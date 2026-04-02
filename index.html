@@ -279,11 +279,12 @@ textarea{resize:vertical;min-height:76px}
 .dp-dow:last-child{border-right:none}
 .dp-week-row{display:grid;grid-template-columns:repeat(7,1fr);position:relative;border-top:1px solid var(--border)}
 /* Available cells get the diagonal hatch — matches Hospitable */
-.dp-cell{position:relative;min-height:56px;border-right:1px solid var(--border);padding:4px 0 0 5px;cursor:pointer;background-image:repeating-linear-gradient(135deg,transparent,transparent 6px,rgba(0,0,0,.08) 6px,rgba(0,0,0,.08) 7px);background-color:#f9fdf9}
+.dp-cell{position:relative;min-height:56px;border-right:1px solid var(--border);padding:4px 0 0 5px;cursor:pointer;background:#fff}
 .dp-cell:last-child{border-right:none}
-.dp-cell.dp-other{background-color:var(--surface2);background-image:none;cursor:default}
+.dp-cell.dp-other{background-color:var(--surface2);cursor:default}
 .dp-cell.dp-today-cell{background-color:var(--gold-pale)}
-.dp-cell.dp-booked-bg{background-color:#fff;background-image:none} /* no hatch when booked — bar covers it */
+.dp-cell.dp-booked-bg{background-color:#f9fdf9;background-image:repeating-linear-gradient(135deg,transparent,transparent 6px,rgba(0,0,0,.08) 6px,rgba(0,0,0,.08) 7px)}
+.dp-cell.dp-turn-bg{background-color:var(--gold-pale);background-image:none}
 .dp-cell:not(.dp-other):hover{background-color:var(--green-pale)}
 .dp-cell.dp-other:hover{background-color:var(--surface2)}
 .dp-dn{font-size:.78rem;font-weight:700;color:var(--text);line-height:1;position:relative;z-index:2;text-shadow:0 0 2px #fff,0 0 4px #fff}
@@ -1255,7 +1256,8 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
       let cls='dp-cell';
       if(isToday)cls+=' dp-today-cell';
       if(isSel)cls+=' dp-selected';
-      if(isBooked||isTurn)cls+=' dp-booked-bg';
+      if(isTurn)cls+=' dp-turn-bg';
+      else if(isBooked)cls+=' dp-booked-bg';
       const dnCls='dp-dn'+(isToday?' dp-today-num':'');
       const warn=isBooked?',true':'';
       const click=!isPast?`onclick="selDate('${px}','${ds}'${warn})"`:'' ;
@@ -1335,9 +1337,9 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
     </div>`;
   } else {
     h+=`<div class="dp-leg">`;
-    h+=`<div class="dp-li"><div class="dp-ld" style="background:${TEAL}"></div>Guests in house</div>`;
-    h+=`<div class="dp-li"><svg width="22" height="10"><polygon points="6,0 22,0 22,10 0,10" fill="${TEAL}" opacity=".92"/><polygon points="0,0 16,0 22,10 0,10" fill="${TEAL}" opacity=".65"/></svg>Turn day</div>`;
-    h+=`<div class="dp-li"><div style="width:14px;height:10px;background-image:repeating-linear-gradient(135deg,transparent,transparent 3px,rgba(0,0,0,.12) 3px,rgba(0,0,0,.12) 4px);background-color:#fff;border:1px solid var(--border);border-radius:2px"></div>Available</div>`;
+    h+=`<div class="dp-li"><div style="width:14px;height:10px;background:#fff;border:1px solid var(--border);border-radius:2px"></div>Available</div>`;
+    h+=`<div class="dp-li"><div style="width:14px;height:10px;background-color:var(--gold-pale);border:1px solid var(--gold-light);border-radius:2px"></div>Turn day</div>`;
+    h+=`<div class="dp-li"><div style="width:14px;height:10px;background-image:repeating-linear-gradient(135deg,transparent,transparent 3px,rgba(0,0,0,.12) 3px,rgba(0,0,0,.12) 4px);background-color:#f9fdf9;border:1px solid var(--border);border-radius:2px"></div>Booked</div>`;
     h+=`</div>`;
   }
   h+=`<div class="dp-warn" id="${px}-dp-warn"><strong>⚠ Guests are in house on this day.</strong> Are you sure you want to schedule maintenance while guests are present?<div class="dp-warn-btns"><button class="btn btn-gold" onclick="confirmBookedDate('${px}')">Yes, Schedule Anyway</button><button class="btn" onclick="cancelBookedDate('${px}')">Pick Another Day</button></div></div>`;
