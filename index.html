@@ -673,7 +673,7 @@ document.addEventListener('DOMContentLoaded', function() {
       <button class="btn btn-g" onclick="addNote('admin')">Add</button>
     </div>
     <div id="d-next-co" style="font-size:.72rem;color:var(--text2);margin:4px 0 8px"></div>
-    <div class="stitle">Suggested Vendors</div>
+    <div class="stitle" id="d-vendors-title">Suggested Vendors</div>
     <div id="d-vendors"></div>
     <div style="display:flex;gap:9px;margin-top:20px;justify-content:space-between;align-items:center;flex-wrap:wrap">
       <button class="btn btn-red" onclick="deleteTask()">Delete Task</button>
@@ -1778,11 +1778,13 @@ function vendorCard(v,t,p,showAssign){
 }
 function renderDetailVendors(t,p){
   const area=document.getElementById('d-vendors');
+  const titleEl=document.getElementById('d-vendors-title');
   const m=vendors.filter(v=>v.categories.includes(t.category));
   const assignedVendor=t.vendor?vendors.find(v=>v.name.toLowerCase()===t.vendor.toLowerCase()):null;
 
   // If a vendor is assigned and they're in our list, show their card prominently
   if(assignedVendor){
+    titleEl.textContent='Assigned Vendor';
     let h=vendorCard(assignedVendor,t,p,false);
     // Show other vendors in a collapsible section
     const others=m.filter(v=>v.id!==assignedVendor.id).slice(0,3);
@@ -1797,6 +1799,7 @@ function renderDetailVendors(t,p){
 
   // If vendor is assigned but not in our list (e.g. typed manually), show a note + suggestions
   if(t.vendor){
+    titleEl.textContent='Assigned Vendor';
     let h=`<div style="font-size:.82rem;color:var(--text2);padding:6px 0;margin-bottom:8px">Assigned to <strong>${t.vendor}</strong> (not in vendor list)</div>`;
     if(m.length){
       h+=`<details><summary style="font-size:.78rem;color:var(--text2);cursor:pointer;padding:6px 0">Suggested vendors for this category (${m.length})</summary>`;
@@ -1808,6 +1811,7 @@ function renderDetailVendors(t,p){
   }
 
   // No vendor assigned — show all suggestions
+  titleEl.textContent='Suggested Vendors';
   if(!m.length){area.innerHTML='<div style="color:var(--text3);font-size:.82rem">Set a category to see vendor suggestions.</div>';return;}
   area.innerHTML=m.slice(0,3).map(v=>vendorCard(v,t,p,true)).join('');
 }
