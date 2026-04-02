@@ -1250,8 +1250,8 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
       const isSel=selVal===ds;
       const isPast=d<today&&d.toDateString()!==today.toDateString();
       const st=dayState(d);
-      const isBooked=st==='booked';
-      const isTurn=st==='turn';
+      const isTurn=st==='turn'||st==='turn-only';
+      const isBooked=st==='booked'||st==='checkin'||st==='checkout';
       const isToday=d.toDateString()===today.toDateString();
       let cls='dp-cell';
       if(isToday)cls+=' dp-today-cell';
