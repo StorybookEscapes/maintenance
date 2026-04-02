@@ -257,6 +257,7 @@ textarea{resize:vertical;min-height:76px}
 .dp-cell.dp-other{background-color:var(--surface2);cursor:default}
 .dp-cell.dp-today-cell{background-color:var(--gold-pale)}
 .dp-cell.dp-booked-bg{background-image:repeating-linear-gradient(135deg,transparent,transparent 6px,rgba(0,0,0,.08) 6px,rgba(0,0,0,.08) 7px);background-color:#f9fdf9}
+.dp-cell.dp-turn-bg{background-color:#fff3e0}
 .dp-cell:not(.dp-other):hover{background-color:var(--green-pale)}
 .dp-cell.dp-other:hover{background-color:var(--surface2)}
 .dp-dn{font-size:.78rem;font-weight:700;color:var(--text);line-height:1;position:relative;z-index:2;text-shadow:0 0 2px #fff,0 0 4px #fff}
@@ -1098,15 +1099,16 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
       const isSel=selVal===ds;
       const isPast=d<today&&d.toDateString()!==today.toDateString();
       const st=dayState(d);
-      const isBooked=st==='booked';
-      const isTurn=st==='turn';
+      const isFullyBooked=st==='booked'; // guest staying through the night — no service window
+      const isTurn=st==='turn'||st==='turn-only'; // checkout + checkin same day — tight window
       const isToday=d.toDateString()===today.toDateString();
       let cls='dp-cell';
       if(isToday)cls+=' dp-today-cell';
       if(isSel)cls+=' dp-selected';
-      if(isBooked||isTurn)cls+=' dp-booked-bg';
+      if(isFullyBooked)cls+=' dp-booked-bg';
+      if(isTurn)cls+=' dp-turn-bg';
       const dnCls='dp-dn'+(isToday?' dp-today-num':'');
-      const warn=isBooked?',true':'';
+      const warn=isFullyBooked?',true':'';
       const click=!isPast?`onclick="selDate('${px}','${ds}'${warn})"`:'' ;
       // position:relative + z-index:1 ensures cell is above the SVG bar layer for clicks
       h+=`<div class="${cls}" style="position:relative;z-index:1" ${click}><div class="${dnCls}">${dn}</div></div>`;
@@ -1184,9 +1186,9 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
     </div>`;
   } else {
     h+=`<div class="dp-leg">`;
-    h+=`<div class="dp-li"><div class="dp-ld" style="background:${TEAL}"></div>Guests in house</div>`;
-    h+=`<div class="dp-li"><div style="width:14px;height:10px;background-image:repeating-linear-gradient(135deg,transparent,transparent 3px,rgba(0,0,0,.12) 3px,rgba(0,0,0,.12) 4px);background-color:#f9fdf9;border:1px solid var(--border);border-radius:2px"></div>Unavailable</div>`;
-    h+=`<div class="dp-li"><div style="width:14px;height:10px;background:#fff;border:1px solid var(--border);border-radius:2px"></div>Available</div>`;
+    h+=`<div class="dp-li"><div style="width:14px;height:10px;background-image:repeating-linear-gradient(135deg,transparent,transparent 3px,rgba(0,0,0,.12) 3px,rgba(0,0,0,.12) 4px);background-color:#f9fdf9;border:1px solid var(--border);border-radius:2px"></div>Booked all day</div>`;
+    h+=`<div class="dp-li"><div style="width:14px;height:10px;background:#fff3e0;border:1px solid var(--border);border-radius:2px"></div>Turn day</div>`;
+    h+=`<div class="dp-li"><div style="width:14px;height:10px;background:#fff;border:1px solid var(--border);border-radius:2px"></div>Available for service</div>`;
     h+=`</div>`;
   }
   h+=`<div class="dp-warn" id="${px}-dp-warn"><strong>⚠ Guests are in house on this day.</strong> Are you sure you want to schedule maintenance while guests are present?<div class="dp-warn-btns"><button class="btn btn-gold" onclick="confirmBookedDate('${px}')">Yes, Schedule Anyway</button><button class="btn" onclick="cancelBookedDate('${px}')">Pick Another Day</button></div></div>`;
