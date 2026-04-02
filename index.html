@@ -899,7 +899,39 @@ const PROXY_BASE = 'https://storybook-webhook.vercel.app';
 let calDate=new Date(), calMode='month', editVendorId=null, icalCache={};
 
 // STORAGE
-const S = window.storage || {get:async()=>null, set:async()=>null};
+const STORAGE_API = 'https://storybook-webhook.vercel.app/api/storage';
+function getAuthToken(){
+  try{const a=sessionStorage.getItem('se_auth_token');return a||null;}catch(e){return null;}
+}
+const S = {
+  get: async (k) => {
+    const token = getAuthToken();
+    if (token) {
+      try {
+        const r = await fetch(STORAGE_API + '?key=' + encodeURIComponent(k), {
+          headers: { 'Authorization': 'Bearer ' + token },
+          signal: AbortSignal.timeout(8000)
+        });
+        if (r.ok) { const d = await r.json(); return d.value ? { value: d.value } : null; }
+      } catch(e) { console.warn('[storage] Server get failed, using localStorage:', e.message); }
+    }
+    const v = localStorage.getItem(k); return v ? { value: v } : null;
+  },
+  set: async (k, v) => {
+    localStorage.setItem(k, v);
+    const token = getAuthToken();
+    if (token) {
+      try {
+        await fetch(STORAGE_API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ key: k, value: v }),
+          signal: AbortSignal.timeout(8000)
+        });
+      } catch(e) { console.warn('[storage] Server set failed:', e.message); }
+    }
+  }
+};
 async function load() {
   try{const r=await S.get('se_t');if(r)tasks=JSON.parse(r.value);}catch(e){tasks=[];}
   try{const r=await S.get('se_v');if(r)vendors=JSON.parse(r.value);else{vendors=JSON.parse(JSON.stringify(DEF_VENDORS));await save('se_v',vendors);}}catch(e){vendors=JSON.parse(JSON.stringify(DEF_VENDORS));}
@@ -2148,19 +2180,7 @@ function showToast(msg,cls='',undoFn=null){
   } else {_toastTimer=setTimeout(()=>t.classList.remove('show'),3000);}
 }
 
-// SEED
-async function seed(){
-  if(tasks.length>0)return;
-  tasks=[
-    {id:'d1',property:'umc60',guest:'Sade Seeger',problem:'Eyebolt for the hot tub cover strap is pulled out of the deck.',category:'hot_tub',status:'open',date:'',vendor:'James Hawthorne',urgent:true,recurring:false,notes:[],vendorNotes:'',created:new Date('2026-03-30T10:50:00').toISOString()},
-    {id:'d2',property:'prc2',guest:'David Bond',problem:'Oven handle is loose and partially broke off, though still functional.',category:'handyman',status:'open',date:'',vendor:'',urgent:false,recurring:false,notes:[],vendorNotes:'',created:new Date('2026-03-30T10:13:00').toISOString()},
-    {id:'d3',property:'umc50',guest:'Sarajo Stough',problem:'Bathroom cabinet fell off its hinges and needs to be repaired.',category:'handyman',status:'scheduled',date:'2026-04-07',vendor:'James Hawthorne',urgent:false,recurring:false,notes:[{text:'Called Lisa, sending James this week.',type:'admin',time:new Date().toISOString()}],vendorNotes:'',created:new Date('2026-03-28T11:39:00').toISOString()},
-    {id:'d4',property:'prc4',guest:'Jose Reyes',problem:'Door to the bedroom does not lock properly.',category:'handyman',status:'scheduled',date:'2026-04-04',vendor:'Michael Gilchrist',urgent:false,recurring:false,notes:[],vendorNotes:'',created:new Date('2026-03-27T11:00:00').toISOString()},
-    {id:'d5',property:'hillside_big',guest:'Amy Henry',problem:'Closet door with second refrigerator sticks on the brick floor.',category:'handyman',status:'open',date:'',vendor:'',urgent:false,recurring:false,notes:[],vendorNotes:'',created:new Date('2026-03-25T15:13:00').toISOString()},
-    {id:'d6',property:'bearadise',guest:'Mark Torres',problem:'Roaches found in kitchen cabinet under the sink.',category:'pest',status:'open',date:'',vendor:'All About Bugs',urgent:true,recurring:false,notes:[{text:'All About Bugs contacted. Coming tomorrow.',type:'admin',time:new Date().toISOString()}],vendorNotes:'',created:new Date('2026-04-01T08:22:00').toISOString()},
-  ];
-  await saveTasks();
-}
+// SEED removed — tasks are loaded from server storage
 
 // HOSTBUDDY INTEGRATION
 // ── Configure this after deploying the webhook API ──
@@ -2441,7 +2461,6 @@ async function hbTest() {
 // START
 (async()=>{
   await load();
-  await seed();
   populatePropSel('f-property');
   populatePropMulti('r-props');
   renderAll();
