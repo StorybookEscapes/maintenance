@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Storybook Escapes — Maintenance</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -18,7 +19,8 @@
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px}
-#app{display:flex;flex-direction:column;min-height:100vh}
+#app{display:none;flex-direction:column;min-height:100vh}
+#app.authed{display:flex}
 header{background:var(--green);padding:0 24px;height:58px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.2);gap:16px}
 .hbrand{display:flex;align-items:center;gap:10px;flex-shrink:0}
 .hlogo{height:32px}
@@ -353,6 +355,17 @@ textarea{resize:vertical;min-height:76px}
 .toast-undo{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:6px;padding:3px 10px;font-size:.76rem;font-family:inherit;font-weight:600;cursor:pointer;white-space:nowrap}
 .toast-undo:hover{background:rgba(255,255,255,.35)}
 
+/* AUTH GATE */
+#login-screen{position:fixed;inset:0;z-index:9999;background:var(--green);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:24px}
+#login-screen.hidden{display:none}
+.login-box{background:var(--white);border-radius:16px;padding:48px 40px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.3);max-width:380px;width:90%}
+.login-logo{height:48px;margin-bottom:8px}
+.login-title{font-family:'Cormorant Garamond',serif;font-size:1.6rem;color:var(--green);font-weight:600;margin-bottom:4px}
+.login-sub{font-size:.85rem;color:var(--text2);margin-bottom:28px}
+.login-err{font-size:.8rem;color:var(--red);margin-top:14px;display:none}
+.login-user{display:none;align-items:center;gap:10px;justify-content:center;margin-top:16px;font-size:.82rem;color:var(--text2)}
+.login-user img{width:28px;height:28px;border-radius:50%}
+
 @media(max-width:768px){
   .stats{grid-template-columns:repeat(3,1fr)}
   .fg{grid-template-columns:1fr}
@@ -367,6 +380,81 @@ textarea{resize:vertical;min-height:76px}
 </style>
 </head>
 <body>
+
+<!-- AUTH GATE -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-title">Storybook Escapes</div>
+    <div class="login-sub">Maintenance Portal — Sign in to continue</div>
+    <div id="g_id_onload"
+      data-client_id="998506456904-tlionif2dmsafl74qk0sinb4rvljdddm.apps.googleusercontent.com"
+      data-callback="onGoogleSignIn"
+      data-auto_prompt="false">
+    </div>
+    <div class="g_id_signin"
+      data-type="standard"
+      data-shape="rectangular"
+      data-theme="outline"
+      data-text="sign_in_with"
+      data-size="large"
+      data-logo_alignment="left"
+      data-width="300">
+    </div>
+    <div class="login-err" id="login-err"></div>
+  </div>
+</div>
+
+<script>
+// ── AUTH CONFIG ──────────────────────────────────────────────
+const ALLOWED_EMAILS = ['properties@chipburns.com'];
+
+function onGoogleSignIn(response) {
+  // Decode the JWT credential to get user info
+  const payload = JSON.parse(atob(response.credential.split('.')[1]));
+  const email = payload.email;
+  const name = payload.name;
+
+  if (!ALLOWED_EMAILS.includes(email.toLowerCase())) {
+    const err = document.getElementById('login-err');
+    err.textContent = 'Access denied. ' + email + ' is not authorized.';
+    err.style.display = 'block';
+    return;
+  }
+
+  // Store session
+  sessionStorage.setItem('se_auth', JSON.stringify({
+    email: email,
+    name: name,
+    picture: payload.picture,
+    exp: payload.exp
+  }));
+
+  // Reveal app
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('app').classList.add('authed');
+}
+
+function signOut() {
+  sessionStorage.removeItem('se_auth');
+  document.getElementById('app').classList.remove('authed');
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('login-err').style.display = 'none';
+}
+
+// Check for existing session on page load
+(function checkSession() {
+  try {
+    const auth = JSON.parse(sessionStorage.getItem('se_auth'));
+    if (auth && auth.exp && auth.exp * 1000 > Date.now()) {
+      document.getElementById('login-screen').classList.add('hidden');
+      document.getElementById('app').classList.add('authed');
+      return;
+    }
+  } catch(e) {}
+  // No valid session — show login screen (default state)
+})();
+</script>
+
 <div id="app">
   <header>
     <div class="hbrand">
@@ -384,6 +472,7 @@ textarea{resize:vertical;min-height:76px}
     </div>
     <div class="hactions">
       <button class="btn btn-g" onclick="openAddTask()">+ New Task</button>
+      <button class="btn" onclick="signOut()" style="background:transparent;color:rgba(255,255,255,.5);border-color:rgba(255,255,255,.15);font-size:.7rem">Sign Out</button>
     </div>
   </header>
   <main>
@@ -576,8 +665,6 @@ textarea{resize:vertical;min-height:76px}
     <div id="d-next-co" style="font-size:.72rem;color:var(--text2);margin:4px 0 8px"></div>
     <div class="stitle">Suggested Vendors</div>
     <div id="d-vendors"></div>
-    <div class="stitle">Vendor Completion Notes</div>
-    <textarea id="d-vnotes" rows="3" placeholder="Vendor fills this out after completing work..." onchange="updateField('vendorNotes',this.value)" oninput="clearTimeout(this._debounce);this._debounce=setTimeout(()=>updateField('vendorNotes',this.value),800)"></textarea>
     <div style="display:flex;gap:9px;margin-top:20px;justify-content:space-between;align-items:center;flex-wrap:wrap">
       <button class="btn btn-red" onclick="deleteTask()">Delete Task</button>
       <div style="display:flex;gap:7px">
@@ -609,6 +696,10 @@ textarea{resize:vertical;min-height:76px}
       <div class="fgr"><label>Default Vendor</label><select id="r-vendor" onchange="onRecVendorChange()"><option value="">— None —</option></select></div>
       <div class="fgr" id="r-vendor-custom-wrap" style="display:none"><label>Custom Vendor Name</label><input type="text" id="r-vendor-custom" placeholder="Enter vendor name"></div>
       <div class="fgr full"><label>Notes</label><textarea id="r-notes" rows="2" placeholder="Additional instructions..."></textarea></div>
+      <div class="fgr full" style="flex-direction:row;align-items:center;gap:8px;padding:8px 0 0">
+        <input type="checkbox" id="r-combinable" style="width:16px;height:16px;accent-color:var(--green);cursor:pointer">
+        <label for="r-combinable" style="cursor:pointer;font-size:.82rem;color:var(--text)">Suggest combining with nearby tasks <span style="color:var(--text2);font-weight:400">(when another task is scheduled within 10 days at the same property)</span></label>
+      </div>
     </div>
     <div style="display:flex;gap:9px;margin-top:20px;justify-content:flex-end">
       <button class="btn" onclick="closeModal('rec-modal')">Cancel</button>
@@ -760,14 +851,14 @@ const DEF_VENDORS = [
   {id:'v21',name:'Tennessee Fumigation (Terry Hazelwood)',phone:'(865) 755-7105',email:'',role:'Bed Bug Treatment',categories:['bed_bugs'],note:'Same or next day fumigation. Property ready in approximately 24 hours.'},
 ];
 const DEF_RECURRING = [
-  {id:'rc1',name:'HVAC Filter Replacement',properties:['all'],category:'hvac',frequency:'monthly',vendor:'Whaley Mechanical (Brandon)',notes:'Replace all HVAC filters monthly.',nextDue:'2026-05-01'},
-  {id:'rc2',name:'Pre-Summer HVAC Check + Drain Line Flush',properties:['all'],category:'hvac',frequency:'biannual',vendor:'Whaley Mechanical (Brandon)',notes:'Flush drain lines to prevent summer shutdowns.',nextDue:'2026-04-15'},
-  {id:'rc3',name:'Pre-Winter HVAC Check',properties:['all'],category:'hvac',frequency:'biannual',vendor:'Whaley Mechanical (Brandon)',notes:'Pre-winter heating system check.',nextDue:'2026-10-01'},
-  {id:'rc4',name:'Aqua Clear — Magic Mountain',properties:['magic'],category:'water',frequency:'quarterly',vendor:'Aqua Clear Water Systems',notes:'Magic Mountain water is highly sulfuric. Regular visits required.',nextDue:'2026-04-01'},
-  {id:'rc5',name:'Aqua Clear — PRC Well',properties:['prc1','prc2','prc3','prc4','prc5','prc6'],category:'water',frequency:'quarterly',vendor:'Aqua Clear Water Systems',notes:'6 PRC cabins share a single well. Equipment in shed next to Cabin 6. Notify guests.',nextDue:'2026-04-01'},
-  {id:'rc6',name:'Septic System Service',properties:['wizards','magic','prc1','prc2','prc3','prc4','prc5','prc6','umc10','umc20','umc30','umc40','umc50','umc60'],category:'septic',frequency:'biennial',vendor:'Top Septic',notes:'Every 2 years for all properties with septic systems.',nextDue:'2027-01-01'},
-  {id:'rc7',name:'Smoke & CO Detector Battery Replacement',properties:['all'],category:'electrical',frequency:'annual',vendor:'',notes:'Replace batteries in all smoke and CO detectors.',nextDue:'2026-10-01'},
-  {id:'rc8',name:'Bed Bug Prevention — Bearadise Lodge',properties:['bearadise'],category:'bed_bugs',frequency:'monthly',vendor:'All About Bugs',notes:'Bearadise Lodge had bed bugs twice (2023, 2025). Monthly prevention treatment.',nextDue:'2026-05-01'},
+  {id:'rc1',name:'HVAC Filter Replacement',properties:['all'],category:'hvac',frequency:'monthly',vendor:'Whaley Mechanical (Brandon)',notes:'Replace all HVAC filters monthly.',nextDue:'2026-05-01',combinable:true},
+  {id:'rc2',name:'Pre-Summer HVAC Check + Drain Line Flush',properties:['all'],category:'hvac',frequency:'biannual',vendor:'Whaley Mechanical (Brandon)',notes:'Flush drain lines to prevent summer shutdowns.',nextDue:'2026-04-15',combinable:false},
+  {id:'rc3',name:'Pre-Winter HVAC Check',properties:['all'],category:'hvac',frequency:'biannual',vendor:'Whaley Mechanical (Brandon)',notes:'Pre-winter heating system check.',nextDue:'2026-10-01',combinable:false},
+  {id:'rc4',name:'Aqua Clear — Magic Mountain',properties:['magic'],category:'water',frequency:'quarterly',vendor:'Aqua Clear Water Systems',notes:'Magic Mountain water is highly sulfuric. Regular visits required.',nextDue:'2026-04-01',combinable:false},
+  {id:'rc5',name:'Aqua Clear — PRC Well',properties:['prc1','prc2','prc3','prc4','prc5','prc6'],category:'water',frequency:'quarterly',vendor:'Aqua Clear Water Systems',notes:'6 PRC cabins share a single well. Equipment in shed next to Cabin 6. Notify guests.',nextDue:'2026-04-01',combinable:false},
+  {id:'rc6',name:'Septic System Service',properties:['wizards','magic','prc1','prc2','prc3','prc4','prc5','prc6','umc10','umc20','umc30','umc40','umc50','umc60'],category:'septic',frequency:'biennial',vendor:'Top Septic',notes:'Every 2 years for all properties with septic systems.',nextDue:'2027-01-01',combinable:false},
+  {id:'rc7',name:'Smoke & CO Detector Battery Replacement',properties:['all'],category:'electrical',frequency:'annual',vendor:'',notes:'Replace batteries in all smoke and CO detectors.',nextDue:'2026-10-01',combinable:false},
+  {id:'rc8',name:'Bed Bug Prevention — Bearadise Lodge',properties:['bearadise'],category:'bed_bugs',frequency:'monthly',vendor:'All About Bugs',notes:'Bearadise Lodge had bed bugs twice (2023, 2025). Monthly prevention treatment.',nextDue:'2026-05-01',combinable:false},
 ];
 const VCAT = [
   {id:'cleaning',label:'Cleaning'},{id:'handyman',label:'Handyman / Carpentry'},
@@ -1116,6 +1207,10 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
 
     // SVG bar layer for this week row — rendered after cells but positioned absolute behind them via z-index:0
     // Use 100% width SVG, each cell = 1/7 of width
+    // Determine which columns in this week row belong to the current month
+    const firstValidCol=wk.findIndex(c=>!c.isOther);
+    const lastValidCol=6-[...wk].reverse().findIndex(c=>!c.isOther);
+
     h+=`<div class="dp-bars" style="z-index:0"><svg width="100%" height="${CELL_H}" viewBox="0 0 700 ${CELL_H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" style="pointer-events:none">`;
     const CW=100; // each cell = 100 units wide (700 total for 7 cells)
 
@@ -1126,7 +1221,7 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
       const coInWeek=r.co>wkStart&&r.co<=wkEnd;
 
       // Column of first visible day of this bar
-      let startCol; 
+      let startCol;
       if(ciInWeek){
         startCol=Math.round((r.ci-wkStart)/(864e5));
       } else {
@@ -1139,6 +1234,9 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
       } else {
         endCol=7;
       }
+      // Clamp bars to only draw within current-month cells
+      if(firstValidCol>=0)startCol=Math.max(startCol,firstValidCol);
+      if(lastValidCol>=0)endCol=Math.min(endCol,lastValidCol+1);
       if(endCol<=startCol)return;
 
       // Does this bar have a diagonal START (checkin on a turn day)?
@@ -1403,6 +1501,7 @@ function openAddRecurring(){
   // Clear property selection
   const sel=document.getElementById('r-props');Array.from(sel.options).forEach(o=>o.selected=false);
   populateRecVendor('');
+  document.getElementById('r-combinable').checked=false;
   document.getElementById('rec-modal').classList.add('open');
 }
 function editRec(id){
@@ -1418,12 +1517,13 @@ function editRec(id){
   // Set property selection
   const sel=document.getElementById('r-props');
   Array.from(sel.options).forEach(o=>{o.selected=r.properties.includes(o.value)||r.properties.includes('all');});
+  document.getElementById('r-combinable').checked=!!r.combinable;
   document.getElementById('rec-modal').classList.add('open');
 }
 async function saveRecurring(){
   const name=document.getElementById('r-name').value.trim();if(!name){showToast('Task name required.','err');return;}
   const sel=document.getElementById('r-props');const props=Array.from(sel.selectedOptions).map(o=>o.value);
-  const data={name,properties:props.length?props:['all'],category:document.getElementById('r-cat').value,frequency:document.getElementById('r-freq').value,vendor:getRecVendorValue(),notes:document.getElementById('r-notes').value.trim(),nextDue:document.getElementById('r-next').value};
+  const data={name,properties:props.length?props:['all'],category:document.getElementById('r-cat').value,frequency:document.getElementById('r-freq').value,vendor:getRecVendorValue(),notes:document.getElementById('r-notes').value.trim(),nextDue:document.getElementById('r-next').value,combinable:document.getElementById('r-combinable').checked};
   if(editRecId){
     const r=recurring.find(x=>x.id===editRecId);if(r)Object.assign(r,data);
     editRecId=null;
@@ -1459,6 +1559,7 @@ function checkCombine(){
   const area=document.getElementById('d-combine');area.innerHTML='';if(!t.date)return;
   const td=new Date(t.date+'T12:00:00');
   const nearby=recurring.filter(r=>{
+    if(!r.combinable)return false;
     if(!r.nextDue)return false;
     const diff=Math.abs(td-new Date(r.nextDue+'T12:00:00'))/(864e5);if(diff>10)return false;
     const ps=r.properties.includes('all')?PROPS.map(p=>p.id):r.properties;if(!ps.includes(t.property))return false;
@@ -1539,7 +1640,6 @@ async function openDetail(id){
   document.getElementById('d-title').textContent=t.problem;
   document.getElementById('d-status').value=t.status;
   document.getElementById('d-vendor').value=t.vendor||'';
-  document.getElementById('d-vnotes').value=t.vendorNotes||'';
   const dv=t.date||'';
   document.getElementById('d-date').value=dv;
   if(dv){document.getElementById('d-dp-display').textContent=fmtDate(dv);document.getElementById('d-dp-display').className='';document.getElementById('d-dp-btn').classList.add('has-val');}
