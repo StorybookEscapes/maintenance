@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Storybook Escapes — Maintenance</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -18,7 +19,13 @@
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px}
-#app{display:flex;flex-direction:column;min-height:100vh}
+#app{display:none;flex-direction:column;min-height:100vh}
+#app.authed{display:flex}
+#login-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:var(--green);color:#fff;font-family:'DM Sans',sans-serif}
+#login-screen .login-box{text-align:center;max-width:360px;padding:40px}
+#login-screen h1{font-family:'Cormorant Garamond',serif;font-size:2.2rem;margin-bottom:6px;color:var(--gold-light)}
+#login-screen p{font-size:.88rem;color:rgba(255,255,255,.6);margin-bottom:28px}
+#login-screen #g_id_signin{display:inline-block}
 header{background:var(--green);padding:0 24px;height:58px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.2);gap:16px}
 .hbrand{display:flex;align-items:center;gap:10px;flex-shrink:0}
 .hlogo{height:32px}
@@ -403,6 +410,13 @@ textarea{resize:vertical;min-height:76px}
 </style>
 </head>
 <body>
+<div id="login-screen">
+  <div class="login-box">
+    <h1>Storybook Escapes</h1>
+    <p>Maintenance Portal — Sign in to continue</p>
+    <div id="g_id_signin"></div>
+  </div>
+</div>
 <div id="app">
   <header>
     <div class="hbrand">
@@ -695,6 +709,88 @@ textarea{resize:vertical;min-height:76px}
 </div>
 
 <div class="toast" id="toast"></div>
+
+<script>
+// ── Auth Gate & Storage Client ──────────────────────────────
+(function(){
+  const GOOGLE_CLIENT_ID='998506456904-tlionif2dmsafl74qk0sinb4rvljdddm.apps.googleusercontent.com';
+  const API_BASE='https://storybook-webhook.vercel.app';
+  const ALLOWED='properties@chipburns.com';
+
+  // Dev bypass: skip auth on non-production hosts
+  if(window.location.hostname!=='storybookescapes.github.io'){
+    document.getElementById('login-screen').style.display='none';
+    document.getElementById('app').classList.add('authed');
+    // Set up storage client that works without auth token for dev
+    window.storage={
+      get:async function(k){try{const r=await fetch(API_BASE+'/api/storage?key='+k);const j=await r.json();return j;}catch(e){return null;}},
+      set:async function(k,v){try{await fetch(API_BASE+'/api/storage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:k,value:v})});}catch(e){}}
+    };
+    return;
+  }
+
+  // Production: set up storage client with auth token
+  function makeStorage(token){
+    return{
+      get:async function(k){
+        try{
+          const r=await fetch(API_BASE+'/api/storage?key='+k,{headers:{'Authorization':'Bearer '+token}});
+          if(!r.ok)return null;
+          return await r.json();
+        }catch(e){return null;}
+      },
+      set:async function(k,v){
+        try{
+          await fetch(API_BASE+'/api/storage',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({key:k,value:v})});
+        }catch(e){}
+      }
+    };
+  }
+
+  function handleCredentialResponse(response){
+    const token=response.credential;
+    // Decode JWT to check email
+    try{
+      const payload=JSON.parse(atob(token.split('.')[1]));
+      const email=(payload.email||'').toLowerCase();
+      if(email!==ALLOWED){
+        alert('Access denied. This account is not authorized.');
+        return;
+      }
+      sessionStorage.setItem('se_auth_token',token);
+      window.storage=makeStorage(token);
+      document.getElementById('login-screen').style.display='none';
+      document.getElementById('app').classList.add('authed');
+      // Trigger app init if it's waiting
+      if(typeof initApp==='function')initApp();
+    }catch(e){alert('Sign-in failed. Please try again.');}
+  }
+
+  // Check for existing session
+  const existing=sessionStorage.getItem('se_auth_token');
+  if(existing){
+    try{
+      const payload=JSON.parse(atob(existing.split('.')[1]));
+      if(payload.exp&&payload.exp*1000>Date.now()&&(payload.email||'').toLowerCase()===ALLOWED){
+        window.storage=makeStorage(existing);
+        document.getElementById('login-screen').style.display='none';
+        document.getElementById('app').classList.add('authed');
+        return;
+      }
+    }catch(e){}
+    sessionStorage.removeItem('se_auth_token');
+  }
+
+  // Initialize Google Sign-In when the library loads
+  function tryInitGoogle(){
+    if(typeof google==='undefined'||!google.accounts){setTimeout(tryInitGoogle,100);return;}
+    google.accounts.id.initialize({client_id:GOOGLE_CLIENT_ID,callback:handleCredentialResponse});
+    google.accounts.id.renderButton(document.getElementById('g_id_signin'),{theme:'outline',size:'large',text:'signin_with',shape:'pill'});
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',tryInitGoogle);
+  else tryInitGoogle();
+})();
+</script>
 
 <script>
 // ── Hospitable REST API v2 (replaces iCal) ──────────────────
