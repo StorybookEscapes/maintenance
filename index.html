@@ -1772,8 +1772,9 @@ function hbStartPolling() {
 
 // Match HostBuddy property name to our internal property ID
 function hbMatchProperty(name) {
-  if (!name) return '';
+  if (!name || typeof name !== 'string') return '';
   const n = name.toLowerCase().trim();
+  if (!n) return '';
   // Try exact match first
   const exact = PROPS.find(p => p.name.toLowerCase() === n);
   if (exact) return exact.id;
@@ -1788,6 +1789,42 @@ function hbMatchProperty(name) {
   });
   if (kwMatch) return kwMatch.id;
   return '';
+}
+
+// Deep-scan a raw payload object for any string that matches a property name
+// Used as fallback when extractFields couldn't identify the property field
+function hbDeepMatchProperty(raw) {
+  if (!raw || typeof raw !== 'object') return '';
+  const allStrings = [];
+  function collect(obj) {
+    if (!obj) return;
+    if (typeof obj === 'string' && obj.length > 2 && obj.length < 200) allStrings.push(obj);
+    else if (Array.isArray(obj)) obj.forEach(collect);
+    else if (typeof obj === 'object') Object.values(obj).forEach(collect);
+  }
+  collect(raw);
+  // Try each string against property matching (most specific first)
+  for (const s of allStrings) {
+    const pid = hbMatchProperty(s);
+    if (pid) { console.log(`Deep-matched property "${s}" → ${pid}`); return pid; }
+  }
+  return '';
+}
+
+// Deep-scan raw payload for the longest meaningful string (likely the problem description)
+function hbDeepFindProblem(raw) {
+  if (!raw || typeof raw !== 'object') return '';
+  const candidates = [];
+  function collect(obj) {
+    if (!obj) return;
+    if (typeof obj === 'string' && obj.length > 20) candidates.push(obj);
+    else if (Array.isArray(obj)) obj.forEach(collect);
+    else if (typeof obj === 'object') Object.values(obj).forEach(collect);
+  }
+  collect(raw);
+  // Return the longest candidate that looks like a problem description
+  candidates.sort((a, b) => b.length - a.length);
+  return candidates[0] || '';
 }
 
 // Map HostBuddy category to our category
@@ -1820,15 +1857,19 @@ function renderHB() {
       </div>
     </div>`;
   hbItems.forEach(item => {
-    const matchedPid = hbMatchProperty(item.property);
+    let matchedPid = hbMatchProperty(item.property);
+    // Fallback: deep-scan raw payload if standard field match fails
+    if (!matchedPid && item._raw) matchedPid = hbDeepMatchProperty(item._raw);
     const matchedProp = matchedPid ? getProp(matchedPid) : null;
     const matchedCat = hbMatchCategory(item.category);
+    // Fallback for problem too
+    const displayProblem = item.problem || (item._raw ? hbDeepFindProblem(item._raw) : '') || 'No description';
     const timeAgo = getTimeAgo(item.receivedAt);
     h += `<div class="hb-item" id="hb-${item.id}">
       <div class="hb-item-top">
         <div style="flex:1">
           <div class="hb-item-prop">${item.property || 'Unknown Property'}${matchedProp ? ` <span style="opacity:.5">→ ${matchedProp.name}</span>` : ' <span style="color:#cc8844;opacity:.8">⚠ No match</span>'}</div>
-          <div class="hb-item-prob">${escHtml(item.problem || 'No description')}</div>
+          <div class="hb-item-prob">${escHtml(displayProblem)}</div>
           <div class="hb-item-meta">
             ${item.guest ? `<span>Guest: ${escHtml(item.guest)}</span>` : ''}
             ${item.category ? `<span>Category: ${escHtml(item.category)}${matchedCat ? '' : ' ⚠'}</span>` : ''}
@@ -1867,13 +1908,25 @@ function getTimeAgo(iso) {
 async function hbImport(id) {
   const item = hbItems.find(x => x.id === id);
   if (!item) return;
-  const pid = hbMatchProperty(item.property);
+  // Try standard field match first, then deep-scan raw payload as fallback
+  let pid = hbMatchProperty(item.property);
+  if (!pid && item._raw) pid = hbDeepMatchProperty(item._raw);
   const cat = hbMatchCategory(item.category);
+  // Use problem field, or deep-scan raw for a description-like string
+  let problem = item.problem;
+  if (!problem && item._raw) problem = hbDeepFindProblem(item._raw);
+  // Also try to find guest name from raw if missing
+  let guest = item.guest;
+  if (!guest && item._raw) {
+    const rawStr = JSON.stringify(item._raw);
+    // Log raw payload for debugging new HostBuddy formats
+    console.log('HostBuddy raw payload:', JSON.stringify(item._raw, null, 2));
+  }
   const t = {
     id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
     property: pid || '',
-    guest: item.guest || '',
-    problem: item.problem || 'HostBuddy action item',
+    guest: guest || '',
+    problem: problem || 'HostBuddy action item',
     category: cat || '',
     status: 'open',
     date: '',
@@ -1901,12 +1954,16 @@ async function hbImportAll() {
   let n = 0;
   const ids = [];
   for (const item of [...hbItems]) {
-    const pid = hbMatchProperty(item.property);
+    let pid = hbMatchProperty(item.property);
+    if (!pid && item._raw) pid = hbDeepMatchProperty(item._raw);
     const cat = hbMatchCategory(item.category);
+    let problem = item.problem;
+    if (!problem && item._raw) problem = hbDeepFindProblem(item._raw);
+    console.log('HostBuddy raw payload:', JSON.stringify(item._raw, null, 2));
     tasks.unshift({
       id: Date.now().toString() + Math.random().toString(36).slice(2, 6) + n,
       property: pid || '', guest: item.guest || '',
-      problem: item.problem || 'HostBuddy action item',
+      problem: problem || 'HostBuddy action item',
       category: cat || '', status: 'open', date: '', vendor: '',
       urgent: !!(item.urgent), recurring: false,
       notes: [{ text: `Imported from HostBuddy AI.${item.conversationSnippet ? ' Guest said: "' + item.conversationSnippet.slice(0, 200) + '"' : ''}`, type: 'admin', time: new Date().toISOString() }],
