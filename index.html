@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Storybook Escapes — Maintenance</title>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -19,8 +18,7 @@
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px}
-#app{display:none;flex-direction:column;min-height:100vh}
-#app.authed{display:flex}
+#app{display:flex;flex-direction:column;min-height:100vh}
 header{background:var(--green);padding:0 24px;height:58px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.2);gap:16px}
 .hbrand{display:flex;align-items:center;gap:10px;flex-shrink:0}
 .hlogo{height:32px}
@@ -230,6 +228,26 @@ textarea{resize:vertical;min-height:76px}
 .utog label{font-size:.8rem;color:var(--red);font-weight:600;text-transform:none;letter-spacing:0;cursor:pointer;margin:0}
 .stitle{font-size:.67rem;text-transform:uppercase;letter-spacing:2px;color:var(--text3);font-weight:700;margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
 
+/* VENDOR DROPDOWN */
+.vd-wrap{position:relative;display:flex;align-items:stretch}
+.vd-wrap input{flex:1;border-radius:7px 0 0 7px;border-right:none}
+.vd-arrow{padding:0 10px;background:var(--surface2);border:1px solid var(--border);border-radius:0 7px 7px 0;color:var(--text3);font-size:.7rem;cursor:pointer;display:flex;align-items:center}
+.vd-arrow:hover{background:var(--border);color:var(--text)}
+.vd-dropdown{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;box-shadow:var(--shadow-md);z-index:200;max-height:280px;overflow-y:auto;scrollbar-width:thin}
+.vd-cat-label{font-size:.62rem;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3);font-weight:700;padding:8px 12px 3px;background:var(--surface2);border-top:1px solid var(--border);position:sticky;top:0}
+.vd-cat-label:first-child{border-top:none}
+.vd-item{padding:7px 12px;cursor:pointer;font-size:.82rem;display:flex;justify-content:space-between;align-items:center;transition:background .1s}
+.vd-item:hover{background:var(--green-light)}
+.vd-item.sel{background:var(--green-light);font-weight:600}
+.vd-item .vd-role{font-size:.68rem;color:var(--text3);flex-shrink:0;margin-left:8px}
+.vd-none{padding:10px 12px;font-size:.8rem;color:var(--text3);font-style:italic}
+
+/* URGENT TOGGLE (detail) */
+#d-urgent-toggle.urg-on{background:var(--red);color:#fff;border-color:var(--red)}
+#d-urgent-toggle.urg-on:hover{background:#a93226}
+#d-urgent-toggle.urg-off{background:var(--surface2);color:var(--text2);border-color:var(--border)}
+#d-urgent-toggle.urg-off:hover{border-color:var(--red);color:var(--red)}
+
 /* VENDOR SUGGEST */
 .vsc{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:7px}
 .vsn{font-weight:600;font-size:.86rem;margin-bottom:2px}
@@ -253,13 +271,12 @@ textarea{resize:vertical;min-height:76px}
 .dp-dow{text-align:left;font-size:.6rem;text-transform:uppercase;color:var(--text3);padding:5px 0 5px 5px;font-weight:600;border-right:1px solid var(--border)}
 .dp-dow:last-child{border-right:none}
 .dp-week-row{display:grid;grid-template-columns:repeat(7,1fr);position:relative;border-top:1px solid var(--border)}
-/* Available cells are clean white; booked/occupied get diagonal hatch */
-.dp-cell{position:relative;min-height:56px;border-right:1px solid var(--border);padding:4px 0 0 5px;cursor:pointer;background:#fff}
+/* Available cells get the diagonal hatch — matches Hospitable */
+.dp-cell{position:relative;min-height:56px;border-right:1px solid var(--border);padding:4px 0 0 5px;cursor:pointer;background-image:repeating-linear-gradient(135deg,transparent,transparent 6px,rgba(0,0,0,.08) 6px,rgba(0,0,0,.08) 7px);background-color:#f9fdf9}
 .dp-cell:last-child{border-right:none}
-.dp-cell.dp-other{background-color:var(--surface2);cursor:default}
+.dp-cell.dp-other{background-color:var(--surface2);background-image:none;cursor:default}
 .dp-cell.dp-today-cell{background-color:var(--gold-pale)}
-.dp-cell.dp-booked-bg{background-image:repeating-linear-gradient(135deg,transparent,transparent 6px,rgba(0,0,0,.08) 6px,rgba(0,0,0,.08) 7px);background-color:#f9fdf9}
-.dp-cell.dp-turn-bg{background-color:#fff3e0}
+.dp-cell.dp-booked-bg{background-color:#fff;background-image:none} /* no hatch when booked — bar covers it */
 .dp-cell:not(.dp-other):hover{background-color:var(--green-pale)}
 .dp-cell.dp-other:hover{background-color:var(--surface2)}
 .dp-dn{font-size:.78rem;font-weight:700;color:var(--text);line-height:1;position:relative;z-index:2;text-shadow:0 0 2px #fff,0 0 4px #fff}
@@ -297,6 +314,25 @@ textarea{resize:vertical;min-height:76px}
 .sms-btn{padding:5px 11px;border-radius:6px;font-size:.74rem;font-family:inherit;font-weight:600;cursor:pointer;border:none;text-decoration:none;display:inline-block}
 .sms-send{background:#2e5f8a;color:#fff}
 .sms-copy{background:#fff;color:var(--text2);border:1px solid var(--border);cursor:pointer}
+
+/* VENDOR GROUPING (calendar) */
+.vg-pill{display:flex;align-items:center;gap:4px;border-radius:4px;padding:3px 6px;font-size:.63rem;font-weight:600;margin-bottom:2px;cursor:pointer;line-height:1.3;background:var(--green);color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:1px solid rgba(255,255,255,.15)}
+.vg-pill:hover{opacity:.88;box-shadow:0 1px 4px rgba(0,0,0,.18)}
+.vg-pill .vg-count{background:rgba(255,255,255,.22);border-radius:3px;padding:0 4px;font-size:.6rem;font-weight:700;line-height:1.5;flex-shrink:0}
+.vg-pill.urg{outline:2px solid var(--red);outline-offset:0}
+.de.vg-pill-week{display:flex;align-items:center;gap:5px;background:var(--green);color:#fff;border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:6px 8px;cursor:pointer}
+.de.vg-pill-week:hover{opacity:.88}
+.de.vg-pill-week .de-prop{color:rgba(255,255,255,.8)}
+.de.vg-pill-week .de-title{color:#fff}
+
+/* COMBINED SMS PANEL (detail modal) */
+.combined-sms-banner{background:linear-gradient(135deg,#eef4fa,#f0f5f8);border:1px solid #b8d4e8;border-radius:10px;padding:14px 16px;margin-bottom:14px}
+.combined-sms-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.combined-sms-title{font-size:.72rem;text-transform:uppercase;letter-spacing:1.5px;color:#2e5f8a;font-weight:700}
+.combined-sms-count{font-size:.67rem;background:#2e5f8a;color:#fff;border-radius:12px;padding:2px 9px;font-weight:600}
+.combined-sms-tasks{font-size:.77rem;color:var(--text2);margin-bottom:10px;line-height:1.5;padding:0}
+.combined-sms-tasks li{margin-bottom:2px;list-style:none;padding-left:12px;position:relative}
+.combined-sms-tasks li:before{content:"\2022";position:absolute;left:0;color:#2e5f8a;font-weight:700}
 
 /* NOTES */
 .notes{display:flex;flex-direction:column;gap:6px;margin-bottom:9px}
@@ -355,114 +391,18 @@ textarea{resize:vertical;min-height:76px}
 .toast-undo{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:6px;padding:3px 10px;font-size:.76rem;font-family:inherit;font-weight:600;cursor:pointer;white-space:nowrap}
 .toast-undo:hover{background:rgba(255,255,255,.35)}
 
-/* AUTH GATE */
-#login-screen{position:fixed;inset:0;z-index:9999;background:var(--green);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:24px}
-#login-screen.hidden{display:none}
-.login-box{background:var(--white);border-radius:16px;padding:48px 40px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.3);max-width:380px;width:90%}
-.login-logo{height:48px;margin-bottom:8px}
-.login-title{font-family:'Cormorant Garamond',serif;font-size:1.6rem;color:var(--green);font-weight:600;margin-bottom:4px}
-.login-sub{font-size:.85rem;color:var(--text2);margin-bottom:28px}
-.login-err{font-size:.8rem;color:var(--red);margin-top:14px;display:none}
-.login-user{display:none;align-items:center;gap:10px;justify-content:center;margin-top:16px;font-size:.82rem;color:var(--text2)}
-.login-user img{width:28px;height:28px;border-radius:50%}
-
 @media(max-width:768px){
   .stats{grid-template-columns:repeat(3,1fr)}
   .fg{grid-template-columns:1fr}
   .fgr.full{grid-column:1}
   main{padding:12px}
-  header{flex-wrap:wrap;height:auto;padding:10px 16px;gap:8px}
-  .hnav{order:3;width:100%;flex:none;justify-content:flex-start;overflow-x:auto;-webkit-overflow-scrolling:touch;gap:4px;padding:4px 0 2px}
-  .hnav::-webkit-scrollbar{display:none}
+  .hnav{display:none}
   .hsub{display:none}
   .dp-popup{width:280px}
 }
 </style>
 </head>
 <body>
-
-<!-- AUTH GATE -->
-<div id="login-screen">
-  <div class="login-box">
-    <div class="login-title">Storybook Escapes</div>
-    <div class="login-sub">Maintenance Portal — Sign in to continue</div>
-    <div id="g_id_onload"
-      data-client_id="998506456904-tlionif2dmsafl74qk0sinb4rvljdddm.apps.googleusercontent.com"
-      data-callback="onGoogleSignIn"
-      data-auto_prompt="false">
-    </div>
-    <div class="g_id_signin"
-      data-type="standard"
-      data-shape="rectangular"
-      data-theme="outline"
-      data-text="sign_in_with"
-      data-size="large"
-      data-logo_alignment="left"
-      data-width="300">
-    </div>
-    <div class="login-err" id="login-err"></div>
-  </div>
-</div>
-
-<script>
-// ── AUTH CONFIG ──────────────────────────────────────────────
-const ALLOWED_EMAILS = ['properties@chipburns.com'];
-
-function onGoogleSignIn(response) {
-  // Decode the JWT credential to get user info
-  const payload = JSON.parse(atob(response.credential.split('.')[1]));
-  const email = payload.email;
-  const name = payload.name;
-
-  if (!ALLOWED_EMAILS.includes(email.toLowerCase())) {
-    const err = document.getElementById('login-err');
-    err.textContent = 'Access denied. ' + email + ' is not authorized.';
-    err.style.display = 'block';
-    return;
-  }
-
-  // Store session and raw token for API auth
-  sessionStorage.setItem('se_auth', JSON.stringify({
-    email: email,
-    name: name,
-    picture: payload.picture,
-    exp: payload.exp
-  }));
-  sessionStorage.setItem('se_auth_token', JSON.stringify(response.credential));
-
-  // Reveal app
-  document.getElementById('login-screen').classList.add('hidden');
-  document.getElementById('app').classList.add('authed');
-}
-
-function signOut() {
-  sessionStorage.removeItem('se_auth');
-  sessionStorage.removeItem('se_auth_token');
-  document.getElementById('app').classList.remove('authed');
-  document.getElementById('login-screen').classList.remove('hidden');
-  document.getElementById('login-err').style.display = 'none';
-}
-
-// Check for existing session on page load (runs after DOM is ready)
-document.addEventListener('DOMContentLoaded', function() {
-  // Dev bypass: skip login when not on production domain
-  if (window.location.hostname !== 'storybookescapes.github.io') {
-    document.getElementById('login-screen').classList.add('hidden');
-    document.getElementById('app').classList.add('authed');
-    return;
-  }
-  try {
-    const auth = JSON.parse(sessionStorage.getItem('se_auth'));
-    if (auth && auth.exp && auth.exp * 1000 > Date.now()) {
-      document.getElementById('login-screen').classList.add('hidden');
-      document.getElementById('app').classList.add('authed');
-      return;
-    }
-  } catch(e) {}
-  // No valid session — show login screen (default state)
-});
-</script>
-
 <div id="app">
   <header>
     <div class="hbrand">
@@ -476,11 +416,9 @@ document.addEventListener('DOMContentLoaded', function() {
       <button class="nav-btn" onclick="switchView('recurring',this)">Recurring</button>
       <button class="nav-btn" onclick="switchView('history',this)">Property History</button>
       <button class="nav-btn" onclick="switchView('vendors',this)">Vendors</button>
-      <button class="nav-btn" onclick="switchView('properties',this)">Properties</button>
     </div>
     <div class="hactions">
       <button class="btn btn-g" onclick="openAddTask()">+ New Task</button>
-      <button class="btn" onclick="signOut()" style="background:transparent;color:rgba(255,255,255,.5);border-color:rgba(255,255,255,.15);font-size:.7rem">Sign Out</button>
     </div>
   </header>
   <main>
@@ -528,17 +466,6 @@ document.addEventListener('DOMContentLoaded', function() {
         <button class="btn btn-g" onclick="openAddVendor()">+ Add Vendor</button>
       </div>
       <div id="vendor-dir"></div>
-    </div>
-
-    <div class="view" id="view-properties">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px">
-        <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--green);font-weight:600">Property Management</h2>
-        <div style="display:flex;gap:8px">
-          <button class="btn" onclick="openAddNb()">+ Add Neighborhood</button>
-          <button class="btn btn-g" onclick="openAddProp()">+ Add Property</button>
-        </div>
-      </div>
-      <div id="prop-dir"></div>
     </div>
   </main>
 </div>
@@ -611,8 +538,7 @@ document.addEventListener('DOMContentLoaded', function() {
       <div class="fgr full" id="f-vendor-suggest"></div>
       <div class="fgr full">
         <label>Assigned Vendor</label>
-        <input type="text" id="f-vendor" placeholder="Vendor name" oninput="checkNewVendor()" onblur="setTimeout(checkNewVendor,200)">
-        <div id="f-vendor-new" style="display:none"></div>
+        <input type="text" id="f-vendor" placeholder="Vendor name">
       </div>
       <div class="fgr full">
         <label>Internal Notes</label>
@@ -637,6 +563,9 @@ document.addEventListener('DOMContentLoaded', function() {
       <button class="mclose" onclick="closeModal('detail-modal')">&#x2715;</button>
     </div>
     <div id="d-badges" style="display:flex;gap:7px;margin-bottom:16px;flex-wrap:wrap;align-items:center"></div>
+    <div style="margin-bottom:14px">
+      <button type="button" class="btn" id="d-urgent-toggle" onclick="toggleDetailUrgent()" style="font-size:.72rem;padding:4px 12px;border-radius:20px"></button>
+    </div>
     <div id="d-combine"></div>
     <div class="fg">
       <div class="fgr">
@@ -660,10 +589,13 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
         <input type="hidden" id="d-date">
       </div>
-      <div class="fgr full">
+      <div class="fgr full" style="position:relative">
         <label>Assigned Vendor</label>
-        <input type="text" id="d-vendor" onchange="updateField('vendor',this.value)" oninput="checkNewVendor('d')" onblur="setTimeout(()=>checkNewVendor('d'),200)" placeholder="Vendor name">
-        <div id="d-vendor-new" style="display:none"></div>
+        <div class="vd-wrap" id="vd-wrap">
+          <input type="text" id="d-vendor" autocomplete="off" placeholder="Search or select a vendor..." oninput="filterVendorDD(this.value)" onfocus="openVendorDD()" onchange="updateField('vendor',this.value)">
+          <button type="button" class="vd-arrow" onclick="toggleVendorDD()">&#x25BC;</button>
+          <div class="vd-dropdown" id="vd-dropdown" style="display:none"></div>
+        </div>
       </div>
     </div>
     <div class="stitle">Notes</div>
@@ -675,6 +607,8 @@ document.addEventListener('DOMContentLoaded', function() {
     <div id="d-next-co" style="font-size:.72rem;color:var(--text2);margin:4px 0 8px"></div>
     <div class="stitle" id="d-vendors-title">Suggested Vendors</div>
     <div id="d-vendors"></div>
+    <div class="stitle">Vendor Completion Notes</div>
+    <textarea id="d-vnotes" rows="3" placeholder="Vendor fills this out after completing work..." onchange="updateField('vendorNotes',this.value)" oninput="clearTimeout(this._debounce);this._debounce=setTimeout(()=>updateField('vendorNotes',this.value),800)"></textarea>
     <div style="display:flex;gap:9px;margin-top:20px;justify-content:space-between;align-items:center;flex-wrap:wrap">
       <button class="btn btn-red" onclick="deleteTask()">Delete Task</button>
       <div style="display:flex;gap:7px">
@@ -682,6 +616,25 @@ document.addEventListener('DOMContentLoaded', function() {
         <button class="btn" onclick="markResolvedByGuest()" id="resolved-guest-btn" style="border-color:var(--green);color:var(--green)">Resolved by Guest</button>
         <button class="btn btn-g" onclick="markComplete()" id="complete-btn">Mark Complete</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- VENDOR DAY MODAL -->
+<div class="mo" id="vendor-day-modal">
+  <div class="modal">
+    <div class="mhdr">
+      <div>
+        <div id="vd-date" style="font-size:.67rem;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;color:var(--gold);margin-bottom:4px"></div>
+        <div class="mtitle" id="vd-title"></div>
+      </div>
+      <button class="mclose" onclick="closeModal('vendor-day-modal')">&#x2715;</button>
+    </div>
+    <div id="vd-combined-sms"></div>
+    <div class="stitle">Individual Tasks</div>
+    <div id="vd-tasks" style="display:flex;flex-direction:column;gap:7px;margin-bottom:16px"></div>
+    <div style="display:flex;justify-content:flex-end;gap:7px">
+      <button class="btn" onclick="closeModal('vendor-day-modal')">Close</button>
     </div>
   </div>
 </div>
@@ -706,10 +659,6 @@ document.addEventListener('DOMContentLoaded', function() {
       <div class="fgr"><label>Default Vendor</label><select id="r-vendor" onchange="onRecVendorChange()"><option value="">— None —</option></select></div>
       <div class="fgr" id="r-vendor-custom-wrap" style="display:none"><label>Custom Vendor Name</label><input type="text" id="r-vendor-custom" placeholder="Enter vendor name"></div>
       <div class="fgr full"><label>Notes</label><textarea id="r-notes" rows="2" placeholder="Additional instructions..."></textarea></div>
-      <div class="fgr full" style="flex-direction:row;align-items:center;gap:8px;padding:8px 0 0">
-        <input type="checkbox" id="r-combinable" style="width:16px;height:16px;accent-color:var(--green);cursor:pointer">
-        <label for="r-combinable" style="cursor:pointer;font-size:.82rem;color:var(--text)">Suggest combining with nearby tasks <span style="color:var(--text2);font-weight:400">(when another task is scheduled within 10 days at the same property)</span></label>
-      </div>
     </div>
     <div style="display:flex;gap:9px;margin-top:20px;justify-content:flex-end">
       <button class="btn" onclick="closeModal('rec-modal')">Cancel</button>
@@ -745,67 +694,33 @@ document.addEventListener('DOMContentLoaded', function() {
   </div>
 </div>
 
-<div class="mo" id="prop-modal">
-  <div class="modal">
-    <div class="mhdr">
-      <div class="mtitle" id="prop-modal-title">Add Property</div>
-      <button class="mclose" onclick="closeModal('prop-modal')">&#x2715;</button>
-    </div>
-    <div class="fg">
-      <div class="fgr"><label>Property Name</label><input type="text" id="p-name" placeholder="e.g. PRC - 7 - Sunset View"></div>
-      <div class="fgr"><label>Property ID</label><input type="text" id="p-id" placeholder="e.g. prc7 (unique, no spaces)"></div>
-      <div class="fgr full"><label>Address</label><input type="text" id="p-addr" placeholder="Full property address"></div>
-      <div class="fgr"><label>Door Code</label><input type="text" id="p-door" placeholder="e.g. 1477"></div>
-      <div class="fgr"><label>Neighborhood</label>
-        <select id="p-nb"></select>
-      </div>
-      <div class="fgr full"><label>iCal URL <span style="font-weight:400;color:var(--text2)">(optional — for calendar reservations)</span></label><input type="text" id="p-ical" placeholder="https://api.hospitable.com/..."></div>
-    </div>
-    <div style="display:flex;gap:9px;margin-top:20px;justify-content:space-between;align-items:center">
-      <button class="btn btn-red" id="p-del-btn" onclick="deleteProp()" style="display:none">Delete Property</button>
-      <div style="display:flex;gap:7px;margin-left:auto">
-        <button class="btn" onclick="closeModal('prop-modal')">Cancel</button>
-        <button class="btn btn-g" onclick="saveProp()">Save Property</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="mo" id="nb-modal">
-  <div class="modal">
-    <div class="mhdr">
-      <div class="mtitle" id="nb-modal-title">Add Neighborhood</div>
-      <button class="mclose" onclick="closeModal('nb-modal')">&#x2715;</button>
-    </div>
-    <div class="fg">
-      <div class="fgr"><label>Neighborhood Name</label><input type="text" id="nb-name" placeholder="e.g. Mountain View Estates"></div>
-      <div class="fgr"><label>Location</label><input type="text" id="nb-sub" placeholder="e.g. Gatlinburg, TN"></div>
-      <div class="fgr"><label>Color Class</label>
-        <select id="nb-cls">
-          <option value="prc">Green (PRC)</option>
-          <option value="umc">Blue (UMC)</option>
-          <option value="gatlinburg">Amber (Gatlinburg)</option>
-          <option value="alpine">Purple (Alpine)</option>
-          <option value="sevierville">Teal (Sevierville)</option>
-          <option value="hillside">Rose (Hillside)</option>
-        </select>
-      </div>
-    </div>
-    <div style="display:flex;gap:9px;margin-top:20px;justify-content:space-between;align-items:center">
-      <button class="btn btn-red" id="nb-del-btn" onclick="deleteNb()" style="display:none">Delete Neighborhood</button>
-      <div style="display:flex;gap:7px;margin-left:auto">
-        <button class="btn" onclick="closeModal('nb-modal')">Cancel</button>
-        <button class="btn btn-g" onclick="saveNbModal()">Save Neighborhood</button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <div class="toast" id="toast"></div>
 
 <script>
-const DEF_ICAL_URLS = {"bearadise": "https://api.hospitable.com/v1/properties/reservations.ics?key=709494&token=600a3fe5-4ae2-41e5-a98c-0e89277d76a9&noCache", "hero": "https://api.hospitable.com/v1/properties/reservations.ics?key=916674&token=a0a4a2d9-03ed-4a27-a812-905c8c4ea501&noCache", "hibernation": "https://api.hospitable.com/v1/properties/reservations.ics?key=1225322&token=c4917596-d906-4a1e-809f-eba9a2439350&noCache", "hillside_big": "https://api.hospitable.com/v1/properties/reservations.ics?key=1335724&token=5a763d10-b98e-4b50-8362-921ecbb26f21&noCache", "hillside_cottage": "https://api.hospitable.com/v1/properties/reservations.ics?key=1340910&token=82ae91d7-ccdb-438b-becf-6840e461dc71&noCache", "magic": "https://api.hospitable.com/v1/properties/reservations.ics?key=962256&token=305df0a9-5851-4281-8651-74a3e00313a8&noCache", "prc1": "https://api.hospitable.com/v1/properties/reservations.ics?key=1928482&token=420fd322-b0a3-4e75-b341-1d64ebee284a&noCache", "prc2": "https://api.hospitable.com/v1/properties/reservations.ics?key=1930408&token=046ec345-6d05-4c1b-999b-9214518ebca2&noCache", "prc3": "https://api.hospitable.com/v1/properties/reservations.ics?key=1930410&token=afe5571b-0163-4ea6-9e9c-f87a160cd258&noCache", "prc4": "https://api.hospitable.com/v1/properties/reservations.ics?key=1930412&token=23d354b5-45cd-458b-8187-a465b161512b&noCache", "prc5": "https://api.hospitable.com/v1/properties/reservations.ics?key=1930678&token=155d60a2-1146-4efb-b697-256e45269636&noCache", "prc6": "https://api.hospitable.com/v1/properties/reservations.ics?key=1930676&token=6f185c88-f931-4c88-b382-e270a5325e3c&noCache", "wizards": "https://api.hospitable.com/v1/properties/reservations.ics?key=1107656&token=ecc9f7cb-48cc-4dda-8bd1-ef728dfa7f97&noCache", "umc10": "https://api.hospitable.com/v1/properties/reservations.ics?key=1717974&token=e31eaae4-8872-418a-95b5-5efd718ee7b3&noCache", "umc20": "https://api.hospitable.com/v1/properties/reservations.ics?key=1718066&token=61a6a850-ee7e-4145-b886-5ede9c382c1f&noCache", "umc30": "https://api.hospitable.com/v1/properties/reservations.ics?key=1718396&token=7e6fd6ff-090a-4381-a0bf-3f049b857e10&noCache", "umc40": "https://api.hospitable.com/v1/properties/reservations.ics?key=1718538&token=5cf6055c-fb5f-462e-8224-dbd64429433a&noCache", "umc50": "https://api.hospitable.com/v1/properties/reservations.ics?key=1718734&token=5dbe6adf-516d-4630-b778-bd02c0c182a0&noCache", "umc60": "https://api.hospitable.com/v1/properties/reservations.ics?key=1718786&token=0a252269-a0b0-49fa-9a73-a80b565dd5a3&noCache"};
-const DEF_NBS = [
+// ── Hospitable REST API v2 (replaces iCal) ──────────────────
+// Property shortnames → Hospitable UUID property IDs
+const HOSPITABLE_IDS = {
+  "bearadise":"02c1caaf-5a7c-4a72-bd6e-b3be2fc56202",
+  "hero":"f98bdb26-4ed6-4633-83ef-96e5e567ef77",
+  "hibernation":"1f6c5121-d938-49a8-9a6d-b705b13287e0",
+  "hillside_big":"3ab44a3c-4a48-4783-b3d5-aa1c58d1ad97",
+  "hillside_cottage":"f11403bb-2281-4aab-8e5b-f13078ca4dee",
+  "magic":"255cae9a-e83c-4c03-bef6-81241309894e",
+  "prc1":"c3555d02-6b66-4ef2-a0c0-f08db7eb365f",
+  "prc2":"e0599c7e-a9d8-4a4c-b5af-69beb2528d66",
+  "prc3":"9cf9010d-421c-4cb8-aa09-22c71258069d",
+  "prc4":"0f62c8b2-365e-4109-82b8-8e680fbbe27d",
+  "prc5":"725570ac-6f11-41b8-a84c-93c68277eac9",
+  "prc6":"195a44a4-2cf4-410a-bddd-462f2d12acf2",
+  "wizards":"74601c4e-fe9d-4668-80a9-a2b8f74c7df0",
+  "umc10":"919a81dc-2a41-40e3-a23c-9491c7729999",
+  "umc20":"f8b224bf-5b72-4da3-ae2a-80766d820810",
+  "umc30":"088097dc-0770-4adf-8ae8-88db05cffbdc",
+  "umc40":"0d57c1ac-957e-43b6-a3fd-b31e590e39a0",
+  "umc50":"8fc601cc-d75c-4c3b-aa37-fda349af10da",
+  "umc60":"7a7ae454-b0ff-435a-819e-623f618264b6"
+};
+const NBS = [
   {id:'prc',name:'Paradise Ridge',sub:'Pigeon Forge, TN',cls:'prc',props:['prc1','prc2','prc3','prc4','prc5','prc6']},
   {id:'umc',name:'Upper Middle Creek',sub:'Sevierville, TN',cls:'umc',props:['umc10','umc20','umc30','umc40','umc50','umc60']},
   {id:'gatlinburg',name:'Gatlinburg',sub:'Gatlinburg, TN',cls:'gatlinburg',props:['bearadise','wizards']},
@@ -813,7 +728,7 @@ const DEF_NBS = [
   {id:'sevierville',name:'Sevierville',sub:'Sevierville, TN',cls:'sevierville',props:['magic']},
   {id:'hillside',name:'Hillside Haven',sub:'Lake Martin, AL',cls:'hillside',props:['hillside_big','hillside_cottage']},
 ];
-const DEF_PROPS = [
+const PROPS = [
   {id:'prc1',name:'PRC - 1 - Forge in the Forest',address:'1627 Paradise Ridge Dr. Unit 1',door:'1471'},
   {id:'prc2',name:'PRC - 2 - Bluebird Bungalow',address:'1627 Paradise Ridge Dr. Unit 2',door:'1472'},
   {id:'prc3',name:'PRC - 3 - The Rustic Rose',address:'1627 Paradise Ridge Dr. Unit 3',door:'1473'},
@@ -834,9 +749,6 @@ const DEF_PROPS = [
   {id:'hillside_big',name:'Hillside Haven: The Big House',address:'226 Oak Hill, Jacksons Gap, AL',door:'4425'},
   {id:'hillside_cottage',name:'Hillside Haven: The Cottage',address:'218 Oak Hill, Jacksons Gap, AL',door:'O812'},
 ];
-let ICAL_URLS = JSON.parse(JSON.stringify(DEF_ICAL_URLS));
-let NBS = JSON.parse(JSON.stringify(DEF_NBS));
-let PROPS = JSON.parse(JSON.stringify(DEF_PROPS));
 const DEF_VENDORS = [
   {id:'v1',name:'Lisa Hawthorne',phone:'(936) 648-3940',email:'',role:'Head Cleaner',categories:['cleaning'],note:'Primary cleaner for all Smokies properties. Provides linens, soaps, paper products.'},
   {id:'v2',name:'James Hawthorne',phone:'(936) 714-7249',email:'',role:'Light Handyman / Hot Tub',categories:['cleaning','handyman','hot_tub'],note:"Lisa's husband. First call for hot tub Vapor Lock / Flo code issues. Can respond same night."},
@@ -861,14 +773,14 @@ const DEF_VENDORS = [
   {id:'v21',name:'Tennessee Fumigation (Terry Hazelwood)',phone:'(865) 755-7105',email:'',role:'Bed Bug Treatment',categories:['bed_bugs'],note:'Same or next day fumigation. Property ready in approximately 24 hours.'},
 ];
 const DEF_RECURRING = [
-  {id:'rc1',name:'HVAC Filter Replacement',properties:['all'],category:'hvac',frequency:'monthly',vendor:'Whaley Mechanical (Brandon)',notes:'Replace all HVAC filters monthly.',nextDue:'2026-05-01',combinable:true},
-  {id:'rc2',name:'Pre-Summer HVAC Check + Drain Line Flush',properties:['all'],category:'hvac',frequency:'biannual',vendor:'Whaley Mechanical (Brandon)',notes:'Flush drain lines to prevent summer shutdowns.',nextDue:'2026-04-15',combinable:false},
-  {id:'rc3',name:'Pre-Winter HVAC Check',properties:['all'],category:'hvac',frequency:'biannual',vendor:'Whaley Mechanical (Brandon)',notes:'Pre-winter heating system check.',nextDue:'2026-10-01',combinable:false},
-  {id:'rc4',name:'Aqua Clear — Magic Mountain',properties:['magic'],category:'water',frequency:'quarterly',vendor:'Aqua Clear Water Systems',notes:'Magic Mountain water is highly sulfuric. Regular visits required.',nextDue:'2026-04-01',combinable:false},
-  {id:'rc5',name:'Aqua Clear — PRC Well',properties:['prc1','prc2','prc3','prc4','prc5','prc6'],category:'water',frequency:'quarterly',vendor:'Aqua Clear Water Systems',notes:'6 PRC cabins share a single well. Equipment in shed next to Cabin 6. Notify guests.',nextDue:'2026-04-01',combinable:false},
-  {id:'rc6',name:'Septic System Service',properties:['wizards','magic','prc1','prc2','prc3','prc4','prc5','prc6','umc10','umc20','umc30','umc40','umc50','umc60'],category:'septic',frequency:'biennial',vendor:'Top Septic',notes:'Every 2 years for all properties with septic systems.',nextDue:'2027-01-01',combinable:false},
-  {id:'rc7',name:'Smoke & CO Detector Battery Replacement',properties:['all'],category:'electrical',frequency:'annual',vendor:'',notes:'Replace batteries in all smoke and CO detectors.',nextDue:'2026-10-01',combinable:false},
-  {id:'rc8',name:'Bed Bug Prevention — Bearadise Lodge',properties:['bearadise'],category:'bed_bugs',frequency:'monthly',vendor:'All About Bugs',notes:'Bearadise Lodge had bed bugs twice (2023, 2025). Monthly prevention treatment.',nextDue:'2026-05-01',combinable:false},
+  {id:'rc1',name:'HVAC Filter Replacement',properties:['all'],category:'hvac',frequency:'monthly',vendor:'Whaley Mechanical (Brandon)',notes:'Replace all HVAC filters monthly.',nextDue:'2026-05-01'},
+  {id:'rc2',name:'Pre-Summer HVAC Check + Drain Line Flush',properties:['all'],category:'hvac',frequency:'biannual',vendor:'Whaley Mechanical (Brandon)',notes:'Flush drain lines to prevent summer shutdowns.',nextDue:'2026-04-15'},
+  {id:'rc3',name:'Pre-Winter HVAC Check',properties:['all'],category:'hvac',frequency:'biannual',vendor:'Whaley Mechanical (Brandon)',notes:'Pre-winter heating system check.',nextDue:'2026-10-01'},
+  {id:'rc4',name:'Aqua Clear — Magic Mountain',properties:['magic'],category:'water',frequency:'quarterly',vendor:'Aqua Clear Water Systems',notes:'Magic Mountain water is highly sulfuric. Regular visits required.',nextDue:'2026-04-01'},
+  {id:'rc5',name:'Aqua Clear — PRC Well',properties:['prc1','prc2','prc3','prc4','prc5','prc6'],category:'water',frequency:'quarterly',vendor:'Aqua Clear Water Systems',notes:'6 PRC cabins share a single well. Equipment in shed next to Cabin 6. Notify guests.',nextDue:'2026-04-01'},
+  {id:'rc6',name:'Septic System Service',properties:['wizards','magic','prc1','prc2','prc3','prc4','prc5','prc6','umc10','umc20','umc30','umc40','umc50','umc60'],category:'septic',frequency:'biennial',vendor:'Top Septic',notes:'Every 2 years for all properties with septic systems.',nextDue:'2027-01-01'},
+  {id:'rc7',name:'Smoke & CO Detector Battery Replacement',properties:['all'],category:'electrical',frequency:'annual',vendor:'',notes:'Replace batteries in all smoke and CO detectors.',nextDue:'2026-10-01'},
+  {id:'rc8',name:'Bed Bug Prevention — Bearadise Lodge',properties:['bearadise'],category:'bed_bugs',frequency:'monthly',vendor:'All About Bugs',notes:'Bearadise Lodge had bed bugs twice (2023, 2025). Monthly prevention treatment.',nextDue:'2026-05-01'},
 ];
 const VCAT = [
   {id:'cleaning',label:'Cleaning'},{id:'handyman',label:'Handyman / Carpentry'},
@@ -891,57 +803,16 @@ const PROXY_BASE = 'https://storybook-webhook.vercel.app';
 let calDate=new Date(), calMode='month', editVendorId=null, icalCache={};
 
 // STORAGE
-// Storage: uses server API when authenticated, falls back to localStorage
-const STORAGE_API = 'https://storybook-webhook.vercel.app/api/storage';
-function getAuthToken() {
-  try { const a = JSON.parse(sessionStorage.getItem('se_auth_token')); return a; } catch(e) { return null; }
-}
-const S = window.storage || {
-  get: async (k) => {
-    const token = getAuthToken();
-    if (token) {
-      try {
-        const r = await fetch(STORAGE_API + '?key=' + encodeURIComponent(k), {
-          headers: { 'Authorization': 'Bearer ' + token },
-          signal: AbortSignal.timeout(8000)
-        });
-        if (r.ok) { const d = await r.json(); return d.value ? { value: d.value } : null; }
-      } catch(e) { console.warn('[storage] Server get failed, using localStorage:', e.message); }
-    }
-    // Fallback to localStorage
-    const v = localStorage.getItem(k); return v ? { value: v } : null;
-  },
-  set: async (k, v) => {
-    // Always save to localStorage as backup
-    localStorage.setItem(k, v);
-    const token = getAuthToken();
-    if (token) {
-      try {
-        await fetch(STORAGE_API, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-          body: JSON.stringify({ key: k, value: v }),
-          signal: AbortSignal.timeout(8000)
-        });
-      } catch(e) { console.warn('[storage] Server set failed:', e.message); }
-    }
-  }
-};
+const S = window.storage || {get:async()=>null, set:async()=>null};
 async function load() {
   try{const r=await S.get('se_t');if(r)tasks=JSON.parse(r.value);}catch(e){tasks=[];}
   try{const r=await S.get('se_v');if(r)vendors=JSON.parse(r.value);else{vendors=JSON.parse(JSON.stringify(DEF_VENDORS));await save('se_v',vendors);}}catch(e){vendors=JSON.parse(JSON.stringify(DEF_VENDORS));}
   try{const r=await S.get('se_r');if(r)recurring=JSON.parse(r.value);else{recurring=JSON.parse(JSON.stringify(DEF_RECURRING));await save('se_r',recurring);}}catch(e){recurring=JSON.parse(JSON.stringify(DEF_RECURRING));}
-  try{const r=await S.get('se_props');if(r)PROPS=JSON.parse(r.value);}catch(e){}
-  try{const r=await S.get('se_nbs');if(r)NBS=JSON.parse(r.value);}catch(e){}
-  try{const r=await S.get('se_ical');if(r)ICAL_URLS=JSON.parse(r.value);}catch(e){}
 }
 async function save(k,v){try{await S.set(k,JSON.stringify(v));}catch(e){}}
 const saveTasks=()=>save('se_t',tasks);
 const saveVendors=()=>save('se_v',vendors);
 const saveRec=()=>save('se_r',recurring);
-const saveProps=()=>save('se_props',PROPS);
-const saveNbs=()=>save('se_nbs',NBS);
-const saveIcal=()=>save('se_ical',ICAL_URLS);
 
 // HELPERS
 const getNb=id=>NBS.find(n=>n.props.includes(id));
@@ -979,7 +850,7 @@ function populatePropMulti(id){
   });
 }
 
-function renderAll(){renderUB();renderTasks();renderCalendar();renderRecurring();renderHistory();renderVendors();renderProperties();}
+function renderAll(){renderUB();renderTasks();renderCalendar();renderRecurring();renderHistory();renderVendors();}
 
 // URGENT BANNER
 function renderUB(){
@@ -1081,52 +952,67 @@ function renderTasks(){
 function setCatFilter(c,btn){catFilter=c;document.querySelectorAll('.fb').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderTasks();}
 function setFilter(f,btn){} // kept for compatibility
 
-// ICAL
-function parseIcal(txt){
+// ── HOSPITABLE API INTEGRATION ──────────────────────────────
+// Replaces the old iCal fetch + parse pipeline.
+// Uses the Calendar endpoint which returns day-by-day availability.
+// Output shape {start: Date, end: Date, summary: string} is unchanged
+// so all downstream consumers (renderDP, getAvail, miniCal, SMS) work as before.
+
+// Convert calendar day-by-day data into reservation blocks {start, end, summary}
+function adaptCalendar(data){
+  if(!data||!data.data||!data.data.days){
+    console.warn('adaptCalendar: unexpected format',data?Object.keys(data):'null');
+    return[];
+  }
+  const days=data.data.days;
   const evs=[];
-  // Unfold iCal lines (lines continued with CRLF+whitespace or LF+whitespace)
-  const unfolded=txt.replace(/\r\n[ \t]/g,'').replace(/\n[ \t]/g,'');
-  const blocks=unfolded.split(/BEGIN:VEVENT/);
-  blocks.slice(1).forEach(b=>{
-    // Match DTSTART and DTEND with optional parameters like ;VALUE=DATE or ;TZID=...
-    const g=k=>{const m=b.match(new RegExp(k+'(?:;[^:]*)?:([^\r\n]+)'));return m?m[1].trim():'';};
-    const s=g('DTSTART');const e=g('DTEND');if(!s||!e)return;
-    // Extract digits only and build local noon date — immune to timezone shifts
-    const pd=str=>{const d=str.replace(/\D/g,'').slice(0,8);if(d.length<8)return null;return new Date(+d.slice(0,4),+d.slice(4,6)-1,+d.slice(6,8),12,0,0);};
-    const ci=pd(s);const co=pd(e);if(!ci||!co)return;
-    // Get summary, strip platform suffixes like " (Airbnb)"
-    const rawSum=g('SUMMARY');
-    const summary=rawSum.replace(/\s*\((?:Airbnb|VRBO|Booking\.com|HomeAway)[^)]*\)\s*$/i,'').trim();
-    // Skip blocked/unavailable entries with no guest name
-    if(!summary||summary.toLowerCase().includes('not available')||summary.toLowerCase()==='blocked')return;
-    evs.push({start:ci,end:co,summary});
-  });
+  let blockStart=null;
+  // Walk through days, group consecutive RESERVED days into blocks
+  for(let i=0;i<days.length;i++){
+    const d=days[i];
+    const isReserved=d.status&&d.status.reason==='RESERVED';
+    if(isReserved&&!blockStart){
+      blockStart=d.date; // start a new block
+    } else if(!isReserved&&blockStart){
+      // End the block — checkout is this day
+      const pd=s=>{const m=s.match(/(\d{4})-(\d{2})-(\d{2})/);return m?new Date(+m[1],+m[2]-1,+m[3],12,0,0):null;};
+      const ci=pd(blockStart),co=pd(d.date);
+      if(ci&&co)evs.push({start:ci,end:co,summary:'Guest'});
+      blockStart=null;
+    }
+  }
+  // If still in a block at the end, close it at the last day + 1
+  if(blockStart){
+    const pd=s=>{const m=s.match(/(\d{4})-(\d{2})-(\d{2})/);return m?new Date(+m[1],+m[2]-1,+m[3],12,0,0):null;};
+    const ci=pd(blockStart);
+    const lastDay=pd(days[days.length-1].date);
+    if(ci&&lastDay){const co=new Date(lastDay);co.setDate(co.getDate()+1);evs.push({start:ci,end:co,summary:'Guest'});}
+  }
+  console.log(`adaptCalendar: ${evs.length} reservation blocks from ${days.length} days`);
   return evs;
 }
+
 async function fetchIcal(pid){
   if(icalCache[pid]&&icalCache[pid]!=='error')return icalCache[pid];
-  const url=ICAL_URLS[pid];if(!url){console.warn(`No iCal URL configured for property "${pid}"`);return[];}
-  // Try custom proxy first, then fall back to public CORS proxies
-  const proxies=[
-    u=>`${PROXY_BASE}/api/proxy?url=${encodeURIComponent(u)}`,
-    u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,
-    u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  ];
-  for(const proxy of proxies){
-    const proxyUrl=proxy(url);
-    console.log(`Fetching iCal for ${pid} via: ${proxyUrl.slice(0,80)}...`);
-    try{
-      const r=await fetch(proxyUrl,{signal:AbortSignal.timeout(10000)});
-      if(!r.ok){console.warn(`iCal proxy returned HTTP ${r.status} for ${pid}, trying next...`);continue;}
-      const txt=await r.text();
-      if(!txt.includes('BEGIN:VCALENDAR')){console.warn(`iCal proxy returned non-calendar data for ${pid}, trying next...`);continue;}
-      const evs=parseIcal(txt);
-      console.log(`iCal loaded for ${pid}: ${evs.length} events`);
-      icalCache[pid]=evs;return evs;
-    }catch(e){console.warn(`iCal proxy failed for ${pid}: ${e.message}, trying next...`);continue;}
+  const hospId=HOSPITABLE_IDS[pid];
+  if(!hospId){console.warn(`No Hospitable ID for property "${pid}"`);return[];}
+  const url=`${PROXY_BASE}/api/hospitable?action=calendar&pid=${hospId}`;
+  console.log(`Fetching calendar for ${pid} (hospitable id: ${hospId.slice(0,8)}...)`);
+  try{
+    const r=await fetch(url,{signal:AbortSignal.timeout(15000)});
+    if(!r.ok){
+      const detail=await r.text().catch(()=>'');
+      console.error(`Hospitable API ${r.status} for ${pid}: ${detail.slice(0,200)}`);
+      icalCache[pid]='error';return'error';
+    }
+    const json=await r.json();
+    const evs=adaptCalendar(json);
+    console.log(`Loaded ${pid}: ${evs.length} reservation blocks via API`);
+    icalCache[pid]=evs;return evs;
+  }catch(e){
+    console.error(`Hospitable API failed for ${pid}: ${e.message}`);
+    icalCache[pid]='error';return'error';
   }
-  console.error(`All iCal proxies failed for ${pid}`);
-  icalCache[pid]='error';return'error';
 }
 function getAvail(evs,start,days){
   const res=[];
@@ -1235,16 +1121,15 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
       const isSel=selVal===ds;
       const isPast=d<today&&d.toDateString()!==today.toDateString();
       const st=dayState(d);
-      const isFullyBooked=st==='booked'; // guest staying through the night — no service window
-      const isTurn=st==='turn'||st==='turn-only'; // checkout + checkin same day — tight window
+      const isBooked=st==='booked';
+      const isTurn=st==='turn';
       const isToday=d.toDateString()===today.toDateString();
       let cls='dp-cell';
       if(isToday)cls+=' dp-today-cell';
       if(isSel)cls+=' dp-selected';
-      if(isFullyBooked)cls+=' dp-booked-bg';
-      if(isTurn)cls+=' dp-turn-bg';
+      if(isBooked||isTurn)cls+=' dp-booked-bg';
       const dnCls='dp-dn'+(isToday?' dp-today-num':'');
-      const warn=isFullyBooked?',true':'';
+      const warn=isBooked?',true':'';
       const click=!isPast?`onclick="selDate('${px}','${ds}'${warn})"`:'' ;
       // position:relative + z-index:1 ensures cell is above the SVG bar layer for clicks
       h+=`<div class="${cls}" style="position:relative;z-index:1" ${click}><div class="${dnCls}">${dn}</div></div>`;
@@ -1252,10 +1137,6 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
 
     // SVG bar layer for this week row — rendered after cells but positioned absolute behind them via z-index:0
     // Use 100% width SVG, each cell = 1/7 of width
-    // Determine which columns in this week row belong to the current month
-    const firstValidCol=wk.findIndex(c=>!c.isOther);
-    const lastValidCol=6-[...wk].reverse().findIndex(c=>!c.isOther);
-
     h+=`<div class="dp-bars" style="z-index:0"><svg width="100%" height="${CELL_H}" viewBox="0 0 700 ${CELL_H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" style="pointer-events:none">`;
     const CW=100; // each cell = 100 units wide (700 total for 7 cells)
 
@@ -1266,7 +1147,7 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
       const coInWeek=r.co>wkStart&&r.co<=wkEnd;
 
       // Column of first visible day of this bar
-      let startCol;
+      let startCol; 
       if(ciInWeek){
         startCol=Math.round((r.ci-wkStart)/(864e5));
       } else {
@@ -1279,9 +1160,6 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
       } else {
         endCol=7;
       }
-      // Clamp bars to only draw within current-month cells
-      if(firstValidCol>=0)startCol=Math.max(startCol,firstValidCol);
-      if(lastValidCol>=0)endCol=Math.min(endCol,lastValidCol+1);
       if(endCol<=startCol)return;
 
       // Does this bar have a diagonal START (checkin on a turn day)?
@@ -1329,9 +1207,9 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
     </div>`;
   } else {
     h+=`<div class="dp-leg">`;
-    h+=`<div class="dp-li"><div style="width:14px;height:10px;background-image:repeating-linear-gradient(135deg,transparent,transparent 3px,rgba(0,0,0,.12) 3px,rgba(0,0,0,.12) 4px);background-color:#f9fdf9;border:1px solid var(--border);border-radius:2px"></div>Booked all day</div>`;
-    h+=`<div class="dp-li"><div style="width:14px;height:10px;background:#fff3e0;border:1px solid var(--border);border-radius:2px"></div>Turn day</div>`;
-    h+=`<div class="dp-li"><div style="width:14px;height:10px;background:#fff;border:1px solid var(--border);border-radius:2px"></div>Available for service</div>`;
+    h+=`<div class="dp-li"><div class="dp-ld" style="background:${TEAL}"></div>Guests in house</div>`;
+    h+=`<div class="dp-li"><svg width="22" height="10"><polygon points="6,0 22,0 22,10 0,10" fill="${TEAL}" opacity=".92"/><polygon points="0,0 16,0 22,10 0,10" fill="${TEAL}" opacity=".65"/></svg>Turn day</div>`;
+    h+=`<div class="dp-li"><div style="width:14px;height:10px;background-image:repeating-linear-gradient(135deg,transparent,transparent 3px,rgba(0,0,0,.12) 3px,rgba(0,0,0,.12) 4px);background-color:#fff;border:1px solid var(--border);border-radius:2px"></div>Available</div>`;
     h+=`</div>`;
   }
   h+=`<div class="dp-warn" id="${px}-dp-warn"><strong>⚠ Guests are in house on this day.</strong> Are you sure you want to schedule maintenance while guests are present?<div class="dp-warn-btns"><button class="btn btn-gold" onclick="confirmBookedDate('${px}')">Yes, Schedule Anyway</button><button class="btn" onclick="cancelBookedDate('${px}')">Pick Another Day</button></div></div>`;
@@ -1416,7 +1294,26 @@ function buildMonth(){
     if(!isO){
       h+=`<div class="cdn ${isT?'today':''}">${dn}</div>`;
       const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(dn).padStart(2,'0')}`;
-      tasks.filter(t=>t.date===ds&&!['complete','resolved_by_guest'].includes(t.status)).forEach(t=>{
+      const dayTasks=tasks.filter(t=>t.date===ds&&!['complete','resolved_by_guest'].includes(t.status));
+      // Group tasks by vendor for same-day dispatch indicators
+      const vendorGroups={};const ungrouped=[];
+      dayTasks.forEach(t=>{
+        if(t.vendor){const vk=t.vendor.toLowerCase();if(!vendorGroups[vk])vendorGroups[vk]={name:t.vendor,tasks:[]};vendorGroups[vk].tasks.push(t);}
+        else ungrouped.push(t);
+      });
+      // Render vendor groups (2+ tasks = pill, 1 task = normal)
+      Object.values(vendorGroups).forEach(vg=>{
+        if(vg.tasks.length>=2){
+          const hasUrg=vg.tasks.some(t=>t.urgent);
+          const firstName=vg.name.split(' ')[0];
+          const summary=vg.tasks.map(t=>{const p=getProp(t.property);return(p?p.name.split(' - ').pop():t.property)+': '+t.problem;}).join(' | ');
+          h+=`<div class="vg-pill ${hasUrg?'urg':''}" onclick="openVendorDay('${vg.name.replace(/'/g,"\\'")}','${ds}')" title="${firstName}: ${summary}"><span class="vg-count">${vg.tasks.length}</span>${firstName}: ${vg.tasks.length} jobs</div>`;
+        } else {
+          vg.tasks.forEach(t=>{const nc=getNbCls(t.property);const p=getProp(t.property);const sh=p?p.name.split(' - ').pop():t.property;h+=`<div class="ce ce-${nc} ${t.urgent?'urg':''} ${t.recurring?'rec':''}" onclick="openDetail('${t.id}')" title="${sh}: ${t.problem}">${sh}: ${t.problem.substring(0,30)}${t.problem.length>30?'...':''}</div>`;});
+        }
+      });
+      // Render unassigned tasks normally
+      ungrouped.forEach(t=>{
         const nc=getNbCls(t.property);const p=getProp(t.property);const sh=p?p.name.split(' - ').pop():t.property;
         h+=`<div class="ce ce-${nc} ${t.urgent?'urg':''} ${t.recurring?'rec':''}" onclick="openDetail('${t.id}')" title="${sh}: ${t.problem}">${sh}: ${t.problem.substring(0,30)}${t.problem.length>30?'...':''}</div>`;
       });
@@ -1426,7 +1323,7 @@ function buildMonth(){
         const alreadyScheduled=tasks.some(x=>x.recurring&&x.problem===r.name&&x.date===ds&&pids.some(pid=>x.property===pid));
         if(alreadyScheduled)return;
         const nc=pids.length===1?getNbCls(pids[0]):'other';
-        h+=`<div class="ce ce-${nc} rec sug" title="${r.name} — click to schedule" onclick="openTaskFromRecurring('${r.id}','${ds}')" style="cursor:pointer">${r.name.substring(0,28)}${r.name.length>28?'...':''}</div>`;
+        h+=`<div class="ce ce-${nc} rec sug" title="${r.name} (recurring — go to Recurring tab to generate)" style="cursor:default">${r.name.substring(0,28)}${r.name.length>28?'...':''}</div>`;
       });
     }
     h+='</div>';
@@ -1444,8 +1341,22 @@ function buildWeek(ws){
     const d=new Date(ws);d.setDate(ws.getDate()+i);
     const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     h+='<div class="wk-day">';
-    tasks.filter(t=>t.date===ds&&!['complete','resolved_by_guest'].includes(t.status)).forEach(t=>{
-      const nc=getNbCls(t.property);const p=getProp(t.property);
+    const wkDayTasks=tasks.filter(t=>t.date===ds&&!['complete','resolved_by_guest'].includes(t.status));
+    const wkVendorGroups={};const wkUngrouped=[];
+    wkDayTasks.forEach(t=>{
+      if(t.vendor){const vk=t.vendor.toLowerCase();if(!wkVendorGroups[vk])wkVendorGroups[vk]={name:t.vendor,tasks:[]};wkVendorGroups[vk].tasks.push(t);}
+      else wkUngrouped.push(t);
+    });
+    Object.values(wkVendorGroups).forEach(vg=>{
+      if(vg.tasks.length>=2){
+        const hasUrg=vg.tasks.some(t=>t.urgent);const firstName=vg.name.split(' ')[0];
+        const jobList=vg.tasks.map(t=>{const p=getProp(t.property);return(p?p.name.split(' - ').pop():t.property)+': '+t.problem;}).join(', ');
+        h+=`<div class="de vg-pill-week ${hasUrg?'urg':''}" onclick="openVendorDay('${vg.name.replace(/'/g,"\\'")}','${ds}')"><div class="de-prop">${firstName} — ${vg.tasks.length} jobs</div><div class="de-title">${jobList.substring(0,60)}${jobList.length>60?'...':''}</div></div>`;
+      } else {
+        vg.tasks.forEach(t=>{const nc=getNbCls(t.property);const p=getProp(t.property);h+=`<div class="de de-${nc} ${t.urgent?'urg':''} ${t.recurring?'rec':''}" onclick="openDetail('${t.id}')"><div class="de-prop">${p?p.name.split(' - ').pop():''}</div><div class="de-title">${t.problem.substring(0,35)}</div></div>`;});
+      }
+    });
+    wkUngrouped.forEach(t=>{const nc=getNbCls(t.property);const p=getProp(t.property);
       h+=`<div class="de de-${nc} ${t.urgent?'urg':''} ${t.recurring?'rec':''}" onclick="openDetail('${t.id}')"><div class="de-prop">${p?p.name.split(' - ').pop():''}</div><div class="de-title">${t.problem.substring(0,35)}</div></div>`;
     });
     recurring.filter(r=>r.nextDue===ds).forEach(r=>{
@@ -1454,7 +1365,7 @@ function buildWeek(ws){
       const alreadyScheduled=tasks.some(x=>x.recurring&&x.problem===r.name&&x.date===ds&&pids.some(pid=>x.property===pid));
       if(alreadyScheduled)return;
       const nc=pids.length===1?getNbCls(pids[0]):'other';
-      h+=`<div class="de de-${nc} rec sug" onclick="openTaskFromRecurring('${r.id}','${ds}')" style="cursor:pointer"><div class="de-prop">Recurring</div><div class="de-title">${r.name.substring(0,35)}</div></div>`;
+      h+=`<div class="de de-${nc} rec sug"><div class="de-prop">Recurring</div><div class="de-title">${r.name.substring(0,35)}</div></div>`;
     });
     h+='</div>';
   }
@@ -1546,7 +1457,6 @@ function openAddRecurring(){
   // Clear property selection
   const sel=document.getElementById('r-props');Array.from(sel.options).forEach(o=>o.selected=false);
   populateRecVendor('');
-  document.getElementById('r-combinable').checked=false;
   document.getElementById('rec-modal').classList.add('open');
 }
 function editRec(id){
@@ -1562,13 +1472,12 @@ function editRec(id){
   // Set property selection
   const sel=document.getElementById('r-props');
   Array.from(sel.options).forEach(o=>{o.selected=r.properties.includes(o.value)||r.properties.includes('all');});
-  document.getElementById('r-combinable').checked=!!r.combinable;
   document.getElementById('rec-modal').classList.add('open');
 }
 async function saveRecurring(){
   const name=document.getElementById('r-name').value.trim();if(!name){showToast('Task name required.','err');return;}
   const sel=document.getElementById('r-props');const props=Array.from(sel.selectedOptions).map(o=>o.value);
-  const data={name,properties:props.length?props:['all'],category:document.getElementById('r-cat').value,frequency:document.getElementById('r-freq').value,vendor:getRecVendorValue(),notes:document.getElementById('r-notes').value.trim(),nextDue:document.getElementById('r-next').value,combinable:document.getElementById('r-combinable').checked};
+  const data={name,properties:props.length?props:['all'],category:document.getElementById('r-cat').value,frequency:document.getElementById('r-freq').value,vendor:getRecVendorValue(),notes:document.getElementById('r-notes').value.trim(),nextDue:document.getElementById('r-next').value};
   if(editRecId){
     const r=recurring.find(x=>x.id===editRecId);if(r)Object.assign(r,data);
     editRecId=null;
@@ -1604,7 +1513,6 @@ function checkCombine(){
   const area=document.getElementById('d-combine');area.innerHTML='';if(!t.date)return;
   const td=new Date(t.date+'T12:00:00');
   const nearby=recurring.filter(r=>{
-    if(!r.combinable)return false;
     if(!r.nextDue)return false;
     const diff=Math.abs(td-new Date(r.nextDue+'T12:00:00'))/(864e5);if(diff>10)return false;
     const ps=r.properties.includes('all')?PROPS.map(p=>p.id):r.properties;if(!ps.includes(t.property))return false;
@@ -1639,35 +1547,6 @@ function onPropChange(){
   document.getElementById('f-dp-display').className='dp-ph';
   document.getElementById('f-dp-btn').classList.remove('has-val');
 }
-function checkNewVendor(prefix='f'){
-  const input=document.getElementById(prefix+'-vendor');
-  const area=document.getElementById(prefix+'-vendor-new');
-  const name=input.value.trim();
-  if(!name||name.length<2){area.style.display='none';return;}
-  // Check if any existing vendor matches (case-insensitive partial match)
-  const match=vendors.some(v=>v.name.toLowerCase()===name.toLowerCase()||v.name.toLowerCase().includes(name.toLowerCase())||name.toLowerCase().includes(v.name.toLowerCase()));
-  if(match){area.style.display='none';return;}
-  area.style.display='block';
-  area.innerHTML=`<div style="margin-top:6px;padding:9px 12px;background:#fff8e8;border:1px solid var(--gold-light);border-radius:8px;font-size:.8rem;display:flex;align-items:center;justify-content:space-between;gap:8px">
-    <span><strong>${name}</strong> is not in your vendor list.</span>
-    <button class="btn btn-gold" style="font-size:.72rem;white-space:nowrap" onclick="quickAddVendor('${prefix}')">+ Add to Vendors</button>
-  </div>`;
-}
-async function quickAddVendor(prefix='f'){
-  const input=document.getElementById(prefix+'-vendor');
-  const name=input.value.trim();if(!name)return;
-  // Check if already exists
-  if(vendors.some(v=>v.name.toLowerCase()===name.toLowerCase())){showToast('Vendor already exists.');return;}
-  // Get current category from the task form for a smart default
-  let cat='other';
-  if(prefix==='f'){const el=document.getElementById('f-category');if(el)cat=el.value;}
-  else if(detailId){const t=tasks.find(x=>x.id===detailId);if(t)cat=t.category||'other';}
-  const v={id:'v'+Date.now(),name,role:'',phone:'',email:'',categories:[cat||'other'],note:''};
-  vendors.push(v);
-  await saveVendors();
-  document.getElementById(prefix+'-vendor-new').style.display='none';
-  showToast(`${name} added to vendor list. You can add their details in the Vendors tab.`);
-}
 function onCatChange(){
   const cat=document.getElementById('f-category').value;
   const area=document.getElementById('f-vendor-suggest');
@@ -1683,23 +1562,6 @@ function onCatChange(){
       </div>
       ${v.note?`<div style="font-size:.73rem;color:var(--text2);margin-top:4px">${v.note}</div>`:''}
     </div>`).join('');
-}
-function openTaskFromRecurring(recId, date) {
-  const r = recurring.find(x => x.id === recId); if (!r) return;
-  const pids = r.properties.includes('all') ? PROPS.map(p => p.id) : r.properties;
-  openAddTask(pids[0] || '');
-  setTimeout(() => {
-    document.getElementById('f-problem').value = r.name;
-    document.getElementById('f-category').value = r.category || '';
-    document.getElementById('f-vendor').value = r.vendor || '';
-    if (date) {
-      document.getElementById('f-date').value = date;
-      document.getElementById('f-dp-display').textContent = fmtDate(date);
-      document.getElementById('f-dp-display').className = '';
-      document.getElementById('f-dp-btn').classList.add('has-val');
-    }
-    document.getElementById('task-modal-title').textContent = 'New Task — from Recurring';
-  }, 60);
 }
 function openAddTask(propId){
   document.getElementById('task-modal-title').textContent='New Task';
@@ -1731,6 +1593,7 @@ async function openDetail(id){
   document.getElementById('d-title').textContent=t.problem;
   document.getElementById('d-status').value=t.status;
   document.getElementById('d-vendor').value=t.vendor||'';
+  document.getElementById('d-vnotes').value=t.vendorNotes||'';
   const dv=t.date||'';
   document.getElementById('d-date').value=dv;
   if(dv){document.getElementById('d-dp-display').textContent=fmtDate(dv);document.getElementById('d-dp-display').className='';document.getElementById('d-dp-btn').classList.add('has-val');}
@@ -1742,12 +1605,39 @@ async function openDetail(id){
     ${t.category?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${t.category.replace('_',' ')}</span>`:''}
     ${t.guest?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">Reported by ${t.guest}</span>`:''}
     ${t.created?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${fmtReported(t.created)}</span>`:''}`;
+  renderUrgentToggle(t);
   renderDetailVendors(t,p);renderNotes(t);checkCombine();
+  closeVendorDD(); // reset dropdown state when opening a new task
   renderMiniCal(t.property).then(()=>renderDetailVendors(t,p));
   const isDone=['complete','resolved_by_guest'].includes(t.status);
   document.getElementById('complete-btn').style.display=isDone?'none':'';
   document.getElementById('resolved-guest-btn').style.display=isDone?'none':'';
   document.getElementById('detail-modal').classList.add('open');
+}
+/* Open the vendor-day modal showing all tasks for a vendor on a specific date */
+function openVendorDay(vendorName,date){
+  const vdTasks=getVendorDayTasks(vendorName,date);
+  if(!vdTasks.length)return;
+  const v=vendors.find(x=>x.name.toLowerCase()===vendorName.toLowerCase());
+  const fmtD=new Date(date+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+  document.getElementById('vd-date').textContent=fmtD;
+  document.getElementById('vd-title').textContent=`${vendorName} — ${vdTasks.length} Jobs`;
+  // Render combined SMS if vendor exists in our list
+  if(v){
+    document.getElementById('vd-combined-sms').innerHTML=combinedVendorCard(v,vdTasks);
+  } else {
+    document.getElementById('vd-combined-sms').innerHTML=`<div style="font-size:.82rem;color:var(--text2);padding:6px 0;margin-bottom:8px"><strong>${vendorName}</strong> is not in the vendor list — add them to send a combined message.</div>`;
+  }
+  // Render individual task cards for reference
+  let th='';
+  vdTasks.forEach(t=>{
+    const p=getProp(t.property);const nc=getNbCls(t.property);const sh=p?p.name.split(' - ').pop():t.property;
+    th+=`<div class="tc nb-${nc}" style="cursor:pointer" onclick="closeModal('vendor-day-modal');openDetail('${t.id}')">
+      <div class="tc-top"><div class="tdot dot-${t.status}"></div><div class="tmain"><div class="tprop pl-${nc}">${sh}</div><div class="tprob">${t.problem}</div>
+      <div class="tmeta"><span class="badge b-${t.status}">${t.status.replace('_',' ')}</span>${t.urgent?'<span class="badge b-urgent">Urgent</span>':''}<span class="tmi">${t.category?t.category.replace('_',' '):''}</span></div></div></div></div>`;
+  });
+  document.getElementById('vd-tasks').innerHTML=th;
+  document.getElementById('vendor-day-modal').classList.add('open');
 }
 async function renderMiniCal(pid){
   const nco=document.getElementById('d-next-co');
@@ -1758,52 +1648,63 @@ async function renderMiniCal(pid){
   const fco=av.find(a=>a.status==='checkout');
   nco.innerHTML=fco?`Next checkout: <strong style="color:var(--gold)">${fco.date.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</strong> — earliest recommended window`:'';
 }
-function vendorCard(v,t,p,showAssign){
-  const sms=buildSMS(t,p,v);const tel=v.phone.replace(/\D/g,'');
-  const smsId='sms-'+v.id;
-  return`<div class="vsc">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start">
-      <div><div class="vsn">${v.name}</div><div class="vsr">${v.role}</div><div class="vsp">${v.phone}${v.email?' | '+v.email:''}</div></div>
-      ${showAssign?`<button class="btn btn-g" onclick="assignVendor('${v.name.replace(/'/g,"\\'")}')">Assign</button>`:''}
-    </div>
-    <div style="font-size:.73rem;color:var(--text2);margin:5px 0 8px">${v.note}</div>
-    <div class="sms-box"><div class="sms-lbl">Ready-to-Send Text Message</div>
-      <textarea class="sms-edit" id="${smsId}">${sms.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
-      <div class="sms-acts">
-        <a id="${smsId}-link" href="sms:${tel}?body=${encodeURIComponent(sms)}" class="sms-btn sms-send" onclick="updateSmsLink('${smsId}','${tel}')">Open in Messages</a>
-        <button class="sms-btn sms-copy" onclick="copySms('${smsId}')">Copy Text</button>
-      </div>
-    </div>
-  </div>`;
-}
 function renderDetailVendors(t,p){
   const area=document.getElementById('d-vendors');
   const titleEl=document.getElementById('d-vendors-title');
   const m=vendors.filter(v=>v.categories.includes(t.category));
   const assignedVendor=t.vendor?vendors.find(v=>v.name.toLowerCase()===t.vendor.toLowerCase()):null;
 
-  // If a vendor is assigned and they're in our list, show their card prominently
+  function vendorCard(v,showAssign){
+    const sms=buildSMS(t,p,v);const tel=v.phone.replace(/\D/g,'');
+    const smsId='sms-'+v.id+'-'+t.id;
+    return`<div class="vsc">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div><div class="vsn">${v.name}</div><div class="vsr">${v.role}</div><div class="vsp">${v.phone}${v.email?' | '+v.email:''}</div></div>
+        ${showAssign?`<button class="btn btn-g" onclick="assignVendor('${v.name.replace(/'/g,"\\'")}')">Assign</button>`:''}
+      </div>
+      <div style="font-size:.73rem;color:var(--text2);margin:5px 0 8px">${v.note}</div>
+      <div class="sms-box"><div class="sms-lbl">Ready-to-Send Text Message</div>
+        <textarea class="sms-edit" id="${smsId}">${sms.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+        <div class="sms-acts">
+          <a id="${smsId}-link" href="sms:${tel}?body=${encodeURIComponent(sms)}" class="sms-btn sms-send" onclick="updateSmsLink('${smsId}','${tel}')">Open in Messages</a>
+          <button class="sms-btn sms-copy" onclick="copySms('${smsId}')">Copy Text</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // If a vendor is assigned and they're in our list
   if(assignedVendor){
     titleEl.textContent='Assigned Vendor';
-    let h=vendorCard(assignedVendor,t,p,false);
+    let h='';
+    // Check for same-vendor same-day grouping → show combined SMS banner
+    const sameDayTasks=getVendorDayTasks(assignedVendor.name,t.date);
+    if(sameDayTasks.length>=2){
+      h+=combinedVendorCard(assignedVendor,sameDayTasks);
+      h+=`<details style="margin-top:10px"><summary style="font-size:.78rem;color:var(--text2);cursor:pointer;padding:6px 0">Single-task message for this job only</summary>`;
+      h+=vendorCard(assignedVendor,false);
+      h+=`</details>`;
+    } else {
+      h+=vendorCard(assignedVendor,false);
+    }
     // Show other vendors in a collapsible section
     const others=m.filter(v=>v.id!==assignedVendor.id).slice(0,3);
     if(others.length){
       h+=`<details style="margin-top:10px"><summary style="font-size:.78rem;color:var(--text2);cursor:pointer;padding:6px 0">Other vendors for this category (${others.length})</summary>`;
-      h+=others.map(v=>vendorCard(v,t,p,true)).join('');
+      h+=others.map(v=>vendorCard(v,true)).join('');
       h+=`</details>`;
     }
     area.innerHTML=h;
     return;
   }
 
-  // If vendor is assigned but not in our list (e.g. typed manually), show a note + suggestions
+  // If vendor is assigned but not in our list
   if(t.vendor){
     titleEl.textContent='Assigned Vendor';
     let h=`<div style="font-size:.82rem;color:var(--text2);padding:6px 0;margin-bottom:8px">Assigned to <strong>${t.vendor}</strong> (not in vendor list)</div>`;
     if(m.length){
       h+=`<details><summary style="font-size:.78rem;color:var(--text2);cursor:pointer;padding:6px 0">Suggested vendors for this category (${m.length})</summary>`;
-      h+=m.slice(0,3).map(v=>vendorCard(v,t,p,true)).join('');
+      h+=m.slice(0,3).map(v=>vendorCard(v,true)).join('');
       h+=`</details>`;
     }
     area.innerHTML=h;
@@ -1813,7 +1714,7 @@ function renderDetailVendors(t,p){
   // No vendor assigned — show all suggestions
   titleEl.textContent='Suggested Vendors';
   if(!m.length){area.innerHTML='<div style="color:var(--text3);font-size:.82rem">Set a category to see vendor suggestions.</div>';return;}
-  area.innerHTML=m.slice(0,3).map(v=>vendorCard(v,t,p,true)).join('');
+  area.innerHTML=m.slice(0,3).map(v=>vendorCard(v,true)).join('');
 }
 function copySms(id){
   const el=document.getElementById(id);if(!el)return;
@@ -1841,6 +1742,45 @@ function buildSMS(t,p,v){
     else{ds='Scheduling TBD — please let us know your availability.';}
   }
   return`Hi ${v.name.split(' ')[0]}, we have a maintenance issue at one of our properties.${urg}\n\nProperty: ${pn}\nAddress: ${addr}\nDoor Code: ${door}\n\nIssue: ${t.problem}${t.guest?`\nReported by guest: ${t.guest}`:''}\n${ds}\n\nThank you — Chip Burns, Storybook Escapes`;
+}
+/* Get all active tasks for a vendor on a specific date */
+function getVendorDayTasks(vendorName,date){
+  if(!vendorName||!date)return[];
+  return tasks.filter(t=>t.vendor&&t.vendor.toLowerCase()===vendorName.toLowerCase()&&t.date===date&&!['complete','resolved_by_guest'].includes(t.status));
+}
+/* Build a consolidated SMS for multiple tasks going to the same vendor on the same day */
+function buildMultiSMS(taskList,v){
+  const hasUrgent=taskList.some(t=>t.urgent);
+  const urg=hasUrgent?'\n\nOne or more of these is URGENT — same-day response needed if possible.':'';
+  const date=taskList[0].date;
+  const ds=date?`All scheduled for: ${date}`:'Scheduling TBD — please let us know your availability.';
+  let jobLines=taskList.map((t,i)=>{
+    const p=getProp(t.property);
+    const pn=p?p.name:t.property,addr=p?p.address:'',door=p?p.door:'';
+    let line=`Job ${i+1}: ${pn}\nAddress: ${addr}\nDoor Code: ${door}\nIssue: ${t.problem}`;
+    if(t.guest)line+=`\nReported by guest: ${t.guest}`;
+    if(t.urgent)line+=`\n*** URGENT ***`;
+    return line;
+  }).join('\n\n');
+  return`Hi ${v.name.split(' ')[0]}, we have ${taskList.length} maintenance jobs for you on the same day.${urg}\n\n${jobLines}\n\n${ds}\n\nThank you — Chip Burns, Storybook Escapes`;
+}
+/* Render combined SMS card for a vendor with multiple same-day tasks */
+function combinedVendorCard(v,taskList){
+  const sms=buildMultiSMS(taskList,v);const tel=v.phone.replace(/\D/g,'');
+  const smsId='sms-combined-'+v.id;
+  const taskSummary=taskList.map(t=>{const p=getProp(t.property);return`<li>${p?p.name.split(' - ').pop():t.property}: ${t.problem}${t.urgent?' <span style="color:var(--red);font-weight:700">URGENT</span>':''}</li>`;}).join('');
+  return`<div class="combined-sms-banner">
+    <div class="combined-sms-hdr"><span class="combined-sms-title">Combined Message for ${v.name}</span><span class="combined-sms-count">${taskList.length} jobs</span></div>
+    <ul class="combined-sms-tasks">${taskSummary}</ul>
+    <div class="sms-box" style="margin-top:0">
+      <div class="sms-lbl">Ready-to-Send Combined Text</div>
+      <textarea class="sms-edit" id="${smsId}" style="min-height:200px">${sms.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+      <div class="sms-acts">
+        <a id="${smsId}-link" href="sms:${tel}?body=${encodeURIComponent(sms)}" class="sms-btn sms-send" onclick="updateSmsLink('${smsId}','${tel}')">Open in Messages</a>
+        <button class="sms-btn sms-copy" onclick="copySms('${smsId}')">Copy Text</button>
+      </div>
+    </div>
+  </div>`;
 }
 function renderNotes(t){
   const el=document.getElementById('d-notes');const ns=t.notes||[];
@@ -1884,6 +1824,88 @@ async function assignVendor(name){
   closeModal('detail-modal');
   showToast(`${name} assigned to all tasks on this date.`);
 }
+
+// ─── URGENT TOGGLE (detail modal) ───────────────────────────────
+function renderUrgentToggle(task){
+  const btn=document.getElementById('d-urgent-toggle');
+  if(task.urgent){
+    btn.className='btn urg-on';
+    btn.innerHTML='&#x26A0; URGENT — click to remove';
+  } else {
+    btn.className='btn urg-off';
+    btn.textContent='Mark as Urgent';
+  }
+}
+async function toggleDetailUrgent(){
+  const t=tasks.find(x=>x.id===detailId);if(!t)return;
+  t.urgent=!t.urgent;
+  renderUrgentToggle(t);
+  // Re-render badges
+  const nb=getNb(t.property);
+  document.getElementById('d-badges').innerHTML=`
+    ${t.urgent?'<span class="badge b-urgent">Urgent</span>':''}
+    ${t.recurring?'<span class="badge b-rec">Recurring</span>':''}
+    <span class="badge b-${t.status}">${t.status.replace('_',' ')}</span>
+    ${t.category?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${t.category.replace('_',' ')}</span>`:''}
+    ${t.guest?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">Reported by ${t.guest}</span>`:''}
+    ${t.created?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${fmtReported(t.created)}</span>`:''}`;
+  await saveTasks();renderAll();
+  showToast(t.urgent?'Marked as urgent.':'Urgent removed.');
+}
+
+// ─── VENDOR SEARCHABLE DROPDOWN ─────────────────────────────────
+let vdOpen=false;
+function buildVendorDD(filter=''){
+  const dd=document.getElementById('vd-dropdown');
+  const q=filter.toLowerCase().trim();
+  // Group vendors by category
+  let html='';
+  let anyMatch=false;
+  for(const cat of VCAT){
+    const catVendors=vendors.filter(v=>v.categories.includes(cat.id));
+    const matched=catVendors.filter(v=>{
+      if(!q)return true;
+      return v.name.toLowerCase().includes(q)||v.role.toLowerCase().includes(q)||cat.label.toLowerCase().includes(q);
+    });
+    if(!matched.length)continue;
+    anyMatch=true;
+    html+=`<div class="vd-cat-label">${cat.label}</div>`;
+    const currentVendor=document.getElementById('d-vendor').value;
+    for(const v of matched){
+      const sel=v.name===currentVendor?'sel':'';
+      html+=`<div class="vd-item ${sel}" onclick="selectVendorDD('${v.name.replace(/'/g,"\\'")}')">
+        <span>${v.name}</span><span class="vd-role">${v.role}</span>
+      </div>`;
+    }
+  }
+  if(!anyMatch)html='<div class="vd-none">No matching vendors</div>';
+  dd.innerHTML=html;
+}
+function openVendorDD(){
+  const dd=document.getElementById('vd-dropdown');
+  buildVendorDD(document.getElementById('d-vendor').value);
+  dd.style.display='block';vdOpen=true;
+}
+function closeVendorDD(){
+  document.getElementById('vd-dropdown').style.display='none';vdOpen=false;
+}
+function toggleVendorDD(){
+  if(vdOpen)closeVendorDD(); else openVendorDD();
+}
+function filterVendorDD(val){
+  buildVendorDD(val);
+  document.getElementById('vd-dropdown').style.display='block';vdOpen=true;
+}
+async function selectVendorDD(name){
+  document.getElementById('d-vendor').value=name;
+  closeVendorDD();
+  await updateField('vendor',name);
+}
+// Close dropdown on outside click
+document.addEventListener('click',e=>{
+  if(vdOpen && !document.getElementById('vd-wrap')?.contains(e.target))closeVendorDD();
+});
+
 async function markComplete(){
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
   t.status='complete';document.getElementById('d-status').value='complete';
@@ -2017,186 +2039,8 @@ async function deleteVendor(){
   showToast('Vendor deleted.','',async()=>{vendors.splice(idx,0,deleted);await saveVendors();renderVendors();showToast('Vendor restored.');});
 }
 
-// ── PROPERTY MANAGEMENT ──────────────────────────────────────
-let editPropId=null, editNbId=null;
-
-function renderProperties(){
-  let h='';
-  NBS.forEach(nb=>{
-    const nbProps=PROPS.filter(p=>nb.props.includes(p.id));
-    h+=`<div class="vs"><div class="vs-hdr" style="display:flex;justify-content:space-between;align-items:center">
-      <h3>${nb.name} <span style="font-weight:400;font-size:.82rem;color:var(--text2)">— ${nb.sub}</span></h3>
-      <button class="btn" style="font-size:.72rem" onclick="openEditNb('${nb.id}')">Edit Neighborhood</button>
-    </div><div class="vc-list">`;
-    if(nbProps.length){
-      nbProps.forEach(p=>{
-        const ical=ICAL_URLS[p.id]?'<span style="color:var(--green);font-size:.72rem">Calendar linked</span>':'<span style="color:var(--text2);font-size:.72rem">No calendar</span>';
-        h+=`<div class="vc"><div class="vc-top"><div class="vc-info">
-          <div class="vc-name">${p.name}</div>
-          <div class="vc-contact"><span class="vc-phone">${p.address}</span></div>
-          <div class="vc-contact"><span class="vc-phone">Door Code: <strong>${p.door}</strong></span> ${ical}</div>
-        </div><div class="vc-actions">
-          <button class="btn" onclick="openEditProp('${p.id}')">Edit</button>
-        </div></div></div>`;
-      });
-    } else {
-      h+='<div style="padding:12px;color:var(--text2);font-size:.85rem">No properties in this neighborhood yet.</div>';
-    }
-    h+='</div></div>';
-  });
-  // Show any orphan properties not in any neighborhood
-  const assigned=NBS.flatMap(nb=>nb.props);
-  const orphans=PROPS.filter(p=>!assigned.includes(p.id));
-  if(orphans.length){
-    h+=`<div class="vs"><div class="vs-hdr"><h3>Unassigned Properties</h3></div><div class="vc-list">`;
-    orphans.forEach(p=>{
-      h+=`<div class="vc"><div class="vc-top"><div class="vc-info">
-        <div class="vc-name">${p.name}</div>
-        <div class="vc-contact"><span class="vc-phone">${p.address}</span></div>
-        <div class="vc-contact"><span class="vc-phone">Door Code: <strong>${p.door}</strong></span></div>
-      </div><div class="vc-actions">
-        <button class="btn" onclick="openEditProp('${p.id}')">Edit</button>
-      </div></div></div>`;
-    });
-    h+='</div></div>';
-  }
-  document.getElementById('prop-dir').innerHTML=h||'<div class="empty">No properties yet.</div>';
-}
-
-function populateNbSelect(){
-  const sel=document.getElementById('p-nb');
-  sel.innerHTML='<option value="">(none)</option>';
-  NBS.forEach(nb=>{const o=document.createElement('option');o.value=nb.id;o.textContent=nb.name+' — '+nb.sub;sel.appendChild(o);});
-}
-
-function openAddProp(){
-  editPropId=null;
-  document.getElementById('prop-modal-title').textContent='Add Property';
-  ['p-name','p-addr','p-door','p-ical'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('p-id').value='';document.getElementById('p-id').disabled=false;
-  populateNbSelect();document.getElementById('p-nb').value='';
-  document.getElementById('p-del-btn').style.display='none';
-  document.getElementById('prop-modal').classList.add('open');
-}
-
-function openEditProp(id){
-  editPropId=id;
-  const p=PROPS.find(x=>x.id===id);if(!p)return;
-  document.getElementById('prop-modal-title').textContent='Edit Property';
-  document.getElementById('p-name').value=p.name;
-  document.getElementById('p-id').value=p.id;document.getElementById('p-id').disabled=true;
-  document.getElementById('p-addr').value=p.address;
-  document.getElementById('p-door').value=p.door;
-  document.getElementById('p-ical').value=ICAL_URLS[p.id]||'';
-  populateNbSelect();
-  const nb=NBS.find(n=>n.props.includes(id));
-  document.getElementById('p-nb').value=nb?nb.id:'';
-  document.getElementById('p-del-btn').style.display='';
-  document.getElementById('prop-modal').classList.add('open');
-}
-
-async function saveProp(){
-  const name=document.getElementById('p-name').value.trim();
-  if(!name){showToast('Property name is required.','err');return;}
-  const pid=editPropId||document.getElementById('p-id').value.trim().toLowerCase().replace(/[^a-z0-9_]/g,'');
-  if(!pid){showToast('Property ID is required.','err');return;}
-  if(!editPropId&&PROPS.find(p=>p.id===pid)){showToast('A property with that ID already exists.','err');return;}
-  const addr=document.getElementById('p-addr').value.trim();
-  const door=document.getElementById('p-door').value.trim();
-  const ical=document.getElementById('p-ical').value.trim();
-  const nbId=document.getElementById('p-nb').value;
-
-  const prop={id:pid,name,address:addr,door};
-  if(editPropId){
-    const i=PROPS.findIndex(x=>x.id===editPropId);if(i>=0)PROPS[i]=prop;
-  } else {
-    PROPS.push(prop);
-  }
-
-  // Update iCal
-  if(ical){ICAL_URLS[pid]=ical;}else{delete ICAL_URLS[pid];}
-
-  // Update neighborhood assignment
-  NBS.forEach(nb=>{nb.props=nb.props.filter(x=>x!==pid);});
-  if(nbId){const nb=NBS.find(n=>n.id===nbId);if(nb)nb.props.push(pid);}
-
-  await saveProps();await saveNbs();await saveIcal();
-  closeModal('prop-modal');renderProperties();populatePropSel('f-prop');populatePropSel('d-prop');
-  showToast(editPropId?'Property updated.':'Property added.');
-}
-
-async function deleteProp(){
-  const deleted=PROPS.find(p=>p.id===editPropId);if(!deleted)return;
-  const idx=PROPS.indexOf(deleted);
-  const oldIcal=ICAL_URLS[editPropId];
-  const oldNb=NBS.find(n=>n.props.includes(editPropId));
-  const oldNbIdx=oldNb?oldNb.props.indexOf(editPropId):-1;
-
-  PROPS=PROPS.filter(p=>p.id!==editPropId);
-  delete ICAL_URLS[editPropId];
-  NBS.forEach(nb=>{nb.props=nb.props.filter(x=>x!==editPropId);});
-
-  await saveProps();await saveNbs();await saveIcal();
-  closeModal('prop-modal');renderProperties();populatePropSel('f-prop');populatePropSel('d-prop');
-  showToast('Property deleted.','',async()=>{
-    PROPS.splice(idx,0,deleted);
-    if(oldIcal)ICAL_URLS[deleted.id]=oldIcal;
-    if(oldNb)oldNb.props.splice(oldNbIdx,0,deleted.id);
-    await saveProps();await saveNbs();await saveIcal();
-    renderProperties();populatePropSel('f-prop');populatePropSel('d-prop');
-    showToast('Property restored.');
-  });
-}
-
-// ── NEIGHBORHOOD MANAGEMENT ──────────────────────────────────
-function openAddNb(){
-  editNbId=null;
-  document.getElementById('nb-modal-title').textContent='Add Neighborhood';
-  ['nb-name','nb-sub'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('nb-cls').value='prc';
-  document.getElementById('nb-del-btn').style.display='none';
-  document.getElementById('nb-modal').classList.add('open');
-}
-
-function openEditNb(id){
-  editNbId=id;
-  const nb=NBS.find(n=>n.id===id);if(!nb)return;
-  document.getElementById('nb-modal-title').textContent='Edit Neighborhood';
-  document.getElementById('nb-name').value=nb.name;
-  document.getElementById('nb-sub').value=nb.sub;
-  document.getElementById('nb-cls').value=nb.cls;
-  document.getElementById('nb-del-btn').style.display='';
-  document.getElementById('nb-modal').classList.add('open');
-}
-
-async function saveNbModal(){
-  const name=document.getElementById('nb-name').value.trim();
-  if(!name){showToast('Neighborhood name is required.','err');return;}
-  const sub=document.getElementById('nb-sub').value.trim();
-  const cls=document.getElementById('nb-cls').value;
-
-  if(editNbId){
-    const nb=NBS.find(n=>n.id===editNbId);
-    if(nb){nb.name=name;nb.sub=sub;nb.cls=cls;}
-  } else {
-    const id='nb_'+Date.now();
-    NBS.push({id,name,sub,cls,props:[]});
-  }
-  await saveNbs();closeModal('nb-modal');renderProperties();
-  showToast(editNbId?'Neighborhood updated.':'Neighborhood added.');
-}
-
-async function deleteNb(){
-  const nb=NBS.find(n=>n.id===editNbId);if(!nb)return;
-  if(nb.props.length){showToast('Move or delete all properties in this neighborhood first.','err');return;}
-  const idx=NBS.indexOf(nb);
-  NBS=NBS.filter(n=>n.id!==editNbId);
-  await saveNbs();closeModal('nb-modal');renderProperties();
-  showToast('Neighborhood deleted.','',async()=>{NBS.splice(idx,0,nb);await saveNbs();renderProperties();showToast('Neighborhood restored.');});
-}
-
 function closeModal(id){document.getElementById(id).classList.remove('open');}
-/* Backdrop click disabled — modals close only via X or Cancel */
+document.querySelectorAll('.mo').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
 let _toastTimer=null;
 function showToast(msg,cls='',undoFn=null){
   clearTimeout(_toastTimer);
@@ -2208,6 +2052,19 @@ function showToast(msg,cls='',undoFn=null){
   } else {_toastTimer=setTimeout(()=>t.classList.remove('show'),3000);}
 }
 
+// SEED
+async function seed(){
+  if(tasks.length>0)return;
+  tasks=[
+    {id:'d1',property:'umc60',guest:'Sade Seeger',problem:'Eyebolt for the hot tub cover strap is pulled out of the deck.',category:'hot_tub',status:'open',date:'',vendor:'James Hawthorne',urgent:true,recurring:false,notes:[],vendorNotes:'',created:new Date('2026-03-30T10:50:00').toISOString()},
+    {id:'d2',property:'prc2',guest:'David Bond',problem:'Oven handle is loose and partially broke off, though still functional.',category:'handyman',status:'open',date:'',vendor:'',urgent:false,recurring:false,notes:[],vendorNotes:'',created:new Date('2026-03-30T10:13:00').toISOString()},
+    {id:'d3',property:'umc50',guest:'Sarajo Stough',problem:'Bathroom cabinet fell off its hinges and needs to be repaired.',category:'handyman',status:'scheduled',date:'2026-04-07',vendor:'James Hawthorne',urgent:false,recurring:false,notes:[{text:'Called Lisa, sending James this week.',type:'admin',time:new Date().toISOString()}],vendorNotes:'',created:new Date('2026-03-28T11:39:00').toISOString()},
+    {id:'d4',property:'prc4',guest:'Jose Reyes',problem:'Door to the bedroom does not lock properly.',category:'handyman',status:'scheduled',date:'2026-04-04',vendor:'Michael Gilchrist',urgent:false,recurring:false,notes:[],vendorNotes:'',created:new Date('2026-03-27T11:00:00').toISOString()},
+    {id:'d5',property:'hillside_big',guest:'Amy Henry',problem:'Closet door with second refrigerator sticks on the brick floor.',category:'handyman',status:'open',date:'',vendor:'',urgent:false,recurring:false,notes:[],vendorNotes:'',created:new Date('2026-03-25T15:13:00').toISOString()},
+    {id:'d6',property:'bearadise',guest:'Mark Torres',problem:'Roaches found in kitchen cabinet under the sink.',category:'pest',status:'open',date:'',vendor:'All About Bugs',urgent:true,recurring:false,notes:[{text:'All About Bugs contacted. Coming tomorrow.',type:'admin',time:new Date().toISOString()}],vendorNotes:'',created:new Date('2026-04-01T08:22:00').toISOString()},
+  ];
+  await saveTasks();
+}
 
 // HOSTBUDDY INTEGRATION
 // ── Configure this after deploying the webhook API ──
@@ -2488,6 +2345,7 @@ async function hbTest() {
 // START
 (async()=>{
   await load();
+  await seed();
   populatePropSel('f-property');
   populatePropMulti('r-props');
   renderAll();
