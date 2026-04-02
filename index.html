@@ -852,12 +852,11 @@ function parseIcal(txt){
 async function fetchIcal(pid){
   if(icalCache[pid]&&icalCache[pid]!=='error')return icalCache[pid];
   const url=ICAL_URLS[pid];if(!url)return[];
-  // Try direct fetch first (works if server sends CORS headers), then proxies
+  // Use our own Vercel proxy first, then fall back to public proxies
   const attempts=[
-    u=>u,
+    u=>`https://maintenance-kappa-coral.vercel.app/api/proxy?url=${encodeURIComponent(u)}`,
     u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
     u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,
-    u=>`https://cors.sh/?${u}`,
   ];
   for(const attempt of attempts){
     try{
