@@ -228,26 +228,6 @@ textarea{resize:vertical;min-height:76px}
 .utog label{font-size:.8rem;color:var(--red);font-weight:600;text-transform:none;letter-spacing:0;cursor:pointer;margin:0}
 .stitle{font-size:.67rem;text-transform:uppercase;letter-spacing:2px;color:var(--text3);font-weight:700;margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
 
-/* VENDOR DROPDOWN */
-.vd-wrap{position:relative;display:flex;align-items:stretch}
-.vd-wrap input{flex:1;border-radius:7px 0 0 7px;border-right:none}
-.vd-arrow{padding:0 10px;background:var(--surface2);border:1px solid var(--border);border-radius:0 7px 7px 0;color:var(--text3);font-size:.7rem;cursor:pointer;display:flex;align-items:center}
-.vd-arrow:hover{background:var(--border);color:var(--text)}
-.vd-dropdown{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;box-shadow:var(--shadow-md);z-index:200;max-height:280px;overflow-y:auto;scrollbar-width:thin}
-.vd-cat-label{font-size:.62rem;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3);font-weight:700;padding:8px 12px 3px;background:var(--surface2);border-top:1px solid var(--border);position:sticky;top:0}
-.vd-cat-label:first-child{border-top:none}
-.vd-item{padding:7px 12px;cursor:pointer;font-size:.82rem;display:flex;justify-content:space-between;align-items:center;transition:background .1s}
-.vd-item:hover{background:var(--green-light)}
-.vd-item.sel{background:var(--green-light);font-weight:600}
-.vd-item .vd-role{font-size:.68rem;color:var(--text3);flex-shrink:0;margin-left:8px}
-.vd-none{padding:10px 12px;font-size:.8rem;color:var(--text3);font-style:italic}
-
-/* URGENT TOGGLE (detail) */
-#d-urgent-toggle.urg-on{background:var(--red);color:#fff;border-color:var(--red)}
-#d-urgent-toggle.urg-on:hover{background:#a93226}
-#d-urgent-toggle.urg-off{background:var(--surface2);color:var(--text2);border-color:var(--border)}
-#d-urgent-toggle.urg-off:hover{border-color:var(--red);color:var(--red)}
-
 /* VENDOR SUGGEST */
 .vsc{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:7px}
 .vsn{font-weight:600;font-size:.86rem;margin-bottom:2px}
@@ -271,12 +251,12 @@ textarea{resize:vertical;min-height:76px}
 .dp-dow{text-align:left;font-size:.6rem;text-transform:uppercase;color:var(--text3);padding:5px 0 5px 5px;font-weight:600;border-right:1px solid var(--border)}
 .dp-dow:last-child{border-right:none}
 .dp-week-row{display:grid;grid-template-columns:repeat(7,1fr);position:relative;border-top:1px solid var(--border)}
-/* Available cells get the diagonal hatch — matches Hospitable */
-.dp-cell{position:relative;min-height:56px;border-right:1px solid var(--border);padding:4px 0 0 5px;cursor:pointer;background-image:repeating-linear-gradient(135deg,transparent,transparent 6px,rgba(0,0,0,.08) 6px,rgba(0,0,0,.08) 7px);background-color:#f9fdf9}
+/* Available cells are clean white; booked/occupied get diagonal hatch */
+.dp-cell{position:relative;min-height:56px;border-right:1px solid var(--border);padding:4px 0 0 5px;cursor:pointer;background:#fff}
 .dp-cell:last-child{border-right:none}
-.dp-cell.dp-other{background-color:var(--surface2);background-image:none;cursor:default}
+.dp-cell.dp-other{background-color:var(--surface2);cursor:default}
 .dp-cell.dp-today-cell{background-color:var(--gold-pale)}
-.dp-cell.dp-booked-bg{background-color:#fff;background-image:none} /* no hatch when booked — bar covers it */
+.dp-cell.dp-booked-bg{background-image:repeating-linear-gradient(135deg,transparent,transparent 6px,rgba(0,0,0,.08) 6px,rgba(0,0,0,.08) 7px);background-color:#f9fdf9}
 .dp-cell:not(.dp-other):hover{background-color:var(--green-pale)}
 .dp-cell.dp-other:hover{background-color:var(--surface2)}
 .dp-dn{font-size:.78rem;font-weight:700;color:var(--text);line-height:1;position:relative;z-index:2;text-shadow:0 0 2px #fff,0 0 4px #fff}
@@ -377,7 +357,9 @@ textarea{resize:vertical;min-height:76px}
   .fg{grid-template-columns:1fr}
   .fgr.full{grid-column:1}
   main{padding:12px}
-  .hnav{display:none}
+  header{flex-wrap:wrap;height:auto;padding:10px 16px;gap:8px}
+  .hnav{order:3;width:100%;flex:none;justify-content:flex-start;overflow-x:auto;-webkit-overflow-scrolling:touch;gap:4px;padding:4px 0 2px}
+  .hnav::-webkit-scrollbar{display:none}
   .hsub{display:none}
   .dp-popup{width:280px}
 }
@@ -397,6 +379,7 @@ textarea{resize:vertical;min-height:76px}
       <button class="nav-btn" onclick="switchView('recurring',this)">Recurring</button>
       <button class="nav-btn" onclick="switchView('history',this)">Property History</button>
       <button class="nav-btn" onclick="switchView('vendors',this)">Vendors</button>
+      <button class="nav-btn" onclick="switchView('properties',this)">Properties</button>
     </div>
     <div class="hactions">
       <button class="btn btn-g" onclick="openAddTask()">+ New Task</button>
@@ -447,6 +430,17 @@ textarea{resize:vertical;min-height:76px}
         <button class="btn btn-g" onclick="openAddVendor()">+ Add Vendor</button>
       </div>
       <div id="vendor-dir"></div>
+    </div>
+
+    <div class="view" id="view-properties">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+        <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--green);font-weight:600">Property Management</h2>
+        <div style="display:flex;gap:8px">
+          <button class="btn" onclick="openAddNb()">+ Add Neighborhood</button>
+          <button class="btn btn-g" onclick="openAddProp()">+ Add Property</button>
+        </div>
+      </div>
+      <div id="prop-dir"></div>
     </div>
   </main>
 </div>
@@ -544,9 +538,6 @@ textarea{resize:vertical;min-height:76px}
       <button class="mclose" onclick="closeModal('detail-modal')">&#x2715;</button>
     </div>
     <div id="d-badges" style="display:flex;gap:7px;margin-bottom:16px;flex-wrap:wrap;align-items:center"></div>
-    <div style="margin-bottom:14px">
-      <button type="button" class="btn" id="d-urgent-toggle" onclick="toggleDetailUrgent()" style="font-size:.72rem;padding:4px 12px;border-radius:20px"></button>
-    </div>
     <div id="d-combine"></div>
     <div class="fg">
       <div class="fgr">
@@ -570,13 +561,9 @@ textarea{resize:vertical;min-height:76px}
         </div>
         <input type="hidden" id="d-date">
       </div>
-      <div class="fgr full" style="position:relative">
+      <div class="fgr full">
         <label>Assigned Vendor</label>
-        <div class="vd-wrap" id="vd-wrap">
-          <input type="text" id="d-vendor" autocomplete="off" placeholder="Search or select a vendor..." oninput="filterVendorDD(this.value)" onfocus="openVendorDD()" onchange="updateField('vendor',this.value)">
-          <button type="button" class="vd-arrow" onclick="toggleVendorDD()">&#x25BC;</button>
-          <div class="vd-dropdown" id="vd-dropdown" style="display:none"></div>
-        </div>
+        <input type="text" id="d-vendor" onchange="updateField('vendor',this.value)" placeholder="Vendor name">
       </div>
     </div>
     <div class="stitle">Notes</div>
@@ -656,33 +643,67 @@ textarea{resize:vertical;min-height:76px}
   </div>
 </div>
 
+<div class="mo" id="prop-modal">
+  <div class="modal">
+    <div class="mhdr">
+      <div class="mtitle" id="prop-modal-title">Add Property</div>
+      <button class="mclose" onclick="closeModal('prop-modal')">&#x2715;</button>
+    </div>
+    <div class="fg">
+      <div class="fgr"><label>Property Name</label><input type="text" id="p-name" placeholder="e.g. PRC - 7 - Sunset View"></div>
+      <div class="fgr"><label>Property ID</label><input type="text" id="p-id" placeholder="e.g. prc7 (unique, no spaces)"></div>
+      <div class="fgr full"><label>Address</label><input type="text" id="p-addr" placeholder="Full property address"></div>
+      <div class="fgr"><label>Door Code</label><input type="text" id="p-door" placeholder="e.g. 1477"></div>
+      <div class="fgr"><label>Neighborhood</label>
+        <select id="p-nb"></select>
+      </div>
+      <div class="fgr full"><label>iCal URL <span style="font-weight:400;color:var(--text2)">(optional — for calendar reservations)</span></label><input type="text" id="p-ical" placeholder="https://api.hospitable.com/..."></div>
+    </div>
+    <div style="display:flex;gap:9px;margin-top:20px;justify-content:space-between;align-items:center">
+      <button class="btn btn-red" id="p-del-btn" onclick="deleteProp()" style="display:none">Delete Property</button>
+      <div style="display:flex;gap:7px;margin-left:auto">
+        <button class="btn" onclick="closeModal('prop-modal')">Cancel</button>
+        <button class="btn btn-g" onclick="saveProp()">Save Property</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mo" id="nb-modal">
+  <div class="modal">
+    <div class="mhdr">
+      <div class="mtitle" id="nb-modal-title">Add Neighborhood</div>
+      <button class="mclose" onclick="closeModal('nb-modal')">&#x2715;</button>
+    </div>
+    <div class="fg">
+      <div class="fgr"><label>Neighborhood Name</label><input type="text" id="nb-name" placeholder="e.g. Mountain View Estates"></div>
+      <div class="fgr"><label>Location</label><input type="text" id="nb-sub" placeholder="e.g. Gatlinburg, TN"></div>
+      <div class="fgr"><label>Color Class</label>
+        <select id="nb-cls">
+          <option value="prc">Green (PRC)</option>
+          <option value="umc">Blue (UMC)</option>
+          <option value="gatlinburg">Amber (Gatlinburg)</option>
+          <option value="alpine">Purple (Alpine)</option>
+          <option value="sevierville">Teal (Sevierville)</option>
+          <option value="hillside">Rose (Hillside)</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:flex;gap:9px;margin-top:20px;justify-content:space-between;align-items:center">
+      <button class="btn btn-red" id="nb-del-btn" onclick="deleteNb()" style="display:none">Delete Neighborhood</button>
+      <div style="display:flex;gap:7px;margin-left:auto">
+        <button class="btn" onclick="closeModal('nb-modal')">Cancel</button>
+        <button class="btn btn-g" onclick="saveNbModal()">Save Neighborhood</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
-// ── Hospitable REST API v2 (replaces iCal) ──────────────────
-// Property shortnames → Hospitable UUID property IDs
-const HOSPITABLE_IDS = {
-  "bearadise":"02c1caaf-5a7c-4a72-bd6e-b3be2fc56202",
-  "hero":"f98bdb26-4ed6-4633-83ef-96e5e567ef77",
-  "hibernation":"1f6c5121-d938-49a8-9a6d-b705b13287e0",
-  "hillside_big":"3ab44a3c-4a48-4783-b3d5-aa1c58d1ad97",
-  "hillside_cottage":"f11403bb-2281-4aab-8e5b-f13078ca4dee",
-  "magic":"255cae9a-e83c-4c03-bef6-81241309894e",
-  "prc1":"c3555d02-6b66-4ef2-a0c0-f08db7eb365f",
-  "prc2":"e0599c7e-a9d8-4a4c-b5af-69beb2528d66",
-  "prc3":"9cf9010d-421c-4cb8-aa09-22c71258069d",
-  "prc4":"0f62c8b2-365e-4109-82b8-8e680fbbe27d",
-  "prc5":"725570ac-6f11-41b8-a84c-93c68277eac9",
-  "prc6":"195a44a4-2cf4-410a-bddd-462f2d12acf2",
-  "wizards":"74601c4e-fe9d-4668-80a9-a2b8f74c7df0",
-  "umc10":"919a81dc-2a41-40e3-a23c-9491c7729999",
-  "umc20":"f8b224bf-5b72-4da3-ae2a-80766d820810",
-  "umc30":"088097dc-0770-4adf-8ae8-88db05cffbdc",
-  "umc40":"0d57c1ac-957e-43b6-a3fd-b31e590e39a0",
-  "umc50":"8fc601cc-d75c-4c3b-aa37-fda349af10da",
-  "umc60":"7a7ae454-b0ff-435a-819e-623f618264b6"
-};
-const NBS = [
+const DEF_ICAL_URLS = {"bearadise": "https://api.hospitable.com/v1/properties/reservations.ics?key=709494&token=600a3fe5-4ae2-41e5-a98c-0e89277d76a9&noCache", "hero": "https://api.hospitable.com/v1/properties/reservations.ics?key=916674&token=a0a4a2d9-03ed-4a27-a812-905c8c4ea501&noCache", "hibernation": "https://api.hospitable.com/v1/properties/reservations.ics?key=1225322&token=c4917596-d906-4a1e-809f-eba9a2439350&noCache", "hillside_big": "https://api.hospitable.com/v1/properties/reservations.ics?key=1335724&token=5a763d10-b98e-4b50-8362-921ecbb26f21&noCache", "hillside_cottage": "https://api.hospitable.com/v1/properties/reservations.ics?key=1340910&token=82ae91d7-ccdb-438b-becf-6840e461dc71&noCache", "magic": "https://api.hospitable.com/v1/properties/reservations.ics?key=962256&token=305df0a9-5851-4281-8651-74a3e00313a8&noCache", "prc1": "https://api.hospitable.com/v1/properties/reservations.ics?key=1928482&token=420fd322-b0a3-4e75-b341-1d64ebee284a&noCache", "prc2": "https://api.hospitable.com/v1/properties/reservations.ics?key=1930408&token=046ec345-6d05-4c1b-999b-9214518ebca2&noCache", "prc3": "https://api.hospitable.com/v1/properties/reservations.ics?key=1930410&token=afe5571b-0163-4ea6-9e9c-f87a160cd258&noCache", "prc4": "https://api.hospitable.com/v1/properties/reservations.ics?key=1930412&token=23d354b5-45cd-458b-8187-a465b161512b&noCache", "prc5": "https://api.hospitable.com/v1/properties/reservations.ics?key=1930678&token=155d60a2-1146-4efb-b697-256e45269636&noCache", "prc6": "https://api.hospitable.com/v1/properties/reservations.ics?key=1930676&token=6f185c88-f931-4c88-b382-e270a5325e3c&noCache", "wizards": "https://api.hospitable.com/v1/properties/reservations.ics?key=1107656&token=ecc9f7cb-48cc-4dda-8bd1-ef728dfa7f97&noCache", "umc10": "https://api.hospitable.com/v1/properties/reservations.ics?key=1717974&token=e31eaae4-8872-418a-95b5-5efd718ee7b3&noCache", "umc20": "https://api.hospitable.com/v1/properties/reservations.ics?key=1718066&token=61a6a850-ee7e-4145-b886-5ede9c382c1f&noCache", "umc30": "https://api.hospitable.com/v1/properties/reservations.ics?key=1718396&token=7e6fd6ff-090a-4381-a0bf-3f049b857e10&noCache", "umc40": "https://api.hospitable.com/v1/properties/reservations.ics?key=1718538&token=5cf6055c-fb5f-462e-8224-dbd64429433a&noCache", "umc50": "https://api.hospitable.com/v1/properties/reservations.ics?key=1718734&token=5dbe6adf-516d-4630-b778-bd02c0c182a0&noCache", "umc60": "https://api.hospitable.com/v1/properties/reservations.ics?key=1718786&token=0a252269-a0b0-49fa-9a73-a80b565dd5a3&noCache"};
+const DEF_NBS = [
   {id:'prc',name:'Paradise Ridge',sub:'Pigeon Forge, TN',cls:'prc',props:['prc1','prc2','prc3','prc4','prc5','prc6']},
   {id:'umc',name:'Upper Middle Creek',sub:'Sevierville, TN',cls:'umc',props:['umc10','umc20','umc30','umc40','umc50','umc60']},
   {id:'gatlinburg',name:'Gatlinburg',sub:'Gatlinburg, TN',cls:'gatlinburg',props:['bearadise','wizards']},
@@ -690,7 +711,7 @@ const NBS = [
   {id:'sevierville',name:'Sevierville',sub:'Sevierville, TN',cls:'sevierville',props:['magic']},
   {id:'hillside',name:'Hillside Haven',sub:'Lake Martin, AL',cls:'hillside',props:['hillside_big','hillside_cottage']},
 ];
-const PROPS = [
+const DEF_PROPS = [
   {id:'prc1',name:'PRC - 1 - Forge in the Forest',address:'1627 Paradise Ridge Dr. Unit 1',door:'1471'},
   {id:'prc2',name:'PRC - 2 - Bluebird Bungalow',address:'1627 Paradise Ridge Dr. Unit 2',door:'1472'},
   {id:'prc3',name:'PRC - 3 - The Rustic Rose',address:'1627 Paradise Ridge Dr. Unit 3',door:'1473'},
@@ -711,6 +732,9 @@ const PROPS = [
   {id:'hillside_big',name:'Hillside Haven: The Big House',address:'226 Oak Hill, Jacksons Gap, AL',door:'4425'},
   {id:'hillside_cottage',name:'Hillside Haven: The Cottage',address:'218 Oak Hill, Jacksons Gap, AL',door:'O812'},
 ];
+let ICAL_URLS = JSON.parse(JSON.stringify(DEF_ICAL_URLS));
+let NBS = JSON.parse(JSON.stringify(DEF_NBS));
+let PROPS = JSON.parse(JSON.stringify(DEF_PROPS));
 const DEF_VENDORS = [
   {id:'v1',name:'Lisa Hawthorne',phone:'(936) 648-3940',email:'',role:'Head Cleaner',categories:['cleaning'],note:'Primary cleaner for all Smokies properties. Provides linens, soaps, paper products.'},
   {id:'v2',name:'James Hawthorne',phone:'(936) 714-7249',email:'',role:'Light Handyman / Hot Tub',categories:['cleaning','handyman','hot_tub'],note:"Lisa's husband. First call for hot tub Vapor Lock / Flo code issues. Can respond same night."},
@@ -770,11 +794,17 @@ async function load() {
   try{const r=await S.get('se_t');if(r)tasks=JSON.parse(r.value);}catch(e){tasks=[];}
   try{const r=await S.get('se_v');if(r)vendors=JSON.parse(r.value);else{vendors=JSON.parse(JSON.stringify(DEF_VENDORS));await save('se_v',vendors);}}catch(e){vendors=JSON.parse(JSON.stringify(DEF_VENDORS));}
   try{const r=await S.get('se_r');if(r)recurring=JSON.parse(r.value);else{recurring=JSON.parse(JSON.stringify(DEF_RECURRING));await save('se_r',recurring);}}catch(e){recurring=JSON.parse(JSON.stringify(DEF_RECURRING));}
+  try{const r=await S.get('se_props');if(r)PROPS=JSON.parse(r.value);}catch(e){}
+  try{const r=await S.get('se_nbs');if(r)NBS=JSON.parse(r.value);}catch(e){}
+  try{const r=await S.get('se_ical');if(r)ICAL_URLS=JSON.parse(r.value);}catch(e){}
 }
 async function save(k,v){try{await S.set(k,JSON.stringify(v));}catch(e){}}
 const saveTasks=()=>save('se_t',tasks);
 const saveVendors=()=>save('se_v',vendors);
 const saveRec=()=>save('se_r',recurring);
+const saveProps=()=>save('se_props',PROPS);
+const saveNbs=()=>save('se_nbs',NBS);
+const saveIcal=()=>save('se_ical',ICAL_URLS);
 
 // HELPERS
 const getNb=id=>NBS.find(n=>n.props.includes(id));
@@ -812,7 +842,7 @@ function populatePropMulti(id){
   });
 }
 
-function renderAll(){renderUB();renderTasks();renderCalendar();renderRecurring();renderHistory();renderVendors();}
+function renderAll(){renderUB();renderTasks();renderCalendar();renderRecurring();renderHistory();renderVendors();renderProperties();}
 
 // URGENT BANNER
 function renderUB(){
@@ -914,67 +944,52 @@ function renderTasks(){
 function setCatFilter(c,btn){catFilter=c;document.querySelectorAll('.fb').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderTasks();}
 function setFilter(f,btn){} // kept for compatibility
 
-// ── HOSPITABLE API INTEGRATION ──────────────────────────────
-// Replaces the old iCal fetch + parse pipeline.
-// Uses the Calendar endpoint which returns day-by-day availability.
-// Output shape {start: Date, end: Date, summary: string} is unchanged
-// so all downstream consumers (renderDP, getAvail, miniCal, SMS) work as before.
-
-// Convert calendar day-by-day data into reservation blocks {start, end, summary}
-function adaptCalendar(data){
-  if(!data||!data.data||!data.data.days){
-    console.warn('adaptCalendar: unexpected format',data?Object.keys(data):'null');
-    return[];
-  }
-  const days=data.data.days;
+// ICAL
+function parseIcal(txt){
   const evs=[];
-  let blockStart=null;
-  // Walk through days, group consecutive RESERVED days into blocks
-  for(let i=0;i<days.length;i++){
-    const d=days[i];
-    const isReserved=d.status&&d.status.reason==='RESERVED';
-    if(isReserved&&!blockStart){
-      blockStart=d.date; // start a new block
-    } else if(!isReserved&&blockStart){
-      // End the block — checkout is this day
-      const pd=s=>{const m=s.match(/(\d{4})-(\d{2})-(\d{2})/);return m?new Date(+m[1],+m[2]-1,+m[3],12,0,0):null;};
-      const ci=pd(blockStart),co=pd(d.date);
-      if(ci&&co)evs.push({start:ci,end:co,summary:'Guest'});
-      blockStart=null;
-    }
-  }
-  // If still in a block at the end, close it at the last day + 1
-  if(blockStart){
-    const pd=s=>{const m=s.match(/(\d{4})-(\d{2})-(\d{2})/);return m?new Date(+m[1],+m[2]-1,+m[3],12,0,0):null;};
-    const ci=pd(blockStart);
-    const lastDay=pd(days[days.length-1].date);
-    if(ci&&lastDay){const co=new Date(lastDay);co.setDate(co.getDate()+1);evs.push({start:ci,end:co,summary:'Guest'});}
-  }
-  console.log(`adaptCalendar: ${evs.length} reservation blocks from ${days.length} days`);
+  // Unfold iCal lines (lines continued with CRLF+whitespace or LF+whitespace)
+  const unfolded=txt.replace(/\r\n[ \t]/g,'').replace(/\n[ \t]/g,'');
+  const blocks=unfolded.split(/BEGIN:VEVENT/);
+  blocks.slice(1).forEach(b=>{
+    // Match DTSTART and DTEND with optional parameters like ;VALUE=DATE or ;TZID=...
+    const g=k=>{const m=b.match(new RegExp(k+'(?:;[^:]*)?:([^\r\n]+)'));return m?m[1].trim():'';};
+    const s=g('DTSTART');const e=g('DTEND');if(!s||!e)return;
+    // Extract digits only and build local noon date — immune to timezone shifts
+    const pd=str=>{const d=str.replace(/\D/g,'').slice(0,8);if(d.length<8)return null;return new Date(+d.slice(0,4),+d.slice(4,6)-1,+d.slice(6,8),12,0,0);};
+    const ci=pd(s);const co=pd(e);if(!ci||!co)return;
+    // Get summary, strip platform suffixes like " (Airbnb)"
+    const rawSum=g('SUMMARY');
+    const summary=rawSum.replace(/\s*\((?:Airbnb|VRBO|Booking\.com|HomeAway)[^)]*\)\s*$/i,'').trim();
+    // Skip blocked/unavailable entries with no guest name
+    if(!summary||summary.toLowerCase().includes('not available')||summary.toLowerCase()==='blocked')return;
+    evs.push({start:ci,end:co,summary});
+  });
   return evs;
 }
-
 async function fetchIcal(pid){
   if(icalCache[pid]&&icalCache[pid]!=='error')return icalCache[pid];
-  const hospId=HOSPITABLE_IDS[pid];
-  if(!hospId){console.warn(`No Hospitable ID for property "${pid}"`);return[];}
-  const url=`${PROXY_BASE}/api/hospitable?action=calendar&pid=${hospId}`;
-  console.log(`Fetching calendar for ${pid} (hospitable id: ${hospId.slice(0,8)}...)`);
-  try{
-    const r=await fetch(url,{signal:AbortSignal.timeout(15000)});
-    if(!r.ok){
-      const detail=await r.text().catch(()=>'');
-      console.error(`Hospitable API ${r.status} for ${pid}: ${detail.slice(0,200)}`);
-      icalCache[pid]='error';return'error';
-    }
-    const json=await r.json();
-    const evs=adaptCalendar(json);
-    console.log(`Loaded ${pid}: ${evs.length} reservation blocks via API`);
-    icalCache[pid]=evs;return evs;
-  }catch(e){
-    console.error(`Hospitable API failed for ${pid}: ${e.message}`);
-    icalCache[pid]='error';return'error';
+  const url=ICAL_URLS[pid];if(!url){console.warn(`No iCal URL configured for property "${pid}"`);return[];}
+  // Try custom proxy first, then fall back to public CORS proxies
+  const proxies=[
+    u=>`${PROXY_BASE}/api/proxy?url=${encodeURIComponent(u)}`,
+    u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,
+    u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  ];
+  for(const proxy of proxies){
+    const proxyUrl=proxy(url);
+    console.log(`Fetching iCal for ${pid} via: ${proxyUrl.slice(0,80)}...`);
+    try{
+      const r=await fetch(proxyUrl,{signal:AbortSignal.timeout(10000)});
+      if(!r.ok){console.warn(`iCal proxy returned HTTP ${r.status} for ${pid}, trying next...`);continue;}
+      const txt=await r.text();
+      if(!txt.includes('BEGIN:VCALENDAR')){console.warn(`iCal proxy returned non-calendar data for ${pid}, trying next...`);continue;}
+      const evs=parseIcal(txt);
+      console.log(`iCal loaded for ${pid}: ${evs.length} events`);
+      icalCache[pid]=evs;return evs;
+    }catch(e){console.warn(`iCal proxy failed for ${pid}: ${e.message}, trying next...`);continue;}
   }
+  console.error(`All iCal proxies failed for ${pid}`);
+  icalCache[pid]='error';return'error';
 }
 function getAvail(evs,start,days){
   const res=[];
@@ -1170,8 +1185,8 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
   } else {
     h+=`<div class="dp-leg">`;
     h+=`<div class="dp-li"><div class="dp-ld" style="background:${TEAL}"></div>Guests in house</div>`;
-    h+=`<div class="dp-li"><svg width="22" height="10"><polygon points="6,0 22,0 22,10 0,10" fill="${TEAL}" opacity=".92"/><polygon points="0,0 16,0 22,10 0,10" fill="${TEAL}" opacity=".65"/></svg>Turn day</div>`;
-    h+=`<div class="dp-li"><div style="width:14px;height:10px;background-image:repeating-linear-gradient(135deg,transparent,transparent 3px,rgba(0,0,0,.12) 3px,rgba(0,0,0,.12) 4px);background-color:#fff;border:1px solid var(--border);border-radius:2px"></div>Available</div>`;
+    h+=`<div class="dp-li"><div style="width:14px;height:10px;background-image:repeating-linear-gradient(135deg,transparent,transparent 3px,rgba(0,0,0,.12) 3px,rgba(0,0,0,.12) 4px);background-color:#f9fdf9;border:1px solid var(--border);border-radius:2px"></div>Unavailable</div>`;
+    h+=`<div class="dp-li"><div style="width:14px;height:10px;background:#fff;border:1px solid var(--border);border-radius:2px"></div>Available</div>`;
     h+=`</div>`;
   }
   h+=`<div class="dp-warn" id="${px}-dp-warn"><strong>⚠ Guests are in house on this day.</strong> Are you sure you want to schedule maintenance while guests are present?<div class="dp-warn-btns"><button class="btn btn-gold" onclick="confirmBookedDate('${px}')">Yes, Schedule Anyway</button><button class="btn" onclick="cancelBookedDate('${px}')">Pick Another Day</button></div></div>`;
@@ -1534,9 +1549,7 @@ async function openDetail(id){
     ${t.category?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${t.category.replace('_',' ')}</span>`:''}
     ${t.guest?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">Reported by ${t.guest}</span>`:''}
     ${t.created?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${fmtReported(t.created)}</span>`:''}`;
-  renderUrgentToggle(t);
   renderDetailVendors(t,p);renderNotes(t);checkCombine();
-  closeVendorDD(); // reset dropdown state when opening a new task
   renderMiniCal(t.property).then(()=>renderDetailVendors(t,p));
   const isDone=['complete','resolved_by_guest'].includes(t.status);
   document.getElementById('complete-btn').style.display=isDone?'none':'';
@@ -1644,88 +1657,6 @@ async function assignVendor(name){
   closeModal('detail-modal');
   showToast(`${name} assigned to all tasks on this date.`);
 }
-
-// ─── URGENT TOGGLE (detail modal) ───────────────────────────────
-function renderUrgentToggle(task){
-  const btn=document.getElementById('d-urgent-toggle');
-  if(task.urgent){
-    btn.className='btn urg-on';
-    btn.innerHTML='&#x26A0; URGENT — click to remove';
-  } else {
-    btn.className='btn urg-off';
-    btn.textContent='Mark as Urgent';
-  }
-}
-async function toggleDetailUrgent(){
-  const t=tasks.find(x=>x.id===detailId);if(!t)return;
-  t.urgent=!t.urgent;
-  renderUrgentToggle(t);
-  // Re-render badges
-  const nb=getNb(t.property);
-  document.getElementById('d-badges').innerHTML=`
-    ${t.urgent?'<span class="badge b-urgent">Urgent</span>':''}
-    ${t.recurring?'<span class="badge b-rec">Recurring</span>':''}
-    <span class="badge b-${t.status}">${t.status.replace('_',' ')}</span>
-    ${t.category?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${t.category.replace('_',' ')}</span>`:''}
-    ${t.guest?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">Reported by ${t.guest}</span>`:''}
-    ${t.created?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${fmtReported(t.created)}</span>`:''}`;
-  await saveTasks();renderAll();
-  showToast(t.urgent?'Marked as urgent.':'Urgent removed.');
-}
-
-// ─── VENDOR SEARCHABLE DROPDOWN ─────────────────────────────────
-let vdOpen=false;
-function buildVendorDD(filter=''){
-  const dd=document.getElementById('vd-dropdown');
-  const q=filter.toLowerCase().trim();
-  // Group vendors by category
-  let html='';
-  let anyMatch=false;
-  for(const cat of VCAT){
-    const catVendors=vendors.filter(v=>v.categories.includes(cat.id));
-    const matched=catVendors.filter(v=>{
-      if(!q)return true;
-      return v.name.toLowerCase().includes(q)||v.role.toLowerCase().includes(q)||cat.label.toLowerCase().includes(q);
-    });
-    if(!matched.length)continue;
-    anyMatch=true;
-    html+=`<div class="vd-cat-label">${cat.label}</div>`;
-    const currentVendor=document.getElementById('d-vendor').value;
-    for(const v of matched){
-      const sel=v.name===currentVendor?'sel':'';
-      html+=`<div class="vd-item ${sel}" onclick="selectVendorDD('${v.name.replace(/'/g,"\\'")}')">
-        <span>${v.name}</span><span class="vd-role">${v.role}</span>
-      </div>`;
-    }
-  }
-  if(!anyMatch)html='<div class="vd-none">No matching vendors</div>';
-  dd.innerHTML=html;
-}
-function openVendorDD(){
-  const dd=document.getElementById('vd-dropdown');
-  buildVendorDD(document.getElementById('d-vendor').value);
-  dd.style.display='block';vdOpen=true;
-}
-function closeVendorDD(){
-  document.getElementById('vd-dropdown').style.display='none';vdOpen=false;
-}
-function toggleVendorDD(){
-  if(vdOpen)closeVendorDD(); else openVendorDD();
-}
-function filterVendorDD(val){
-  buildVendorDD(val);
-  document.getElementById('vd-dropdown').style.display='block';vdOpen=true;
-}
-async function selectVendorDD(name){
-  document.getElementById('d-vendor').value=name;
-  closeVendorDD();
-  await updateField('vendor',name);
-}
-// Close dropdown on outside click
-document.addEventListener('click',e=>{
-  if(vdOpen && !document.getElementById('vd-wrap')?.contains(e.target))closeVendorDD();
-});
-
 async function markComplete(){
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
   t.status='complete';document.getElementById('d-status').value='complete';
@@ -1859,8 +1790,186 @@ async function deleteVendor(){
   showToast('Vendor deleted.','',async()=>{vendors.splice(idx,0,deleted);await saveVendors();renderVendors();showToast('Vendor restored.');});
 }
 
+// ── PROPERTY MANAGEMENT ──────────────────────────────────────
+let editPropId=null, editNbId=null;
+
+function renderProperties(){
+  let h='';
+  NBS.forEach(nb=>{
+    const nbProps=PROPS.filter(p=>nb.props.includes(p.id));
+    h+=`<div class="vs"><div class="vs-hdr" style="display:flex;justify-content:space-between;align-items:center">
+      <h3>${nb.name} <span style="font-weight:400;font-size:.82rem;color:var(--text2)">— ${nb.sub}</span></h3>
+      <button class="btn" style="font-size:.72rem" onclick="openEditNb('${nb.id}')">Edit Neighborhood</button>
+    </div><div class="vc-list">`;
+    if(nbProps.length){
+      nbProps.forEach(p=>{
+        const ical=ICAL_URLS[p.id]?'<span style="color:var(--green);font-size:.72rem">Calendar linked</span>':'<span style="color:var(--text2);font-size:.72rem">No calendar</span>';
+        h+=`<div class="vc"><div class="vc-top"><div class="vc-info">
+          <div class="vc-name">${p.name}</div>
+          <div class="vc-contact"><span class="vc-phone">${p.address}</span></div>
+          <div class="vc-contact"><span class="vc-phone">Door Code: <strong>${p.door}</strong></span> ${ical}</div>
+        </div><div class="vc-actions">
+          <button class="btn" onclick="openEditProp('${p.id}')">Edit</button>
+        </div></div></div>`;
+      });
+    } else {
+      h+='<div style="padding:12px;color:var(--text2);font-size:.85rem">No properties in this neighborhood yet.</div>';
+    }
+    h+='</div></div>';
+  });
+  // Show any orphan properties not in any neighborhood
+  const assigned=NBS.flatMap(nb=>nb.props);
+  const orphans=PROPS.filter(p=>!assigned.includes(p.id));
+  if(orphans.length){
+    h+=`<div class="vs"><div class="vs-hdr"><h3>Unassigned Properties</h3></div><div class="vc-list">`;
+    orphans.forEach(p=>{
+      h+=`<div class="vc"><div class="vc-top"><div class="vc-info">
+        <div class="vc-name">${p.name}</div>
+        <div class="vc-contact"><span class="vc-phone">${p.address}</span></div>
+        <div class="vc-contact"><span class="vc-phone">Door Code: <strong>${p.door}</strong></span></div>
+      </div><div class="vc-actions">
+        <button class="btn" onclick="openEditProp('${p.id}')">Edit</button>
+      </div></div></div>`;
+    });
+    h+='</div></div>';
+  }
+  document.getElementById('prop-dir').innerHTML=h||'<div class="empty">No properties yet.</div>';
+}
+
+function populateNbSelect(){
+  const sel=document.getElementById('p-nb');
+  sel.innerHTML='<option value="">(none)</option>';
+  NBS.forEach(nb=>{const o=document.createElement('option');o.value=nb.id;o.textContent=nb.name+' — '+nb.sub;sel.appendChild(o);});
+}
+
+function openAddProp(){
+  editPropId=null;
+  document.getElementById('prop-modal-title').textContent='Add Property';
+  ['p-name','p-addr','p-door','p-ical'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('p-id').value='';document.getElementById('p-id').disabled=false;
+  populateNbSelect();document.getElementById('p-nb').value='';
+  document.getElementById('p-del-btn').style.display='none';
+  document.getElementById('prop-modal').classList.add('open');
+}
+
+function openEditProp(id){
+  editPropId=id;
+  const p=PROPS.find(x=>x.id===id);if(!p)return;
+  document.getElementById('prop-modal-title').textContent='Edit Property';
+  document.getElementById('p-name').value=p.name;
+  document.getElementById('p-id').value=p.id;document.getElementById('p-id').disabled=true;
+  document.getElementById('p-addr').value=p.address;
+  document.getElementById('p-door').value=p.door;
+  document.getElementById('p-ical').value=ICAL_URLS[p.id]||'';
+  populateNbSelect();
+  const nb=NBS.find(n=>n.props.includes(id));
+  document.getElementById('p-nb').value=nb?nb.id:'';
+  document.getElementById('p-del-btn').style.display='';
+  document.getElementById('prop-modal').classList.add('open');
+}
+
+async function saveProp(){
+  const name=document.getElementById('p-name').value.trim();
+  if(!name){showToast('Property name is required.','err');return;}
+  const pid=editPropId||document.getElementById('p-id').value.trim().toLowerCase().replace(/[^a-z0-9_]/g,'');
+  if(!pid){showToast('Property ID is required.','err');return;}
+  if(!editPropId&&PROPS.find(p=>p.id===pid)){showToast('A property with that ID already exists.','err');return;}
+  const addr=document.getElementById('p-addr').value.trim();
+  const door=document.getElementById('p-door').value.trim();
+  const ical=document.getElementById('p-ical').value.trim();
+  const nbId=document.getElementById('p-nb').value;
+
+  const prop={id:pid,name,address:addr,door};
+  if(editPropId){
+    const i=PROPS.findIndex(x=>x.id===editPropId);if(i>=0)PROPS[i]=prop;
+  } else {
+    PROPS.push(prop);
+  }
+
+  // Update iCal
+  if(ical){ICAL_URLS[pid]=ical;}else{delete ICAL_URLS[pid];}
+
+  // Update neighborhood assignment
+  NBS.forEach(nb=>{nb.props=nb.props.filter(x=>x!==pid);});
+  if(nbId){const nb=NBS.find(n=>n.id===nbId);if(nb)nb.props.push(pid);}
+
+  await saveProps();await saveNbs();await saveIcal();
+  closeModal('prop-modal');renderProperties();populatePropSel('f-prop');populatePropSel('d-prop');
+  showToast(editPropId?'Property updated.':'Property added.');
+}
+
+async function deleteProp(){
+  const deleted=PROPS.find(p=>p.id===editPropId);if(!deleted)return;
+  const idx=PROPS.indexOf(deleted);
+  const oldIcal=ICAL_URLS[editPropId];
+  const oldNb=NBS.find(n=>n.props.includes(editPropId));
+  const oldNbIdx=oldNb?oldNb.props.indexOf(editPropId):-1;
+
+  PROPS=PROPS.filter(p=>p.id!==editPropId);
+  delete ICAL_URLS[editPropId];
+  NBS.forEach(nb=>{nb.props=nb.props.filter(x=>x!==editPropId);});
+
+  await saveProps();await saveNbs();await saveIcal();
+  closeModal('prop-modal');renderProperties();populatePropSel('f-prop');populatePropSel('d-prop');
+  showToast('Property deleted.','',async()=>{
+    PROPS.splice(idx,0,deleted);
+    if(oldIcal)ICAL_URLS[deleted.id]=oldIcal;
+    if(oldNb)oldNb.props.splice(oldNbIdx,0,deleted.id);
+    await saveProps();await saveNbs();await saveIcal();
+    renderProperties();populatePropSel('f-prop');populatePropSel('d-prop');
+    showToast('Property restored.');
+  });
+}
+
+// ── NEIGHBORHOOD MANAGEMENT ──────────────────────────────────
+function openAddNb(){
+  editNbId=null;
+  document.getElementById('nb-modal-title').textContent='Add Neighborhood';
+  ['nb-name','nb-sub'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('nb-cls').value='prc';
+  document.getElementById('nb-del-btn').style.display='none';
+  document.getElementById('nb-modal').classList.add('open');
+}
+
+function openEditNb(id){
+  editNbId=id;
+  const nb=NBS.find(n=>n.id===id);if(!nb)return;
+  document.getElementById('nb-modal-title').textContent='Edit Neighborhood';
+  document.getElementById('nb-name').value=nb.name;
+  document.getElementById('nb-sub').value=nb.sub;
+  document.getElementById('nb-cls').value=nb.cls;
+  document.getElementById('nb-del-btn').style.display='';
+  document.getElementById('nb-modal').classList.add('open');
+}
+
+async function saveNbModal(){
+  const name=document.getElementById('nb-name').value.trim();
+  if(!name){showToast('Neighborhood name is required.','err');return;}
+  const sub=document.getElementById('nb-sub').value.trim();
+  const cls=document.getElementById('nb-cls').value;
+
+  if(editNbId){
+    const nb=NBS.find(n=>n.id===editNbId);
+    if(nb){nb.name=name;nb.sub=sub;nb.cls=cls;}
+  } else {
+    const id='nb_'+Date.now();
+    NBS.push({id,name,sub,cls,props:[]});
+  }
+  await saveNbs();closeModal('nb-modal');renderProperties();
+  showToast(editNbId?'Neighborhood updated.':'Neighborhood added.');
+}
+
+async function deleteNb(){
+  const nb=NBS.find(n=>n.id===editNbId);if(!nb)return;
+  if(nb.props.length){showToast('Move or delete all properties in this neighborhood first.','err');return;}
+  const idx=NBS.indexOf(nb);
+  NBS=NBS.filter(n=>n.id!==editNbId);
+  await saveNbs();closeModal('nb-modal');renderProperties();
+  showToast('Neighborhood deleted.','',async()=>{NBS.splice(idx,0,nb);await saveNbs();renderProperties();showToast('Neighborhood restored.');});
+}
+
 function closeModal(id){document.getElementById(id).classList.remove('open');}
-document.querySelectorAll('.mo').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
+/* Backdrop click disabled — modals close only via X or Cancel */
 let _toastTimer=null;
 function showToast(msg,cls='',undoFn=null){
   clearTimeout(_toastTimer);
