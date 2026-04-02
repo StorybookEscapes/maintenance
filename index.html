@@ -1758,28 +1758,58 @@ async function renderMiniCal(pid){
   const fco=av.find(a=>a.status==='checkout');
   nco.innerHTML=fco?`Next checkout: <strong style="color:var(--gold)">${fco.date.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</strong> — earliest recommended window`:'';
 }
+function vendorCard(v,t,p,showAssign){
+  const sms=buildSMS(t,p,v);const tel=v.phone.replace(/\D/g,'');
+  const smsId='sms-'+v.id;
+  return`<div class="vsc">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div><div class="vsn">${v.name}</div><div class="vsr">${v.role}</div><div class="vsp">${v.phone}${v.email?' | '+v.email:''}</div></div>
+      ${showAssign?`<button class="btn btn-g" onclick="assignVendor('${v.name.replace(/'/g,"\\'")}')">Assign</button>`:''}
+    </div>
+    <div style="font-size:.73rem;color:var(--text2);margin:5px 0 8px">${v.note}</div>
+    <div class="sms-box"><div class="sms-lbl">Ready-to-Send Text Message</div>
+      <textarea class="sms-edit" id="${smsId}">${sms.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+      <div class="sms-acts">
+        <a id="${smsId}-link" href="sms:${tel}?body=${encodeURIComponent(sms)}" class="sms-btn sms-send" onclick="updateSmsLink('${smsId}','${tel}')">Open in Messages</a>
+        <button class="sms-btn sms-copy" onclick="copySms('${smsId}')">Copy Text</button>
+      </div>
+    </div>
+  </div>`;
+}
 function renderDetailVendors(t,p){
   const area=document.getElementById('d-vendors');
   const m=vendors.filter(v=>v.categories.includes(t.category));
+  const assignedVendor=t.vendor?vendors.find(v=>v.name.toLowerCase()===t.vendor.toLowerCase()):null;
+
+  // If a vendor is assigned and they're in our list, show their card prominently
+  if(assignedVendor){
+    let h=vendorCard(assignedVendor,t,p,false);
+    // Show other vendors in a collapsible section
+    const others=m.filter(v=>v.id!==assignedVendor.id).slice(0,3);
+    if(others.length){
+      h+=`<details style="margin-top:10px"><summary style="font-size:.78rem;color:var(--text2);cursor:pointer;padding:6px 0">Other vendors for this category (${others.length})</summary>`;
+      h+=others.map(v=>vendorCard(v,t,p,true)).join('');
+      h+=`</details>`;
+    }
+    area.innerHTML=h;
+    return;
+  }
+
+  // If vendor is assigned but not in our list (e.g. typed manually), show a note + suggestions
+  if(t.vendor){
+    let h=`<div style="font-size:.82rem;color:var(--text2);padding:6px 0;margin-bottom:8px">Assigned to <strong>${t.vendor}</strong> (not in vendor list)</div>`;
+    if(m.length){
+      h+=`<details><summary style="font-size:.78rem;color:var(--text2);cursor:pointer;padding:6px 0">Suggested vendors for this category (${m.length})</summary>`;
+      h+=m.slice(0,3).map(v=>vendorCard(v,t,p,true)).join('');
+      h+=`</details>`;
+    }
+    area.innerHTML=h;
+    return;
+  }
+
+  // No vendor assigned — show all suggestions
   if(!m.length){area.innerHTML='<div style="color:var(--text3);font-size:.82rem">Set a category to see vendor suggestions.</div>';return;}
-  area.innerHTML=m.slice(0,3).map(v=>{
-    const sms=buildSMS(t,p,v);const tel=v.phone.replace(/\D/g,'');
-    const smsId='sms-'+v.id;
-    return`<div class="vsc">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start">
-        <div><div class="vsn">${v.name}</div><div class="vsr">${v.role}</div><div class="vsp">${v.phone}${v.email?' | '+v.email:''}</div></div>
-        <button class="btn btn-g" onclick="assignVendor('${v.name.replace(/'/g,"\\'")}')">Assign</button>
-      </div>
-      <div style="font-size:.73rem;color:var(--text2);margin:5px 0 8px">${v.note}</div>
-      <div class="sms-box"><div class="sms-lbl">Ready-to-Send Text Message</div>
-        <textarea class="sms-edit" id="${smsId}">${sms.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
-        <div class="sms-acts">
-          <a id="${smsId}-link" href="sms:${tel}?body=${encodeURIComponent(sms)}" class="sms-btn sms-send" onclick="updateSmsLink('${smsId}','${tel}')">Open in Messages</a>
-          <button class="sms-btn sms-copy" onclick="copySms('${smsId}')">Copy Text</button>
-        </div>
-      </div>
-    </div>`;
-  }).join('');
+  area.innerHTML=m.slice(0,3).map(v=>vendorCard(v,t,p,true)).join('');
 }
 function copySms(id){
   const el=document.getElementById(id);if(!el)return;
