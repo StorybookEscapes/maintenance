@@ -611,7 +611,8 @@ document.addEventListener('DOMContentLoaded', function() {
       <div class="fgr full" id="f-vendor-suggest"></div>
       <div class="fgr full">
         <label>Assigned Vendor</label>
-        <input type="text" id="f-vendor" placeholder="Vendor name">
+        <input type="text" id="f-vendor" placeholder="Vendor name" oninput="checkNewVendor()" onblur="setTimeout(checkNewVendor,200)">
+        <div id="f-vendor-new" style="display:none"></div>
       </div>
       <div class="fgr full">
         <label>Internal Notes</label>
@@ -661,7 +662,8 @@ document.addEventListener('DOMContentLoaded', function() {
       </div>
       <div class="fgr full">
         <label>Assigned Vendor</label>
-        <input type="text" id="d-vendor" onchange="updateField('vendor',this.value)" placeholder="Vendor name">
+        <input type="text" id="d-vendor" onchange="updateField('vendor',this.value)" oninput="checkNewVendor('d')" onblur="setTimeout(()=>checkNewVendor('d'),200)" placeholder="Vendor name">
+        <div id="d-vendor-new" style="display:none"></div>
       </div>
     </div>
     <div class="stitle">Notes</div>
@@ -1424,7 +1426,7 @@ function buildMonth(){
         const alreadyScheduled=tasks.some(x=>x.recurring&&x.problem===r.name&&x.date===ds&&pids.some(pid=>x.property===pid));
         if(alreadyScheduled)return;
         const nc=pids.length===1?getNbCls(pids[0]):'other';
-        h+=`<div class="ce ce-${nc} rec sug" title="${r.name} (recurring — go to Recurring tab to generate)" style="cursor:default">${r.name.substring(0,28)}${r.name.length>28?'...':''}</div>`;
+        h+=`<div class="ce ce-${nc} rec sug" title="${r.name} — click to schedule" onclick="openTaskFromRecurring('${r.id}','${ds}')" style="cursor:pointer">${r.name.substring(0,28)}${r.name.length>28?'...':''}</div>`;
       });
     }
     h+='</div>';
@@ -1452,7 +1454,7 @@ function buildWeek(ws){
       const alreadyScheduled=tasks.some(x=>x.recurring&&x.problem===r.name&&x.date===ds&&pids.some(pid=>x.property===pid));
       if(alreadyScheduled)return;
       const nc=pids.length===1?getNbCls(pids[0]):'other';
-      h+=`<div class="de de-${nc} rec sug"><div class="de-prop">Recurring</div><div class="de-title">${r.name.substring(0,35)}</div></div>`;
+      h+=`<div class="de de-${nc} rec sug" onclick="openTaskFromRecurring('${r.id}','${ds}')" style="cursor:pointer"><div class="de-prop">Recurring</div><div class="de-title">${r.name.substring(0,35)}</div></div>`;
     });
     h+='</div>';
   }
@@ -1637,6 +1639,35 @@ function onPropChange(){
   document.getElementById('f-dp-display').className='dp-ph';
   document.getElementById('f-dp-btn').classList.remove('has-val');
 }
+function checkNewVendor(prefix='f'){
+  const input=document.getElementById(prefix+'-vendor');
+  const area=document.getElementById(prefix+'-vendor-new');
+  const name=input.value.trim();
+  if(!name||name.length<2){area.style.display='none';return;}
+  // Check if any existing vendor matches (case-insensitive partial match)
+  const match=vendors.some(v=>v.name.toLowerCase()===name.toLowerCase()||v.name.toLowerCase().includes(name.toLowerCase())||name.toLowerCase().includes(v.name.toLowerCase()));
+  if(match){area.style.display='none';return;}
+  area.style.display='block';
+  area.innerHTML=`<div style="margin-top:6px;padding:9px 12px;background:#fff8e8;border:1px solid var(--gold-light);border-radius:8px;font-size:.8rem;display:flex;align-items:center;justify-content:space-between;gap:8px">
+    <span><strong>${name}</strong> is not in your vendor list.</span>
+    <button class="btn btn-gold" style="font-size:.72rem;white-space:nowrap" onclick="quickAddVendor('${prefix}')">+ Add to Vendors</button>
+  </div>`;
+}
+async function quickAddVendor(prefix='f'){
+  const input=document.getElementById(prefix+'-vendor');
+  const name=input.value.trim();if(!name)return;
+  // Check if already exists
+  if(vendors.some(v=>v.name.toLowerCase()===name.toLowerCase())){showToast('Vendor already exists.');return;}
+  // Get current category from the task form for a smart default
+  let cat='other';
+  if(prefix==='f'){const el=document.getElementById('f-category');if(el)cat=el.value;}
+  else if(detailId){const t=tasks.find(x=>x.id===detailId);if(t)cat=t.category||'other';}
+  const v={id:'v'+Date.now(),name,role:'',phone:'',email:'',categories:[cat||'other'],note:''};
+  vendors.push(v);
+  await saveVendors();
+  document.getElementById(prefix+'-vendor-new').style.display='none';
+  showToast(`${name} added to vendor list. You can add their details in the Vendors tab.`);
+}
 function onCatChange(){
   const cat=document.getElementById('f-category').value;
   const area=document.getElementById('f-vendor-suggest');
@@ -1652,6 +1683,23 @@ function onCatChange(){
       </div>
       ${v.note?`<div style="font-size:.73rem;color:var(--text2);margin-top:4px">${v.note}</div>`:''}
     </div>`).join('');
+}
+function openTaskFromRecurring(recId, date) {
+  const r = recurring.find(x => x.id === recId); if (!r) return;
+  const pids = r.properties.includes('all') ? PROPS.map(p => p.id) : r.properties;
+  openAddTask(pids[0] || '');
+  setTimeout(() => {
+    document.getElementById('f-problem').value = r.name;
+    document.getElementById('f-category').value = r.category || '';
+    document.getElementById('f-vendor').value = r.vendor || '';
+    if (date) {
+      document.getElementById('f-date').value = date;
+      document.getElementById('f-dp-display').textContent = fmtDate(date);
+      document.getElementById('f-dp-display').className = '';
+      document.getElementById('f-dp-btn').classList.add('has-val');
+    }
+    document.getElementById('task-modal-title').textContent = 'New Task — from Recurring';
+  }, 60);
 }
 function openAddTask(propId){
   document.getElementById('task-modal-title').textContent='New Task';
