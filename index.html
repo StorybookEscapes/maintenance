@@ -1196,22 +1196,19 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
   }
 
   // Helper: given a date, return its booking state
+  // Scan ALL reservations first to collect flags, then decide
   function dayState(d){
+    const ds=d.toDateString();
+    let hasCheckout=false, hasCheckin=false, isMidStay=false;
     for(const r of res){
-      const isCheckout=d.toDateString()===r.co.toDateString();
-      const isCheckin=d.toDateString()===r.ci.toDateString();
-      if(isCheckout&&isCheckin)return'turn-only'; // blocked + same-day turn
-      if(isCheckout){
-        // Is there also a checkin on this day?
-        const hasCheckin=res.some(x=>x!==r&&x.ci.toDateString()===d.toDateString());
-        return hasCheckin?'turn':'checkout';
-      }
-      if(isCheckin){
-        const hasCheckout=res.some(x=>x!==r&&x.co.toDateString()===d.toDateString());
-        return hasCheckout?'turn':'checkin';
-      }
-      if(d>r.ci&&d<r.co)return'booked';
+      if(ds===r.co.toDateString()) hasCheckout=true;
+      if(ds===r.ci.toDateString()) hasCheckin=true;
+      if(d>r.ci&&d<r.co) isMidStay=true;
     }
+    if(hasCheckout&&hasCheckin) return'turn';
+    if(isMidStay) return'booked';
+    if(hasCheckin) return'checkin';
+    if(hasCheckout) return'checkout';
     return'available';
   }
 
@@ -1226,11 +1223,7 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
     if(wk.length===7){weeks.push(wk);wk=[];}
   }
 
-  const TEAL='#2a8f72';
-  const CELL_H=56; // matches min-height in CSS
-  const BAR_TOP=22; // px from cell top where bar starts
-  const BAR_H=20;  // bar height px
-  const DIAG=12;   // px of diagonal slant
+  // Cell backgrounds handle booking state — no SVG bars in datepicker
 
   let h=`<div class="dp-phdr"><div class="dp-ptitle">${MONTHS[mo]} ${y}</div><div class="dp-pnav"><button onclick="dpNav('${px}',-1,${y},${mo})">&#x2190;</button><button onclick="dpNav('${px}',1,${y},${mo})">&#x2192;</button></div></div>`;
   h+=`<div class="dp-cal-wrap"><div class="dp-dow-row">`;
@@ -1240,9 +1233,6 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
   weeks.forEach(wk=>{
     const wkStart=wk[0].d, wkEnd=new Date(y,wk[6].d.getMonth(),wk[6].d.getDate()+1,12,0,0);
     // Reservations touching this week
-    const wkRes=res.filter(r=>r.co>wkStart&&r.ci<wkEnd);
-
-    // Render cells — z-index:1 so they sit above the SVG bar layer for click handling
     h+=`<div class="dp-week-row">`;
     wk.forEach(({dn,d,isOther})=>{
       if(isOther){h+=`<div class="dp-cell dp-other"></div>`;return;}
@@ -1261,72 +1251,10 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
       const dnCls='dp-dn'+(isToday?' dp-today-num':'');
       const warn=isBooked?',true':'';
       const click=!isPast?`onclick="selDate('${px}','${ds}'${warn})"`:'' ;
-      // position:relative + z-index:1 ensures cell is above the SVG bar layer for clicks
-      h+=`<div class="${cls}" style="position:relative;z-index:1" ${click}><div class="${dnCls}">${dn}</div></div>`;
+      h+=`<div class="${cls}" ${click}><div class="${dnCls}">${dn}</div></div>`;
     });
 
-    // SVG bar layer for this week row — rendered after cells but positioned absolute behind them via z-index:0
-    // Use 100% width SVG, each cell = 1/7 of width
-    h+=`<div class="dp-bars" style="z-index:0"><svg width="100%" height="${CELL_H}" viewBox="0 0 700 ${CELL_H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" style="pointer-events:none">`;
-    const CW=100; // each cell = 100 units wide (700 total for 7 cells)
-
-    wkRes.forEach(r=>{
-      // Determine columns this reservation occupies in this week (0-based)
-      // ci col: day index within week
-      const ciInWeek=r.ci>=wkStart&&r.ci<wkEnd;
-      const coInWeek=r.co>wkStart&&r.co<=wkEnd;
-
-      // Column of first visible day of this bar
-      let startCol; 
-      if(ciInWeek){
-        startCol=Math.round((r.ci-wkStart)/(864e5));
-      } else {
-        startCol=0;
-      }
-      // Column AFTER last visible day of this bar
-      let endCol;
-      if(coInWeek){
-        endCol=Math.round((r.co-wkStart)/(864e5));
-      } else {
-        endCol=7;
-      }
-      if(endCol<=startCol)return;
-
-      // Does this bar have a diagonal START (checkin on a turn day)?
-      const hasLeftDiag=ciInWeek&&res.some(x=>x!==r&&x.co.toDateString()===r.ci.toDateString());
-      // Does this bar have a diagonal END (checkout on a turn day)?
-      const hasRightDiag=coInWeek&&res.some(x=>x!==r&&x.ci.toDateString()===r.co.toDateString());
-
-      const x1=startCol*CW;
-      const x2=endCol*CW;
-      const y1=BAR_TOP, y2=BAR_TOP+BAR_H;
-      const d2=DIAG;
-
-      // Build polygon points:
-      // Normal bar: rectangle x1,y1 → x2,y1 → x2,y2 → x1,y2
-      // Left diag (incoming on turn): top-left corner pushed right by d2, bottom-left is x1
-      //   → creates a left-pointing chevron
-      // Right diag (outgoing on turn): top-right is x2, bottom-right pushed left by d2
-      //   → creates a right-pointing chevron
-      const tl=hasLeftDiag ?`${x1+d2},${y1}`:`${x1},${y1}`;
-      const bl=hasLeftDiag ?`${x1},${y2}`        :`${x1},${y2}`;
-      const tr=hasRightDiag?`${x2},${y1}`         :`${x2},${y1}`;
-      const br=hasRightDiag?`${x2-d2},${y2}`      :`${x2},${y2}`;
-
-      h+=`<polygon points="${tl} ${tr} ${br} ${bl}" fill="${TEAL}" opacity="0.92"/>`;
-
-      // Guest name label — centered in bar, clipped
-      const labelX=(x1+(hasLeftDiag?d2/2:0)+x2-(hasRightDiag?d2/2:0))/2;
-      const visWidth=x2-x1-d2*(hasLeftDiag?0.5:0)-d2*(hasRightDiag?0.5:0);
-      if(visWidth>CW*0.9&&r.name){
-        h+=`<text x="${labelX}" y="${BAR_TOP+BAR_H*0.68}" text-anchor="middle" fill="white" font-size="9" font-weight="600" font-family="DM Sans,sans-serif" clip-path="url(#clip-${startCol}-${endCol})">`;
-        const maxChars=Math.floor(visWidth/5.5);
-        const label=r.name.length>maxChars?r.name.slice(0,maxChars-1)+'…':r.name;
-        h+=`${label}</text>`;
-      }
-    });
-
-    h+=`</svg></div></div>`;
+    h+=`</div>`;
   });
 
   h+=`</div>`;
