@@ -278,34 +278,23 @@ textarea{resize:vertical;min-height:76px}
 .dp-dow{text-align:left;font-size:.6rem;text-transform:uppercase;color:var(--text3);padding:5px 0 5px 5px;font-weight:600;border-right:1px solid var(--border)}
 .dp-dow:last-child{border-right:none}
 .dp-week-row{display:grid;grid-template-columns:repeat(7,1fr);position:relative;border-top:1px solid var(--border)}
-/* Available cells get the diagonal hatch — matches Hospitable */
 .dp-cell{position:relative;min-height:56px;border-right:1px solid var(--border);padding:4px 0 0 5px;cursor:pointer;background:#fff}
 .dp-cell:last-child{border-right:none}
 .dp-cell.dp-other{background-color:var(--surface2);cursor:default}
 .dp-cell.dp-today-cell{background-color:var(--gold-pale)}
-.dp-cell.dp-booked-bg{background-color:#f9fdf9;background-image:repeating-linear-gradient(135deg,transparent,transparent 6px,rgba(0,0,0,.08) 6px,rgba(0,0,0,.08) 7px)}
-.dp-cell.dp-turn-bg{background-color:var(--gold-pale);background-image:none}
-.dp-cell.dp-checkout-bg{background-color:#eef6ee;position:relative}
-.dp-cell.dp-checkout-bg::after{content:'out 10a';position:absolute;bottom:1px;left:50%;transform:translateX(-50%);font-size:.42rem;color:#5a8a5a;letter-spacing:.3px;white-space:nowrap}
-.dp-cell.dp-checkin-bg{background-color:#eef6ee;position:relative}
-.dp-cell.dp-checkin-bg::after{content:'in 4p';position:absolute;bottom:1px;left:50%;transform:translateX(-50%);font-size:.42rem;color:#5a8a5a;letter-spacing:.3px;white-space:nowrap}
 .dp-cell:not(.dp-other):hover{background-color:var(--green-pale)}
 .dp-cell.dp-other:hover{background-color:var(--surface2)}
 .dp-dn{font-size:.78rem;font-weight:700;color:var(--text);line-height:1;position:relative;z-index:2;text-shadow:0 0 2px #fff,0 0 4px #fff}
 .dp-dn.dp-today-num{color:var(--gold)}
 .dp-cell.dp-selected{box-shadow:inset 0 0 0 2px var(--green);z-index:2}
+/* Hospitable-style reservation bars */
+.dp-res-bar{position:absolute;top:20px;height:20px;background:#2d9c95;z-index:1;display:flex;align-items:center;overflow:hidden;pointer-events:none}
+.dp-res-name{color:#fff;font-size:.55rem;font-weight:600;padding-left:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* In-house warning banner */
 .dp-warn{background:#fff8e8;border:1px solid var(--gold-light);border-radius:8px;padding:10px 13px;margin-top:10px;font-size:.78rem;color:#7a5c00;display:none}
 .dp-warn.show{display:block}
 .dp-warn strong{color:#b8830a}
 .dp-warn-btns{display:flex;gap:7px;margin-top:8px}
-/* Reservation bars — rendered as SVG so we get pixel-perfect diagonal ends */
-.dp-bars{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;overflow:hidden}
-.dp-bars svg{pointer-events:none}
-.dp-bars svg *{pointer-events:none}
-.dp-leg{display:flex;gap:12px;margin-top:10px;flex-wrap:wrap}
-.dp-li{display:flex;align-items:center;gap:5px;font-size:.67rem;color:var(--text2)}
-.dp-ld{width:12px;height:10px;border-radius:2px}
 .dp-load{text-align:center;padding:20px;color:var(--text3);font-size:.82rem}
 .dp-noprop{text-align:center;padding:20px;color:var(--text3);font-size:.82rem;font-style:italic}
 @media(max-width:768px){.dp-popup{width:calc(100vw - 40px)}}
@@ -1284,39 +1273,63 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
     if(wk.length===7){weeks.push(wk);wk=[];}
   }
 
-  // Cell backgrounds handle booking state — no SVG bars in datepicker
-
   let h=`<div class="dp-phdr"><div class="dp-ptitle">${MONTHS[mo]} ${y}</div><div class="dp-pnav"><button onclick="dpNav('${px}',-1,${y},${mo})">&#x2190;</button><button onclick="dpNav('${px}',1,${y},${mo})">&#x2192;</button></div></div>`;
   h+=`<div class="dp-cal-wrap"><div class="dp-dow-row">`;
   ['Su','Mo','Tu','We','Th','Fr','Sa'].forEach(d=>h+=`<div class="dp-dow">${d}</div>`);
   h+=`</div>`;
 
+  const COL_PCT=100/7; // ~14.285% per column
+
   weeks.forEach(wk=>{
-    const wkStart=wk[0].d, wkEnd=new Date(y,wk[6].d.getMonth(),wk[6].d.getDate()+1,12,0,0);
-    // Reservations touching this week
+    const wkStart=wk[0].d;
+    const wkEnd=new Date(wk[6].d.getFullYear(),wk[6].d.getMonth(),wk[6].d.getDate()+1,12,0,0);
+
     h+=`<div class="dp-week-row">`;
+
+    // Render day cells (no booking background classes — bars handle that)
     wk.forEach(({dn,d,isOther})=>{
       if(isOther){h+=`<div class="dp-cell dp-other"></div>`;return;}
       const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
       const isSel=selVal===ds;
       const isPast=d<today&&d.toDateString()!==today.toDateString();
-      const st=dayState(d);
-      const isTurn=st==='turn'||st==='turn-only';
-      const isGuestInHouse=st==='booked';
-      const isCheckout=st==='checkout';
-      const isCheckin=st==='checkin';
       const isToday=d.toDateString()===today.toDateString();
+      const st=dayState(d);
+      const isGuestInHouse=st==='booked';
       let cls='dp-cell';
       if(isToday)cls+=' dp-today-cell';
       if(isSel)cls+=' dp-selected';
-      if(isTurn)cls+=' dp-turn-bg';
-      else if(isGuestInHouse)cls+=' dp-booked-bg';
-      else if(isCheckout)cls+=' dp-checkout-bg';
-      else if(isCheckin)cls+=' dp-checkin-bg';
       const dnCls='dp-dn'+(isToday?' dp-today-num':'');
       const warn=isGuestInHouse?',true':'';
       const click=!isPast?`onclick="selDate('${px}','${ds}'${warn})"`:'' ;
       h+=`<div class="${cls}" ${click}><div class="${dnCls}">${dn}</div></div>`;
+    });
+
+    // Render reservation bars overlaying this week row
+    res.forEach(r=>{
+      // Skip if reservation doesn't overlap this week
+      // Bar covers from check-in through the night before checkout (checkout cell itself is free)
+      if(r.ci>=wkEnd||r.co<=wkStart) return;
+
+      // Clamp to week boundaries
+      const barStart=r.ci<wkStart?wkStart:r.ci;
+      const barEnd=r.co>wkEnd?wkEnd:r.co;
+
+      // Column indices (0–7)
+      const msPerDay=86400000;
+      const startCol=Math.round((barStart.getTime()-wkStart.getTime())/msPerDay);
+      const endCol=Math.round((barEnd.getTime()-wkStart.getTime())/msPerDay);
+      if(endCol<=startCol) return;
+
+      const left=(startCol*COL_PCT).toFixed(2);
+      const width=((endCol-startCol)*COL_PCT).toFixed(2);
+
+      // Rounded ends: round on the actual check-in/checkout ends, flat where it continues
+      const isFirst=r.ci>=wkStart; // bar starts at actual check-in
+      const isLast=r.co<=wkEnd;    // bar ends at actual checkout
+      const rL=isFirst?'4px':'0';
+      const rR=isLast?'4px':'0';
+
+      h+=`<div class="dp-res-bar" style="left:${left}%;width:${width}%;border-radius:${rL} ${rR} ${rR} ${rL}"><span class="dp-res-name">${r.name}</span></div>`;
     });
 
     h+=`</div>`;
@@ -1325,16 +1338,9 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
   h+=`</div>`;
   if(fetchFailed){
     h+=`<div style="background:#fdf0ee;border:1px solid #e8c0bb;border-radius:8px;padding:9px 12px;margin-top:8px;font-size:.76rem;color:#7a2019">
-      <strong>Booking data unavailable.</strong> You can still pick a date, but guest check-in/check-out times won't be shown.
-      <span style="display:block;margin-top:4px;font-size:.68rem;color:var(--text3)">Check the browser console (F12) for details. If you opened this file directly, try serving it via a local web server instead.</span>
+      <strong>Booking data unavailable.</strong> You can still pick a date, but booking info won't be shown.
+      <span style="display:block;margin-top:4px;font-size:.68rem;color:var(--text3)">Check the browser console (F12) for details.</span>
     </div>`;
-  } else {
-    h+=`<div class="dp-leg">`;
-    h+=`<div class="dp-li"><div style="width:14px;height:10px;background:#fff;border:1px solid var(--border);border-radius:2px"></div>Available</div>`;
-    h+=`<div class="dp-li"><div style="width:14px;height:10px;background-color:#eef6ee;border:1px solid #c4d9c4;border-radius:2px"></div>Serviceable</div>`;
-    h+=`<div class="dp-li"><div style="width:14px;height:10px;background-color:var(--gold-pale);border:1px solid var(--gold-light);border-radius:2px"></div>Turn day</div>`;
-    h+=`<div class="dp-li"><div style="width:14px;height:10px;background-image:repeating-linear-gradient(135deg,transparent,transparent 3px,rgba(0,0,0,.12) 3px,rgba(0,0,0,.12) 4px);background-color:#f9fdf9;border:1px solid var(--border);border-radius:2px"></div>Guests in house</div>`;
-    h+=`</div>`;
   }
   h+=`<div class="dp-warn" id="${px}-dp-warn"><strong>⚠ Guests are in house on this day.</strong> Service is not recommended while guests are present. Consider a checkout day (after 10am) or check-in day (before 4pm) instead.<div class="dp-warn-btns"><button class="btn btn-gold" onclick="confirmBookedDate('${px}')">Schedule Anyway</button><button class="btn" onclick="cancelBookedDate('${px}')">Pick Another Day</button></div></div>`;
   popup.innerHTML=h;
