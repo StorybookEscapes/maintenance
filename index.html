@@ -466,12 +466,6 @@ textarea{resize:vertical;min-height:76px}
       <div id="hb-wrap"></div>
       <div id="ub-wrap"></div>
       <input type="hidden" id="search-input" value="">
-      <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap">
-        <select id="prop-filter" onchange="setPropFilter(this.value)" style="padding:5px 10px;border-radius:20px;border:1px solid var(--border);background:var(--white);color:var(--text);font-family:inherit;font-size:.76rem;cursor:pointer">
-          <option value="all">All Properties</option>
-        </select>
-        <button id="date-sort-btn" class="fb" onclick="toggleDateSort()" style="margin-left:auto">Sort by Date</button>
-      </div>
       <div id="task-list"></div>
     </div>
 
@@ -546,6 +540,15 @@ textarea{resize:vertical;min-height:76px}
             </label>
             <button class="btn btn-red" onclick="removeLogo()" id="logo-remove-btn" style="display:none">Remove Logo</button>
           </div>
+        </div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px">
+        <h3 style="font-size:.88rem;font-weight:600;color:var(--green);margin-bottom:4px">Product Roadmap / Notes</h3>
+        <p style="font-size:.76rem;color:var(--text2);margin-bottom:14px;line-height:1.5">Jot down ideas, feature requests, and things to build later.</p>
+        <textarea id="roadmap-notes" style="width:100%;min-height:220px;font-family:'DM Sans',sans-serif;font-size:.82rem;padding:12px;border:1px solid var(--border);border-radius:8px;resize:vertical;line-height:1.6" placeholder="- Add photo uploads to tasks&#10;- Guest notification system&#10;- Monthly maintenance reports&#10;..."></textarea>
+        <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
+          <span id="roadmap-status" style="font-size:.72rem;color:var(--text3);align-self:center;margin-right:auto"></span>
+          <button class="btn btn-g" onclick="saveRoadmap()">Save Notes</button>
         </div>
       </div>
     </div>
@@ -1139,8 +1142,10 @@ function renderTasks(){
   // Group by scheduling status (date presence is the primary signal)
   const isScheduled=t=>t.status==='scheduled'||t.status==='in_progress'||!!t.date;
   const needsScheduling=sortTasks(f.filter(t=>!isScheduled(t)));
-  let scheduled=sortTasks(f.filter(t=>isScheduled(t)));
-  if(dateSort)scheduled.sort((a,b)=>{const da=a.date||'9999';const db=b.date||'9999';return da.localeCompare(db);});
+  let scheduled=f.filter(t=>isScheduled(t)).sort((a,b)=>{
+    if(a.urgent&&!b.urgent)return-1;if(!a.urgent&&b.urgent)return 1;
+    const da=a.date||'9999';const db=b.date||'9999';return da.localeCompare(db);
+  });
 
   let html='';
   if(needsScheduling.length){
@@ -2031,6 +2036,15 @@ async function removeLogo(){
   if(rmBtn)rmBtn.style.display='none';
   showToast('Logo removed.');
 }
+// ROADMAP NOTES
+async function loadRoadmap(){
+  try{const r=await S.get('se_notes');if(r&&r.value){const el=document.getElementById('roadmap-notes');if(el)el.value=r.value;}}catch(e){}
+}
+async function saveRoadmap(){
+  const el=document.getElementById('roadmap-notes');if(!el)return;
+  await S.set('se_notes',el.value);
+  showToast('Notes saved.');
+}
 
 function buildSMS(t,p,v){
   const pn=p?p.name:t.property,addr=p?p.address:'',door=p?p.door:'';
@@ -2247,46 +2261,64 @@ async function deleteTask(){
 // PROPERTY HISTORY
 function renderHistory(){
   const container=document.getElementById('hist-container');
-  // All completed tasks
-  let done=tasks.filter(t=>['complete','resolved_by_guest'].includes(t.status));
-  // Apply property filter
-  if(selProp)done=done.filter(t=>t.property===selProp);
-  // Apply category filter
-  if(histCat!=='all')done=done.filter(t=>t.category===histCat);
-  // Sort newest first
-  done.sort((a,b)=>new Date(b.created)-new Date(a.created));
-  // Build category counts from all completed (before cat filter)
-  const allDone=tasks.filter(t=>['complete','resolved_by_guest'].includes(t.status)&&(selProp?t.property===selProp:true));
-  const cc={};allDone.forEach(t=>{if(t.category)cc[t.category]=(cc[t.category]||0)+1;});
-  const uc=Object.entries(cc).sort((a,b)=>b[1]-a[1]);
-  // Build property dropdown
-  let propOpts='<option value="">All Properties</option>';
+  // Property grid grouped by neighborhood
+  let gridHtml='';
   NBS.forEach(nb=>{
-    let group='';
-    PROPS.filter(p=>nb.props.includes(p.id)).forEach(p=>{
-      const cnt=tasks.filter(t=>t.property===p.id&&['complete','resolved_by_guest'].includes(t.status)).length;
-      if(cnt)group+=`<option value="${p.id}" ${selProp===p.id?'selected':''}>${p.name.split(' - ').pop()} (${cnt})</option>`;
-    });
-    if(group)propOpts+=`<optgroup label="${nb.name}">${group}</optgroup>`;
+    const cards=nb.props.map(pid=>{
+      const p=getProp(pid);if(!p)return'';
+      const done=tasks.filter(t=>t.property===pid&&['complete','resolved_by_guest'].includes(t.status)).length;
+      return`<div class="pc nb-${nb.cls} ${selProp===pid?'sel':''}" onclick="selPropFn('${pid}')" style="cursor:pointer">
+        <div class="pc-name">${p.name.split(' - ').pop()}</div>
+        <div class="pcs"><strong>${done}</strong> completed</div>
+      </div>`;
+    }).join('');
+    gridHtml+=`<div class="nb-section"><div class="nb-hdr nb-${nb.cls}-h"><h3>${nb.name}</h3><span class="nb-sub">${nb.sub}</span></div><div class="prop-grid">${cards}</div></div>`;
   });
-  // Build category chips
-  const chips=[`<button class="chip ${histCat==='all'?'active':''}" onclick="setHistCat('all')">All (${allDone.length})</button>`,...uc.map(([c,n])=>`<button class="chip ${histCat===c?'active':''}" onclick="setHistCat('${c}')">${c.replace('_',' ')} (${n})</button>`)].join('');
-  // Build list
+  // Completed tasks with filters applied
+  const allDone=tasks.filter(t=>['complete','resolved_by_guest'].includes(t.status));
+  let done=selProp?allDone.filter(t=>t.property===selProp):allDone;
+  const scoped=done;// before cat filter, for chip counts
+  if(histCat!=='all')done=done.filter(t=>t.category===histCat);
+  done.sort((a,b)=>{const da=a.date||a.created;const db=b.date||b.created;return db.localeCompare(da);});
+  // Category chips from scoped set
+  const cc={};scoped.forEach(t=>{if(t.category)cc[t.category]=(cc[t.category]||0)+1;});
+  const uc=Object.entries(cc).sort((a,b)=>b[1]-a[1]);
+  const chips=[`<button class="chip ${histCat==='all'?'active':''}" onclick="setHistCat('all')">All (${scoped.length})</button>`,...uc.map(([c,n])=>`<button class="chip ${histCat===c?'active':''}" onclick="setHistCat('${c}')">${c.replace('_',' ')} (${n})</button>`)].join('');
+  // Task list — date prominent, vendor, short description
   const list=done.length?done.map(t=>{
-    const p=getProp(t.property);const nb=getNb(t.property);const nbc=nb?'pl-'+nb.cls:'';
-    const dateLabel=t.date?`<span>Completed ${t.date}</span>`:'';
-    return`<div class="hi" onclick="openDetail('${t.id}')"><div class="hi-top"><div class="hi-prob">${t.problem}</div><span class="badge b-${t.status}">${t.status.replace('_',' ')}</span></div><div class="hi-meta"><span class="${nbc}" style="font-weight:600">${p?p.name.split(' - ').pop():t.property}</span>${t.category?`<span>${t.category.replace('_',' ')}</span>`:''} ${t.vendor?`<span>${t.vendor}</span>`:''} ${dateLabel} <span>${new Date(t.created).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</span></div></div>`;
+    const p=getProp(t.property);const nb=getNb(t.property);const nbc=nb?'nb-'+nb.cls:'';const plc=nb?'pl-'+nb.cls:'';
+    const d=t.date?new Date(t.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'';
+    const short=t.problem.length>80?t.problem.substring(0,80)+'...':t.problem;
+    return`<div class="hi ${nbc}" onclick="openDetail('${t.id}')" style="border-left-width:3px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+            <span style="font-size:.82rem;font-weight:700;color:var(--text)">${d}</span>
+            <span style="font-size:.72rem;font-weight:600" class="${plc}">${p?p.name.split(' - ').pop():''}</span>
+          </div>
+          <div style="font-size:.8rem;color:var(--text);line-height:1.4;margin-bottom:4px">${short}</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            ${t.vendor?`<span style="font-size:.7rem;color:var(--text2)">${t.vendor}</span>`:''}
+            ${t.category?`<span style="font-size:.7rem;color:var(--text3)">${t.category.replace('_',' ')}</span>`:''}
+          </div>
+        </div>
+        <span class="badge b-${t.status}" style="flex-shrink:0">${t.status.replace('_',' ')}</span>
+      </div>
+    </div>`;
   }).join(''):'<div style="color:var(--text3);font-size:.82rem;padding:16px 0;font-style:italic">No completed tasks found.</div>';
-  container.innerHTML=`
-    <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
-      <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--green);font-weight:600;margin:0">Service History</h2>
-      <select onchange="selPropFn(this.value)" style="padding:5px 10px;border-radius:20px;border:1px solid var(--border);background:var(--white);color:var(--text);font-family:inherit;font-size:.76rem;cursor:pointer;margin-left:auto">${propOpts}</select>
-    </div>
-    <div class="cat-chips" style="margin-bottom:14px">${chips}</div>
-    <div style="font-size:.72rem;color:var(--text3);margin-bottom:10px">${done.length} completed task${done.length!==1?'s':''}</div>
-    <div class="hist-list">${list}</div>`;
+  // Active filter label
+  const filterLabel=selProp?`<span style="font-size:.76rem;color:var(--text2);margin-left:8px">Showing: <strong>${getProp(selProp)?.name.split(' - ').pop()}</strong> <button onclick="selPropFn(null)" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:.72rem;font-family:inherit;padding:0 4px">✕ Clear</button></span>`:'';
+  container.innerHTML=`${gridHtml}
+    <div style="margin-top:20px;padding-top:18px;border-top:2px solid var(--border)">
+      <div style="display:flex;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:6px">
+        <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.3rem;color:var(--green);font-weight:600;margin:0">Completed Work</h2>
+        ${filterLabel}
+      </div>
+      <div class="cat-chips" style="margin-bottom:14px">${chips}</div>
+      <div class="hist-list">${list}</div>
+    </div>`;
 }
-function selPropFn(id){selProp=id||null;renderHistory();}
+function selPropFn(id){selProp=id||null;histCat='all';renderHistory();}
 window.setHistCat=cat=>{histCat=cat;renderHistory();};
 
 // VENDORS
@@ -2647,6 +2679,7 @@ async function initApp(){
   await load();
   await loadSmsTemplate();
   await loadLogo();
+  await loadRoadmap();
   populatePropSel('f-property');
   populatePropMulti('r-props');
   populatePropFilter();
