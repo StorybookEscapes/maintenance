@@ -147,10 +147,8 @@ main{flex:1;padding:22px;max-width:1440px;margin:0 auto;width:100%}
 .cal-legend{display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap}
 .cli{display:flex;align-items:center;gap:5px;font-size:.71rem;color:var(--text2)}
 .cld{width:10px;height:10px;border-radius:2px;flex-shrink:0}
-.cal-grid{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--white);box-shadow:var(--shadow)}
-.cal-head{display:grid;grid-template-columns:repeat(7,1fr);background:var(--green)}
-.cal-head-cell{padding:9px 6px;text-align:center;font-size:.67rem;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,.7);font-weight:600}
-.cal-body{display:grid;grid-template-columns:repeat(7,1fr)}
+.cal-grid{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--white);box-shadow:var(--shadow);display:grid;grid-template-columns:repeat(7,1fr)}
+.cal-head-cell{padding:9px 6px;text-align:center;font-size:.67rem;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,.7);font-weight:600;background:var(--green);border-bottom:1px solid var(--border)}
 .cal-cell{border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-height:95px;padding:5px}
 .cal-cell:nth-child(7n){border-right:none}
 .cal-cell.om{background:var(--surface2)}
@@ -400,7 +398,9 @@ textarea{resize:vertical;min-height:76px}
   .fg{grid-template-columns:1fr}
   .fgr.full{grid-column:1}
   main{padding:12px}
-  .hnav{display:none}
+  header{flex-wrap:wrap;height:auto;padding:10px 16px;gap:8px}
+  .hnav{order:3;width:100%;justify-content:flex-start;overflow-x:auto;-webkit-overflow-scrolling:touch;gap:4px;padding:4px 0 2px;border-top:1px solid rgba(255,255,255,.1);scrollbar-width:none;-ms-overflow-style:none}
+  .hnav::-webkit-scrollbar{display:none}
   .hsub{display:none}
   .dp-popup{width:280px}
 }
@@ -735,7 +735,7 @@ textarea{resize:vertical;min-height:76px}
 (function(){
   const GOOGLE_CLIENT_ID='998506456904-tlionif2dmsafl74qk0sinb4rvljdddm.apps.googleusercontent.com';
   const API_BASE='https://storybook-webhook.vercel.app';
-  const ALLOWED='properties@chipburns.com';
+  const ALLOWED=['properties@chipburns.com','cb@chipburns.com'];
 
   // Dev bypass: skip auth on non-production hosts
   if(window.location.hostname!=='storybookescapes.github.io'){
@@ -773,7 +773,7 @@ textarea{resize:vertical;min-height:76px}
     try{
       const payload=JSON.parse(atob(token.split('.')[1]));
       const email=(payload.email||'').toLowerCase();
-      if(email!==ALLOWED){
+      if(!ALLOWED.includes(email)){
         alert('Access denied. This account is not authorized.');
         return;
       }
@@ -791,7 +791,7 @@ textarea{resize:vertical;min-height:76px}
   if(existing){
     try{
       const payload=JSON.parse(atob(existing.split('.')[1]));
-      if(payload.exp&&payload.exp*1000>Date.now()&&(payload.email||'').toLowerCase()===ALLOWED){
+      if(payload.exp&&payload.exp*1000>Date.now()&&ALLOWED.includes((payload.email||'').toLowerCase())){
         window.storage=makeStorage(existing);
         document.getElementById('login-screen').style.display='none';
         document.getElementById('app').classList.add('authed');
@@ -1418,9 +1418,8 @@ function renderCalendar(){
 function buildMonth(){
   const y=calDate.getFullYear(),m=calDate.getMonth();
   const first=new Date(y,m,1),last=new Date(y,m+1,0);
-  const today=new Date();let h='<div class="cal-grid"><div class="cal-head">';
+  const today=new Date();let h='<div class="cal-grid">';
   ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d=>h+=`<div class="cal-head-cell">${d}</div>`);
-  h+='</div><div class="cal-body">';
   const tot=Math.ceil((first.getDay()+last.getDate())/7)*7;
   for(let i=0;i<tot;i++){
     const dn=i-first.getDay()+1;const d=new Date(y,m,dn);
@@ -1463,7 +1462,7 @@ function buildMonth(){
     }
     h+='</div>';
   }
-  return h+'</div></div>';
+  return h+'</div>';
 }
 const wkStart=d=>{const s=new Date(d);s.setDate(d.getDate()-d.getDay());return s;};
 function buildWeek(ws){
