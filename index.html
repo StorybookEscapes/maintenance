@@ -466,6 +466,12 @@ textarea{resize:vertical;min-height:76px}
       <div id="hb-wrap"></div>
       <div id="ub-wrap"></div>
       <input type="hidden" id="search-input" value="">
+      <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap">
+        <select id="prop-filter" onchange="setPropFilter(this.value)" style="padding:5px 10px;border-radius:20px;border:1px solid var(--border);background:var(--white);color:var(--text);font-family:inherit;font-size:.76rem;cursor:pointer">
+          <option value="all">All Properties</option>
+        </select>
+        <button id="date-sort-btn" class="fb" onclick="toggleDateSort()" style="margin-left:auto">Sort by Date</button>
+      </div>
       <div id="task-list"></div>
     </div>
 
@@ -1068,6 +1074,16 @@ function renderStats(){
 // TASKS
 const CAT_LABELS={handyman:'Handyman / Carpentry',plumbing:'Plumbing',hvac:'HVAC',electrical:'Electrical',hot_tub:'Hot Tub',pool:'Pool',pest:'Pest Control',cleaning:'Cleaning',landscaping:'Landscaping',arcade:'Arcade / Billiards',septic:'Septic',water:'Water Filtration',bed_bugs:'Bed Bugs',other:'Other','':`Uncategorized`};
 let catFilter='all';
+let propFilter='all';
+let dateSort=false;
+function overdueBadge(t){
+  if(!t.date||['complete','resolved_by_guest'].includes(t.status))return'';
+  const today=new Date();today.setHours(0,0,0,0);
+  const d=new Date(t.date+'T12:00:00');d.setHours(0,0,0,0);
+  const diff=Math.floor((today-d)/(86400000));
+  if(diff<=0)return'';
+  return`<span class="tmi" style="color:var(--red);font-weight:600">${diff}d overdue</span>`;
+}
 function taskCard(t){
   const p=getProp(t.property);const nb=getNb(t.property);
   const nbcls=nb?'nb-'+nb.cls:'';const plcls=nb?'pl-'+nb.cls:'';
@@ -1080,7 +1096,7 @@ function taskCard(t){
         ${t.urgent?'<span class="badge b-urgent">Urgent</span>':''}
         ${t.recurring?'<span class="badge b-rec">Recurring</span>':''}
         <span class="badge b-${t.status}">${t.status.replace('_',' ')}</span>
-        ${t.date?`<span class="tmi">${t.date}</span>`:(t.status!=='scheduled'?'<span class="tmi" style="color:var(--text3)">Not scheduled</span>':'')}
+        ${t.date?`<span class="tmi">${t.date}</span>${overdueBadge(t)}`:(t.status!=='scheduled'?'<span class="tmi" style="color:var(--text3)">Not scheduled</span>':'')}
         ${t.vendor?`<span class="tmi">${t.vendor}</span>`:''}
         ${t.guest?`<span class="tmi">Reported by ${t.guest}</span>`:''}
       </div>
@@ -1091,6 +1107,8 @@ function renderTasks(){
   const q=document.getElementById('search-input').value.toLowerCase();
   const active=tasks.filter(t=>!['complete','resolved_by_guest'].includes(t.status));
   let f=active.filter(t=>{
+    // Property filter
+    if(propFilter!=='all'&&t.property!==propFilter)return false;
     // Category/urgent filter
     if(catFilter==='urgent'&&!t.urgent)return false;
     if(catFilter!=='all'&&catFilter!=='urgent'){const cats=t.category?t.category.split(',').map(x=>x.trim()):[''];if(!cats.includes(catFilter))return false;}
@@ -1121,7 +1139,8 @@ function renderTasks(){
   // Group by scheduling status (date presence is the primary signal)
   const isScheduled=t=>t.status==='scheduled'||t.status==='in_progress'||!!t.date;
   const needsScheduling=sortTasks(f.filter(t=>!isScheduled(t)));
-  const scheduled=sortTasks(f.filter(t=>isScheduled(t)));
+  let scheduled=sortTasks(f.filter(t=>isScheduled(t)));
+  if(dateSort)scheduled.sort((a,b)=>{const da=a.date||'9999';const db=b.date||'9999';return da.localeCompare(db);});
 
   let html='';
   if(needsScheduling.length){
@@ -1139,6 +1158,22 @@ function renderTasks(){
   el.innerHTML=html;
 }
 function setCatFilter(c,btn){catFilter=c;document.querySelectorAll('.fb').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderTasks();}
+function setPropFilter(v){propFilter=v;renderTasks();}
+function toggleDateSort(){dateSort=!dateSort;document.getElementById('date-sort-btn').classList.toggle('active',dateSort);renderTasks();}
+function populatePropFilter(){
+  const sel=document.getElementById('prop-filter');if(!sel)return;
+  const prev=sel.value;
+  sel.innerHTML='<option value="all">All Properties</option>';
+  NBS.forEach(nb=>{
+    const group=document.createElement('optgroup');group.label=nb.name;
+    PROPS.filter(p=>nb.props.includes(p.id)).forEach(p=>{
+      const opt=document.createElement('option');opt.value=p.id;opt.textContent=p.name.split(' - ').pop();
+      group.appendChild(opt);
+    });
+    sel.appendChild(group);
+  });
+  sel.value=prev||'all';
+}
 function setFilter(f,btn){} // kept for compatibility
 
 // ── HOSPITABLE API INTEGRATION ──────────────────────────────
@@ -2220,13 +2255,14 @@ function renderHistory(){
       const p=getProp(pid);if(!p)return'';
       const pt=tasks.filter(t=>t.property===pid);
       const open=pt.filter(t=>!['complete','resolved_by_guest'].includes(t.status));
-      const hasU=open.some(t=>t.urgent);const hasO=open.length>0;
-      return`<div class="pc nb-${nb.cls} ${selProp===pid?'sel':''} ${!hasO?'noi':''}" onclick="selPropFn('${pid}')">
+      const done=pt.filter(t=>['complete','resolved_by_guest'].includes(t.status));
+      const hasU=open.some(t=>t.urgent);
+      return`<div class="pc nb-${nb.cls} ${selProp===pid?'sel':''}" onclick="selPropFn('${pid}')">
         ${hasU?'<div class="upip"></div>':''}
         <div class="pc-name">${p.name}</div>
         <div class="pc-stats">
-          <div class="pcs ${hasO?'ho':''}"><strong>${open.length}</strong> open</div>
-          <div class="pcs"><strong>${pt.length}</strong> total</div>
+          ${open.length?`<div class="pcs ho"><strong>${open.length}</strong> open</div>`:''}
+          <div class="pcs"><strong>${done.length}</strong> completed</div>
         </div>
       </div>`;
     }).join('');
@@ -2250,13 +2286,21 @@ function renderHistDetail(){
   const pt=tasks.filter(t=>t.property===selProp);
   const cc={};pt.forEach(t=>{if(t.category)cc[t.category]=(cc[t.category]||0)+1;});
   const uc=Object.entries(cc).sort((a,b)=>b[1]-a[1]);
-  const f=histCat==='all'?pt:pt.filter(t=>t.category===histCat);
+  const f=histCat==='all'||histCat==='_completed'||histCat==='_open'?pt:pt.filter(t=>t.category===histCat);
   f.sort((a,b)=>new Date(b.created)-new Date(a.created));
   const nbc=nb?`var(--${nb.cls})`:'var(--green)';
-  const bd=uc.map(([c,n])=>`<div class="cbox" style="border-top:3px solid ${nbc}"><div class="cn" style="color:${nbc}">${n}</div><div class="cl">${c.replace('_',' ')}</div></div>`).join('');
-  const chips=[`<button class="chip ${histCat==='all'?'active':''}" onclick="setHistCat('all')">All (${pt.length})</button>`,...uc.map(([c,n])=>`<button class="chip ${histCat===c?'active':''}" onclick="setHistCat('${c}')">${c.replace('_',' ')} (${n})</button>`)].join('');
-  const list=f.length?f.map(t=>`<div class="hi" onclick="openDetail('${t.id}')"><div class="hi-top"><div class="hi-prob">${t.urgent?'<span class="badge b-urgent" style="margin-right:5px">Urgent</span>':''}${t.problem}</div><span class="badge b-${t.status}">${t.status.replace('_',' ')}</span></div><div class="hi-meta">${t.category?`<span>${t.category.replace('_',' ')}</span>`:''} ${t.vendor?`<span>${t.vendor}</span>`:''} ${t.date?`<span>Scheduled ${t.date}</span>`:''} ${t.guest?`<span>Reported by ${t.guest}</span>`:''} <span>${new Date(t.created).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</span></div></div>`).join(''):'<div style="color:var(--text3);font-size:.82rem;padding:16px 0;font-style:italic">No records in this category yet.</div>';
-  el.innerHTML=`<div class="hist-hdr" style="border-left:3px solid ${nbc};padding-left:14px"><div><div class="hist-name" style="color:${nbc}">${p.name}</div><div class="hist-addr">${p.address} &nbsp;|&nbsp; Door: ${p.door}</div></div><button class="btn btn-g" onclick="openAddTask('${p.id}')">+ Add Task</button></div>${bd?`<div class="cat-breakdown" style="margin-top:13px">${bd}</div>`:''}<div class="cat-chips" style="margin-top:11px">${chips}</div><div class="hist-list">${list}</div>`;
+  const completed=pt.filter(t=>['complete','resolved_by_guest'].includes(t.status));
+  const open=pt.filter(t=>!['complete','resolved_by_guest'].includes(t.status));
+  const chips=[`<button class="chip ${histCat==='all'?'active':''}" onclick="setHistCat('all')">All (${pt.length})</button>`,`<button class="chip ${histCat==='_completed'?'active':''}" onclick="setHistCat('_completed')">Completed (${completed.length})</button>`,`<button class="chip ${histCat==='_open'?'active':''}" onclick="setHistCat('_open')">Open (${open.length})</button>`,...uc.map(([c,n])=>`<button class="chip ${histCat===c?'active':''}" onclick="setHistCat('${c}')">${c.replace('_',' ')} (${n})</button>`)].join('');
+  let filtered=f;
+  if(histCat==='_completed')filtered=completed.sort((a,b)=>new Date(b.created)-new Date(a.created));
+  else if(histCat==='_open')filtered=open.sort((a,b)=>new Date(b.created)-new Date(a.created));
+  const list=filtered.length?filtered.map(t=>{
+    const isDone=['complete','resolved_by_guest'].includes(t.status);
+    const dateLabel=isDone&&t.date?`<span>Completed ${t.date}</span>`:t.date?`<span>Scheduled ${t.date}</span>`:'';
+    return`<div class="hi" onclick="openDetail('${t.id}')" style="${isDone?'opacity:.7':''}"><div class="hi-top"><div class="hi-prob">${t.urgent?'<span class="badge b-urgent" style="margin-right:5px">Urgent</span>':''}${t.problem}</div><span class="badge b-${t.status}">${t.status.replace('_',' ')}</span></div><div class="hi-meta">${t.category?`<span>${t.category.replace('_',' ')}</span>`:''} ${t.vendor?`<span>${t.vendor}</span>`:''} ${dateLabel} ${t.guest?`<span>Reported by ${t.guest}</span>`:''} <span>${new Date(t.created).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</span></div></div>`;
+  }).join(''):'<div style="color:var(--text3);font-size:.82rem;padding:16px 0;font-style:italic">No records yet.</div>';
+  el.innerHTML=`<div class="hist-hdr" style="border-left:3px solid ${nbc};padding-left:14px"><div><div class="hist-name" style="color:${nbc}">${p.name}</div><div class="hist-addr">${p.address} &nbsp;|&nbsp; Door: ${p.door}</div></div></div><div class="cat-chips" style="margin-top:11px">${chips}</div><div class="hist-list">${list}</div>`;
 }
 window.setHistCat=cat=>{histCat=cat;renderHistDetail();};
 
@@ -2620,6 +2664,7 @@ async function initApp(){
   await loadLogo();
   populatePropSel('f-property');
   populatePropMulti('r-props');
+  populatePropFilter();
   renderAll();
   hbStartPolling();
 }
