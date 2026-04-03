@@ -1793,10 +1793,13 @@ function renderDetailVendors(t,p){
     return;
   }
 
-  // No vendor assigned — show all suggestions
-  titleEl.textContent='Suggested Vendors';
+  // No vendor assigned — show suggestions in collapsible section
+  titleEl.textContent='Vendors';
   if(!m.length){area.innerHTML='<div style="color:var(--text3);font-size:.82rem">Set a category to see vendor suggestions.</div>';return;}
-  area.innerHTML=m.slice(0,3).map(v=>vendorCard(v,true)).join('');
+  let h=`<details><summary style="font-size:.82rem;color:var(--text2);cursor:pointer;padding:6px 0">Suggested vendors for this category (${m.slice(0,3).length})</summary>`;
+  h+=m.slice(0,3).map(v=>vendorCard(v,true)).join('');
+  h+=`</details>`;
+  area.innerHTML=h;
 }
 function copySms(id){
   const el=document.getElementById(id);if(!el)return;
@@ -1878,6 +1881,11 @@ async function addNote(type){
 async function updateField(f,v){
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
   t[f]=v;await saveTasks();renderAll();
+  // Re-render vendor section when vendor or category changes
+  if(f==='vendor'||f==='category'){
+    const p=getProp(t.property);
+    renderDetailVendors(t,p);
+  }
 }
 async function assignVendor(name){
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
