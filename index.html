@@ -434,6 +434,17 @@ textarea{resize:vertical;min-height:76px}
 .cl-trend.improving{background:rgba(80,160,80,.12);color:#6ab06a}
 .cl-trend.declining{background:rgba(200,80,60,.12);color:#cc6644}
 .cl-trend.stable{background:rgba(200,180,60,.12);color:#c0a830}
+.cl-section{margin-bottom:24px}
+.cl-section-hdr{font-family:'Cormorant Garamond',serif;font-size:1.15rem;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.cl-section-hdr .icon{font-size:1.1rem}
+.cl-section-hdr.problems{color:#cc6644}
+.cl-section-hdr.winners{color:#5ab05a}
+.cl-section-hdr.all-props{color:var(--gold)}
+.cl-winner-card{background:var(--surface);border:1px solid var(--border);border-left:3px solid #5ab05a;border-radius:var(--radius);padding:14px 16px;cursor:pointer;transition:border-color .15s}
+.cl-winner-card:hover{border-color:#5ab05a}
+.cl-winner-stat{font-size:.72rem;color:var(--text2)}
+.cl-winner-stat .good{color:#5ab05a;font-weight:700}
+.cl-no-data{font-size:.82rem;color:var(--text2);padding:10px 0;font-style:italic}
 .hb-pulse{width:8px;height:8px;background:#5ba3e0;border-radius:50%;animation:pulse 1.5s infinite;display:inline-block}
 
 .toast{position:fixed;bottom:22px;right:22px;background:var(--green);color:#fff;border-radius:var(--radius);padding:10px 16px;font-size:.82rem;z-index:999;transform:translateY(80px);opacity:0;transition:all .3s;pointer-events:none;box-shadow:var(--shadow-md);display:flex;align-items:center;gap:10px}
@@ -2739,7 +2750,8 @@ async function hbTest() {
 }
 
 // ── Cleaning Log ───────────────────────────────────────────────
-let clData = []; // all cleaning-relevant review entries
+let clData = []; // all cleaning-relevant review entries (flagged issues)
+let clAllRatings = {}; // ALL cleanliness ratings per property (for winners/trends): { pid: [{rating, reviewedAt}] }
 let clLoaded = false;
 
 // Keywords that indicate cleaning issues specifically
@@ -2833,6 +2845,13 @@ async function clFetch() {
     for (const r of results) {
       if (r.status === 'fulfilled' && r.value.length) {
         for (const rv of r.value) {
+          // Collect ALL cleanliness ratings for trend/winner analysis
+          const cleanR = (rv.private?.detailed_ratings || []).find(d => d.type === 'cleanliness');
+          if (cleanR && cleanR.rating > 0) {
+            if (!clAllRatings[rv._pid]) clAllRatings[rv._pid] = [];
+            clAllRatings[rv._pid].push({ rating: cleanR.rating, reviewedAt: rv.reviewed_at });
+          }
+          // Only add flagged items to the issue log
           if (clIsCleaningRelevant(rv)) allEntries.push(clBuildEntry(rv));
         }
       }
@@ -2843,7 +2862,8 @@ async function clFetch() {
   allEntries.sort((a, b) => new Date(b.reviewedAt) - new Date(a.reviewedAt));
   clData = allEntries;
   clLoaded = true;
-  if (el) el.textContent = `${clData.length} cleaning flag${clData.length !== 1 ? 's' : ''} found`;
+  const totalReviews = Object.values(clAllRatings).reduce((s, a) => s + a.length, 0);
+  if (el) el.textContent = `${totalReviews} reviews scanned · ${clData.length} cleaning flag${clData.length !== 1 ? 's' : ''} found`;
   populateClPropFilter();
   renderCleaningLog();
 }
@@ -2885,50 +2905,125 @@ function renderCleaningLog() {
     return;
   }
 
-  // Summary cards (only show when viewing all properties)
+  // Summary: Problem Properties, Winners, and All Properties (only when viewing all)
   if (filter === 'all') {
-    let sumH = '<div class="cl-summary-grid">';
-    // Build per-property stats
-    const propStats = {};
-    clData.forEach(e => {
-      if (!propStats[e.pid]) propStats[e.pid] = { total: 0, recent: 0, avgRating: [] };
-      propStats[e.pid].total++;
-      if (new Date(e.reviewedAt) > new Date(Date.now() - 90 * 86400000)) propStats[e.pid].recent++;
-      if (e.cleanlinessRating !== null) propStats[e.pid].avgRating.push(e.cleanlinessRating);
+    const now = Date.now();
+    const sixtyDaysAgo = now - 60 * 86400000;
+
+    // Build per-property stats using ALL ratings (not just flagged issues)
+    const allPropStats = {};
+    for (const [pid, ratings] of Object.entries(clAllRatings)) {
+      const recent = ratings.filter(r => new Date(r.reviewedAt) > new Date(sixtyDaysAgo));
+      const recentAvg = recent.length ? recent.reduce((s, r) => s + r.rating, 0) / recent.length : null;
+      const totalAvg = ratings.reduce((s, r) => s + r.rating, 0) / ratings.length;
+      const flags = clData.filter(e => e.pid === pid);
+      const recentFlags = flags.filter(e => new Date(e.reviewedAt) > new Date(sixtyDaysAgo));
+      allPropStats[pid] = { totalReviews: ratings.length, recentReviews: recent.length, recentAvg, totalAvg, totalFlags: flags.length, recentFlags: recentFlags.length };
+    }
+    // Also include properties with NO ratings data
+    for (const [pid] of Object.entries(HOSPITABLE_IDS)) {
+      if (!allPropStats[pid]) allPropStats[pid] = { totalReviews: 0, recentReviews: 0, recentAvg: null, totalAvg: null, totalFlags: 0, recentFlags: 0 };
+    }
+
+    // ── Problem Properties: flags in last 60 days OR recent avg ≤ 3.5 ──
+    const problemPids = Object.keys(allPropStats).filter(pid => {
+      const s = allPropStats[pid];
+      return s.recentFlags >= 2 || (s.recentAvg !== null && s.recentAvg <= 3.5);
+    }).sort((a, b) => {
+      const sa = allPropStats[a], sb = allPropStats[b];
+      return sb.recentFlags - sa.recentFlags || (sa.recentAvg || 5) - (sb.recentAvg || 5);
     });
 
-    // Sort properties: most issues first
-    const sortedPids = Object.keys(propStats).sort((a, b) => propStats[b].total - propStats[a].total);
-    for (const pid of sortedPids) {
-      const p = getProp(pid);
-      if (!p) continue;
-      const s = propStats[pid];
-      const avg = s.avgRating.length ? (s.avgRating.reduce((a, b) => a + b, 0) / s.avgRating.length).toFixed(1) : '—';
-      // Trend: compare last 90 days vs. prior 90 days
-      const now = Date.now();
-      const recentEntries = clData.filter(e => e.pid === pid && new Date(e.reviewedAt) > new Date(now - 90 * 86400000)).length;
-      const priorEntries = clData.filter(e => e.pid === pid && new Date(e.reviewedAt) <= new Date(now - 90 * 86400000) && new Date(e.reviewedAt) > new Date(now - 180 * 86400000)).length;
-      let trend = '';
-      if (recentEntries < priorEntries) trend = '<span class="cl-trend improving">↓ improving</span>';
-      else if (recentEntries > priorEntries) trend = '<span class="cl-trend declining">↑ worsening</span>';
-      else if (s.total > 1) trend = '<span class="cl-trend stable">— stable</span>';
+    // ── Winners: 5+ recent reviews with avg ≥ 4.8 and zero flags in 60 days ──
+    const winnerPids = Object.keys(allPropStats).filter(pid => {
+      const s = allPropStats[pid];
+      return s.recentReviews >= 3 && s.recentAvg !== null && s.recentAvg >= 4.8 && s.recentFlags === 0;
+    }).sort((a, b) => (allPropStats[b].recentAvg || 0) - (allPropStats[a].recentAvg || 0));
 
-      sumH += `<div class="cl-prop-card${s.total > 0 ? ' has-issues' : ''}" onclick="document.getElementById('cl-prop-filter').value='${pid}';renderCleaningLog()">
-        <div class="cl-prop-name">${escHtml(p.name)}</div>
-        <div class="cl-prop-stat"><span class="bad">${s.total} flag${s.total !== 1 ? 's' : ''}</span> total · ${s.recent} in last 90 days · avg cleanliness: ${avg}/5 ${trend}</div>
-      </div>`;
+    let sumH = '';
+
+    // ── Problem Properties Section ──
+    if (problemPids.length) {
+      sumH += `<div class="cl-section"><div class="cl-section-hdr problems"><span class="icon">⚠</span> Problem Properties <span style="font-size:.72rem;font-weight:400;color:var(--text2)">(last 60 days)</span></div>`;
+      sumH += '<div class="cl-summary-grid">';
+      for (const pid of problemPids) {
+        const p = getProp(pid);
+        if (!p) continue;
+        const s = allPropStats[pid];
+        const avgStr = s.recentAvg !== null ? s.recentAvg.toFixed(1) : '—';
+        // Trend vs prior 60 days
+        const prior60 = (clAllRatings[pid] || []).filter(r => { const d = new Date(r.reviewedAt).getTime(); return d > now - 120 * 86400000 && d <= now - 60 * 86400000; });
+        const priorAvg = prior60.length ? prior60.reduce((s, r) => s + r.rating, 0) / prior60.length : null;
+        let trend = '';
+        if (priorAvg !== null && s.recentAvg !== null) {
+          if (s.recentAvg > priorAvg + 0.3) trend = '<span class="cl-trend improving">↑ improving</span>';
+          else if (s.recentAvg < priorAvg - 0.3) trend = '<span class="cl-trend declining">↓ declining</span>';
+        }
+        sumH += `<div class="cl-prop-card has-issues" onclick="document.getElementById('cl-prop-filter').value='${pid}';renderCleaningLog()">
+          <div class="cl-prop-name">${escHtml(p.name)}</div>
+          <div class="cl-prop-stat"><span class="bad">${s.recentFlags} flag${s.recentFlags !== 1 ? 's' : ''}</span> in 60 days · avg cleanliness: ${avgStr}/5 ${trend} · ${s.recentReviews} review${s.recentReviews !== 1 ? 's' : ''}</div>
+        </div>`;
+      }
+      sumH += '</div></div>';
     }
-    sumH += '</div>';
+
+    // ── Winners Section ──
+    if (winnerPids.length) {
+      sumH += `<div class="cl-section"><div class="cl-section-hdr winners"><span class="icon">★</span> Cleaning Winners <span style="font-size:.72rem;font-weight:400;color:var(--text2)">(last 60 days)</span></div>`;
+      sumH += '<div class="cl-summary-grid">';
+      for (const pid of winnerPids) {
+        const p = getProp(pid);
+        if (!p) continue;
+        const s = allPropStats[pid];
+        const avgStr = s.recentAvg !== null ? s.recentAvg.toFixed(1) : '—';
+        const perfectCount = (clAllRatings[pid] || []).filter(r => new Date(r.reviewedAt) > new Date(sixtyDaysAgo) && r.rating === 5).length;
+        sumH += `<div class="cl-winner-card" onclick="document.getElementById('cl-prop-filter').value='${pid}';renderCleaningLog()">
+          <div class="cl-prop-name">${escHtml(p.name)}</div>
+          <div class="cl-winner-stat"><span class="good">${avgStr}/5 avg</span> · ${s.recentReviews} reviews · ${perfectCount} perfect 5/5 scores</div>
+        </div>`;
+      }
+      sumH += '</div></div>';
+    }
+
+    if (!problemPids.length && !winnerPids.length) {
+      sumH += '<div class="cl-no-data">Not enough review data in the last 60 days to identify trends yet.</div>';
+    }
+
+    // ── All Properties Grid ──
+    sumH += `<div class="cl-section"><div class="cl-section-hdr all-props"><span class="icon">◈</span> All Properties</div>`;
+    sumH += '<div class="cl-summary-grid">';
+    const allSorted = Object.keys(allPropStats).filter(pid => allPropStats[pid].totalFlags > 0).sort((a, b) => allPropStats[b].totalFlags - allPropStats[a].totalFlags);
+    if (allSorted.length) {
+      for (const pid of allSorted) {
+        const p = getProp(pid);
+        if (!p) continue;
+        const s = allPropStats[pid];
+        const avg = s.totalAvg !== null ? s.totalAvg.toFixed(1) : '—';
+        sumH += `<div class="cl-prop-card${s.totalFlags > 0 ? ' has-issues' : ''}" onclick="document.getElementById('cl-prop-filter').value='${pid}';renderCleaningLog()">
+          <div class="cl-prop-name">${escHtml(p.name)}</div>
+          <div class="cl-prop-stat"><span class="bad">${s.totalFlags} flag${s.totalFlags !== 1 ? 's' : ''}</span> all-time · avg cleanliness: ${avg}/5 · ${s.totalReviews} total reviews</div>
+        </div>`;
+      }
+    } else {
+      sumH += '<div class="cl-no-data">No cleaning flags recorded for any properties.</div>';
+    }
+    sumH += '</div></div>';
+
     summaryEl.innerHTML = sumH;
   } else {
     // Show stats header for selected property
     const p = getProp(filter);
     const entries = clData.filter(e => e.pid === filter);
-    const avgRating = entries.filter(e => e.cleanlinessRating !== null);
-    const avg = avgRating.length ? (avgRating.reduce((a, b) => a + b.cleanlinessRating, 0) / avgRating.length).toFixed(1) : '—';
+    const propRatings = clAllRatings[filter] || [];
+    const allAvg = propRatings.length ? (propRatings.reduce((s, r) => s + r.rating, 0) / propRatings.length).toFixed(1) : '—';
+    const sixtyDayRatings = propRatings.filter(r => new Date(r.reviewedAt) > new Date(Date.now() - 60 * 86400000));
+    const recentAvg = sixtyDayRatings.length ? (sixtyDayRatings.reduce((s, r) => s + r.rating, 0) / sixtyDayRatings.length).toFixed(1) : '—';
+    const perfect = sixtyDayRatings.filter(r => r.rating === 5).length;
+    const recentFlags = entries.filter(e => new Date(e.reviewedAt) > new Date(Date.now() - 60 * 86400000)).length;
     summaryEl.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px">
       <div style="font-size:.82rem;font-weight:700;color:var(--green)">${escHtml(p?.name || filter)}</div>
-      <div style="font-size:.74rem;color:var(--text2);margin-top:4px">${entries.length} cleaning flag${entries.length !== 1 ? 's' : ''} · Average cleanliness rating: ${avg}/5</div>
+      <div style="font-size:.74rem;color:var(--text2);margin-top:4px">${entries.length} cleaning flag${entries.length !== 1 ? 's' : ''} all-time · ${propRatings.length} total reviews · Overall avg: ${allAvg}/5</div>
+      <div style="font-size:.74rem;color:var(--text2);margin-top:2px">Last 60 days: ${sixtyDayRatings.length} reviews · avg ${recentAvg}/5 · ${perfect} perfect scores · ${recentFlags} flag${recentFlags !== 1 ? 's' : ''}</div>
       <div style="margin-top:6px"><button class="rv-btn rv-btn-dismiss" style="font-size:.7rem" onclick="document.getElementById('cl-prop-filter').value='all';renderCleaningLog()">← Back to all properties</button></div>
     </div>`;
   }
@@ -3165,7 +3260,7 @@ async function rvImport(id) {
   rvItems = rvItems.filter(x => x.id !== id);
   renderRV(); renderAll();
   showToast('Task imported from guest feedback.');
-  if (!rv._pid) { detailId = t.id; openDetail(t.id); }
+  detailId = t.id; openDetail(t.id);
 }
 
 async function rvImportAll() {
