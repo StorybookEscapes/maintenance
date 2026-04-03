@@ -3233,11 +3233,29 @@ async function rvFetch() {
 
   // Filter: only maintenance-relevant, not already dismissed, within last 30 days
   const cutoff = Date.now() - 30 * 86400000;
-  rvItems = allReviews.filter(rv => {
-    if (rvDismissed.includes(rv.id)) return false;
-    if (new Date(rv.reviewed_at).getTime() < cutoff) return false;
-    return rvIsMaintRelevant(rv);
-  });
+  let purchaseCount = 0;
+  rvItems = [];
+  for (const rv of allReviews) {
+    if (rvDismissed.includes(rv.id)) continue;
+    if (new Date(rv.reviewed_at).getTime() < cutoff) continue;
+    if (!rvIsMaintRelevant(rv)) continue;
+
+    // Auto-route purchase items directly to Replacements (skip the Tasks bar)
+    const problem = rvBuildProblem(rv);
+    if (rvIsPurchaseItem(problem)) {
+      await rpImportFromReview(rv);
+      rvDismissed.push(rv.id);
+      purchaseCount++;
+      continue;
+    }
+
+    rvItems.push(rv);
+  }
+  // Persist dismissed IDs if any purchase items were auto-imported
+  if (purchaseCount) {
+    localStorage.setItem('se_rv_dismissed', JSON.stringify(rvDismissed));
+    renderReplacements();
+  }
 
   // Sort by date, newest first
   rvItems.sort((a, b) => new Date(b.reviewed_at) - new Date(a.reviewed_at));
