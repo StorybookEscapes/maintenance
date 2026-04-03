@@ -1177,7 +1177,7 @@ async function fetchIcal(pid){
           .map(rv=>({
             start:pd(rv.arrival_date),
             end:pd(rv.departure_date),
-            summary:rv.guest_name||rv.guest?.name||'Guest'
+            summary:rv.guest_name||rv.guest?.name||(rv.guest?.first_name?rv.guest.first_name+' '+rv.guest.last_name:'Guest')
           }))
           .filter(ev=>ev.start&&ev.end);
         console.log(`Loaded ${pid}: ${evs.length} individual reservations via API`);
