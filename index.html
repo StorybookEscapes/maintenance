@@ -2925,10 +2925,14 @@ function renderCleaningLog() {
       if (!allPropStats[pid]) allPropStats[pid] = { totalReviews: 0, recentReviews: 0, recentAvg: null, totalAvg: null, totalFlags: 0, recentFlags: 0 };
     }
 
-    // ── Problem Properties: flags in last 60 days OR recent avg ≤ 3.5 ──
+    // ── Problem Properties: trend-based, favoring repeated complaints over single bad scores ──
+    // Qualifies if: 3+ flags in 60 days (clear pattern), OR 2 flags + avg ≤ 4.0 (repeated + below par)
+    // A single low score alone does NOT qualify — that's an outlier, not a trend
     const problemPids = Object.keys(allPropStats).filter(pid => {
       const s = allPropStats[pid];
-      return s.recentFlags >= 2 || (s.recentAvg !== null && s.recentAvg <= 3.5);
+      if (s.recentFlags >= 3) return true; // 3+ complaints = undeniable pattern
+      if (s.recentFlags >= 2 && s.recentAvg !== null && s.recentAvg <= 4.0) return true; // 2 complaints + below-average scores
+      return false;
     }).sort((a, b) => {
       const sa = allPropStats[a], sb = allPropStats[b];
       return sb.recentFlags - sa.recentFlags || (sa.recentAvg || 5) - (sb.recentAvg || 5);
