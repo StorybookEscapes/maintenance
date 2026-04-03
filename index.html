@@ -149,6 +149,7 @@ main{flex:1;padding:22px;max-width:1440px;margin:0 auto;width:100%}
 .cld{width:10px;height:10px;border-radius:2px;flex-shrink:0}
 .cal-grid{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--white);box-shadow:var(--shadow);display:grid;grid-template-columns:repeat(7,1fr)}
 .cal-head-cell{padding:9px 6px;text-align:center;font-size:.67rem;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,.7);font-weight:600;background:var(--green);border-bottom:1px solid var(--border)}
+.dow-short{display:none}
 .cal-cell{border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-height:95px;padding:5px}
 .cal-cell:nth-child(7n){border-right:none}
 .cal-cell.om{background:var(--surface2)}
@@ -403,6 +404,32 @@ textarea{resize:vertical;min-height:76px}
   .hnav::-webkit-scrollbar{display:none}
   .hsub{display:none}
   .dp-popup{width:280px}
+  /* Calendar mobile */
+  .cal-hdr{gap:6px;margin-bottom:10px}
+  .cal-title{font-size:1.15rem}
+  .cal-nav button{padding:4px 8px;font-size:.7rem}
+  .cal-mode{padding:4px 10px;font-size:.7rem}
+  .cal-legend{gap:6px 10px;margin-bottom:8px}
+  .cli{font-size:.62rem}
+  .cld{width:8px;height:8px}
+  .cal-head-cell{padding:6px 2px;font-size:.58rem;letter-spacing:.8px}
+  .dow-full{display:none}
+  .dow-short{display:inline}
+  .cal-cell{min-height:60px;padding:2px}
+  .cdn{font-size:.63rem;width:17px;height:17px;margin-bottom:1px}
+  .ce{font-size:.55rem;padding:1px 3px;margin-bottom:1px;line-height:1.3}
+  .vg-pill{font-size:.55rem;padding:1px 3px;gap:2px}
+  .vg-pill .vg-count{font-size:.5rem;padding:0 3px}
+  /* Week view mobile */
+  .wk-hrow{grid-template-columns:32px repeat(7,1fr)}
+  .wk-brow{grid-template-columns:32px repeat(7,1fr)}
+  .wk-lbl{font-size:.55rem;padding:5px 2px}
+  .wk-hcell{padding:5px 2px}
+  .wk-hcell .wd{font-size:.55rem}
+  .wk-hcell .wdt{font-size:.8rem}
+  .wk-day{padding:3px;min-height:60px}
+  .de{font-size:.62rem;padding:3px 5px}
+  .de-prop{font-size:.53rem}
 }
 </style>
 </head>
@@ -1419,7 +1446,7 @@ function buildMonth(){
   const y=calDate.getFullYear(),m=calDate.getMonth();
   const first=new Date(y,m,1),last=new Date(y,m+1,0);
   const today=new Date();let h='<div class="cal-grid">';
-  ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d=>h+=`<div class="cal-head-cell">${d}</div>`);
+  ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d=>h+=`<div class="cal-head-cell"><span class="dow-full">${d}</span><span class="dow-short">${d[0]}</span></div>`);
   const tot=Math.ceil((first.getDay()+last.getDate())/7)*7;
   for(let i=0;i<tot;i++){
     const dn=i-first.getDay()+1;const d=new Date(y,m,dn);
