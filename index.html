@@ -412,17 +412,18 @@ textarea{resize:vertical;min-height:76px}
   .cal-legend{gap:6px 10px;margin-bottom:8px}
   .cli{font-size:.62rem}
   .cld{width:8px;height:8px}
+  .cal-grid{grid-template-columns:repeat(7,minmax(0,1fr))}
   .cal-head-cell{padding:6px 2px;font-size:.58rem;letter-spacing:.8px}
   .dow-full{display:none}
   .dow-short{display:inline}
-  .cal-cell{min-height:60px;padding:2px}
+  .cal-cell{min-height:60px;padding:2px;overflow:hidden}
   .cdn{font-size:.63rem;width:17px;height:17px;margin-bottom:1px}
-  .ce{font-size:.55rem;padding:1px 3px;margin-bottom:1px;line-height:1.3}
-  .vg-pill{font-size:.55rem;padding:1px 3px;gap:2px}
+  .ce{font-size:.55rem;padding:1px 3px;margin-bottom:1px;line-height:1.3;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  .vg-pill{font-size:.55rem;padding:1px 3px;gap:2px;max-width:100%;overflow:hidden;text-overflow:ellipsis}
   .vg-pill .vg-count{font-size:.5rem;padding:0 3px}
   /* Week view mobile */
-  .wk-hrow{grid-template-columns:32px repeat(7,1fr)}
-  .wk-brow{grid-template-columns:32px repeat(7,1fr)}
+  .wk-hrow{grid-template-columns:32px repeat(7,minmax(0,1fr))}
+  .wk-brow{grid-template-columns:32px repeat(7,minmax(0,1fr))}
   .wk-lbl{font-size:.55rem;padding:5px 2px}
   .wk-hcell{padding:5px 2px}
   .wk-hcell .wd{font-size:.55rem}
