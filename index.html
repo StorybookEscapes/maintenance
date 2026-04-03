@@ -2261,7 +2261,9 @@ function renderHB() {
     const matchedProp = matchedPid ? getProp(matchedPid) : null;
     const matchedCat = hbMatchCategory(item.category);
     // Fallback for problem too
-    const displayProblem = item.problem || (item._raw ? hbDeepFindProblem(item._raw) : '') || 'No description';
+    const skipProblems = ['action_items','action_item','maintenance','issue','task','alert','notification'];
+    const rawProblem = (item.problem||'').trim();
+    const displayProblem = (rawProblem && !skipProblems.includes(rawProblem.toLowerCase())) ? rawProblem : (item.conversationSnippet || (item._raw ? hbDeepFindProblem(item._raw) : '') || 'No description');
     const timeAgo = getTimeAgo(item.receivedAt);
     h += `<div class="hb-item" id="hb-${item.id}">
       <div class="hb-item-top">
@@ -2311,13 +2313,15 @@ async function hbImport(id) {
   if (!pid && item._raw) pid = hbDeepMatchProperty(item._raw);
   const cat = hbMatchCategory(item.category);
   // Use problem field, or deep-scan raw for a description-like string
-  let problem = item.problem;
-  if (!problem && item._raw) problem = hbDeepFindProblem(item._raw);
+  const skipProblems = ['action_items','action_item','maintenance','issue','task','alert','notification'];
+  let problem = (item.problem||'').trim();
+  if (!problem || skipProblems.includes(problem.toLowerCase())) {
+    problem = item.conversationSnippet || (item._raw ? hbDeepFindProblem(item._raw) : '') || '';
+  }
   // Also try to find guest name from raw if missing
   let guest = item.guest;
   if (!guest && item._raw) {
     const rawStr = JSON.stringify(item._raw);
-    // Log raw payload for debugging new HostBuddy formats
     console.log('HostBuddy raw payload:', JSON.stringify(item._raw, null, 2));
   }
   const t = {
@@ -2355,9 +2359,11 @@ async function hbImportAll() {
     let pid = hbMatchProperty(item.property);
     if (!pid && item._raw) pid = hbDeepMatchProperty(item._raw);
     const cat = hbMatchCategory(item.category);
-    let problem = item.problem;
-    if (!problem && item._raw) problem = hbDeepFindProblem(item._raw);
-    console.log('HostBuddy raw payload:', JSON.stringify(item._raw, null, 2));
+    const _skip = ['action_items','action_item','maintenance','issue','task','alert','notification'];
+    let problem = (item.problem||'').trim();
+    if (!problem || _skip.includes(problem.toLowerCase())) {
+      problem = item.conversationSnippet || (item._raw ? hbDeepFindProblem(item._raw) : '') || '';
+    }
     tasks.unshift({
       id: Date.now().toString() + Math.random().toString(36).slice(2, 6) + n,
       property: pid || '', guest: item.guest || '',
