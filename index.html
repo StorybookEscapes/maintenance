@@ -445,6 +445,26 @@ textarea{resize:vertical;min-height:76px}
 .cl-winner-stat{font-size:.72rem;color:var(--text2)}
 .cl-winner-stat .good{color:#5ab05a;font-weight:700}
 .cl-no-data{font-size:.82rem;color:var(--text2);padding:10px 0;font-style:italic}
+
+/* ── Replacements & Purchases ── */
+.rp-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;transition:border-color .15s}
+.rp-card:hover{border-color:var(--gold)}
+.rp-card-info{flex:1;min-width:0}
+.rp-card-item{font-size:.88rem;font-weight:600;color:var(--text);line-height:1.4}
+.rp-card-prop{font-size:.7rem;text-transform:uppercase;letter-spacing:1px;color:var(--gold);font-weight:700;margin-bottom:3px}
+.rp-card-meta{font-size:.72rem;color:var(--text2);margin-top:4px}
+.rp-card-notes{font-size:.76rem;color:var(--text2);margin-top:4px;font-style:italic}
+.rp-card-btns{display:flex;gap:6px;flex-shrink:0;align-items:center}
+.rp-btn{padding:5px 11px;border-radius:7px;font-size:.73rem;font-family:inherit;font-weight:600;cursor:pointer;border:1px solid;transition:all .15s;white-space:nowrap}
+.rp-btn-done{background:var(--green);color:#fff;border-color:var(--green)}
+.rp-btn-done:hover{opacity:.85}
+.rp-btn-del{background:transparent;color:var(--text2);border-color:var(--border)}
+.rp-btn-del:hover{color:#cc6644;border-color:#cc6644}
+.rp-section-hdr{font-family:'Cormorant Garamond',serif;font-size:1.1rem;font-weight:600;color:var(--green);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.rp-purchased-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 16px;margin-bottom:6px;opacity:.6}
+.rp-purchased-card .rp-card-item{text-decoration:line-through}
+.rp-empty{text-align:center;padding:30px;color:var(--text2);font-size:.88rem}
+.rp-count{font-size:.68rem;background:var(--green-light);color:var(--green);border-radius:20px;padding:2px 9px;font-weight:700;margin-left:6px}
 .hb-pulse{width:8px;height:8px;background:#5ba3e0;border-radius:50%;animation:pulse 1.5s infinite;display:inline-block}
 
 .toast{position:fixed;bottom:22px;right:22px;background:var(--green);color:#fff;border-radius:var(--radius);padding:10px 16px;font-size:.82rem;z-index:999;transform:translateY(80px);opacity:0;transition:all .3s;pointer-events:none;box-shadow:var(--shadow-md);display:flex;align-items:center;gap:10px}
@@ -515,6 +535,7 @@ textarea{resize:vertical;min-height:76px}
       <button class="nav-btn" onclick="switchView('history',this)">Service History</button>
       <button class="nav-btn" onclick="switchView('vendors',this)">Vendors</button>
       <button class="nav-btn" onclick="switchView('cleaning',this)">Cleaning Log</button>
+      <button class="nav-btn" onclick="switchView('replacements',this)">Replacements</button>
       <button class="nav-btn" onclick="switchView('settings',this)">Settings</button>
     </div>
     <div class="hactions">
@@ -571,6 +592,42 @@ textarea{resize:vertical;min-height:76px}
       </div>
       <div id="cl-summary"></div>
       <div id="cl-log"></div>
+    </div>
+
+    <div class="view" id="view-replacements">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+        <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--green);font-weight:600">Replacements & Purchases</h2>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="rp-prop-filter" onchange="renderReplacements()" style="padding:6px 10px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.82rem;font-family:inherit">
+            <option value="all">All Properties</option>
+          </select>
+          <button class="btn btn-g" onclick="openAddReplacement()">+ Add Item</button>
+        </div>
+      </div>
+      <div id="rp-list"></div>
+      <div id="rp-purchased" style="margin-top:24px"></div>
+
+      <!-- Add Replacement Modal -->
+      <div class="mo" id="replacement-modal">
+        <div class="mo-content" style="max-width:480px">
+          <div class="mo-hd"><h3>Add Replacement Item</h3><button class="mo-x" onclick="closeModal('replacement-modal')">&times;</button></div>
+          <div class="mo-bd">
+            <label class="fl">Property
+              <select id="rp-property" style="width:100%;padding:8px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit"></select>
+            </label>
+            <label class="fl">Item Description
+              <input type="text" id="rp-item" placeholder="e.g., New pots and pans set" style="width:100%;padding:8px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit">
+            </label>
+            <label class="fl">Source / Notes <span style="font-size:.7rem;color:var(--text2)">(optional)</span>
+              <input type="text" id="rp-notes" placeholder="e.g., Guest feedback, Amazon link, etc." style="width:100%;padding:8px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit">
+            </label>
+          </div>
+          <div class="mo-ft">
+            <button class="btn" onclick="closeModal('replacement-modal')">Cancel</button>
+            <button class="btn btn-g" onclick="saveReplacement()">Add Item</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="view" id="view-vendors">
@@ -1101,6 +1158,8 @@ function switchView(name,btn){
   btn.classList.add('active');
   // Lazy-load cleaning log on first visit
   if (name === 'cleaning' && !clLoaded) clFetch();
+  // Refresh replacements view when switching to it
+  if (name === 'replacements') renderReplacements();
 }
 
 function populatePropSel(id){
@@ -3102,7 +3161,10 @@ function rvIsMaintRelevant(review) {
   // 2. Equipment mentioned + negative context (e.g., "hot water" + "didn't last")
   if (RV_EQUIP_KEYWORDS.test(allPrivateText) && RV_PROBLEM_CONTEXT.test(allPrivateText)) return true;
 
-  // 3. Cleanliness rating ≤ 2 with any private text (they left feedback AND rated cleanliness poorly)
+  // 3. Purchase/replacement suggestion (route to Replacements tab on import)
+  if (rvIsPurchaseItem(allPrivateText)) return true;
+
+  // 4. Cleanliness rating ≤ 2 with any private text (they left feedback AND rated cleanliness poorly)
   const cleanRating = (review.private?.detailed_ratings || []).find(r => r.type === 'cleanliness');
   if (cleanRating && cleanRating.rating > 0 && cleanRating.rating <= 2) return true;
 
@@ -3238,6 +3300,18 @@ async function rvImport(id) {
   const rv = rvItems.find(x => x.id === id);
   if (!rv) return;
   const problem = rvBuildProblem(rv);
+
+  // Route purchase/replacement items to the Replacements tab
+  if (rvIsPurchaseItem(problem)) {
+    await rpImportFromReview(rv);
+    rvDismissed.push(id);
+    localStorage.setItem('se_rv_dismissed', JSON.stringify(rvDismissed));
+    rvItems = rvItems.filter(x => x.id !== id);
+    renderRV(); renderReplacements();
+    showToast('Item imported to Replacements & Purchases.');
+    return;
+  }
+
   const cat = rvGuessCategory(problem);
   const guest = [rv.guest?.first_name, rv.guest?.last_name].filter(Boolean).join(' ') || '';
   const t = {
@@ -3268,13 +3342,22 @@ async function rvImport(id) {
 }
 
 async function rvImportAll() {
-  let n = 0;
+  let nTasks = 0, nPurchases = 0;
   for (const rv of [...rvItems]) {
     const problem = rvBuildProblem(rv);
+
+    // Route purchase items to Replacements
+    if (rvIsPurchaseItem(problem)) {
+      await rpImportFromReview(rv);
+      rvDismissed.push(rv.id);
+      nPurchases++;
+      continue;
+    }
+
     const cat = rvGuessCategory(problem);
     const guest = [rv.guest?.first_name, rv.guest?.last_name].filter(Boolean).join(' ') || '';
     tasks.unshift({
-      id: Date.now().toString() + Math.random().toString(36).slice(2, 6) + n,
+      id: Date.now().toString() + Math.random().toString(36).slice(2, 6) + nTasks,
       property: rv._pid || '', guest: guest,
       problem: problem.slice(0, 500),
       category: cat, status: 'open', date: '', vendor: '',
@@ -3283,13 +3366,16 @@ async function rvImportAll() {
       vendorNotes: '', created: rv.reviewed_at || new Date().toISOString(),
     });
     rvDismissed.push(rv.id);
-    n++;
+    nTasks++;
   }
   await saveTasks();
   localStorage.setItem('se_rv_dismissed', JSON.stringify(rvDismissed));
   rvItems = [];
-  renderRV(); renderAll();
-  showToast(`${n} task${n > 1 ? 's' : ''} imported from guest feedback.`);
+  renderRV(); renderAll(); renderReplacements();
+  const parts = [];
+  if (nTasks) parts.push(`${nTasks} task${nTasks > 1 ? 's' : ''}`);
+  if (nPurchases) parts.push(`${nPurchases} replacement${nPurchases > 1 ? 's' : ''}`);
+  showToast(`${parts.join(' and ')} imported from guest feedback.`);
 }
 
 function rvDismiss(id) {
@@ -3308,9 +3394,206 @@ function rvDismissAll() {
   showToast('All feedback dismissed.');
 }
 
+// ── REPLACEMENTS & PURCHASES ──────────────────────────────────────
+let rpData = []; // { id, property, item, notes, status:'needed'|'purchased', created, purchasedAt? }
+
+const RP_PURCHASE_KEYWORDS = /\b(pots?|pans?|cookware|dishes?|plates?|cups?|glasses?|mugs?|utensils?|silverware|flatware|knife|knives|cutting board|bakeware|towels?|linens?|sheets?|bedding|comforter|blankets?|pillows?|mattress|supplies|toiletries|soap|shampoo|conditioner|toilet paper|paper towels?|coffee maker|keurig|toaster|blender|can opener|corkscrew|iron|ironing board|hangers?|curtains?|blinds?|rug|mat|broom|mop|vacuum|trash can|light bulb|batteries|remote|game|games|board game|puzzle|toys?|dvd|book|decor|decoration|furniture|chair|table|shelf|shelves|mirror|picture|artwork|sign)\b/i;
+
+async function loadReplacements() {
+  try {
+    const r = await S.get('se_purchases');
+    if (r) rpData = JSON.parse(r.value);
+  } catch (e) { rpData = []; }
+}
+
+async function saveReplacementData() {
+  await save('se_purchases', rpData);
+}
+
+function populateRpPropFilter() {
+  const sel = document.getElementById('rp-prop-filter');
+  if (!sel) return;
+  sel.innerHTML = '<option value="all">All Properties</option>';
+  NBS.forEach(nb => {
+    const og = document.createElement('optgroup');
+    og.label = nb.name;
+    nb.props.forEach(pid => {
+      const p = getProp(pid);
+      if (!p) return;
+      const count = rpData.filter(e => e.property === pid && e.status === 'needed').length;
+      const o = document.createElement('option');
+      o.value = pid;
+      o.textContent = p.name + (count ? ` (${count})` : '');
+      og.appendChild(o);
+    });
+    sel.appendChild(og);
+  });
+}
+
+function populateRpPropertySelect() {
+  const sel = document.getElementById('rp-property');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Select property...</option>';
+  NBS.forEach(nb => {
+    const og = document.createElement('optgroup');
+    og.label = nb.name;
+    nb.props.forEach(pid => {
+      const p = getProp(pid);
+      if (!p) return;
+      const o = document.createElement('option');
+      o.value = pid;
+      o.textContent = p.name;
+      og.appendChild(o);
+    });
+    sel.appendChild(og);
+  });
+}
+
+function openAddReplacement(prefill) {
+  populateRpPropertySelect();
+  document.getElementById('rp-property').value = prefill?.property || '';
+  document.getElementById('rp-item').value = prefill?.item || '';
+  document.getElementById('rp-notes').value = prefill?.notes || '';
+  document.getElementById('replacement-modal').classList.add('open');
+}
+
+async function saveReplacement() {
+  const property = document.getElementById('rp-property').value;
+  const item = document.getElementById('rp-item').value.trim();
+  const notes = document.getElementById('rp-notes').value.trim();
+  if (!property || !item) { showToast('Please select a property and enter an item description.'); return; }
+  rpData.unshift({
+    id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
+    property,
+    item,
+    notes,
+    status: 'needed',
+    created: new Date().toISOString(),
+  });
+  await saveReplacementData();
+  closeModal('replacement-modal');
+  renderReplacements();
+  showToast('Replacement item added.');
+}
+
+async function markPurchased(id) {
+  const item = rpData.find(x => x.id === id);
+  if (!item) return;
+  item.status = 'purchased';
+  item.purchasedAt = new Date().toISOString();
+  await saveReplacementData();
+  renderReplacements();
+  showToast('Marked as purchased.');
+}
+
+async function deleteReplacement(id) {
+  rpData = rpData.filter(x => x.id !== id);
+  await saveReplacementData();
+  renderReplacements();
+  showToast('Item removed.');
+}
+
+function renderReplacements() {
+  const filter = document.getElementById('rp-prop-filter')?.value || 'all';
+  const listEl = document.getElementById('rp-list');
+  const purchasedEl = document.getElementById('rp-purchased');
+
+  const needed = rpData.filter(x => x.status === 'needed' && (filter === 'all' || x.property === filter));
+  const purchased = rpData.filter(x => x.status === 'purchased' && (filter === 'all' || x.property === filter));
+
+  // Group needed by property
+  if (!needed.length) {
+    listEl.innerHTML = '<div class="rp-empty">No replacement items needed. Use "Add Item" or import from guest feedback.</div>';
+  } else {
+    // Group by property
+    const grouped = {};
+    needed.forEach(item => {
+      if (!grouped[item.property]) grouped[item.property] = [];
+      grouped[item.property].push(item);
+    });
+    let h = `<div class="rp-section-hdr"><span>Needed</span><span class="rp-count">${needed.length} item${needed.length !== 1 ? 's' : ''}</span></div>`;
+    for (const [pid, items] of Object.entries(grouped)) {
+      const p = getProp(pid);
+      const propName = p ? p.name : pid;
+      h += `<div style="margin-bottom:16px">
+        <div style="font-weight:600;font-size:.85rem;color:var(--gold);margin-bottom:6px">${escHtml(propName)}</div>`;
+      items.forEach(item => {
+        const age = Math.floor((Date.now() - new Date(item.created).getTime()) / 86400000);
+        const ageStr = age === 0 ? 'Today' : age === 1 ? '1 day ago' : `${age} days ago`;
+        h += `<div class="rp-card">
+          <div style="flex:1">
+            <div class="rp-card-item" style="font-weight:600;font-size:.9rem;margin-bottom:2px">${escHtml(item.item)}</div>
+            ${item.notes ? `<div style="font-size:.78rem;color:var(--text2)">${escHtml(item.notes)}</div>` : ''}
+            <div style="font-size:.72rem;color:var(--text2);margin-top:4px">Added ${ageStr}</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button class="btn rp-btn-done" onclick="markPurchased('${item.id}')" title="Mark purchased">&#10003;</button>
+            <button class="btn rp-btn-del" onclick="deleteReplacement('${item.id}')" title="Remove">&times;</button>
+          </div>
+        </div>`;
+      });
+      h += '</div>';
+    }
+    listEl.innerHTML = h;
+  }
+
+  // Purchased section
+  if (!purchased.length) {
+    purchasedEl.innerHTML = '';
+  } else {
+    let h = `<div class="rp-section-hdr"><span>Purchased</span><span class="rp-count">${purchased.length}</span></div>`;
+    purchased.sort((a, b) => new Date(b.purchasedAt || b.created) - new Date(a.purchasedAt || a.created));
+    purchased.forEach(item => {
+      const p = getProp(item.property);
+      const propName = p ? p.name : item.property;
+      const doneDate = item.purchasedAt ? new Date(item.purchasedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+      h += `<div class="rp-purchased-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+          <div style="flex:1">
+            <span class="rp-card-item" style="font-weight:600;font-size:.88rem">${escHtml(item.item)}</span>
+            <span style="font-size:.78rem;color:var(--text2);margin-left:8px">${escHtml(propName)}</span>
+            ${doneDate ? `<span style="font-size:.72rem;color:var(--text2);margin-left:8px">Purchased ${doneDate}</span>` : ''}
+          </div>
+          <button class="btn rp-btn-del" onclick="deleteReplacement('${item.id}')" title="Remove" style="opacity:.5">&times;</button>
+        </div>
+      </div>`;
+    });
+    purchasedEl.innerHTML = h;
+  }
+
+  populateRpPropFilter();
+}
+
+// ── Route purchase-related review items to Replacements ──────────
+function rvIsPurchaseItem(text) {
+  if (!text) return false;
+  const t = text.toLowerCase();
+  // Must mention a purchasable item AND a recommendation/suggestion context
+  const hasItem = RP_PURCHASE_KEYWORDS.test(t);
+  const hasSuggestion = /\b(recommend|suggest|need|new|better|replace|upgrade|get|buy|purchase|supply|provide|add|stock)\b/i.test(t);
+  return hasItem && hasSuggestion;
+}
+
+async function rpImportFromReview(rv) {
+  const problem = rvBuildProblem(rv);
+  const guest = [rv.guest?.first_name, rv.guest?.last_name].filter(Boolean).join(' ') || 'Guest';
+  const prop = getProp(rv._pid);
+  const reviewDate = new Date(rv.reviewed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  rpData.unshift({
+    id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
+    property: rv._pid || '',
+    item: problem.length > 200 ? problem.slice(0, 200) + '...' : problem,
+    notes: `From guest review by ${guest} (${reviewDate})${rv.reservation?.code ? ' — Res: ' + rv.reservation.code : ''}`,
+    status: 'needed',
+    created: rv.reviewed_at || new Date().toISOString(),
+  });
+  await saveReplacementData();
+}
+
 // START
 async function initApp(){
   await load();
+  await loadReplacements();
   await loadSmsTemplate();
   await loadLogo();
   await loadRoadmap();
