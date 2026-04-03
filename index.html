@@ -1080,25 +1080,24 @@ function renderTasks(){
     return;
   }
 
-  // Group by category
-  const CAT_ORDER=['handyman','plumbing','hvac','electrical','hot_tub','pool','pest','cleaning','landscaping','bed_bugs','water','septic','arcade','other',''];
-  const groups={};
-  f.forEach(t=>{
-    const cat=t.category||'';
-    if(!groups[cat])groups[cat]=[];
-    groups[cat].push(t);
-  });
+  // Group by scheduling status (date presence is the primary signal)
+  const isScheduled=t=>t.status==='scheduled'||t.status==='in_progress'||!!t.date;
+  const needsScheduling=sortTasks(f.filter(t=>!isScheduled(t)));
+  const scheduled=sortTasks(f.filter(t=>isScheduled(t)));
 
   let html='';
-  CAT_ORDER.forEach(cat=>{
-    if(!groups[cat])return;
-    const items=sortTasks(groups[cat]);
-    const label=CAT_LABELS[cat]||cat.replace('_',' ');
+  if(needsScheduling.length){
     html+=`<div class="cat-section">
-      <div class="cat-section-hdr"><span class="cat-section-title">${label}</span><span class="cat-section-count">${items.length}</span></div>
-      <div class="task-list">${items.map(taskCard).join('')}</div>
+      <div class="cat-section-hdr"><span class="cat-section-title">Needs Scheduling</span><span class="cat-section-count">${needsScheduling.length}</span></div>
+      <div class="task-list">${needsScheduling.map(taskCard).join('')}</div>
     </div>`;
-  });
+  }
+  if(scheduled.length){
+    html+=`<div class="cat-section">
+      <div class="cat-section-hdr"><span class="cat-section-title">Scheduled</span><span class="cat-section-count">${scheduled.length}</span></div>
+      <div class="task-list">${scheduled.map(taskCard).join('')}</div>
+    </div>`;
+  }
   el.innerHTML=html;
 }
 function setCatFilter(c,btn){catFilter=c;document.querySelectorAll('.fb').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderTasks();}
@@ -1685,7 +1684,11 @@ async function saveTask(){
   const pid=document.getElementById('f-property').value;const prob=document.getElementById('f-problem').value.trim();
   if(!pid||!prob){showToast('Property and problem are required.','err');return;}
   const nt=document.getElementById('f-notes').value.trim();
-  const t={id:Date.now().toString(),property:pid,guest:document.getElementById('f-guest').value.trim(),problem:prob,category:document.getElementById('f-category').value,status:document.getElementById('f-status').value,date:document.getElementById('f-date').value,vendor:document.getElementById('f-vendor').value.trim(),urgent:document.getElementById('f-urgent').checked,recurring:false,notes:nt?[{text:nt,type:'admin',time:new Date().toISOString()}]:[],vendorNotes:'',created:new Date().toISOString()};
+  const fDate=document.getElementById('f-date').value;
+  let fStatus=document.getElementById('f-status').value;
+  // Auto-advance: if a date is set and status is still open, mark as scheduled
+  if(fDate&&fStatus==='open')fStatus='scheduled';
+  const t={id:Date.now().toString(),property:pid,guest:document.getElementById('f-guest').value.trim(),problem:prob,category:document.getElementById('f-category').value,status:fStatus,date:fDate,vendor:document.getElementById('f-vendor').value.trim(),urgent:document.getElementById('f-urgent').checked,recurring:false,notes:nt?[{text:nt,type:'admin',time:new Date().toISOString()}]:[],vendorNotes:'',created:new Date().toISOString()};
   tasks.unshift(t);await saveTasks();closeModal('task-modal');renderAll();showToast('Task created.');
 }
 
@@ -1949,7 +1952,10 @@ async function addNote(type){
 }
 async function updateField(f,v){
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
-  t[f]=v;await saveTasks();renderAll();
+  t[f]=v;
+  // Auto-advance status: setting a date on an open task → scheduled
+  if(f==='date'&&v&&t.status==='open'){t.status='scheduled';document.getElementById('d-status').value='scheduled';}
+  await saveTasks();renderAll();
   // Re-render vendor section when vendor or category changes
   if(f==='vendor'||f==='category'){
     const p=getProp(t.property);
