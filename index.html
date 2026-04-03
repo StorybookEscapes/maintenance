@@ -286,10 +286,13 @@ textarea{resize:vertical;min-height:76px}
 .dp-cell.dp-other:hover{background-color:var(--surface2)}
 .dp-dn{font-size:.78rem;font-weight:700;color:var(--text);line-height:1;position:relative;z-index:2;text-shadow:0 0 2px #fff,0 0 4px #fff}
 .dp-dn.dp-today-num{color:var(--gold)}
-.dp-cell.dp-selected{box-shadow:inset 0 0 0 2px var(--green);z-index:2}
-/* Hospitable-style reservation bars */
-.dp-res-bar{position:absolute;top:20px;height:20px;background:#2d9c95;z-index:1;display:flex;align-items:center;overflow:hidden;pointer-events:none}
-.dp-res-name{color:#fff;font-size:.55rem;font-weight:600;padding-left:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dp-cell.dp-selected .dp-dn{background:var(--gold-pale);border:1.5px solid var(--gold-light);border-radius:4px;padding:1px 4px;color:var(--text)}
+/* Hospitable-style reservation bars — parallelogram shape with checkout bleed */
+.dp-res-bar{position:absolute;top:20px;height:20px;background:#2d9c95;z-index:1;display:flex;align-items:center;overflow:hidden;pointer-events:none;clip-path:polygon(0 0,100% 0,100% 100%,0 100%)}
+.dp-res-bar.dp-bar-start{clip-path:polygon(8px 0,100% 0,100% 100%,0 100%)}
+.dp-res-bar.dp-bar-end{clip-path:polygon(0 0,100% 0,calc(100% - 8px) 100%,0 100%)}
+.dp-res-bar.dp-bar-start.dp-bar-end{clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%)}
+.dp-res-name{color:#fff;font-size:.55rem;font-weight:600;padding-left:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* In-house warning banner */
 .dp-warn{background:#fff8e8;border:1px solid var(--gold-light);border-radius:8px;padding:10px 13px;margin-top:10px;font-size:.78rem;color:#7a5c00;display:none}
 .dp-warn.show{display:block}
@@ -1305,31 +1308,35 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
     });
 
     // Render reservation bars overlaying this week row
+    const BLEED=COL_PCT*0.22; // bleed ~22% into checkout morning
     res.forEach(r=>{
-      // Skip if reservation doesn't overlap this week
-      // Bar covers from check-in through the night before checkout (checkout cell itself is free)
       if(r.ci>=wkEnd||r.co<=wkStart) return;
 
-      // Clamp to week boundaries
       const barStart=r.ci<wkStart?wkStart:r.ci;
       const barEnd=r.co>wkEnd?wkEnd:r.co;
 
-      // Column indices (0–7)
       const msPerDay=86400000;
       const startCol=Math.round((barStart.getTime()-wkStart.getTime())/msPerDay);
       const endCol=Math.round((barEnd.getTime()-wkStart.getTime())/msPerDay);
       if(endCol<=startCol) return;
 
-      const left=(startCol*COL_PCT).toFixed(2);
-      const width=((endCol-startCol)*COL_PCT).toFixed(2);
+      const isFirst=r.ci>=wkStart; // actual check-in in this week
+      const isLast=r.co<=wkEnd;    // actual checkout in this week
 
-      // Rounded ends: round on the actual check-in/checkout ends, flat where it continues
-      const isFirst=r.ci>=wkStart; // bar starts at actual check-in
-      const isLast=r.co<=wkEnd;    // bar ends at actual checkout
-      const rL=isFirst?'4px':'0';
-      const rR=isLast?'4px':'0';
+      // Extend bar into checkout morning; pull bar start back for check-in afternoon
+      let left=startCol*COL_PCT;
+      let width=(endCol-startCol)*COL_PCT;
+      if(isLast) width+=BLEED;   // bleed into checkout cell morning
+      if(isFirst){ left-=BLEED; width+=BLEED; } // bleed back into day before check-in afternoon
+      // Clamp to row boundaries
+      if(left<0){ width+=left; left=0; }
+      if(left+width>100) width=100-left;
 
-      h+=`<div class="dp-res-bar" style="left:${left}%;width:${width}%;border-radius:${rL} ${rR} ${rR} ${rL}"><span class="dp-res-name">${r.name}</span></div>`;
+      let cls='dp-res-bar';
+      if(isFirst) cls+=' dp-bar-start';
+      if(isLast) cls+=' dp-bar-end';
+
+      h+=`<div class="${cls}" style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%"><span class="dp-res-name">${r.name}</span></div>`;
     });
 
     h+=`</div>`;
