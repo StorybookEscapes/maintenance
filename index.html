@@ -1122,6 +1122,7 @@ function adaptCalendar(data){
   const days=data.data.days;
   const evs=[];
   let blockStart=null;
+  const pd=s=>{const m=s.match(/(\d{4})-(\d{2})-(\d{2})/);return m?new Date(+m[1],+m[2]-1,+m[3],12,0,0):null;};
   // Walk through days, group consecutive RESERVED days into blocks
   for(let i=0;i<days.length;i++){
     const d=days[i];
@@ -1130,18 +1131,28 @@ function adaptCalendar(data){
       blockStart=d.date; // start a new block
     } else if(!isReserved&&blockStart){
       // End the block — checkout is this day
-      const pd=s=>{const m=s.match(/(\d{4})-(\d{2})-(\d{2})/);return m?new Date(+m[1],+m[2]-1,+m[3],12,0,0):null;};
       const ci=pd(blockStart),co=pd(d.date);
-      if(ci&&co)evs.push({start:ci,end:co,summary:'Guest'});
+      // If this block started on the very first day of calendar data,
+      // the guest likely checked in before today — push start back 1 day
+      // so dayState sees this as mid-stay, not a false check-in
+      if(ci&&co){
+        const isFirstDay=blockStart===days[0].date;
+        const adjStart=isFirstDay?new Date(ci.getTime()-86400000):ci;
+        evs.push({start:adjStart,end:co,summary:'Guest'});
+      }
       blockStart=null;
     }
   }
   // If still in a block at the end, close it at the last day + 1
   if(blockStart){
-    const pd=s=>{const m=s.match(/(\d{4})-(\d{2})-(\d{2})/);return m?new Date(+m[1],+m[2]-1,+m[3],12,0,0):null;};
     const ci=pd(blockStart);
     const lastDay=pd(days[days.length-1].date);
-    if(ci&&lastDay){const co=new Date(lastDay);co.setDate(co.getDate()+1);evs.push({start:ci,end:co,summary:'Guest'});}
+    if(ci&&lastDay){
+      const co=new Date(lastDay);co.setDate(co.getDate()+1);
+      const isFirstDay=blockStart===days[0].date;
+      const adjStart=isFirstDay?new Date(ci.getTime()-86400000):ci;
+      evs.push({start:adjStart,end:co,summary:'Guest'});
+    }
   }
   console.log(`adaptCalendar: ${evs.length} reservation blocks from ${days.length} days`);
   return evs;
