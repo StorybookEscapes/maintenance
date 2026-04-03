@@ -2251,7 +2251,6 @@ function renderHB() {
       <div style="display:flex;gap:8px;align-items:center">
         <span class="hb-count">${hbItems.length} new</span>
         <button class="hb-btn hb-btn-import" onclick="hbImportAll()">Import All</button>
-        <button class="hb-btn hb-btn-dismiss" onclick="hbDismissAll()">Dismiss All</button>
       </div>
     </div>`;
   hbItems.forEach(item => {
@@ -2280,11 +2279,8 @@ function renderHB() {
         </div>
         <div class="hb-item-btns">
           <button class="hb-btn hb-btn-import" onclick="hbImport('${item.id}')">Import</button>
-          <button class="hb-btn hb-btn-dismiss" onclick="hbDismiss('${item.id}')">Dismiss</button>
-          <button class="hb-btn hb-btn-raw" onclick="toggleHbRaw('${item.id}')">Raw</button>
         </div>
       </div>
-      <div class="hb-raw" id="hb-raw-${item.id}">${escHtml(JSON.stringify(item._raw || item, null, 2))}</div>
     </div>`;
   });
   h += '</div>';
