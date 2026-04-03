@@ -1173,7 +1173,7 @@ async function fetchIcal(pid){
       const json=await r.json();
       if(json.data&&Array.isArray(json.data)&&json.data.length>0){
         const evs=json.data
-          .filter(rv=>rv.arrival_date&&rv.departure_date)
+          .filter(rv=>rv.arrival_date&&rv.departure_date&&rv.status!=='cancelled')
           .map(rv=>({
             start:pd(rv.arrival_date),
             end:pd(rv.departure_date),
