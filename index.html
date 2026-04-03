@@ -412,39 +412,41 @@ textarea{resize:vertical;min-height:76px}
 .rv-btn-dismiss:hover{color:#e8d080;border-color:#d4a840}
 
 /* ── Cleaning Log ── */
-.cl-summary-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:24px}
-.cl-prop-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;cursor:pointer;transition:border-color .15s}
-.cl-prop-card:hover{border-color:var(--gold)}
-.cl-prop-card.has-issues{border-left:3px solid #cc6644}
-.cl-prop-name{font-size:.82rem;font-weight:700;color:var(--green);margin-bottom:4px}
-.cl-prop-stat{font-size:.72rem;color:var(--text2)}
-.cl-prop-stat .bad{color:#cc6644;font-weight:700}
-.cl-entry{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:8px}
+.cl-wrap{background:linear-gradient(135deg,#2a2418 0%,#3a2e1a 100%);border:1px solid #7a6530;border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow-md)}
+.cl-summary-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-bottom:20px}
+.cl-prop-card{background:rgba(255,255,255,.06);border:1px solid rgba(180,150,60,.25);border-radius:8px;padding:13px 16px;cursor:pointer;transition:border-color .15s}
+.cl-prop-card:hover{border-color:#d4a840}
+.cl-prop-card.has-issues{border-left:3px solid #e06050}
+.cl-prop-name{font-size:.78rem;font-weight:700;color:#d4a840;margin-bottom:4px;text-transform:uppercase;letter-spacing:.8px}
+.cl-prop-stat{font-size:.72rem;color:#b0a070;line-height:1.5}
+.cl-prop-stat .bad{color:#e06050;font-weight:700}
+.cl-entry{background:rgba(255,255,255,.06);border:1px solid rgba(180,150,60,.25);border-radius:8px;padding:12px 16px;margin-bottom:6px;transition:border-color .15s}
+.cl-entry:hover{border-color:rgba(180,150,60,.5)}
 .cl-entry-hdr{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:6px}
-.cl-entry-date{font-size:.78rem;font-weight:700;color:var(--text)}
-.cl-entry-guest{font-size:.74rem;color:var(--text2)}
+.cl-entry-date{font-size:.78rem;font-weight:700;color:#e8dcc0}
+.cl-entry-guest{font-size:.72rem;color:#b0a070}
 .cl-entry-rating{font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:12px}
-.cl-entry-rating.good{background:rgba(80,160,80,.15);color:#6ab06a}
+.cl-entry-rating.good{background:rgba(90,176,90,.15);color:#6ab06a}
 .cl-entry-rating.ok{background:rgba(200,180,60,.15);color:#c0a830}
-.cl-entry-rating.bad{background:rgba(200,80,60,.15);color:#cc6644}
-.cl-entry-text{font-size:.82rem;color:var(--text);line-height:1.5;margin-top:4px}
-.cl-entry-source{font-size:.68rem;color:var(--text2);margin-top:4px;font-style:italic}
-.cl-empty{text-align:center;padding:30px;color:var(--text2);font-size:.88rem}
+.cl-entry-rating.bad{background:rgba(224,96,80,.15);color:#e06050}
+.cl-entry-text{font-size:.82rem;color:#e8dcc0;line-height:1.5;margin-top:4px}
+.cl-entry-source{font-size:.68rem;color:#8a7a50;margin-top:4px;font-style:italic}
+.cl-empty{text-align:center;padding:30px;color:#b0a070;font-size:.88rem}
 .cl-trend{display:inline-flex;align-items:center;gap:4px;font-size:.68rem;padding:2px 7px;border-radius:10px;margin-left:6px}
-.cl-trend.improving{background:rgba(80,160,80,.12);color:#6ab06a}
-.cl-trend.declining{background:rgba(200,80,60,.12);color:#cc6644}
-.cl-trend.stable{background:rgba(200,180,60,.12);color:#c0a830}
-.cl-section{margin-bottom:24px}
-.cl-section-hdr{font-family:'Cormorant Garamond',serif;font-size:1.15rem;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px}
-.cl-section-hdr .icon{font-size:1.1rem}
-.cl-section-hdr.problems{color:#cc6644}
-.cl-section-hdr.winners{color:#5ab05a}
-.cl-section-hdr.all-props{color:var(--gold)}
-.cl-winner-card{background:var(--surface);border:1px solid var(--border);border-left:3px solid #5ab05a;border-radius:var(--radius);padding:14px 16px;cursor:pointer;transition:border-color .15s}
-.cl-winner-card:hover{border-color:#5ab05a}
-.cl-winner-stat{font-size:.72rem;color:var(--text2)}
-.cl-winner-stat .good{color:#5ab05a;font-weight:700}
-.cl-no-data{font-size:.82rem;color:var(--text2);padding:10px 0;font-style:italic}
+.cl-trend.improving{background:rgba(90,176,90,.15);color:#6ab06a}
+.cl-trend.declining{background:rgba(224,96,80,.15);color:#e06050}
+.cl-trend.stable{background:rgba(200,180,60,.15);color:#c0a830}
+.cl-section{margin-bottom:22px}
+.cl-section-hdr{font-family:'Cormorant Garamond',serif;font-size:1.1rem;font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:8px;text-transform:uppercase;letter-spacing:1.2px;font-size:.76rem}
+.cl-section-hdr .icon{font-size:1rem}
+.cl-section-hdr.problems{color:#e06050}
+.cl-section-hdr.winners{color:#6ab06a}
+.cl-section-hdr.all-props{color:#d4a840}
+.cl-winner-card{background:rgba(255,255,255,.06);border:1px solid rgba(90,176,90,.3);border-left:3px solid #6ab06a;border-radius:8px;padding:13px 16px;cursor:pointer;transition:border-color .15s}
+.cl-winner-card:hover{border-color:#6ab06a}
+.cl-winner-stat{font-size:.72rem;color:#b0a070}
+.cl-winner-stat .good{color:#6ab06a;font-weight:700}
+.cl-no-data{font-size:.82rem;color:#8a7a50;padding:10px 0;font-style:italic}
 
 /* ── Replacements & Purchases ── */
 .rp-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;transition:border-color .15s}
@@ -546,6 +548,14 @@ textarea{resize:vertical;min-height:76px}
     <div class="view active" id="view-tasks">
       <div id="hb-wrap"></div>
       <div id="rv-wrap"></div>
+      <!-- Review Detail Modal -->
+      <div class="mo" id="rv-detail-modal">
+        <div class="mo-content" style="max-width:560px;background:linear-gradient(135deg,#2a2418 0%,#3a2e1a 100%);border:1px solid #7a6530">
+          <div class="mo-hd" style="border-bottom-color:rgba(180,150,60,.25)"><h3 id="rv-detail-title" style="color:#d4a840">Guest Feedback</h3><button class="mo-x" onclick="closeModal('rv-detail-modal')" style="color:#b0a070">&times;</button></div>
+          <div class="mo-bd" id="rv-detail-body" style="max-height:60vh;overflow-y:auto"></div>
+          <div class="mo-ft" id="rv-detail-ft" style="border-top-color:rgba(180,150,60,.25)"></div>
+        </div>
+      </div>
       <div id="ub-wrap"></div>
       <input type="hidden" id="search-input" value="">
       <div id="task-list"></div>
@@ -583,15 +593,20 @@ textarea{resize:vertical;min-height:76px}
     </div>
 
     <div class="view" id="view-cleaning">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px">
-        <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--green);font-weight:600">Cleaning Log</h2>
-        <div style="display:flex;gap:8px;align-items:center">
-          <select id="cl-prop-filter" onchange="renderCleaningLog()" style="padding:6px 10px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.82rem;font-family:inherit"></select>
-          <span id="cl-status" style="font-size:.72rem;color:var(--text2)"></span>
+      <div class="cl-wrap">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:#d4a840;flex-shrink:0"><path d="M17 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zm0 18H7V4h10v16zM9 6h6v2H9V6zm0 4h6v2H9v-2zm0 4h4v2H9v-2z"/></svg>
+            <div>
+              <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:1.5px;color:#d4a840;font-weight:700">Cleaning Log</div>
+              <span id="cl-status" style="font-size:.66rem;color:#8a7a50"></span>
+            </div>
+          </div>
+          <select id="cl-prop-filter" onchange="renderCleaningLog()" style="padding:6px 10px;border-radius:8px;border:1px solid rgba(180,150,60,.3);background:rgba(255,255,255,.06);color:#e8dcc0;font-size:.78rem;font-family:inherit"></select>
         </div>
+        <div id="cl-summary"></div>
+        <div id="cl-log"></div>
       </div>
-      <div id="cl-summary"></div>
-      <div id="cl-log"></div>
     </div>
 
     <div class="view" id="view-replacements">
@@ -625,6 +640,18 @@ textarea{resize:vertical;min-height:76px}
           <div class="mo-ft">
             <button class="btn" onclick="closeModal('replacement-modal')">Cancel</button>
             <button class="btn btn-g" onclick="saveReplacement()">Add Item</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Replacement Detail Modal -->
+      <div class="mo" id="rp-detail-modal">
+        <div class="mo-content" style="max-width:540px">
+          <div class="mo-hd"><h3 id="rp-detail-title">Item Details</h3><button class="mo-x" onclick="closeModal('rp-detail-modal')">&times;</button></div>
+          <div class="mo-bd" id="rp-detail-body" style="max-height:60vh;overflow-y:auto"></div>
+          <div class="mo-ft">
+            <button class="btn" onclick="closeModal('rp-detail-modal')">Close</button>
+            <button class="btn rp-btn-done" id="rp-detail-purchase-btn" onclick="">Mark Purchased</button>
           </div>
         </div>
       </div>
@@ -1156,8 +1183,8 @@ function switchView(name,btn){
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('view-'+name).classList.add('active');
   btn.classList.add('active');
-  // Lazy-load cleaning log on first visit
-  if (name === 'cleaning' && !clLoaded) clFetch();
+  // Cleaning log now pre-loaded on init; this is a fallback
+  if (name === 'cleaning' && !clLoaded && !clFetching) clFetch();
   // Refresh replacements view when switching to it
   if (name === 'replacements') renderReplacements();
 }
@@ -2812,6 +2839,7 @@ async function hbTest() {
 let clData = []; // all cleaning-relevant review entries (flagged issues)
 let clAllRatings = {}; // ALL cleanliness ratings per property (for winners/trends): { pid: [{rating, reviewedAt}] }
 let clLoaded = false;
+let clFetching = false;
 
 // Keywords that indicate cleaning issues specifically
 const CL_KEYWORDS = /\b(dirty|filthy|grime|grimy|stain|stained|smell|odor|smelly|mold|mildew|cobweb|cobwebs|dust|dusty|hair|hairs|trash|garbage|gross|disgusting|unsanitary|unclean|not clean|wasn.t clean|wasn.t cleaned|mouse feces|droppings|feces|poop|urine|sewage)\b/i;
@@ -2872,6 +2900,8 @@ function clBuildEntry(review) {
 }
 
 async function clFetch() {
+  if (clFetching) return;
+  clFetching = true;
   const el = document.getElementById('cl-status');
   if (el) el.textContent = 'Loading reviews...';
   const allEntries = [];
@@ -3052,23 +3082,32 @@ function renderCleaningLog() {
       sumH += '<div class="cl-no-data">Not enough review data in the last 60 days to identify trends yet.</div>';
     }
 
-    // ── All Properties Grid ──
-    sumH += `<div class="cl-section"><div class="cl-section-hdr all-props"><span class="icon">◈</span> All Properties</div>`;
+    // ── All Properties Grid (60-day weighted) ──
+    sumH += `<div class="cl-section"><div class="cl-section-hdr all-props"><span class="icon">◈</span> All Properties <span style="font-size:.72rem;font-weight:400;color:#8a7a50">(last 60 days)</span></div>`;
     sumH += '<div class="cl-summary-grid">';
-    const allSorted = Object.keys(allPropStats).filter(pid => allPropStats[pid].totalFlags > 0).sort((a, b) => allPropStats[b].totalFlags - allPropStats[a].totalFlags);
+    // Show all properties with recent activity, sorted by flags then avg
+    const allSorted = Object.keys(allPropStats)
+      .filter(pid => allPropStats[pid].recentReviews > 0)
+      .sort((a, b) => {
+        const sa = allPropStats[a], sb = allPropStats[b];
+        // Sort: most flags first, then lowest avg
+        if (sb.recentFlags !== sa.recentFlags) return sb.recentFlags - sa.recentFlags;
+        return (sa.recentAvg || 5) - (sb.recentAvg || 5);
+      });
     if (allSorted.length) {
       for (const pid of allSorted) {
         const p = getProp(pid);
         if (!p) continue;
         const s = allPropStats[pid];
-        const avg = s.totalAvg !== null ? s.totalAvg.toFixed(1) : '—';
-        sumH += `<div class="cl-prop-card${s.totalFlags > 0 ? ' has-issues' : ''}" onclick="document.getElementById('cl-prop-filter').value='${pid}';renderCleaningLog()">
+        const avg = s.recentAvg !== null ? s.recentAvg.toFixed(1) : '—';
+        const hasFlags = s.recentFlags > 0;
+        sumH += `<div class="cl-prop-card${hasFlags ? ' has-issues' : ''}" onclick="document.getElementById('cl-prop-filter').value='${pid}';renderCleaningLog()">
           <div class="cl-prop-name">${escHtml(p.name)}</div>
-          <div class="cl-prop-stat"><span class="bad">${s.totalFlags} flag${s.totalFlags !== 1 ? 's' : ''}</span> all-time · avg cleanliness: ${avg}/5 · ${s.totalReviews} total reviews</div>
+          <div class="cl-prop-stat">${hasFlags ? `<span class="bad">${s.recentFlags} flag${s.recentFlags !== 1 ? 's' : ''}</span> · ` : ''}avg: ${avg}/5 · ${s.recentReviews} review${s.recentReviews !== 1 ? 's' : ''}${s.totalFlags > 0 ? ` · <span style="color:#8a7a50">${s.totalFlags} all-time</span>` : ''}</div>
         </div>`;
       }
     } else {
-      sumH += '<div class="cl-no-data">No cleaning flags recorded for any properties.</div>';
+      sumH += '<div class="cl-no-data">No reviews found in the last 60 days.</div>';
     }
     sumH += '</div></div>';
 
@@ -3083,11 +3122,11 @@ function renderCleaningLog() {
     const recentAvg = sixtyDayRatings.length ? (sixtyDayRatings.reduce((s, r) => s + r.rating, 0) / sixtyDayRatings.length).toFixed(1) : '—';
     const perfect = sixtyDayRatings.filter(r => r.rating === 5).length;
     const recentFlags = entries.filter(e => new Date(e.reviewedAt) > new Date(Date.now() - 60 * 86400000)).length;
-    summaryEl.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px">
-      <div style="font-size:.82rem;font-weight:700;color:var(--green)">${escHtml(p?.name || filter)}</div>
-      <div style="font-size:.74rem;color:var(--text2);margin-top:4px">${entries.length} cleaning flag${entries.length !== 1 ? 's' : ''} all-time · ${propRatings.length} total reviews · Overall avg: ${allAvg}/5</div>
-      <div style="font-size:.74rem;color:var(--text2);margin-top:2px">Last 60 days: ${sixtyDayRatings.length} reviews · avg ${recentAvg}/5 · ${perfect} perfect scores · ${recentFlags} flag${recentFlags !== 1 ? 's' : ''}</div>
-      <div style="margin-top:6px"><button class="rv-btn rv-btn-dismiss" style="font-size:.7rem" onclick="document.getElementById('cl-prop-filter').value='all';renderCleaningLog()">← Back to all properties</button></div>
+    summaryEl.innerHTML = `<div style="background:rgba(255,255,255,.06);border:1px solid rgba(180,150,60,.25);border-radius:8px;padding:14px 16px;margin-bottom:16px">
+      <div style="font-size:.72rem;font-weight:700;color:#d4a840;text-transform:uppercase;letter-spacing:.8px">${escHtml(p?.name || filter)}</div>
+      <div style="font-size:.74rem;color:#b0a070;margin-top:6px">Last 60 days: ${sixtyDayRatings.length} reviews · avg ${recentAvg}/5 · ${perfect} perfect scores · ${recentFlags} flag${recentFlags !== 1 ? 's' : ''}</div>
+      <div style="font-size:.72rem;color:#8a7a50;margin-top:2px">${entries.length} flag${entries.length !== 1 ? 's' : ''} all-time · ${propRatings.length} total reviews · Overall avg: ${allAvg}/5</div>
+      <div style="margin-top:8px"><button style="padding:4px 12px;border-radius:7px;font-size:.7rem;font-family:inherit;font-weight:600;cursor:pointer;border:1px solid rgba(180,150,60,.3);background:transparent;color:#b0a070;transition:all .15s" onmouseover="this.style.color='#e8d080';this.style.borderColor='#d4a840'" onmouseout="this.style.color='#b0a070';this.style.borderColor='rgba(180,150,60,.3)'" onclick="document.getElementById('cl-prop-filter').value='all';renderCleaningLog()">← Back to all properties</button></div>
     </div>`;
   }
 
@@ -3289,11 +3328,11 @@ function renderRV() {
     const lowRatings = (rv.private?.detailed_ratings || []).filter(r => r.rating > 0 && r.rating <= 3);
     const ratingComments = (rv.private?.detailed_ratings || []).filter(r => r.comment);
 
-    h += `<div class="rv-item" id="rv-${rv.id}">
+    h += `<div class="rv-item" id="rv-${rv.id}" style="cursor:pointer" onclick="openRvDetail('${rv.id}')">
       <div class="rv-item-top">
-        <div style="flex:1">
+        <div style="flex:1;min-width:0">
           <div class="rv-item-prop">${escHtml(propName)}</div>
-          <div class="rv-item-prob">${escHtml(problem.length > 300 ? problem.slice(0, 300) + '...' : problem)}</div>
+          <div class="rv-item-prob" style="overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical">${escHtml(problem)}</div>
           <div class="rv-item-meta">
             <span>Guest: ${escHtml(guest)}</span>
             <span>Reviewed: ${dateStr}</span>
@@ -3304,14 +3343,70 @@ function renderRV() {
           ${ratingComments.length ? `<div class="rv-item-snippet">${ratingComments.map(r => escHtml(r.type + ': ' + r.comment)).join(' · ')}</div>` : ''}
         </div>
         <div class="rv-item-btns">
-          <button class="rv-btn rv-btn-import" onclick="rvImport('${rv.id}')">Import</button>
-          <button class="rv-btn rv-btn-dismiss" onclick="rvDismiss('${rv.id}')">Dismiss</button>
+          <button class="rv-btn rv-btn-import" onclick="event.stopPropagation();rvImport('${rv.id}')">Import</button>
+          <button class="rv-btn rv-btn-dismiss" onclick="event.stopPropagation();rvDismiss('${rv.id}')">Dismiss</button>
         </div>
       </div>
     </div>`;
   });
   h += '</div>';
   el.innerHTML = h;
+}
+
+function openRvDetail(id) {
+  const rv = rvItems.find(x => x.id === id);
+  if (!rv) return;
+  const prop = getProp(rv._pid);
+  const propName = prop ? prop.name : rv._pid;
+  const guest = [rv.guest?.first_name, rv.guest?.last_name].filter(Boolean).join(' ') || 'Anonymous';
+  const reviewDate = new Date(rv.reviewed_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+  const stayDates = rv.reservation ? `${new Date(rv.reservation.check_in).toLocaleDateString('en-US', {month:'short',day:'numeric'})} – ${new Date(rv.reservation.check_out).toLocaleDateString('en-US', {month:'short',day:'numeric'})}` : '';
+
+  let h = `<div style="margin-bottom:14px">
+    <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:1px;color:#d4a840;font-weight:700;margin-bottom:4px">${escHtml(propName)}</div>
+    <div style="font-size:.72rem;color:#8a7a50">Guest: ${escHtml(guest)} · ${reviewDate}${stayDates ? ' · Stay: ' + stayDates : ''}${rv.reservation?.code ? ' · Res: ' + rv.reservation.code : ''}</div>
+    ${rv.public?.rating ? `<div style="font-size:.78rem;color:#d4a840;margin-top:4px">${'★'.repeat(rv.public.rating)}${'☆'.repeat(5 - rv.public.rating)}</div>` : ''}
+  </div>`;
+
+  // Full private feedback — no truncation
+  const feedback = rv.private?.feedback;
+  if (feedback) {
+    h += `<div style="margin-bottom:14px">
+      <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:1px;color:#8a7a50;font-weight:600;margin-bottom:6px">Private Feedback</div>
+      <div style="background:rgba(0,0,0,.2);border:1px solid rgba(180,150,60,.2);border-radius:8px;padding:14px;font-size:.86rem;color:#e8dcc0;line-height:1.65;white-space:pre-wrap;word-break:break-word">${escHtml(feedback)}</div>
+    </div>`;
+  }
+
+  // Detailed ratings with comments
+  const detailedRatings = rv.private?.detailed_ratings || [];
+  if (detailedRatings.length) {
+    h += `<div style="margin-bottom:14px">
+      <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:1px;color:#8a7a50;font-weight:600;margin-bottom:6px">Rating Breakdown</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">`;
+    detailedRatings.forEach(r => {
+      const rColor = r.rating <= 2 ? '#e06050' : r.rating <= 3 ? '#c0a830' : '#6ab06a';
+      h += `<div style="background:rgba(0,0,0,.15);border-radius:6px;padding:6px 10px;font-size:.76rem">
+        <span style="color:#b0a070">${escHtml(r.type)}:</span> <span style="color:${rColor};font-weight:700">${r.rating}/5</span>
+        ${r.comment ? `<div style="font-size:.74rem;color:#c0b080;margin-top:3px;font-style:italic;line-height:1.4">${escHtml(r.comment)}</div>` : ''}
+      </div>`;
+    });
+    h += '</div></div>';
+  }
+
+  // Public review if exists
+  if (rv.public?.review) {
+    h += `<div style="margin-bottom:10px">
+      <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:1px;color:#8a7a50;font-weight:600;margin-bottom:6px">Public Review</div>
+      <div style="font-size:.82rem;color:#b0a070;line-height:1.5;font-style:italic;border-left:2px solid #8a7030;padding-left:10px">${escHtml(rv.public.review)}</div>
+    </div>`;
+  }
+
+  document.getElementById('rv-detail-body').innerHTML = h;
+  document.getElementById('rv-detail-ft').innerHTML = `
+    <button class="rv-btn rv-btn-dismiss" onclick="closeModal('rv-detail-modal')">Close</button>
+    <button class="rv-btn rv-btn-dismiss" onclick="rvDismiss('${rv.id}');closeModal('rv-detail-modal')">Dismiss</button>
+    <button class="rv-btn rv-btn-import" onclick="rvImport('${rv.id}');closeModal('rv-detail-modal')">Import as Task</button>`;
+  document.getElementById('rv-detail-modal').classList.add('open');
 }
 
 async function rvImport(id) {
@@ -3511,6 +3606,43 @@ async function deleteReplacement(id) {
   showToast('Item removed.');
 }
 
+function openRpDetail(id) {
+  const item = rpData.find(x => x.id === id);
+  if (!item) return;
+  const p = getProp(item.property);
+  const propName = p ? p.name : item.property;
+  const created = new Date(item.created).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+
+  let h = `<div style="margin-bottom:14px">
+    <div style="font-size:.78rem;color:var(--gold);font-weight:600;margin-bottom:4px">${escHtml(propName)}</div>
+    <div style="font-size:.72rem;color:var(--text2)">Added ${created}${item.purchasedAt ? ' · Purchased ' + new Date(item.purchasedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</div>
+  </div>`;
+
+  // Full item text — this is the key part, no truncation
+  h += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:14px;font-size:.88rem;line-height:1.6;white-space:pre-wrap;word-break:break-word">${escHtml(item.item)}</div>`;
+
+  // Notes / source
+  if (item.notes) {
+    h += `<div style="margin-bottom:10px">
+      <div style="font-size:.72rem;color:var(--text2);font-weight:600;margin-bottom:4px">Source / Notes</div>
+      <div style="font-size:.82rem;color:var(--text);line-height:1.5">${escHtml(item.notes)}</div>
+    </div>`;
+  }
+
+  document.getElementById('rp-detail-title').textContent = item.status === 'purchased' ? 'Purchased Item' : 'Replacement Needed';
+  document.getElementById('rp-detail-body').innerHTML = h;
+
+  const purchBtn = document.getElementById('rp-detail-purchase-btn');
+  if (item.status === 'needed') {
+    purchBtn.style.display = '';
+    purchBtn.onclick = async () => { await markPurchased(id); closeModal('rp-detail-modal'); };
+  } else {
+    purchBtn.style.display = 'none';
+  }
+
+  document.getElementById('rp-detail-modal').classList.add('open');
+}
+
 function renderReplacements() {
   const filter = document.getElementById('rp-prop-filter')?.value || 'all';
   const listEl = document.getElementById('rp-list');
@@ -3538,15 +3670,15 @@ function renderReplacements() {
       items.forEach(item => {
         const age = Math.floor((Date.now() - new Date(item.created).getTime()) / 86400000);
         const ageStr = age === 0 ? 'Today' : age === 1 ? '1 day ago' : `${age} days ago`;
-        h += `<div class="rp-card">
-          <div style="flex:1">
-            <div class="rp-card-item" style="font-weight:600;font-size:.9rem;margin-bottom:2px">${escHtml(item.item)}</div>
-            ${item.notes ? `<div style="font-size:.78rem;color:var(--text2)">${escHtml(item.notes)}</div>` : ''}
+        h += `<div class="rp-card" style="cursor:pointer" onclick="openRpDetail('${item.id}')">
+          <div style="flex:1;min-width:0">
+            <div class="rp-card-item" style="font-weight:600;font-size:.9rem;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(item.item)}</div>
+            ${item.notes ? `<div style="font-size:.78rem;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(item.notes)}</div>` : ''}
             <div style="font-size:.72rem;color:var(--text2);margin-top:4px">Added ${ageStr}</div>
           </div>
           <div style="display:flex;gap:6px;flex-shrink:0">
-            <button class="btn rp-btn-done" onclick="markPurchased('${item.id}')" title="Mark purchased">&#10003;</button>
-            <button class="btn rp-btn-del" onclick="deleteReplacement('${item.id}')" title="Remove">&times;</button>
+            <button class="btn rp-btn-done" onclick="event.stopPropagation();markPurchased('${item.id}')" title="Mark purchased">&#10003;</button>
+            <button class="btn rp-btn-del" onclick="event.stopPropagation();deleteReplacement('${item.id}')" title="Remove">&times;</button>
           </div>
         </div>`;
       });
@@ -3565,14 +3697,14 @@ function renderReplacements() {
       const p = getProp(item.property);
       const propName = p ? p.name : item.property;
       const doneDate = item.purchasedAt ? new Date(item.purchasedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
-      h += `<div class="rp-purchased-card">
+      h += `<div class="rp-purchased-card" style="cursor:pointer" onclick="openRpDetail('${item.id}')">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
-          <div style="flex:1">
-            <span class="rp-card-item" style="font-weight:600;font-size:.88rem">${escHtml(item.item)}</span>
+          <div style="flex:1;min-width:0">
+            <span class="rp-card-item" style="font-weight:600;font-size:.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:50%">${escHtml(item.item)}</span>
             <span style="font-size:.78rem;color:var(--text2);margin-left:8px">${escHtml(propName)}</span>
             ${doneDate ? `<span style="font-size:.72rem;color:var(--text2);margin-left:8px">Purchased ${doneDate}</span>` : ''}
           </div>
-          <button class="btn rp-btn-del" onclick="deleteReplacement('${item.id}')" title="Remove" style="opacity:.5">&times;</button>
+          <button class="btn rp-btn-del" onclick="event.stopPropagation();deleteReplacement('${item.id}')" title="Remove" style="opacity:.5">&times;</button>
         </div>
       </div>`;
     });
@@ -3621,6 +3753,7 @@ async function initApp(){
   renderAll();
   hbStartPolling();
   rvFetch(); // fetch guest feedback reviews
+  clFetch(); // pre-load cleaning log in background
 }
 initApp();
 </script>
