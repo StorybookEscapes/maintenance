@@ -453,7 +453,7 @@ textarea{resize:vertical;min-height:76px}
       <button class="nav-btn active" onclick="switchView('tasks',this)">Tasks</button>
       <button class="nav-btn" onclick="switchView('calendar',this)">Calendar</button>
       <button class="nav-btn" onclick="switchView('recurring',this)">Recurring</button>
-      <button class="nav-btn" onclick="switchView('history',this)">Property History</button>
+      <button class="nav-btn" onclick="switchView('history',this)">Service History</button>
       <button class="nav-btn" onclick="switchView('vendors',this)">Vendors</button>
       <button class="nav-btn" onclick="switchView('settings',this)">Settings</button>
     </div>
@@ -2247,62 +2247,47 @@ async function deleteTask(){
 // PROPERTY HISTORY
 function renderHistory(){
   const container=document.getElementById('hist-container');
-  // Find which neighborhood the selected property belongs to
-  const selNbIdx=selProp?NBS.findIndex(nb=>nb.props.includes(selProp)):-1;
-  let html='';
-  NBS.forEach((nb,i)=>{
-    const cards=nb.props.map(pid=>{
-      const p=getProp(pid);if(!p)return'';
-      const pt=tasks.filter(t=>t.property===pid);
-      const open=pt.filter(t=>!['complete','resolved_by_guest'].includes(t.status));
-      const done=pt.filter(t=>['complete','resolved_by_guest'].includes(t.status));
-      const hasU=open.some(t=>t.urgent);
-      return`<div class="pc nb-${nb.cls} ${selProp===pid?'sel':''}" onclick="selPropFn('${pid}')">
-        ${hasU?'<div class="upip"></div>':''}
-        <div class="pc-name">${p.name}</div>
-        <div class="pc-stats">
-          ${open.length?`<div class="pcs ho"><strong>${open.length}</strong> open</div>`:''}
-          <div class="pcs"><strong>${done.length}</strong> completed</div>
-        </div>
-      </div>`;
-    }).join('');
-    html+=`<div class="nb-section"><div class="nb-hdr nb-${nb.cls}-h"><h3>${nb.name}</h3><span class="nb-sub">${nb.sub}</span></div><div class="prop-grid">${cards}</div></div>`;
-    // Insert detail panel right after the neighborhood that contains the selected property
-    if(i===selNbIdx) html+=`<div id="hist-detail"></div>`;
-  });
-  // If no property selected, put the placeholder at the end
-  if(selNbIdx<0) html+=`<div id="hist-detail"><div class="noprop">Select a property above to view its maintenance history.</div></div>`;
-  container.innerHTML=html;
-  if(selProp) renderHistDetail();
-}
-function selPropFn(id){
-  selProp=id;histCat='all';renderHistory();
-  setTimeout(()=>{const el=document.getElementById('hist-detail');if(el)el.scrollIntoView({behavior:'smooth',block:'start'});},100);
-}
-function renderHistDetail(){
-  const el=document.getElementById('hist-detail');if(!el)return;
-  if(!selProp){el.innerHTML='<div class="noprop">Select a property above to view its maintenance history.</div>';return;}
-  const p=getProp(selProp);const nb=getNb(selProp);
-  const pt=tasks.filter(t=>t.property===selProp);
-  const cc={};pt.forEach(t=>{if(t.category)cc[t.category]=(cc[t.category]||0)+1;});
+  // All completed tasks
+  let done=tasks.filter(t=>['complete','resolved_by_guest'].includes(t.status));
+  // Apply property filter
+  if(selProp)done=done.filter(t=>t.property===selProp);
+  // Apply category filter
+  if(histCat!=='all')done=done.filter(t=>t.category===histCat);
+  // Sort newest first
+  done.sort((a,b)=>new Date(b.created)-new Date(a.created));
+  // Build category counts from all completed (before cat filter)
+  const allDone=tasks.filter(t=>['complete','resolved_by_guest'].includes(t.status)&&(selProp?t.property===selProp:true));
+  const cc={};allDone.forEach(t=>{if(t.category)cc[t.category]=(cc[t.category]||0)+1;});
   const uc=Object.entries(cc).sort((a,b)=>b[1]-a[1]);
-  const f=histCat==='all'||histCat==='_completed'||histCat==='_open'?pt:pt.filter(t=>t.category===histCat);
-  f.sort((a,b)=>new Date(b.created)-new Date(a.created));
-  const nbc=nb?`var(--${nb.cls})`:'var(--green)';
-  const completed=pt.filter(t=>['complete','resolved_by_guest'].includes(t.status));
-  const open=pt.filter(t=>!['complete','resolved_by_guest'].includes(t.status));
-  const chips=[`<button class="chip ${histCat==='all'?'active':''}" onclick="setHistCat('all')">All (${pt.length})</button>`,`<button class="chip ${histCat==='_completed'?'active':''}" onclick="setHistCat('_completed')">Completed (${completed.length})</button>`,`<button class="chip ${histCat==='_open'?'active':''}" onclick="setHistCat('_open')">Open (${open.length})</button>`,...uc.map(([c,n])=>`<button class="chip ${histCat===c?'active':''}" onclick="setHistCat('${c}')">${c.replace('_',' ')} (${n})</button>`)].join('');
-  let filtered=f;
-  if(histCat==='_completed')filtered=completed.sort((a,b)=>new Date(b.created)-new Date(a.created));
-  else if(histCat==='_open')filtered=open.sort((a,b)=>new Date(b.created)-new Date(a.created));
-  const list=filtered.length?filtered.map(t=>{
-    const isDone=['complete','resolved_by_guest'].includes(t.status);
-    const dateLabel=isDone&&t.date?`<span>Completed ${t.date}</span>`:t.date?`<span>Scheduled ${t.date}</span>`:'';
-    return`<div class="hi" onclick="openDetail('${t.id}')" style="${isDone?'opacity:.7':''}"><div class="hi-top"><div class="hi-prob">${t.urgent?'<span class="badge b-urgent" style="margin-right:5px">Urgent</span>':''}${t.problem}</div><span class="badge b-${t.status}">${t.status.replace('_',' ')}</span></div><div class="hi-meta">${t.category?`<span>${t.category.replace('_',' ')}</span>`:''} ${t.vendor?`<span>${t.vendor}</span>`:''} ${dateLabel} ${t.guest?`<span>Reported by ${t.guest}</span>`:''} <span>${new Date(t.created).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</span></div></div>`;
-  }).join(''):'<div style="color:var(--text3);font-size:.82rem;padding:16px 0;font-style:italic">No records yet.</div>';
-  el.innerHTML=`<div class="hist-hdr" style="border-left:3px solid ${nbc};padding-left:14px"><div><div class="hist-name" style="color:${nbc}">${p.name}</div><div class="hist-addr">${p.address} &nbsp;|&nbsp; Door: ${p.door}</div></div></div><div class="cat-chips" style="margin-top:11px">${chips}</div><div class="hist-list">${list}</div>`;
+  // Build property dropdown
+  let propOpts='<option value="">All Properties</option>';
+  NBS.forEach(nb=>{
+    let group='';
+    PROPS.filter(p=>nb.props.includes(p.id)).forEach(p=>{
+      const cnt=tasks.filter(t=>t.property===p.id&&['complete','resolved_by_guest'].includes(t.status)).length;
+      if(cnt)group+=`<option value="${p.id}" ${selProp===p.id?'selected':''}>${p.name.split(' - ').pop()} (${cnt})</option>`;
+    });
+    if(group)propOpts+=`<optgroup label="${nb.name}">${group}</optgroup>`;
+  });
+  // Build category chips
+  const chips=[`<button class="chip ${histCat==='all'?'active':''}" onclick="setHistCat('all')">All (${allDone.length})</button>`,...uc.map(([c,n])=>`<button class="chip ${histCat===c?'active':''}" onclick="setHistCat('${c}')">${c.replace('_',' ')} (${n})</button>`)].join('');
+  // Build list
+  const list=done.length?done.map(t=>{
+    const p=getProp(t.property);const nb=getNb(t.property);const nbc=nb?'pl-'+nb.cls:'';
+    const dateLabel=t.date?`<span>Completed ${t.date}</span>`:'';
+    return`<div class="hi" onclick="openDetail('${t.id}')"><div class="hi-top"><div class="hi-prob">${t.problem}</div><span class="badge b-${t.status}">${t.status.replace('_',' ')}</span></div><div class="hi-meta"><span class="${nbc}" style="font-weight:600">${p?p.name.split(' - ').pop():t.property}</span>${t.category?`<span>${t.category.replace('_',' ')}</span>`:''} ${t.vendor?`<span>${t.vendor}</span>`:''} ${dateLabel} <span>${new Date(t.created).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</span></div></div>`;
+  }).join(''):'<div style="color:var(--text3);font-size:.82rem;padding:16px 0;font-style:italic">No completed tasks found.</div>';
+  container.innerHTML=`
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+      <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--green);font-weight:600;margin:0">Service History</h2>
+      <select onchange="selPropFn(this.value)" style="padding:5px 10px;border-radius:20px;border:1px solid var(--border);background:var(--white);color:var(--text);font-family:inherit;font-size:.76rem;cursor:pointer;margin-left:auto">${propOpts}</select>
+    </div>
+    <div class="cat-chips" style="margin-bottom:14px">${chips}</div>
+    <div style="font-size:.72rem;color:var(--text3);margin-bottom:10px">${done.length} completed task${done.length!==1?'s':''}</div>
+    <div class="hist-list">${list}</div>`;
 }
-window.setHistCat=cat=>{histCat=cat;renderHistDetail();};
+function selPropFn(id){selProp=id||null;renderHistory();}
+window.setHistCat=cat=>{histCat=cat;renderHistory();};
 
 // VENDORS
 function renderVendors(){
