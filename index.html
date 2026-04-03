@@ -431,6 +431,7 @@ textarea{resize:vertical;min-height:76px}
       <button class="nav-btn" onclick="switchView('recurring',this)">Recurring</button>
       <button class="nav-btn" onclick="switchView('history',this)">Property History</button>
       <button class="nav-btn" onclick="switchView('vendors',this)">Vendors</button>
+      <button class="nav-btn" onclick="switchView('settings',this)">Settings</button>
     </div>
     <div class="hactions">
       <button class="btn btn-g" onclick="openAddTask()">+ New Task</button>
@@ -481,6 +482,28 @@ textarea{resize:vertical;min-height:76px}
         <button class="btn btn-g" onclick="openAddVendor()">+ Add Vendor</button>
       </div>
       <div id="vendor-dir"></div>
+    </div>
+    <div class="view" id="view-settings">
+      <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--green);font-weight:600;margin-bottom:18px">Settings</h2>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px">
+        <h3 style="font-size:.88rem;font-weight:600;color:var(--green);margin-bottom:4px">SMS Message Template</h3>
+        <p style="font-size:.76rem;color:var(--text2);margin-bottom:14px;line-height:1.5">Customize the default text message sent to vendors. Use placeholders below and they'll be replaced with real values when composing a message.</p>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+          <span class="badge" style="background:var(--green-light);color:var(--green);border:1px solid var(--border);font-size:.68rem;cursor:pointer" onclick="insertPlaceholder('sms-template','{vendor_first_name}')">{vendor_first_name}</span>
+          <span class="badge" style="background:var(--green-light);color:var(--green);border:1px solid var(--border);font-size:.68rem;cursor:pointer" onclick="insertPlaceholder('sms-template','{property_name}')">{property_name}</span>
+          <span class="badge" style="background:var(--green-light);color:var(--green);border:1px solid var(--border);font-size:.68rem;cursor:pointer" onclick="insertPlaceholder('sms-template','{address}')">{address}</span>
+          <span class="badge" style="background:var(--green-light);color:var(--green);border:1px solid var(--border);font-size:.68rem;cursor:pointer" onclick="insertPlaceholder('sms-template','{door_code}')">{door_code}</span>
+          <span class="badge" style="background:var(--green-light);color:var(--green);border:1px solid var(--border);font-size:.68rem;cursor:pointer" onclick="insertPlaceholder('sms-template','{issue}')">{issue}</span>
+          <span class="badge" style="background:var(--green-light);color:var(--green);border:1px solid var(--border);font-size:.68rem;cursor:pointer" onclick="insertPlaceholder('sms-template','{guest_name}')">{guest_name}</span>
+          <span class="badge" style="background:var(--green-light);color:var(--green);border:1px solid var(--border);font-size:.68rem;cursor:pointer" onclick="insertPlaceholder('sms-template','{date_info}')">{date_info}</span>
+          <span class="badge" style="background:var(--green-light);color:var(--green);border:1px solid var(--border);font-size:.68rem;cursor:pointer" onclick="insertPlaceholder('sms-template','{urgent_notice}')">{urgent_notice}</span>
+        </div>
+        <textarea id="sms-template" style="width:100%;min-height:180px;font-family:'DM Sans',sans-serif;font-size:.82rem;padding:12px;border:1px solid var(--border);border-radius:8px;resize:vertical;line-height:1.6"></textarea>
+        <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
+          <button class="btn" onclick="resetSmsTemplate()">Reset to Default</button>
+          <button class="btn btn-g" onclick="saveSmsTemplate()">Save Template</button>
+        </div>
+      </div>
     </div>
   </main>
 </div>
@@ -1816,6 +1839,44 @@ function getNextCheckout(pid){
   const upcoming=evs.filter(e=>e.end>today).sort((a,b)=>a.end-b.end);
   return upcoming.length?upcoming[0].end:null;
 }
+// SMS TEMPLATE
+const DEFAULT_SMS_TEMPLATE=`Hi {vendor_first_name}, we have a maintenance issue at one of our properties.{urgent_notice}
+
+Property: {property_name}
+Address: {address}
+Door Code: {door_code}
+
+Issue: {issue}{guest_name}
+{date_info}
+
+Thank you — Chip Burns, Storybook Escapes`;
+
+let smsTemplate=DEFAULT_SMS_TEMPLATE;
+
+async function loadSmsTemplate(){
+  try{const r=await S.get('se_sms');if(r&&r.value)smsTemplate=r.value;}catch(e){}
+  const el=document.getElementById('sms-template');
+  if(el)el.value=smsTemplate;
+}
+async function saveSmsTemplate(){
+  const el=document.getElementById('sms-template');if(!el)return;
+  smsTemplate=el.value;
+  await save('se_sms',smsTemplate);
+  showToast('SMS template saved.');
+}
+function resetSmsTemplate(){
+  smsTemplate=DEFAULT_SMS_TEMPLATE;
+  const el=document.getElementById('sms-template');if(el)el.value=smsTemplate;
+  showToast('Template reset to default. Click Save to apply.');
+}
+function insertPlaceholder(textareaId,placeholder){
+  const ta=document.getElementById(textareaId);if(!ta)return;
+  const start=ta.selectionStart,end=ta.selectionEnd;
+  ta.value=ta.value.substring(0,start)+placeholder+ta.value.substring(end);
+  ta.selectionStart=ta.selectionEnd=start+placeholder.length;
+  ta.focus();
+}
+
 function buildSMS(t,p,v){
   const pn=p?p.name:t.property,addr=p?p.address:'',door=p?p.door:'';
   const urg=t.urgent?'\n\nThis is URGENT — same-day response needed if possible.':'';
@@ -1826,7 +1887,15 @@ function buildSMS(t,p,v){
     if(nco){const fmt=nco.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});ds=`Next available date: ${fmt} (next checkout). Let me know if that day works for you.`;}
     else{ds='Scheduling TBD — please let us know your availability.';}
   }
-  return`Hi ${v.name.split(' ')[0]}, we have a maintenance issue at one of our properties.${urg}\n\nProperty: ${pn}\nAddress: ${addr}\nDoor Code: ${door}\n\nIssue: ${t.problem}${t.guest?`\nReported by guest: ${t.guest}`:''}\n${ds}\n\nThank you — Chip Burns, Storybook Escapes`;
+  return smsTemplate
+    .replace(/\{vendor_first_name\}/g, v.name.split(' ')[0])
+    .replace(/\{property_name\}/g, pn)
+    .replace(/\{address\}/g, addr)
+    .replace(/\{door_code\}/g, door)
+    .replace(/\{issue\}/g, t.problem||'')
+    .replace(/\{guest_name\}/g, t.guest?`\nReported by guest: ${t.guest}`:'')
+    .replace(/\{date_info\}/g, ds)
+    .replace(/\{urgent_notice\}/g, urg);
 }
 /* Get all active tasks for a vendor on a specific date */
 function getVendorDayTasks(vendorName,date){
@@ -2128,7 +2197,8 @@ async function deleteVendor(){
 }
 
 function closeModal(id){document.getElementById(id).classList.remove('open');}
-document.querySelectorAll('.mo').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
+// Disabled backdrop-click-to-close — modals only close via X button or Close button
+// This prevents accidental closure when selecting text and dragging outside the modal
 let _toastTimer=null;
 function showToast(msg,cls='',undoFn=null){
   clearTimeout(_toastTimer);
@@ -2423,6 +2493,7 @@ async function hbTest() {
 // START
 async function initApp(){
   await load();
+  await loadSmsTemplate();
   populatePropSel('f-property');
   populatePropMulti('r-props');
   renderAll();
