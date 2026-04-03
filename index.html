@@ -410,6 +410,30 @@ textarea{resize:vertical;min-height:76px}
 .rv-btn-import:hover{background:#9a7a30}
 .rv-btn-dismiss{background:transparent;color:#b0a070;border-color:rgba(180,150,60,.3)}
 .rv-btn-dismiss:hover{color:#e8d080;border-color:#d4a840}
+
+/* ── Cleaning Log ── */
+.cl-summary-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:24px}
+.cl-prop-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;cursor:pointer;transition:border-color .15s}
+.cl-prop-card:hover{border-color:var(--gold)}
+.cl-prop-card.has-issues{border-left:3px solid #cc6644}
+.cl-prop-name{font-size:.82rem;font-weight:700;color:var(--green);margin-bottom:4px}
+.cl-prop-stat{font-size:.72rem;color:var(--text2)}
+.cl-prop-stat .bad{color:#cc6644;font-weight:700}
+.cl-entry{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:8px}
+.cl-entry-hdr{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:6px}
+.cl-entry-date{font-size:.78rem;font-weight:700;color:var(--text)}
+.cl-entry-guest{font-size:.74rem;color:var(--text2)}
+.cl-entry-rating{font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:12px}
+.cl-entry-rating.good{background:rgba(80,160,80,.15);color:#6ab06a}
+.cl-entry-rating.ok{background:rgba(200,180,60,.15);color:#c0a830}
+.cl-entry-rating.bad{background:rgba(200,80,60,.15);color:#cc6644}
+.cl-entry-text{font-size:.82rem;color:var(--text);line-height:1.5;margin-top:4px}
+.cl-entry-source{font-size:.68rem;color:var(--text2);margin-top:4px;font-style:italic}
+.cl-empty{text-align:center;padding:30px;color:var(--text2);font-size:.88rem}
+.cl-trend{display:inline-flex;align-items:center;gap:4px;font-size:.68rem;padding:2px 7px;border-radius:10px;margin-left:6px}
+.cl-trend.improving{background:rgba(80,160,80,.12);color:#6ab06a}
+.cl-trend.declining{background:rgba(200,80,60,.12);color:#cc6644}
+.cl-trend.stable{background:rgba(200,180,60,.12);color:#c0a830}
 .hb-pulse{width:8px;height:8px;background:#5ba3e0;border-radius:50%;animation:pulse 1.5s infinite;display:inline-block}
 
 .toast{position:fixed;bottom:22px;right:22px;background:var(--green);color:#fff;border-radius:var(--radius);padding:10px 16px;font-size:.82rem;z-index:999;transform:translateY(80px);opacity:0;transition:all .3s;pointer-events:none;box-shadow:var(--shadow-md);display:flex;align-items:center;gap:10px}
@@ -479,6 +503,7 @@ textarea{resize:vertical;min-height:76px}
       <button class="nav-btn" onclick="switchView('recurring',this)">Recurring</button>
       <button class="nav-btn" onclick="switchView('history',this)">Service History</button>
       <button class="nav-btn" onclick="switchView('vendors',this)">Vendors</button>
+      <button class="nav-btn" onclick="switchView('cleaning',this)">Cleaning Log</button>
       <button class="nav-btn" onclick="switchView('settings',this)">Settings</button>
     </div>
     <div class="hactions">
@@ -523,6 +548,18 @@ textarea{resize:vertical;min-height:76px}
 
     <div class="view" id="view-history">
       <div id="hist-container"></div>
+    </div>
+
+    <div class="view" id="view-cleaning">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+        <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--green);font-weight:600">Cleaning Log</h2>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="cl-prop-filter" onchange="renderCleaningLog()" style="padding:6px 10px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.82rem;font-family:inherit"></select>
+          <span id="cl-status" style="font-size:.72rem;color:var(--text2)"></span>
+        </div>
+      </div>
+      <div id="cl-summary"></div>
+      <div id="cl-log"></div>
     </div>
 
     <div class="view" id="view-vendors">
@@ -1051,6 +1088,8 @@ function switchView(name,btn){
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('view-'+name).classList.add('active');
   btn.classList.add('active');
+  // Lazy-load cleaning log on first visit
+  if (name === 'cleaning' && !clLoaded) clFetch();
 }
 
 function populatePropSel(id){
@@ -2699,29 +2738,275 @@ async function hbTest() {
   } catch (e) { console.error('Test failed:', e); }
 }
 
+// ── Cleaning Log ───────────────────────────────────────────────
+let clData = []; // all cleaning-relevant review entries
+let clLoaded = false;
+
+// Keywords that indicate cleaning issues specifically
+const CL_KEYWORDS = /\b(dirty|filthy|grime|grimy|stain|stained|smell|odor|smelly|mold|mildew|cobweb|cobwebs|dust|dusty|hair|hairs|trash|garbage|gross|disgusting|unsanitary|unclean|not clean|wasn.t clean|wasn.t cleaned|mouse feces|droppings|feces|poop|urine|sewage)\b/i;
+
+function clIsCleaningRelevant(review) {
+  const feedback = review.private?.feedback || '';
+  const ratingComments = (review.private?.detailed_ratings || []).filter(r => r.comment).map(r => r.comment).join(' ');
+  const publicReview = review.public?.review || '';
+  const allText = (feedback + ' ' + ratingComments + ' ' + publicReview).trim();
+
+  // 1. Cleanliness rating ≤ 3 (anything below 4 is a flag)
+  const cleanRating = (review.private?.detailed_ratings || []).find(r => r.type === 'cleanliness');
+  if (cleanRating && cleanRating.rating > 0 && cleanRating.rating <= 3) return true;
+
+  // 2. Cleaning keywords in private feedback or rating comments
+  if (feedback && CL_KEYWORDS.test(feedback)) return true;
+  if (ratingComments && CL_KEYWORDS.test(ratingComments)) return true;
+
+  // 3. Cleaning keywords in public review (guests sometimes only leave public feedback)
+  if (publicReview && CL_KEYWORDS.test(publicReview)) return true;
+
+  return false;
+}
+
+function clBuildEntry(review) {
+  const cleanRating = (review.private?.detailed_ratings || []).find(r => r.type === 'cleanliness');
+  const feedback = review.private?.feedback || '';
+  const ratingComments = (review.private?.detailed_ratings || []).filter(r => r.comment);
+  const publicReview = review.public?.review || '';
+
+  // Build the relevant text
+  let text = '';
+  // Private feedback with cleaning keywords gets priority
+  if (feedback && CL_KEYWORDS.test(feedback)) {
+    text = feedback;
+  } else if (ratingComments.some(r => CL_KEYWORDS.test(r.comment))) {
+    text = ratingComments.filter(r => CL_KEYWORDS.test(r.comment)).map(r => r.type + ': ' + r.comment).join('; ');
+  } else if (feedback) {
+    text = feedback;
+  } else if (publicReview && CL_KEYWORDS.test(publicReview)) {
+    text = publicReview;
+  } else {
+    text = 'Low cleanliness rating (no specific feedback provided)';
+  }
+
+  return {
+    id: review.id,
+    pid: review._pid,
+    guest: [review.guest?.first_name, review.guest?.last_name].filter(Boolean).join(' ') || 'Anonymous',
+    reviewedAt: review.reviewed_at,
+    checkIn: review.reservation?.check_in || '',
+    checkOut: review.reservation?.check_out || '',
+    cleanlinessRating: cleanRating?.rating ?? null,
+    overallRating: review.public?.rating || 0,
+    text: text,
+    source: feedback ? 'private feedback' : 'public review',
+  };
+}
+
+async function clFetch() {
+  const el = document.getElementById('cl-status');
+  if (el) el.textContent = 'Loading reviews...';
+  const allEntries = [];
+  const entries = Object.entries(HOSPITABLE_IDS);
+  const batchSize = 4;
+
+  for (let i = 0; i < entries.length; i += batchSize) {
+    const batch = entries.slice(i, i + batchSize);
+    if (el) el.textContent = `Loading reviews... (${Math.min(i + batchSize, entries.length)}/${entries.length} properties)`;
+    const results = await Promise.allSettled(
+      batch.map(async ([pid, uuid]) => {
+        try {
+          // Fetch all reviews (no date filter — full history). Paginate if needed.
+          let page = 1;
+          let allReviews = [];
+          while (page <= 10) { // safety cap at 10 pages (~500 reviews per property)
+            const r = await fetch(`${PROXY_BASE}/api/hospitable?action=reviews&pid=${uuid}&start=2020-01-01&end=${new Date().toISOString().slice(0,10)}&page=${page}`, { signal: AbortSignal.timeout(15000) });
+            if (!r.ok) break;
+            const data = await r.json();
+            const reviews = data.data || [];
+            allReviews.push(...reviews.map(rv => ({ ...rv, _pid: pid })));
+            // Check if there are more pages
+            if (!data.meta || page >= data.meta.last_page) break;
+            page++;
+          }
+          return allReviews;
+        } catch (e) { return []; }
+      })
+    );
+    for (const r of results) {
+      if (r.status === 'fulfilled' && r.value.length) {
+        for (const rv of r.value) {
+          if (clIsCleaningRelevant(rv)) allEntries.push(clBuildEntry(rv));
+        }
+      }
+    }
+  }
+
+  // Sort by review date, newest first
+  allEntries.sort((a, b) => new Date(b.reviewedAt) - new Date(a.reviewedAt));
+  clData = allEntries;
+  clLoaded = true;
+  if (el) el.textContent = `${clData.length} cleaning flag${clData.length !== 1 ? 's' : ''} found`;
+  populateClPropFilter();
+  renderCleaningLog();
+}
+
+function populateClPropFilter() {
+  const sel = document.getElementById('cl-prop-filter');
+  if (!sel) return;
+  sel.innerHTML = '<option value="all">All Properties</option>';
+  NBS.forEach(nb => {
+    const og = document.createElement('optgroup');
+    og.label = nb.name;
+    nb.props.forEach(pid => {
+      const p = getProp(pid);
+      if (!p) return;
+      const count = clData.filter(e => e.pid === pid).length;
+      const o = document.createElement('option');
+      o.value = pid;
+      o.textContent = p.name + (count ? ` (${count})` : '');
+      og.appendChild(o);
+    });
+    sel.appendChild(og);
+  });
+}
+
+function renderCleaningLog() {
+  const filter = document.getElementById('cl-prop-filter')?.value || 'all';
+  const summaryEl = document.getElementById('cl-summary');
+  const logEl = document.getElementById('cl-log');
+
+  if (!clLoaded) {
+    logEl.innerHTML = '<div class="cl-empty">Loading cleaning data from Hospitable...</div>';
+    summaryEl.innerHTML = '';
+    return;
+  }
+
+  if (!clData.length) {
+    logEl.innerHTML = '<div class="cl-empty">No cleaning issues found across any properties. Your cleaning team is doing great!</div>';
+    summaryEl.innerHTML = '';
+    return;
+  }
+
+  // Summary cards (only show when viewing all properties)
+  if (filter === 'all') {
+    let sumH = '<div class="cl-summary-grid">';
+    // Build per-property stats
+    const propStats = {};
+    clData.forEach(e => {
+      if (!propStats[e.pid]) propStats[e.pid] = { total: 0, recent: 0, avgRating: [] };
+      propStats[e.pid].total++;
+      if (new Date(e.reviewedAt) > new Date(Date.now() - 90 * 86400000)) propStats[e.pid].recent++;
+      if (e.cleanlinessRating !== null) propStats[e.pid].avgRating.push(e.cleanlinessRating);
+    });
+
+    // Sort properties: most issues first
+    const sortedPids = Object.keys(propStats).sort((a, b) => propStats[b].total - propStats[a].total);
+    for (const pid of sortedPids) {
+      const p = getProp(pid);
+      if (!p) continue;
+      const s = propStats[pid];
+      const avg = s.avgRating.length ? (s.avgRating.reduce((a, b) => a + b, 0) / s.avgRating.length).toFixed(1) : '—';
+      // Trend: compare last 90 days vs. prior 90 days
+      const now = Date.now();
+      const recentEntries = clData.filter(e => e.pid === pid && new Date(e.reviewedAt) > new Date(now - 90 * 86400000)).length;
+      const priorEntries = clData.filter(e => e.pid === pid && new Date(e.reviewedAt) <= new Date(now - 90 * 86400000) && new Date(e.reviewedAt) > new Date(now - 180 * 86400000)).length;
+      let trend = '';
+      if (recentEntries < priorEntries) trend = '<span class="cl-trend improving">↓ improving</span>';
+      else if (recentEntries > priorEntries) trend = '<span class="cl-trend declining">↑ worsening</span>';
+      else if (s.total > 1) trend = '<span class="cl-trend stable">— stable</span>';
+
+      sumH += `<div class="cl-prop-card${s.total > 0 ? ' has-issues' : ''}" onclick="document.getElementById('cl-prop-filter').value='${pid}';renderCleaningLog()">
+        <div class="cl-prop-name">${escHtml(p.name)}</div>
+        <div class="cl-prop-stat"><span class="bad">${s.total} flag${s.total !== 1 ? 's' : ''}</span> total · ${s.recent} in last 90 days · avg cleanliness: ${avg}/5 ${trend}</div>
+      </div>`;
+    }
+    sumH += '</div>';
+    summaryEl.innerHTML = sumH;
+  } else {
+    // Show stats header for selected property
+    const p = getProp(filter);
+    const entries = clData.filter(e => e.pid === filter);
+    const avgRating = entries.filter(e => e.cleanlinessRating !== null);
+    const avg = avgRating.length ? (avgRating.reduce((a, b) => a + b.cleanlinessRating, 0) / avgRating.length).toFixed(1) : '—';
+    summaryEl.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px">
+      <div style="font-size:.82rem;font-weight:700;color:var(--green)">${escHtml(p?.name || filter)}</div>
+      <div style="font-size:.74rem;color:var(--text2);margin-top:4px">${entries.length} cleaning flag${entries.length !== 1 ? 's' : ''} · Average cleanliness rating: ${avg}/5</div>
+      <div style="margin-top:6px"><button class="rv-btn rv-btn-dismiss" style="font-size:.7rem" onclick="document.getElementById('cl-prop-filter').value='all';renderCleaningLog()">← Back to all properties</button></div>
+    </div>`;
+  }
+
+  // Log entries
+  const filtered = filter === 'all' ? clData : clData.filter(e => e.pid === filter);
+  if (!filtered.length) {
+    logEl.innerHTML = '<div class="cl-empty">No cleaning flags for this property.</div>';
+    return;
+  }
+
+  let h = '';
+  filtered.forEach(e => {
+    const prop = getProp(e.pid);
+    const dateStr = new Date(e.reviewedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    const stayStr = e.checkIn ? `${new Date(e.checkIn).toLocaleDateString('en-US', {month:'short',day:'numeric'})} – ${new Date(e.checkOut).toLocaleDateString('en-US', {month:'short',day:'numeric'})}` : '';
+    let ratingClass = 'good';
+    if (e.cleanlinessRating !== null) {
+      if (e.cleanlinessRating <= 2) ratingClass = 'bad';
+      else if (e.cleanlinessRating <= 3) ratingClass = 'ok';
+    }
+    h += `<div class="cl-entry">
+      <div class="cl-entry-hdr">
+        <div>
+          <span class="cl-entry-date">${dateStr}</span>
+          ${filter === 'all' ? `<span style="font-size:.74rem;color:var(--gold);margin-left:8px;font-weight:600">${escHtml(prop?.name || e.pid)}</span>` : ''}
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          ${e.cleanlinessRating !== null ? `<span class="cl-entry-rating ${ratingClass}">Cleanliness: ${e.cleanlinessRating}/5</span>` : ''}
+          ${e.overallRating ? `<span style="font-size:.7rem;color:var(--text2)">Overall: ${'★'.repeat(e.overallRating)}${'☆'.repeat(5 - e.overallRating)}</span>` : ''}
+        </div>
+      </div>
+      <div class="cl-entry-text">${escHtml(e.text.length > 500 ? e.text.slice(0, 500) + '...' : e.text)}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+        <span class="cl-entry-guest">Guest: ${escHtml(e.guest)}${stayStr ? ' · Stay: ' + stayStr : ''}</span>
+        <span class="cl-entry-source">Source: ${e.source}</span>
+      </div>
+    </div>`;
+  });
+  logEl.innerHTML = h;
+}
+
 // ── Guest Feedback (Review Import) ─────────────────────────────
 let rvItems = []; // filtered, maintenance-relevant reviews
 let rvDismissed = JSON.parse(localStorage.getItem('se_rv_dismissed') || '[]');
 
-// Keywords/phrases that suggest maintenance relevance in private feedback
-const RV_MAINT_KEYWORDS = /\b(broke|broken|leak|leaking|dirty|smell|odor|stain|mold|mildew|cobweb|pest|mouse|mice|rat|roach|bug|ant|spider|critter|rodent|not work|doesn.t work|didn.t work|stopped work|won.t work|replace|repair|fix|crack|damage|worn|rust|clog|drain|faucet|toilet|shower|hot water|water heater|hvac|heat|heater|ac |a\/c|air condition|furnace|fireplace|pots|pans|cookware|towel|linens|sheets|mattress|pillow|appliance|dishwasher|washer|dryer|refrigerator|fridge|stove|oven|microwave|wifi|wi-fi|internet|remote|tv|lock|door|window|screen|deck|railing|porch|gutter|roof|sewage|septic|plumb|noise|squeak|wobble|loose)\b/i;
+// Phrases that indicate actionable maintenance, cleaning, or repair issues
+// Deliberately narrow: must suggest something is BROKEN, DIRTY, INFESTED, or MALFUNCTIONING
+const RV_MAINT_KEYWORDS = /\b(broke|broken|leak|leaking|leaks|dirty|filthy|smell|odor|stain|stained|mold|mildew|cobweb|cobwebs|mouse|mice|rat|roach|cockroach|ant infestation|spider|critter|rodent|mouse feces|droppings|not work|doesn.t work|didn.t work|stopped work|won.t work|isn.t work|wasn.t work|needs? (to be )?(fix|replace|repair|clean)|broke down|out of order|clog|clogged|backed up|overflow|rusted|rusty|rotting|rotten|wobbly|wobbles|peeling|cracked|crack in)\b/i;
 
-// Check if a review has maintenance-relevant content
+// Second-pass phrases: only match if they appear in a NEGATIVE context (near a problem indicator)
+const RV_EQUIP_KEYWORDS = /\b(faucet|toilet|shower|hot water|water heater|hvac|furnace|fireplace|a\/c|air condition|dishwasher|washer|dryer|refrigerator|fridge|stove|oven|microwave|hot tub|jacuzzi|tub jets?|pots|pans|cookware|sewage|septic|plumbing|railing|gutter|roof)\b/i;
+const RV_PROBLEM_CONTEXT = /\b(problem|issue|broke|broken|not work|doesn.t|didn.t|won.t|isn.t|wasn.t|poor|bad|cold|weak|low|no |lack|missing|need|replace|old|worn|dated|gross|disgusting|terrible|horrible|awful|disappoint|complain|unfortunately|however|only complaint|only issue|only problem|downside|negative|could improve|suggest|recommend (new|better|replacing|fixing))\b/i;
+
+// Check if a review has actionable maintenance content (NOT cleaning-only)
+// Cleaning-only issues go to the Cleaning Log tab, not here
 function rvIsMaintRelevant(review) {
-  // 1. Private feedback text contains maintenance keywords
-  if (review.private?.feedback && RV_MAINT_KEYWORDS.test(review.private.feedback)) return true;
-  // 2. Any detailed_rating comment with maintenance keywords
-  if (review.private?.detailed_ratings) {
-    for (const r of review.private.detailed_ratings) {
-      if (r.comment && RV_MAINT_KEYWORDS.test(r.comment)) return true;
-    }
-  }
-  // 3. Any sub-rating ≤ 3 (for cleanliness, accuracy, or value — signals an issue)
-  if (review.private?.detailed_ratings) {
-    for (const r of review.private.detailed_ratings) {
-      if (['cleanliness','accuracy','value'].includes(r.type) && r.rating > 0 && r.rating <= 3) return true;
-    }
-  }
+  const feedback = review.private?.feedback || '';
+  const ratingComments = (review.private?.detailed_ratings || []).filter(r => r.comment).map(r => r.comment).join(' ');
+  const allPrivateText = (feedback + ' ' + ratingComments).trim();
+
+  // Skip reviews with no private feedback text AND no rating comments
+  if (!allPrivateText) return false;
+
+  // Skip if it's ONLY a cleaning issue (those go to Cleaning Log)
+  const isCleaningOnly = CL_KEYWORDS.test(allPrivateText) && !RV_EQUIP_KEYWORDS.test(allPrivateText);
+  if (isCleaningOnly) return false;
+
+  // 1. Direct maintenance keywords (leak, broken, pests, etc.)
+  if (RV_MAINT_KEYWORDS.test(allPrivateText)) return true;
+
+  // 2. Equipment mentioned + negative context (e.g., "hot water" + "didn't last")
+  if (RV_EQUIP_KEYWORDS.test(allPrivateText) && RV_PROBLEM_CONTEXT.test(allPrivateText)) return true;
+
+  // 3. Cleanliness rating ≤ 2 with any private text (they left feedback AND rated cleanliness poorly)
+  const cleanRating = (review.private?.detailed_ratings || []).find(r => r.type === 'cleanliness');
+  if (cleanRating && cleanRating.rating > 0 && cleanRating.rating <= 2) return true;
+
   return false;
 }
 
