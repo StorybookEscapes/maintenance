@@ -1125,9 +1125,33 @@ async function fetchIcal(pid){
   if(icalCache[pid]&&icalCache[pid]!=='error')return icalCache[pid];
   const hospId=HOSPITABLE_IDS[pid];
   if(!hospId){console.warn(`No Hospitable ID for property "${pid}"`);return[];}
-  const url=`${PROXY_BASE}/api/hospitable?action=calendar&pid=${hospId}`;
-  console.log(`Fetching calendar for ${pid} (hospitable id: ${hospId.slice(0,8)}...)`);
+  // Try reservations endpoint first (gives individual bookings with separate check-in/out dates)
+  // Fall back to calendar endpoint if reservations fails
+  const pd=s=>{const m=(s||'').match(/(\d{4})-(\d{2})-(\d{2})/);return m?new Date(+m[1],+m[2]-1,+m[3],12,0,0):null;};
   try{
+    const resUrl=`${PROXY_BASE}/api/hospitable?action=reservations&pid=${hospId}`;
+    console.log(`Fetching reservations for ${pid} (hospitable id: ${hospId.slice(0,8)}...)`);
+    const r=await fetch(resUrl,{signal:AbortSignal.timeout(15000)});
+    if(r.ok){
+      const json=await r.json();
+      if(json.data&&Array.isArray(json.data)&&json.data.length>0){
+        const evs=json.data
+          .filter(rv=>rv.arrival_date&&rv.departure_date)
+          .map(rv=>({
+            start:pd(rv.arrival_date),
+            end:pd(rv.departure_date),
+            summary:rv.guest_name||rv.guest?.name||'Guest'
+          }))
+          .filter(ev=>ev.start&&ev.end);
+        console.log(`Loaded ${pid}: ${evs.length} individual reservations via API`);
+        icalCache[pid]=evs;return evs;
+      }
+    }
+  }catch(e){console.warn(`Reservations endpoint failed for ${pid}, trying calendar:`,e.message);}
+  // Fallback to calendar endpoint
+  try{
+    const url=`${PROXY_BASE}/api/hospitable?action=calendar&pid=${hospId}`;
+    console.log(`Fetching calendar for ${pid} (fallback)`);
     const r=await fetch(url,{signal:AbortSignal.timeout(15000)});
     if(!r.ok){
       const detail=await r.text().catch(()=>'');
@@ -1136,7 +1160,7 @@ async function fetchIcal(pid){
     }
     const json=await r.json();
     const evs=adaptCalendar(json);
-    console.log(`Loaded ${pid}: ${evs.length} reservation blocks via API`);
+    console.log(`Loaded ${pid}: ${evs.length} reservation blocks via calendar fallback`);
     icalCache[pid]=evs;return evs;
   }catch(e){
     console.error(`Hospitable API failed for ${pid}: ${e.message}`);
