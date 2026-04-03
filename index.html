@@ -386,6 +386,30 @@ textarea{resize:vertical;min-height:76px}
 .hb-raw{font-size:.7rem;color:#7a98b0;background:rgba(0,0,0,.2);border-radius:6px;padding:8px 10px;margin-top:7px;font-family:monospace;white-space:pre-wrap;max-height:160px;overflow-y:auto;display:none;border:1px solid rgba(90,150,210,.15)}
 .hb-raw.show{display:block}
 .hb-empty{text-align:center;padding:18px;color:#5a7a90;font-size:.82rem}
+
+/* ── Guest Feedback (Review Import) ── */
+.rv-banner{background:linear-gradient(135deg,#2a2418 0%,#3a2e1a 100%);border:1px solid #7a6530;border-radius:var(--radius);padding:14px 18px;margin-bottom:16px;box-shadow:var(--shadow-md)}
+.rv-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px}
+.rv-title{font-size:.72rem;text-transform:uppercase;letter-spacing:1.5px;color:#d4a840;font-weight:700;display:flex;align-items:center;gap:8px}
+.rv-title svg{width:16px;height:16px;fill:#d4a840;flex-shrink:0}
+.rv-count{font-size:.68rem;background:#5a4a20;color:#e8d080;border-radius:20px;padding:2px 9px;font-weight:700}
+.rv-item{background:rgba(255,255,255,.06);border:1px solid rgba(180,150,60,.25);border-radius:8px;padding:11px 14px;margin-bottom:6px;transition:border-color .15s}
+.rv-item:hover{border-color:#d4a840}
+.rv-item-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.rv-item-prop{font-size:.69rem;text-transform:uppercase;letter-spacing:1.2px;color:#d4a840;font-weight:700;margin-bottom:3px}
+.rv-item-prob{font-size:.87rem;font-weight:500;color:#e8dcc0;line-height:1.4}
+.rv-item-meta{display:flex;gap:12px;margin-top:6px;flex-wrap:wrap}
+.rv-item-meta span{font-size:.69rem;color:#b0a070}
+.rv-item-snippet{font-size:.76rem;color:#c0b080;background:rgba(0,0,0,.15);border-radius:6px;padding:7px 10px;margin-top:7px;line-height:1.4;font-style:italic;border-left:2px solid #8a7030}
+.rv-item-ratings{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap}
+.rv-rating{font-size:.65rem;color:#b0a070;background:rgba(180,150,60,.12);border-radius:4px;padding:2px 6px}
+.rv-rating.low{color:#e06050;background:rgba(224,96,80,.12);font-weight:700}
+.rv-item-btns{display:flex;gap:6px;flex-shrink:0;align-items:flex-start}
+.rv-btn{padding:5px 11px;border-radius:7px;font-size:.73rem;font-family:inherit;font-weight:600;cursor:pointer;border:1px solid;transition:all .15s;white-space:nowrap}
+.rv-btn-import{background:#7a6020;color:#fff;border-color:#9a7a30}
+.rv-btn-import:hover{background:#9a7a30}
+.rv-btn-dismiss{background:transparent;color:#b0a070;border-color:rgba(180,150,60,.3)}
+.rv-btn-dismiss:hover{color:#e8d080;border-color:#d4a840}
 .hb-pulse{width:8px;height:8px;background:#5ba3e0;border-radius:50%;animation:pulse 1.5s infinite;display:inline-block}
 
 .toast{position:fixed;bottom:22px;right:22px;background:var(--green);color:#fff;border-radius:var(--radius);padding:10px 16px;font-size:.82rem;z-index:999;transform:translateY(80px);opacity:0;transition:all .3s;pointer-events:none;box-shadow:var(--shadow-md);display:flex;align-items:center;gap:10px}
@@ -464,6 +488,7 @@ textarea{resize:vertical;min-height:76px}
   <main>
     <div class="view active" id="view-tasks">
       <div id="hb-wrap"></div>
+      <div id="rv-wrap"></div>
       <div id="ub-wrap"></div>
       <input type="hidden" id="search-input" value="">
       <div id="task-list"></div>
@@ -2674,6 +2699,231 @@ async function hbTest() {
   } catch (e) { console.error('Test failed:', e); }
 }
 
+// ── Guest Feedback (Review Import) ─────────────────────────────
+let rvItems = []; // filtered, maintenance-relevant reviews
+let rvDismissed = JSON.parse(localStorage.getItem('se_rv_dismissed') || '[]');
+
+// Keywords/phrases that suggest maintenance relevance in private feedback
+const RV_MAINT_KEYWORDS = /\b(broke|broken|leak|leaking|dirty|smell|odor|stain|mold|mildew|cobweb|pest|mouse|mice|rat|roach|bug|ant|spider|critter|rodent|not work|doesn.t work|didn.t work|stopped work|won.t work|replace|repair|fix|crack|damage|worn|rust|clog|drain|faucet|toilet|shower|hot water|water heater|hvac|heat|heater|ac |a\/c|air condition|furnace|fireplace|pots|pans|cookware|towel|linens|sheets|mattress|pillow|appliance|dishwasher|washer|dryer|refrigerator|fridge|stove|oven|microwave|wifi|wi-fi|internet|remote|tv|lock|door|window|screen|deck|railing|porch|gutter|roof|sewage|septic|plumb|noise|squeak|wobble|loose)\b/i;
+
+// Check if a review has maintenance-relevant content
+function rvIsMaintRelevant(review) {
+  // 1. Private feedback text contains maintenance keywords
+  if (review.private?.feedback && RV_MAINT_KEYWORDS.test(review.private.feedback)) return true;
+  // 2. Any detailed_rating comment with maintenance keywords
+  if (review.private?.detailed_ratings) {
+    for (const r of review.private.detailed_ratings) {
+      if (r.comment && RV_MAINT_KEYWORDS.test(r.comment)) return true;
+    }
+  }
+  // 3. Any sub-rating ≤ 3 (for cleanliness, accuracy, or value — signals an issue)
+  if (review.private?.detailed_ratings) {
+    for (const r of review.private.detailed_ratings) {
+      if (['cleanliness','accuracy','value'].includes(r.type) && r.rating > 0 && r.rating <= 3) return true;
+    }
+  }
+  return false;
+}
+
+// Build a problem description from the review
+function rvBuildProblem(review) {
+  // Prefer private feedback, fall back to public review snippet
+  if (review.private?.feedback) return review.private.feedback;
+  // Check for rating comments
+  const comments = (review.private?.detailed_ratings || []).filter(r => r.comment).map(r => `${r.type}: ${r.comment}`);
+  if (comments.length) return comments.join('; ');
+  return review.public?.review || 'Guest feedback item';
+}
+
+// Guess a category from the review text
+function rvGuessCategory(text) {
+  if (!text) return '';
+  const t = text.toLowerCase();
+  if (/hot tub|jacuzzi|tub jet/i.test(t)) return 'hot_tub';
+  if (/plumb|toilet|faucet|leak|drain|shower|water heater|hot water|sewage|septic/i.test(t)) return 'plumbing';
+  if (/hvac|heat|heater|furnace|ac |a\/c|air condition|fireplace/i.test(t)) return 'hvac';
+  if (/electric|light|outlet|switch|wifi|wi-fi|internet|tv|remote/i.test(t)) return 'electrical';
+  if (/pest|mouse|mice|rat|roach|bug|ant|spider|critter|rodent|bed bug/i.test(t)) return 'pest';
+  if (/clean|dirty|stain|mold|mildew|cobweb|smell|odor/i.test(t)) return 'cleaning';
+  if (/deck|railing|porch|door|window|screen|lock|roof|gutter/i.test(t)) return 'handyman';
+  if (/landscap|yard|tree|bush/i.test(t)) return 'landscaping';
+  if (/pot|pan|cookware|dish|appliance|stove|oven|microwave|fridge|refrigerator|washer|dryer|dishwasher|towel|linen|sheet|mattress|pillow/i.test(t)) return 'other';
+  return '';
+}
+
+// Reverse-lookup: Hospitable UUID → our property ID
+function rvUuidToPid(uuid) {
+  for (const [pid, uid] of Object.entries(HOSPITABLE_IDS)) {
+    if (uid === uuid) return pid;
+  }
+  return '';
+}
+
+// Fetch reviews for all properties, filter to maintenance-relevant
+async function rvFetch() {
+  const allReviews = [];
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Fetch reviews for each property (in parallel, batched)
+  const entries = Object.entries(HOSPITABLE_IDS);
+  const batchSize = 4; // limit concurrency
+  for (let i = 0; i < entries.length; i += batchSize) {
+    const batch = entries.slice(i, i + batchSize);
+    const results = await Promise.allSettled(
+      batch.map(async ([pid, uuid]) => {
+        try {
+          const r = await fetch(`${PROXY_BASE}/api/hospitable?action=reviews&pid=${uuid}&start=${thirtyDaysAgo}&end=${today}`, { signal: AbortSignal.timeout(12000) });
+          if (!r.ok) return [];
+          const data = await r.json();
+          return (data.data || []).map(rv => ({ ...rv, _pid: pid }));
+        } catch (e) { return []; }
+      })
+    );
+    for (const r of results) {
+      if (r.status === 'fulfilled' && r.value.length) allReviews.push(...r.value);
+    }
+  }
+
+  // Filter: only maintenance-relevant, not already dismissed, within last 30 days
+  const cutoff = Date.now() - 30 * 86400000;
+  rvItems = allReviews.filter(rv => {
+    if (rvDismissed.includes(rv.id)) return false;
+    if (new Date(rv.reviewed_at).getTime() < cutoff) return false;
+    return rvIsMaintRelevant(rv);
+  });
+
+  // Sort by date, newest first
+  rvItems.sort((a, b) => new Date(b.reviewed_at) - new Date(a.reviewed_at));
+  renderRV();
+}
+
+function renderRV() {
+  const el = document.getElementById('rv-wrap');
+  if (!rvItems.length) { el.innerHTML = ''; return; }
+  let h = `<div class="rv-banner">
+    <div class="rv-hdr">
+      <div class="rv-title">
+        <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>
+        Guest Feedback — Maintenance Items
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="rv-count">${rvItems.length} flagged</span>
+        <button class="rv-btn rv-btn-import" onclick="rvImportAll()">Import All</button>
+        <button class="rv-btn rv-btn-dismiss" onclick="rvDismissAll()">Dismiss All</button>
+      </div>
+    </div>`;
+  rvItems.forEach(rv => {
+    const prop = getProp(rv._pid);
+    const propName = prop ? prop.name : rv._pid;
+    const problem = rvBuildProblem(rv);
+    const guest = [rv.guest?.first_name, rv.guest?.last_name].filter(Boolean).join(' ') || 'Anonymous';
+    const reviewDate = new Date(rv.reviewed_at);
+    const dateStr = reviewDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const stayDates = rv.reservation ? `${new Date(rv.reservation.check_in).toLocaleDateString('en-US', {month:'short',day:'numeric'})} – ${new Date(rv.reservation.check_out).toLocaleDateString('en-US', {month:'short',day:'numeric'})}` : '';
+    // Show low ratings
+    const lowRatings = (rv.private?.detailed_ratings || []).filter(r => r.rating > 0 && r.rating <= 3);
+    const ratingComments = (rv.private?.detailed_ratings || []).filter(r => r.comment);
+
+    h += `<div class="rv-item" id="rv-${rv.id}">
+      <div class="rv-item-top">
+        <div style="flex:1">
+          <div class="rv-item-prop">${escHtml(propName)}</div>
+          <div class="rv-item-prob">${escHtml(problem.length > 300 ? problem.slice(0, 300) + '...' : problem)}</div>
+          <div class="rv-item-meta">
+            <span>Guest: ${escHtml(guest)}</span>
+            <span>Reviewed: ${dateStr}</span>
+            ${stayDates ? `<span>Stay: ${stayDates}</span>` : ''}
+            ${rv.public?.rating ? `<span>Rating: ${'★'.repeat(rv.public.rating)}${'☆'.repeat(5 - rv.public.rating)}</span>` : ''}
+          </div>
+          ${lowRatings.length ? `<div class="rv-item-ratings">${lowRatings.map(r => `<span class="rv-rating low">${r.type}: ${r.rating}/5</span>`).join('')}</div>` : ''}
+          ${ratingComments.length ? `<div class="rv-item-snippet">${ratingComments.map(r => escHtml(r.type + ': ' + r.comment)).join(' · ')}</div>` : ''}
+        </div>
+        <div class="rv-item-btns">
+          <button class="rv-btn rv-btn-import" onclick="rvImport('${rv.id}')">Import</button>
+          <button class="rv-btn rv-btn-dismiss" onclick="rvDismiss('${rv.id}')">Dismiss</button>
+        </div>
+      </div>
+    </div>`;
+  });
+  h += '</div>';
+  el.innerHTML = h;
+}
+
+async function rvImport(id) {
+  const rv = rvItems.find(x => x.id === id);
+  if (!rv) return;
+  const problem = rvBuildProblem(rv);
+  const cat = rvGuessCategory(problem);
+  const guest = [rv.guest?.first_name, rv.guest?.last_name].filter(Boolean).join(' ') || '';
+  const t = {
+    id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
+    property: rv._pid || '',
+    guest: guest,
+    problem: problem.slice(0, 500),
+    category: cat,
+    status: 'open',
+    date: '',
+    vendor: '',
+    urgent: false,
+    recurring: false,
+    notes: [
+      { text: `Imported from guest review (${new Date(rv.reviewed_at).toLocaleDateString()}).${rv.reservation?.code ? ' Reservation: ' + rv.reservation.code : ''} Private feedback from ${guest || 'guest'}.`, type: 'admin', time: new Date().toISOString() }
+    ],
+    vendorNotes: '',
+    created: rv.reviewed_at || new Date().toISOString(),
+  };
+  tasks.unshift(t);
+  await saveTasks();
+  rvDismissed.push(id);
+  localStorage.setItem('se_rv_dismissed', JSON.stringify(rvDismissed));
+  rvItems = rvItems.filter(x => x.id !== id);
+  renderRV(); renderAll();
+  showToast('Task imported from guest feedback.');
+  if (!rv._pid) { detailId = t.id; openDetail(t.id); }
+}
+
+async function rvImportAll() {
+  let n = 0;
+  for (const rv of [...rvItems]) {
+    const problem = rvBuildProblem(rv);
+    const cat = rvGuessCategory(problem);
+    const guest = [rv.guest?.first_name, rv.guest?.last_name].filter(Boolean).join(' ') || '';
+    tasks.unshift({
+      id: Date.now().toString() + Math.random().toString(36).slice(2, 6) + n,
+      property: rv._pid || '', guest: guest,
+      problem: problem.slice(0, 500),
+      category: cat, status: 'open', date: '', vendor: '',
+      urgent: false, recurring: false,
+      notes: [{ text: `Imported from guest review (${new Date(rv.reviewed_at).toLocaleDateString()}).${rv.reservation?.code ? ' Reservation: ' + rv.reservation.code : ''} Private feedback from ${guest || 'guest'}.`, type: 'admin', time: new Date().toISOString() }],
+      vendorNotes: '', created: rv.reviewed_at || new Date().toISOString(),
+    });
+    rvDismissed.push(rv.id);
+    n++;
+  }
+  await saveTasks();
+  localStorage.setItem('se_rv_dismissed', JSON.stringify(rvDismissed));
+  rvItems = [];
+  renderRV(); renderAll();
+  showToast(`${n} task${n > 1 ? 's' : ''} imported from guest feedback.`);
+}
+
+function rvDismiss(id) {
+  rvDismissed.push(id);
+  localStorage.setItem('se_rv_dismissed', JSON.stringify(rvDismissed));
+  rvItems = rvItems.filter(x => x.id !== id);
+  renderRV();
+  showToast('Feedback dismissed.');
+}
+
+function rvDismissAll() {
+  rvItems.forEach(rv => rvDismissed.push(rv.id));
+  localStorage.setItem('se_rv_dismissed', JSON.stringify(rvDismissed));
+  rvItems = [];
+  renderRV();
+  showToast('All feedback dismissed.');
+}
+
 // START
 async function initApp(){
   await load();
@@ -2685,6 +2935,7 @@ async function initApp(){
   populatePropFilter();
   renderAll();
   hbStartPolling();
+  rvFetch(); // fetch guest feedback reviews
 }
 initApp();
 </script>
