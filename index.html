@@ -1308,7 +1308,8 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
     });
 
     // Render reservation bars overlaying this week row
-    const BLEED=COL_PCT*0.22; // bleed ~22% into checkout morning
+    // Each bar runs from MIDPOINT of check-in cell to MIDPOINT of checkout cell.
+    // On turn days both bars meet exactly at the cell midpoint — diagonal clips create a clean V-gap.
     res.forEach(r=>{
       if(r.ci>=wkEnd||r.co<=wkStart) return;
 
@@ -1323,14 +1324,11 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
       const isFirst=r.ci>=wkStart; // actual check-in in this week
       const isLast=r.co<=wkEnd;    // actual checkout in this week
 
-      // Extend bar into checkout morning; pull bar start back for check-in afternoon
-      let left=startCol*COL_PCT;
-      let width=(endCol-startCol)*COL_PCT;
-      if(isLast) width+=BLEED;   // bleed into checkout cell morning
-      if(isFirst){ left-=BLEED; width+=BLEED; } // bleed back into day before check-in afternoon
-      // Clamp to row boundaries
-      if(left<0){ width+=left; left=0; }
-      if(left+width>100) width=100-left;
+      // Midpoint positioning: start at midpoint of check-in cell, end at midpoint of checkout cell
+      let left=isFirst?(startCol+0.5)*COL_PCT:0;
+      let right=isLast?Math.min((endCol+0.5)*COL_PCT,100):100;
+      let width=right-left;
+      if(width<=0) return;
 
       let cls='dp-res-bar';
       if(isFirst) cls+=' dp-bar-start';
