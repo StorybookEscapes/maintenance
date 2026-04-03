@@ -1993,15 +1993,13 @@ async function markComplete(){
   t.status='complete';document.getElementById('d-status').value='complete';
   document.getElementById('complete-btn').style.display='none';
   document.getElementById('resolved-guest-btn').style.display='none';
-  await saveTasks();renderAll();showToast('Task marked complete.');
+  await saveTasks();closeModal('detail-modal');renderAll();showToast('Task marked complete.');
 }
 async function markResolvedByGuest(){
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
-  t.status='resolved_by_guest';document.getElementById('d-status').value='resolved_by_guest';
-  document.getElementById('complete-btn').style.display='none';
-  document.getElementById('resolved-guest-btn').style.display='none';
+  t.status='resolved_by_guest';
   t.notes=t.notes||[];t.notes.push({text:'Marked as resolved by guest.',type:'admin',time:new Date().toISOString()});
-  await saveTasks();renderAll();showToast('Task marked as resolved by guest.');
+  await saveTasks();closeModal('detail-modal');renderAll();showToast('Task marked as resolved by guest.');
 }
 async function deleteTask(){
   const deleted=tasks.find(x=>x.id===detailId);if(!deleted)return;
