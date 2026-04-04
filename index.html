@@ -2006,7 +2006,8 @@ async function genFromRec(id){
 // COMBINE
 function checkCombine(){
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
-  const area=document.getElementById('d-combine');area.innerHTML='';if(!t.date)return;
+  const area=document.getElementById('d-combine');area.innerHTML='';
+  if(!t.date||['complete','resolved_by_guest'].includes(t.status))return;
   const td=new Date(t.date+'T12:00:00');
   const nearby=recurring.filter(r=>{
     if(!r.nextDue)return false;
