@@ -596,7 +596,7 @@ textarea{resize:vertical;min-height:76px}
       <div class="cl-wrap">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px">
           <div>
-            <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--green);font-weight:600;margin:0">Cleaning Log</h2>
+            <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--green);font-weight:600;margin:0">Cleaning</h2>
             <span id="cl-status" style="font-size:.7rem;color:var(--text2)"></span>
           </div>
           <select id="cl-prop-filter" onchange="renderCleaningLog()" style="padding:6px 10px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.82rem;font-family:inherit"></select>
@@ -2946,13 +2946,27 @@ async function clFetch() {
     for (const r of results) {
       if (r.status === 'fulfilled' && r.value.length) {
         for (const rv of r.value) {
-          // Collect ALL cleanliness ratings for trend/winner analysis
+          // Collect ALL cleanliness ratings for trend/winner analysis AND property detail view
           const cleanR = (rv.private?.detailed_ratings || []).find(d => d.type === 'cleanliness');
           if (cleanR && cleanR.rating > 0) {
             if (!clAllRatings[rv._pid]) clAllRatings[rv._pid] = [];
-            clAllRatings[rv._pid].push({ rating: cleanR.rating, reviewedAt: rv.reviewed_at });
+            const guest = [rv.guest?.first_name, rv.guest?.last_name].filter(Boolean).join(' ') || 'Anonymous';
+            const feedback = rv.private?.feedback || '';
+            const publicReview = rv.public?.review || '';
+            const ratingComments = (rv.private?.detailed_ratings || []).filter(r => r.comment).map(r => r.type + ': ' + r.comment).join('; ');
+            clAllRatings[rv._pid].push({
+              rating: cleanR.rating,
+              reviewedAt: rv.reviewed_at,
+              guest,
+              checkIn: rv.reservation?.check_in || '',
+              checkOut: rv.reservation?.check_out || '',
+              overallRating: rv.public?.rating || 0,
+              text: feedback || ratingComments || publicReview || '',
+              source: feedback ? 'private feedback' : (publicReview ? 'public review' : 'rating only'),
+              isFlagged: clIsCleaningRelevant(rv),
+            });
           }
-          // Only add flagged items to the issue log
+          // Only add flagged items to the issue log (for all-properties view)
           if (clIsCleaningRelevant(rv)) allEntries.push(clBuildEntry(rv));
         }
       }
@@ -3026,16 +3040,16 @@ function renderCleaningLog() {
       if (!allPropStats[pid]) allPropStats[pid] = { totalReviews: 0, recentReviews: 0, recentAvg: null, totalAvg: null, totalFlags: 0, recentFlags: 0 };
     }
 
-    // ── Winners: 60-day avg ≥ 4.8 with at least 3 reviews ──
+    // ── Winners: 60-day cleaning avg ≥ 4.8 (rounded to 1 decimal) with at least 3 reviews ──
     const winnerPids = Object.keys(allPropStats).filter(pid => {
       const s = allPropStats[pid];
-      return s.recentReviews >= 3 && s.recentAvg !== null && s.recentAvg >= 4.8;
+      return s.recentReviews >= 3 && s.recentAvg !== null && Math.round(s.recentAvg * 10) / 10 >= 4.8;
     }).sort((a, b) => (allPropStats[b].recentAvg || 0) - (allPropStats[a].recentAvg || 0));
 
-    // ── Losers: 60-day avg < 4.8 with at least 3 reviews ──
+    // ── Losers: 60-day cleaning avg < 4.8 (rounded to 1 decimal) with at least 3 reviews ──
     const loserPids = Object.keys(allPropStats).filter(pid => {
       const s = allPropStats[pid];
-      return s.recentReviews >= 3 && s.recentAvg !== null && s.recentAvg < 4.8;
+      return s.recentReviews >= 3 && s.recentAvg !== null && Math.round(s.recentAvg * 10) / 10 < 4.8;
     }).sort((a, b) => (allPropStats[a].recentAvg || 5) - (allPropStats[b].recentAvg || 5));
 
     let sumH = '';
@@ -3053,7 +3067,7 @@ function renderCleaningLog() {
         const perfectCount = (clAllRatings[pid] || []).filter(r => new Date(r.reviewedAt) > new Date(sixtyDaysAgo) && r.rating === 5).length;
         sumH += `<div class="cl-winner-card" onclick="document.getElementById('cl-prop-filter').value='${pid}';renderCleaningLog()">
           <div class="cl-prop-name">${escHtml(p.name)}</div>
-          <div class="cl-winner-stat"><span class="good">${recentStr}/5</span> 60-day avg · ${overallStr}/5 overall · ${s.recentReviews} reviews · ${perfectCount} perfect</div>
+          <div class="cl-winner-stat"><span class="good">${recentStr}/5</span> 60-day cleaning · ${overallStr}/5 overall cleaning · ${s.recentReviews} reviews · ${perfectCount} perfect</div>
         </div>`;
       }
       sumH += '</div></div>';
@@ -3079,7 +3093,7 @@ function renderCleaningLog() {
         }
         sumH += `<div class="cl-prop-card has-issues" onclick="document.getElementById('cl-prop-filter').value='${pid}';renderCleaningLog()">
           <div class="cl-prop-name">${escHtml(p.name)}</div>
-          <div class="cl-prop-stat"><span class="bad">${recentStr}/5</span> 60-day avg · ${overallStr}/5 overall ${trend} · ${s.recentReviews} reviews${s.recentFlags > 0 ? ` · <span class="bad">${s.recentFlags} flag${s.recentFlags !== 1 ? 's' : ''}</span>` : ''}</div>
+          <div class="cl-prop-stat"><span class="bad">${recentStr}/5</span> 60-day cleaning · ${overallStr}/5 overall cleaning ${trend} · ${s.recentReviews} reviews${s.recentFlags > 0 ? ` · <span class="bad">${s.recentFlags} flag${s.recentFlags !== 1 ? 's' : ''}</span>` : ''}</div>
         </div>`;
       }
       sumH += '</div></div>';
@@ -3088,34 +3102,6 @@ function renderCleaningLog() {
     if (!winnerPids.length && !loserPids.length) {
       sumH += '<div class="cl-no-data">Not enough review data in the last 60 days to identify trends yet (need at least 3 reviews per property).</div>';
     }
-
-    // ── All Properties Grid (60-day weighted) ──
-    sumH += `<div class="cl-section"><div class="cl-section-hdr all-props"><span class="icon">◈</span> All Properties</div>`;
-    sumH += '<div class="cl-summary-grid">';
-    const allSorted = Object.keys(allPropStats)
-      .filter(pid => allPropStats[pid].recentReviews > 0)
-      .sort((a, b) => {
-        const sa = allPropStats[a], sb = allPropStats[b];
-        if (sb.recentFlags !== sa.recentFlags) return sb.recentFlags - sa.recentFlags;
-        return (sa.recentAvg || 5) - (sb.recentAvg || 5);
-      });
-    if (allSorted.length) {
-      for (const pid of allSorted) {
-        const p = getProp(pid);
-        if (!p) continue;
-        const s = allPropStats[pid];
-        const recentAvg = s.recentAvg !== null ? s.recentAvg.toFixed(1) : '—';
-        const overallAvg = s.totalAvg !== null ? s.totalAvg.toFixed(1) : '—';
-        const hasFlags = s.recentFlags > 0;
-        sumH += `<div class="cl-prop-card${hasFlags ? ' has-issues' : ''}" onclick="document.getElementById('cl-prop-filter').value='${pid}';renderCleaningLog()">
-          <div class="cl-prop-name">${escHtml(p.name)}</div>
-          <div class="cl-prop-stat">${hasFlags ? `<span class="bad">${s.recentFlags} flag${s.recentFlags !== 1 ? 's' : ''}</span> · ` : ''}${recentAvg}/5 60-day · ${overallAvg}/5 overall · ${s.recentReviews} review${s.recentReviews !== 1 ? 's' : ''}</div>
-        </div>`;
-      }
-    } else {
-      sumH += '<div class="cl-no-data">No reviews found in the last 60 days.</div>';
-    }
-    sumH += '</div></div>';
 
     summaryEl.innerHTML = sumH;
   } else {
@@ -3130,64 +3116,98 @@ function renderCleaningLog() {
     const recentFlags = entries.filter(e => new Date(e.reviewedAt) > new Date(Date.now() - 60 * 86400000)).length;
     summaryEl.innerHTML = `<div style="background:var(--white);border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:16px;box-shadow:var(--shadow)">
       <div style="font-family:'Cormorant Garamond',serif;font-size:1.15rem;font-weight:600;color:var(--green)">${escHtml(p?.name || filter)}</div>
-      <div style="font-size:.78rem;color:var(--text);margin-top:6px;font-weight:600">60-Day: <span style="color:${parseFloat(recentAvg) >= 4.8 ? 'var(--green)' : 'var(--red)'}">${recentAvg}/5 avg</span> · ${sixtyDayRatings.length} reviews · ${perfect} perfect · ${recentFlags} flag${recentFlags !== 1 ? 's' : ''}</div>
-      <div style="font-size:.74rem;color:var(--text2);margin-top:2px">Overall: ${allAvg}/5 avg · ${propRatings.length} total reviews · ${entries.length} flag${entries.length !== 1 ? 's' : ''} all-time</div>
+      <div style="font-size:.78rem;color:var(--text);margin-top:6px;font-weight:600">60-Day Cleaning Rating: <span style="color:${parseFloat(recentAvg) >= 4.8 ? 'var(--green)' : 'var(--red)'}">${recentAvg}/5</span> · ${sixtyDayRatings.length} reviews · ${perfect} perfect · ${recentFlags} flag${recentFlags !== 1 ? 's' : ''}</div>
+      <div style="font-size:.74rem;color:var(--text2);margin-top:2px">Overall Cleaning Rating: ${allAvg}/5 · ${propRatings.length} total reviews · ${entries.length} flag${entries.length !== 1 ? 's' : ''} all-time</div>
       <div style="margin-top:8px"><button class="btn" style="font-size:.72rem;padding:4px 12px" onclick="document.getElementById('cl-prop-filter').value='all';renderCleaningLog()">← Back to all properties</button></div>
     </div>`;
   }
 
-  // Log entries — split into recent (60 days) and older
-  const filtered = filter === 'all' ? clData : clData.filter(e => e.pid === filter);
-  if (!filtered.length) {
-    logEl.innerHTML = '<div class="cl-empty">No cleaning flags for this property.</div>';
-    return;
-  }
-
-  const sixtyAgo = Date.now() - 60 * 86400000;
-  const recent = filtered.filter(e => new Date(e.reviewedAt).getTime() > sixtyAgo);
-  const older = filtered.filter(e => new Date(e.reviewedAt).getTime() <= sixtyAgo);
-
-  function clEntryHtml(e) {
+  // ── Entry rendering helper ──
+  function clEntryHtml(e, showPropName) {
     const prop = getProp(e.pid);
     const dateStr = new Date(e.reviewedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-    const stayStr = e.checkIn ? `${new Date(e.checkIn).toLocaleDateString('en-US', {month:'short',day:'numeric'})} – ${new Date(e.checkOut).toLocaleDateString('en-US', {month:'short',day:'numeric'})}` : '';
+    const checkIn = e.checkIn || e.check_in;
+    const checkOut = e.checkOut || e.check_out;
+    const stayStr = checkIn ? `${new Date(checkIn).toLocaleDateString('en-US', {month:'short',day:'numeric'})} – ${new Date(checkOut).toLocaleDateString('en-US', {month:'short',day:'numeric'})}` : '';
+    const cleanRating = e.cleanlinessRating ?? e.rating ?? null;
     let ratingClass = 'good';
-    if (e.cleanlinessRating !== null) {
-      if (e.cleanlinessRating <= 2) ratingClass = 'bad';
-      else if (e.cleanlinessRating <= 3) ratingClass = 'ok';
+    if (cleanRating !== null) {
+      if (cleanRating <= 2) ratingClass = 'bad';
+      else if (cleanRating <= 3) ratingClass = 'ok';
     }
-    return `<div class="cl-entry">
+    const guestName = e.guest || 'Anonymous';
+    const text = e.text || '';
+    const source = e.source || '';
+    const flagged = e.isFlagged ? ' style="border-left:3px solid var(--red)"' : '';
+    return `<div class="cl-entry"${flagged}>
       <div class="cl-entry-hdr">
         <div>
           <span class="cl-entry-date">${dateStr}</span>
-          ${filter === 'all' ? `<span style="font-size:.74rem;color:var(--green);margin-left:8px;font-weight:600">${escHtml(prop?.name || e.pid)}</span>` : ''}
+          ${showPropName ? `<span style="font-size:.74rem;color:var(--green);margin-left:8px;font-weight:600">${escHtml(prop?.name || e.pid)}</span>` : ''}
         </div>
         <div style="display:flex;gap:6px;align-items:center">
-          ${e.cleanlinessRating !== null ? `<span class="cl-entry-rating ${ratingClass}">Cleanliness: ${e.cleanlinessRating}/5</span>` : ''}
+          ${cleanRating !== null ? `<span class="cl-entry-rating ${ratingClass}">Cleaning: ${cleanRating}/5</span>` : ''}
           ${e.overallRating ? `<span style="font-size:.7rem;color:var(--text2)">Overall: ${'★'.repeat(e.overallRating)}${'☆'.repeat(5 - e.overallRating)}</span>` : ''}
         </div>
       </div>
-      <div class="cl-entry-text">${escHtml(e.text.length > 500 ? e.text.slice(0, 500) + '...' : e.text)}</div>
+      ${text ? `<div class="cl-entry-text">${escHtml(text.length > 500 ? text.slice(0, 500) + '...' : text)}</div>` : ''}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
-        <span class="cl-entry-guest">Guest: ${escHtml(e.guest)}${stayStr ? ' · Stay: ' + stayStr : ''}</span>
-        <span class="cl-entry-source">Source: ${e.source}</span>
+        <span class="cl-entry-guest">Guest: ${escHtml(guestName)}${stayStr ? ' · Stay: ' + stayStr : ''}</span>
+        ${source ? `<span class="cl-entry-source">Source: ${source}</span>` : ''}
       </div>
     </div>`;
   }
 
-  let h = '';
-  if (recent.length) {
-    h += recent.map(clEntryHtml).join('');
+  // ── Log entries ──
+  const sixtyAgo = Date.now() - 60 * 86400000;
+
+  if (filter !== 'all') {
+    // Property detail: show ALL cleaning-rated reviews (not just flagged), chronologically
+    const propReviews = (clAllRatings[filter] || []).slice().sort((a, b) => new Date(b.reviewedAt) - new Date(a.reviewedAt));
+    if (!propReviews.length) {
+      logEl.innerHTML = '<div class="cl-empty">No cleaning ratings for this property.</div>';
+      return;
+    }
+    const recent = propReviews.filter(e => new Date(e.reviewedAt).getTime() > sixtyAgo);
+    const older = propReviews.filter(e => new Date(e.reviewedAt).getTime() <= sixtyAgo);
+
+    let h = '';
+    if (recent.length) {
+      h += recent.map(e => clEntryHtml({ ...e, pid: filter }, false)).join('');
+    } else {
+      h += '<div style="color:var(--text2);font-size:.82rem;padding:12px 0;font-style:italic">No cleaning reviews in the last 60 days.</div>';
+    }
+    if (older.length) {
+      h += `<div style="margin-top:16px">
+        <button class="btn" id="cl-older-btn" style="width:100%;text-align:center;font-size:.8rem;padding:10px" onclick="document.getElementById('cl-older-entries').style.display='';this.style.display='none'">Older Reviews (${older.length})</button>
+        <div id="cl-older-entries" style="display:none;margin-top:8px">${older.map(e => clEntryHtml({ ...e, pid: filter }, false)).join('')}</div>
+      </div>`;
+    }
+    logEl.innerHTML = h;
   } else {
-    h += '<div style="color:var(--text2);font-size:.82rem;padding:12px 0;font-style:italic">No cleaning flags in the last 60 days.</div>';
+    // All properties view: show only flagged issues
+    const filtered = clData;
+    if (!filtered.length) {
+      logEl.innerHTML = '<div class="cl-empty">No cleaning flags found across any properties.</div>';
+      return;
+    }
+    const recent = filtered.filter(e => new Date(e.reviewedAt).getTime() > sixtyAgo);
+    const older = filtered.filter(e => new Date(e.reviewedAt).getTime() <= sixtyAgo);
+
+    let h = '';
+    if (recent.length) {
+      h += recent.map(e => clEntryHtml(e, true)).join('');
+    } else {
+      h += '<div style="color:var(--text2);font-size:.82rem;padding:12px 0;font-style:italic">No cleaning flags in the last 60 days.</div>';
+    }
+    if (older.length) {
+      h += `<div style="margin-top:16px">
+        <button class="btn" id="cl-older-btn" style="width:100%;text-align:center;font-size:.8rem;padding:10px" onclick="document.getElementById('cl-older-entries').style.display='';this.style.display='none'">Older Flags (${older.length})</button>
+        <div id="cl-older-entries" style="display:none;margin-top:8px">${older.map(e => clEntryHtml(e, true)).join('')}</div>
+      </div>`;
+    }
+    logEl.innerHTML = h;
   }
-  if (older.length) {
-    h += `<div style="margin-top:16px">
-      <button class="btn" id="cl-older-btn" style="width:100%;text-align:center;font-size:.8rem;padding:10px" onclick="document.getElementById('cl-older-entries').style.display='';this.style.display='none'">Older Reviews (${older.length})</button>
-      <div id="cl-older-entries" style="display:none;margin-top:8px">${older.map(clEntryHtml).join('')}</div>
-    </div>`;
-  }
-  logEl.innerHTML = h;
 }
 
 // ── Guest Feedback (Review Import) ─────────────────────────────
