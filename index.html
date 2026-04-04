@@ -815,7 +815,10 @@ textarea{resize:vertical;min-height:76px}
   <div class="modal">
     <div class="mhdr">
       <div>
-        <div id="d-prop" style="font-size:.67rem;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:4px"></div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <span id="d-prop" style="font-size:.67rem;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;cursor:pointer" title="Click to change property" onclick="document.getElementById('d-prop-select').style.display='';this.style.display='none'"></span>
+          <select id="d-prop-select" style="display:none;font-size:.72rem;font-family:inherit;padding:2px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);max-width:280px" onchange="confirmPropertyChange(this.value)"></select>
+        </div>
         <div class="mtitle" id="d-title" style="cursor:pointer" title="Click to edit description" onclick="taskStartEditTitle()"></div>
         <input type="text" id="d-title-input" style="display:none;font-family:'Cormorant Garamond',serif;font-size:1.25rem;font-weight:600;color:var(--green);border:1px solid var(--gold);border-radius:var(--radius);padding:4px 8px;width:100%;background:var(--surface2);outline:none" onblur="taskSaveTitle()" onkeydown="if(event.key==='Enter'){this.blur();}if(event.key==='Escape'){taskCancelEditTitle();}">
       </div>
@@ -2008,6 +2011,11 @@ async function openDetail(id){
   const p=getProp(t.property);const nb=getNb(t.property);
   document.getElementById('d-prop').textContent=p?p.name:t.property;
   document.getElementById('d-prop').style.color=nb?`var(--${nb.cls})`:'var(--gold)';
+  document.getElementById('d-prop').style.display='';
+  // Populate property dropdown
+  const propSel=document.getElementById('d-prop-select');
+  propSel.innerHTML=PROPS.map(pr=>`<option value="${pr.id}"${pr.id===t.property?' selected':''}>${pr.name}</option>`).join('');
+  propSel.style.display='none';
   document.getElementById('d-title').textContent=t.problem;
   document.getElementById('d-status').value=t.status;
   document.getElementById('d-category').value=t.category||'';
@@ -2060,6 +2068,35 @@ async function taskSaveTitle() {
   await saveTasks();
   renderAll();
   showToast('Description updated.');
+}
+async function confirmPropertyChange(newPropId){
+  const t=tasks.find(x=>x.id===detailId);if(!t)return;
+  if(newPropId===t.property){/* no change — just hide dropdown */
+    document.getElementById('d-prop-select').style.display='none';
+    document.getElementById('d-prop').style.display='';return;
+  }
+  const newP=PROPS.find(p=>p.id===newPropId);
+  const oldP=getProp(t.property);
+  const oldName=oldP?oldP.name.split(' - ').pop():t.property;
+  const newName=newP?newP.name.split(' - ').pop():newPropId;
+  if(!confirm(`Move this task from "${oldName}" to "${newName}"?`)){
+    // Revert dropdown to original value
+    document.getElementById('d-prop-select').value=t.property;
+    document.getElementById('d-prop-select').style.display='none';
+    document.getElementById('d-prop').style.display='';return;
+  }
+  t.property=newPropId;
+  await saveTasks();
+  // Update the label and color
+  const nb=getNb(newPropId);
+  document.getElementById('d-prop').textContent=newP?newP.name:newPropId;
+  document.getElementById('d-prop').style.color=nb?`var(--${nb.cls})`:'var(--gold)';
+  document.getElementById('d-prop-select').style.display='none';
+  document.getElementById('d-prop').style.display='';
+  // Re-render mini calendar for the new property
+  renderMiniCal(newPropId).then(()=>renderDetailVendors(t,getProp(newPropId)));
+  renderAll();
+  showToast(`Task moved to ${newName}.`);
 }
 /* Open the vendor-day modal showing all tasks for a vendor on a specific date */
 function openVendorDay(vendorName,date){
