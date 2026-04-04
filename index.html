@@ -2252,9 +2252,15 @@ function openVendorDay(vendorName,date){
   } else {
     document.getElementById('vd-combined-sms').innerHTML=`<div style="font-size:.82rem;color:var(--text2);padding:6px 0;margin-bottom:8px"><strong>${vendorName}</strong> is not in the vendor list — add them to send a combined message.</div>`;
   }
-  // Render individual task cards for reference
+  // Render individual task cards sorted by neighborhood then property (matches SMS order)
+  const sortedVd=[...vdTasks].sort((a,b)=>{
+    const nbA=getNb(a.property),nbB=getNb(b.property);
+    const nA=nbA?nbA.name:'zzz',nB=nbB?nbB.name:'zzz';
+    if(nA!==nB)return nA.localeCompare(nB);
+    return(a.property||'').localeCompare(b.property||'');
+  });
   let th='';
-  vdTasks.forEach(t=>{
+  sortedVd.forEach(t=>{
     const p=getProp(t.property);const nc=getNbCls(t.property);const sh=p?p.name.split(' - ').pop():t.property;
     th+=`<div class="tc nb-${nc}" style="cursor:pointer" onclick="closeModal('vendor-day-modal');openDetail('${t.id}')">
       <div class="tc-top"><div class="tdot dot-${t.status}"></div><div class="tmain"><div class="tprop pl-${nc}">${sh}</div><div class="tprob">${t.problem}</div>
