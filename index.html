@@ -178,11 +178,12 @@ main{flex:1;padding:22px;max-width:1440px;margin:0 auto;width:100%}
 .wk-sug{grid-column:1/-1;background:var(--surface2);border-top:1px solid var(--border);padding:9px 12px}
 .wk-sug-t{font-size:.64rem;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3);font-weight:700;margin-bottom:6px}
 .wk-sug-items{display:flex;gap:7px;flex-wrap:wrap}
-.de{border-radius:5px;padding:5px 7px;font-size:.71rem;margin-bottom:4px;cursor:pointer;color:#fff;border-left:3px solid rgba(0,0,0,.2)}
+.de{border-radius:5px;padding:6px 8px;font-size:.71rem;margin-bottom:5px;cursor:pointer;color:#fff;border-left:3px solid rgba(0,0,0,.2)}
 .de.urg{outline:2px solid var(--red)}
 .de.rec{border-left-style:dashed}
-.de-prop{font-size:.61rem;opacity:.85;margin-bottom:1px;text-transform:uppercase;letter-spacing:.4px}
-.de-title{font-weight:500;line-height:1.3}
+.de-prop{font-size:.61rem;opacity:.85;margin-bottom:2px;text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+.de-title{font-weight:500;line-height:1.35}
+.de-cat{font-size:.58rem;opacity:.7;margin-top:2px;text-transform:uppercase;letter-spacing:.3px}
 .de-prc{background:var(--prc)}.de-umc{background:var(--umc)}.de-gatlinburg{background:var(--gatlinburg)}.de-alpine{background:var(--alpine)}.de-sevierville{background:var(--sevierville)}.de-hillside{background:var(--hillside)}.de-other{background:#6b7c6e}
 
 /* RECURRING */
@@ -327,9 +328,9 @@ textarea{resize:vertical;min-height:76px}
 .vg-pill:hover{opacity:.88;box-shadow:0 1px 4px rgba(0,0,0,.18)}
 .vg-pill .vg-count{background:rgba(255,255,255,.22);border-radius:3px;padding:0 4px;font-size:.6rem;font-weight:700;line-height:1.5;flex-shrink:0}
 .vg-pill.urg{outline:2px solid var(--red);outline-offset:0}
-.de.vg-pill-week{display:flex;align-items:center;gap:5px;background:var(--green);color:#fff;border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:6px 8px;cursor:pointer}
+.de.vg-pill-week{display:flex;flex-direction:column;gap:2px;background:var(--green);color:#fff;border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:6px 8px;cursor:pointer}
 .de.vg-pill-week:hover{opacity:.88}
-.de.vg-pill-week .de-prop{color:rgba(255,255,255,.8)}
+.de.vg-pill-week .de-prop{color:rgba(255,255,255,.8);margin-bottom:3px;border-bottom:1px solid rgba(255,255,255,.15);padding-bottom:3px}
 .de.vg-pill-week .de-title{color:#fff}
 
 /* COMBINED SMS PANEL (detail modal) */
@@ -1784,14 +1785,15 @@ function buildWeek(ws){
     Object.values(wkVendorGroups).forEach(vg=>{
       if(vg.tasks.length>=2){
         const hasUrg=vg.tasks.some(t=>t.urgent);const firstName=vg.name.split(' ')[0];
-        const jobList=vg.tasks.map(t=>{const p=getProp(t.property);return(p?p.name.split(' - ').pop():t.property)+': '+t.problem;}).join(', ');
-        h+=`<div class="de vg-pill-week ${hasUrg?'urg':''}" onclick="openVendorDay('${vg.name.replace(/'/g,"\\'")}','${ds}')"><div class="de-prop">${firstName} — ${vg.tasks.length} jobs</div><div class="de-title">${jobList.substring(0,60)}${jobList.length>60?'...':''}</div></div>`;
+        h+=`<div class="de vg-pill-week ${hasUrg?'urg':''}" onclick="openVendorDay('${vg.name.replace(/'/g,"\\'")}','${ds}')"><div class="de-prop">${firstName} — ${vg.tasks.length} jobs</div>`;
+        vg.tasks.forEach(t=>{const p=getProp(t.property);const sh=p?p.name.split(' - ').pop():t.property;h+=`<div class="de-title" style="margin-bottom:2px"><span style="font-weight:700;text-transform:uppercase;font-size:.58rem;letter-spacing:.3px;opacity:.8">${sh}:</span> ${t.problem}</div>`;});
+        h+=`</div>`;
       } else {
-        vg.tasks.forEach(t=>{const nc=getNbCls(t.property);const p=getProp(t.property);h+=`<div class="de de-${nc} ${t.urgent?'urg':''} ${t.recurring?'rec':''}" onclick="openDetail('${t.id}')"><div class="de-prop">${p?p.name.split(' - ').pop():''}</div><div class="de-title">${t.problem.substring(0,35)}</div></div>`;});
+        vg.tasks.forEach(t=>{const nc=getNbCls(t.property);const p=getProp(t.property);const cat=t.category?t.category.replace('_',' '):'';h+=`<div class="de de-${nc} ${t.urgent?'urg':''} ${t.recurring?'rec':''}" onclick="openDetail('${t.id}')"><div class="de-prop">${p?p.name.split(' - ').pop():''}</div><div class="de-title">${t.problem}</div>${cat?`<div class="de-cat">${cat}</div>`:''}</div>`;});
       }
     });
-    wkUngrouped.forEach(t=>{const nc=getNbCls(t.property);const p=getProp(t.property);
-      h+=`<div class="de de-${nc} ${t.urgent?'urg':''} ${t.recurring?'rec':''}" onclick="openDetail('${t.id}')"><div class="de-prop">${p?p.name.split(' - ').pop():''}</div><div class="de-title">${t.problem.substring(0,35)}</div></div>`;
+    wkUngrouped.forEach(t=>{const nc=getNbCls(t.property);const p=getProp(t.property);const cat=t.category?t.category.replace('_',' '):'';
+      h+=`<div class="de de-${nc} ${t.urgent?'urg':''} ${t.recurring?'rec':''}" onclick="openDetail('${t.id}')"><div class="de-prop">${p?p.name.split(' - ').pop():''}</div><div class="de-title">${t.problem}</div>${cat?`<div class="de-cat">${cat}</div>`:''}</div>`;
     });
     recurring.filter(r=>r.nextDue===ds).forEach(r=>{
       const pids=r.properties.includes('all')?PROPS.map(p=>p.id):r.properties;
@@ -1799,7 +1801,7 @@ function buildWeek(ws){
       const alreadyScheduled=tasks.some(x=>x.recurring&&x.problem===r.name&&x.date===ds&&pids.some(pid=>x.property===pid));
       if(alreadyScheduled)return;
       const nc=pids.length===1?getNbCls(pids[0]):'other';
-      h+=`<div class="de de-${nc} rec sug"><div class="de-prop">Recurring</div><div class="de-title">${r.name.substring(0,35)}</div></div>`;
+      h+=`<div class="de de-${nc} rec sug"><div class="de-prop">Recurring</div><div class="de-title">${r.name}</div></div>`;
     });
     h+='</div>';
   }
