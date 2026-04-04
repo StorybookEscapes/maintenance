@@ -536,7 +536,7 @@ textarea{resize:vertical;min-height:76px}
       <button class="nav-btn" onclick="switchView('recurring',this)">Recurring</button>
       <button class="nav-btn" onclick="switchView('history',this)">Service History</button>
       <button class="nav-btn" onclick="switchView('vendors',this)">Vendors</button>
-      <button class="nav-btn" onclick="switchView('cleaning',this)">Cleaning Log</button>
+      <button class="nav-btn" onclick="switchView('cleaning',this)">Cleaning</button>
       <button class="nav-btn" onclick="switchView('replacements',this)">Replacements</button>
       <button class="nav-btn" onclick="switchView('settings',this)">Settings</button>
     </div>
@@ -3067,7 +3067,7 @@ function renderCleaningLog() {
         const perfectCount = (clAllRatings[pid] || []).filter(r => new Date(r.reviewedAt) > new Date(sixtyDaysAgo) && r.rating === 5).length;
         sumH += `<div class="cl-winner-card" onclick="document.getElementById('cl-prop-filter').value='${pid}';renderCleaningLog()">
           <div class="cl-prop-name">${escHtml(p.name)}</div>
-          <div class="cl-winner-stat"><span class="good">${recentStr}/5</span> 60-day cleaning · ${overallStr}/5 overall cleaning · ${s.recentReviews} reviews · ${perfectCount} perfect</div>
+          <div class="cl-winner-stat"><span class="good">${recentStr}/5</span> 60-day cleaning<br>${overallStr}/5 overall cleaning<br>${s.recentReviews} reviews</div>
         </div>`;
       }
       sumH += '</div></div>';
@@ -3093,7 +3093,7 @@ function renderCleaningLog() {
         }
         sumH += `<div class="cl-prop-card has-issues" onclick="document.getElementById('cl-prop-filter').value='${pid}';renderCleaningLog()">
           <div class="cl-prop-name">${escHtml(p.name)}</div>
-          <div class="cl-prop-stat"><span class="bad">${recentStr}/5</span> 60-day cleaning · ${overallStr}/5 overall cleaning ${trend} · ${s.recentReviews} reviews${s.recentFlags > 0 ? ` · <span class="bad">${s.recentFlags} flag${s.recentFlags !== 1 ? 's' : ''}</span>` : ''}</div>
+          <div class="cl-prop-stat"><span class="bad">${recentStr}/5</span> 60-day cleaning ${trend}<br>${overallStr}/5 overall cleaning<br>${s.recentReviews} reviews${s.recentFlags > 0 ? ` · <span class="bad">${s.recentFlags} flag${s.recentFlags !== 1 ? 's' : ''}</span>` : ''}</div>
         </div>`;
       }
       sumH += '</div></div>';
