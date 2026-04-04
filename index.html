@@ -646,12 +646,22 @@ textarea{resize:vertical;min-height:76px}
 
       <!-- Replacement Detail Modal -->
       <div class="mo" id="rp-detail-modal">
-        <div class="mo-content" style="max-width:540px">
-          <div class="mo-hd"><h3 id="rp-detail-title">Item Details</h3><button class="mo-x" onclick="closeModal('rp-detail-modal')">&times;</button></div>
-          <div class="mo-bd" id="rp-detail-body" style="max-height:60vh;overflow-y:auto"></div>
-          <div class="mo-ft">
-            <button class="btn" onclick="closeModal('rp-detail-modal')">Close</button>
-            <button class="btn rp-btn-done" id="rp-detail-purchase-btn" onclick="">Mark Purchased</button>
+        <div class="modal" style="max-width:640px">
+          <div class="mhdr">
+            <div>
+              <div id="rp-detail-prop" style="font-size:.67rem;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:4px;color:var(--gold)"></div>
+              <div class="mtitle" id="rp-detail-title"></div>
+            </div>
+            <button class="mclose" onclick="closeModal('rp-detail-modal')">&#x2715;</button>
+          </div>
+          <div id="rp-detail-badges" style="display:flex;gap:7px;margin-bottom:16px;flex-wrap:wrap;align-items:center"></div>
+          <div id="rp-detail-body"></div>
+          <div style="display:flex;gap:9px;margin-top:20px;justify-content:space-between;align-items:center;flex-wrap:wrap">
+            <button class="btn btn-red" id="rp-detail-delete-btn">Delete Item</button>
+            <div style="display:flex;gap:7px">
+              <button class="btn" onclick="closeModal('rp-detail-modal')">Close</button>
+              <button class="btn btn-g" id="rp-detail-purchase-btn">Mark Purchased</button>
+            </div>
           </div>
         </div>
       </div>
@@ -3610,69 +3620,89 @@ function openRpDetail(id) {
   const item = rpData.find(x => x.id === id);
   if (!item) return;
   const p = getProp(item.property);
+  const nb = getNb(item.property);
   const propName = p ? p.name : item.property;
-  const created = new Date(item.created).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-  const rv = item.review; // full review context (if imported from feedback)
+  const rv = item.review;
 
-  let h = `<div style="margin-bottom:14px">
-    <div style="font-size:.78rem;color:var(--gold);font-weight:600;margin-bottom:4px">${escHtml(propName)}</div>
-    <div style="font-size:.72rem;color:var(--text2)">Added ${created}${item.purchasedAt ? ' · Purchased ' + new Date(item.purchasedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</div>
-    ${rv ? `<div style="font-size:.72rem;color:var(--text2);margin-top:2px">Guest: ${escHtml(rv.guest)} · ${rv.reviewDate}${rv.stayDates ? ' · Stay: ' + rv.stayDates : ''}${rv.resCode ? ' · Res: ' + rv.resCode : ''}</div>` : ''}
-    ${rv?.publicRating ? `<div style="font-size:.78rem;color:var(--gold);margin-top:4px">${'★'.repeat(rv.publicRating)}${'☆'.repeat(5 - rv.publicRating)}</div>` : ''}
-  </div>`;
+  // Header: property + title (like task detail)
+  document.getElementById('rp-detail-prop').textContent = propName;
+  document.getElementById('rp-detail-prop').style.color = nb ? `var(--${nb.cls})` : 'var(--gold)';
 
-  // If we have the full review, show that instead of the truncated item text
-  if (rv?.feedback) {
-    h += `<div style="margin-bottom:14px">
-      <div style="font-size:.72rem;color:var(--text2);font-weight:600;margin-bottom:6px">Private Feedback</div>
-      <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px;font-size:.86rem;line-height:1.65;white-space:pre-wrap;word-break:break-word">${escHtml(rv.feedback)}</div>
-    </div>`;
+  // Title: the item description (truncated version as headline)
+  const titleText = item.item.length > 100 ? item.item.slice(0, 100) + '...' : item.item;
+  document.getElementById('rp-detail-title').textContent = titleText;
+
+  // Badges
+  const statusBadge = item.status === 'purchased'
+    ? '<span class="badge b-complete">Purchased</span>'
+    : '<span class="badge b-open">Needed</span>';
+  const dateBadge = `<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${fmtReported(item.created)}</span>`;
+  const guestBadge = rv?.guest ? `<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">From ${escHtml(rv.guest)}</span>` : '';
+  const resBadge = rv?.resCode ? `<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">Res: ${rv.resCode}</span>` : '';
+  document.getElementById('rp-detail-badges').innerHTML = statusBadge + dateBadge + guestBadge + resBadge;
+
+  // Body
+  let h = '';
+
+  // Guest feedback section (if imported from review)
+  if (rv) {
+    // Stay info line
+    if (rv.stayDates || rv.reviewDate) {
+      h += `<div style="font-size:.74rem;color:var(--text2);margin-bottom:14px">Reviewed: ${rv.reviewDate || ''}${rv.stayDates ? ' · Stay: ' + rv.stayDates : ''}${rv.publicRating ? ' · Rating: ' + '★'.repeat(rv.publicRating) + '☆'.repeat(5 - rv.publicRating) : ''}</div>`;
+    }
+
+    // Private feedback — full, no truncation
+    if (rv.feedback) {
+      h += `<div class="stitle">Private Feedback</div>`;
+      h += `<div class="notes"><div class="note-item" style="background:var(--surface2);border-radius:var(--radius);padding:12px 14px;font-size:.86rem;line-height:1.65;white-space:pre-wrap;word-break:break-word">${escHtml(rv.feedback)}</div></div>`;
+    }
+
+    // Rating breakdown
+    if (rv.ratings?.length) {
+      h += `<div class="stitle">Rating Breakdown</div>`;
+      h += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">';
+      rv.ratings.forEach(r => {
+        const rColor = r.rating <= 2 ? '#cc6644' : r.rating <= 3 ? '#c0a830' : 'var(--green)';
+        h += `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;font-size:.76rem">
+          <span style="color:var(--text2)">${escHtml(r.type)}:</span> <span style="color:${rColor};font-weight:700">${r.rating}/5</span>
+          ${r.comment ? `<div style="font-size:.74rem;color:var(--text2);margin-top:3px;font-style:italic;line-height:1.4">${escHtml(r.comment)}</div>` : ''}
+        </div>`;
+      });
+      h += '</div>';
+    }
+
+    // Public review
+    if (rv.publicReview) {
+      h += `<div class="stitle">Public Review</div>`;
+      h += `<div style="font-size:.82rem;color:var(--text2);line-height:1.5;font-style:italic;border-left:3px solid var(--gold);padding:8px 12px;background:var(--surface2);border-radius:0 var(--radius) var(--radius) 0;margin-bottom:8px">${escHtml(rv.publicReview)}</div>`;
+    }
   } else {
-    // Manual item or legacy import — show item text
-    h += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:14px;font-size:.88rem;line-height:1.6;white-space:pre-wrap;word-break:break-word">${escHtml(item.item)}</div>`;
+    // Manual item — show full item text and notes
+    h += `<div class="stitle">Item Description</div>`;
+    h += `<div class="notes"><div class="note-item" style="background:var(--surface2);border-radius:var(--radius);padding:12px 14px;font-size:.88rem;line-height:1.6;white-space:pre-wrap;word-break:break-word">${escHtml(item.item)}</div></div>`;
+    if (item.notes) {
+      h += `<div class="stitle">Notes</div>`;
+      h += `<div style="font-size:.82rem;color:var(--text);line-height:1.5;padding:4px 0">${escHtml(item.notes)}</div>`;
+    }
   }
 
-  // Rating breakdown from review
-  if (rv?.ratings?.length) {
-    h += `<div style="margin-bottom:14px">
-      <div style="font-size:.72rem;color:var(--text2);font-weight:600;margin-bottom:6px">Rating Breakdown</div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px">`;
-    rv.ratings.forEach(r => {
-      const rColor = r.rating <= 2 ? '#cc6644' : r.rating <= 3 ? '#c0a830' : '#6ab06a';
-      h += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:.76rem">
-        <span style="color:var(--text2)">${escHtml(r.type)}:</span> <span style="color:${rColor};font-weight:700">${r.rating}/5</span>
-        ${r.comment ? `<div style="font-size:.74rem;color:var(--text2);margin-top:3px;font-style:italic;line-height:1.4">${escHtml(r.comment)}</div>` : ''}
-      </div>`;
-    });
-    h += '</div></div>';
+  // Source line for review-imported items
+  if (item.notes && rv) {
+    h += `<div style="font-size:.72rem;color:var(--text3);margin-top:12px;font-style:italic">${escHtml(item.notes)}</div>`;
   }
 
-  // Public review
-  if (rv?.publicReview) {
-    h += `<div style="margin-bottom:14px">
-      <div style="font-size:.72rem;color:var(--text2);font-weight:600;margin-bottom:6px">Public Review</div>
-      <div style="font-size:.82rem;color:var(--text2);line-height:1.5;font-style:italic;border-left:2px solid var(--border);padding-left:10px">${escHtml(rv.publicReview)}</div>
-    </div>`;
-  }
-
-  // Notes / source
-  if (item.notes && !rv) {
-    h += `<div style="margin-bottom:10px">
-      <div style="font-size:.72rem;color:var(--text2);font-weight:600;margin-bottom:4px">Source / Notes</div>
-      <div style="font-size:.82rem;color:var(--text);line-height:1.5">${escHtml(item.notes)}</div>
-    </div>`;
-  }
-
-  document.getElementById('rp-detail-title').textContent = item.status === 'purchased' ? 'Purchased Item' : 'Replacement Needed';
   document.getElementById('rp-detail-body').innerHTML = h;
 
+  // Footer buttons
   const purchBtn = document.getElementById('rp-detail-purchase-btn');
+  const delBtn = document.getElementById('rp-detail-delete-btn');
   if (item.status === 'needed') {
     purchBtn.style.display = '';
     purchBtn.onclick = async () => { await markPurchased(id); closeModal('rp-detail-modal'); };
   } else {
     purchBtn.style.display = 'none';
   }
+  delBtn.onclick = async () => { await deleteReplacement(id); closeModal('rp-detail-modal'); };
 
   document.getElementById('rp-detail-modal').classList.add('open');
 }
