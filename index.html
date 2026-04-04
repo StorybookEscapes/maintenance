@@ -135,6 +135,7 @@ main{flex:1;padding:22px;max-width:1440px;margin:0 auto;width:100%}
 .hi-cat{width:100px;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text)}
 .hi-desc{flex:1;min-width:0;padding:10px 14px;justify-content:flex-start;text-align:left;font-size:.78rem;color:var(--text2);line-height:1.4}
 .hi-desc .hi-prop{font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.8px;margin-bottom:2px}
+.hi-prop-col{width:130px;font-size:.7rem;font-weight:600;color:var(--text2)}
 .hi-vendor{width:130px;font-size:.74rem;font-weight:500;color:var(--text2)}
 @media(max-width:600px){.hi{flex-wrap:wrap}.hi-date{width:70px;font-size:.74rem;padding:8px 10px}.hi-cat{width:80px;font-size:.62rem;padding:8px 10px}.hi-desc{flex-basis:100%;order:4;border-right:none;border-top:1px solid var(--border);padding:8px 12px}.hi-vendor{width:auto;flex:1;font-size:.7rem;padding:8px 10px;border-right:none}}
 .noprop{text-align:center;padding:50px 20px;color:var(--text3);font-family:'Cormorant Garamond',serif;font-style:italic;font-size:1.05rem}
@@ -2818,10 +2819,12 @@ function renderHistory(){
     const short=t.problem.length>100?t.problem.substring(0,100)+'…':t.problem;
     const cat=(t.category||'').replace('_',' ');
     const vendorLabel=t.status==='resolved_by_guest'?'Resolved by Guest':(t.vendor||'—');
+    const propName=p?p.name.split(' - ').pop():'';
     return`<div class="hi ${nbc}" onclick="openDetail('${t.id}')" style="border-left-width:3px">
       <div class="hi-block hi-date">${d}</div>
       <div class="hi-block hi-cat">${cat}</div>
       <div class="hi-block hi-desc">${short}</div>
+      ${!selProp?`<div class="hi-block hi-prop-col">${propName}</div>`:''}
       <div class="hi-block hi-vendor">${vendorLabel}</div>
     </div>`;
   }).join(''):'<div style="color:var(--text3);font-size:.82rem;padding:16px 0;font-style:italic">No completed tasks found.</div>';
@@ -2838,6 +2841,7 @@ function renderHistory(){
         <span style="width:82px;padding-left:17px;font-size:.62rem;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text3)">Date</span>
         <span style="width:100px;font-size:.62rem;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);text-align:center">Category</span>
         <span style="flex:1;font-size:.62rem;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);padding-left:14px">Description</span>
+        ${!selProp?'<span style="width:130px;font-size:.62rem;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);text-align:center">Property</span>':''}
         <span style="width:130px;font-size:.62rem;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);text-align:center">Vendor</span>
       </div>`:''}
       <div class="hist-list">${list}</div>
