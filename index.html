@@ -2012,8 +2012,10 @@ function checkCombine(){
     if(!r.nextDue)return false;
     const diff=Math.abs(td-new Date(r.nextDue+'T12:00:00'))/(864e5);if(diff>10)return false;
     const ps=r.properties.includes('all')?PROPS.map(p=>p.id):r.properties;if(!ps.includes(t.property))return false;
+    // Skip if the current task IS this recurring item (don't suggest combining with itself)
+    if(t.recurring&&t.problem===r.name)return false;
     // Hide if already combined: a recurring task with this name already exists on this date for this property
-    const alreadyCombined=tasks.some(x=>x.property===t.property&&x.date===t.date&&x.recurring&&x.problem===r.name&&x.id!==t.id);
+    const alreadyCombined=tasks.some(x=>x.property===t.property&&x.date===t.date&&x.recurring&&x.problem===r.name);
     return !alreadyCombined;
   });
   if(!nearby.length)return;
