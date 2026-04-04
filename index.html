@@ -828,6 +828,19 @@ textarea{resize:vertical;min-height:76px}
     <div style="margin-bottom:14px">
       <button type="button" class="btn" id="d-urgent-toggle" onclick="toggleDetailUrgent()" style="font-size:.72rem;padding:4px 12px;border-radius:20px"></button>
     </div>
+    <div id="d-photo-section" style="margin-bottom:14px">
+      <div id="d-photo-preview" style="display:none;margin-bottom:8px;position:relative;display:inline-block">
+        <img id="d-photo-img" src="" style="max-width:100%;max-height:200px;border-radius:var(--radius);border:1px solid var(--border);cursor:pointer" onclick="window.open(this.src,'_blank')" title="Click to view full size">
+        <button onclick="removeTaskPhoto()" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:.7rem;display:flex;align-items:center;justify-content:center" title="Remove photo">&#x2715;</button>
+      </div>
+      <div id="d-photo-upload">
+        <label style="display:inline-flex;align-items:center;gap:6px;font-size:.74rem;color:var(--green);cursor:pointer;padding:5px 12px;border:1px dashed var(--border);border-radius:var(--radius);background:var(--surface2);transition:border-color .15s" onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--border)'">
+          <span style="font-size:1rem">&#x1F4F7;</span> Attach Photo
+          <input type="file" id="d-photo-input" accept="image/*" capture="environment" style="display:none" onchange="uploadTaskPhoto(this.files[0])">
+        </label>
+        <span id="d-photo-status" style="font-size:.68rem;color:var(--text3);margin-left:8px"></span>
+      </div>
+    </div>
     <div id="d-combine"></div>
     <div class="fg">
       <div class="fgr">
@@ -2033,6 +2046,7 @@ async function openDetail(id){
     ${t.guest?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">Reported by ${t.guest}</span>`:''}
     ${t.created?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${fmtReported(t.created)}</span>`:''}`;
   renderUrgentToggle(t);
+  showTaskPhoto(t);
   renderDetailVendors(t,p);renderNotes(t);checkCombine();
   closeVendorDD(); // reset dropdown state when opening a new task
   renderMiniCal(t.property).then(()=>renderDetailVendors(t,p));
@@ -2097,6 +2111,94 @@ async function confirmPropertyChange(newPropId){
   renderMiniCal(newPropId).then(()=>renderDetailVendors(t,getProp(newPropId)));
   renderAll();
   showToast(`Task moved to ${newName}.`);
+}
+/* ── Task Photo Upload/Remove ── */
+function showTaskPhoto(t){
+  const preview=document.getElementById('d-photo-preview');
+  const img=document.getElementById('d-photo-img');
+  const upload=document.getElementById('d-photo-upload');
+  if(t.photoUrl){
+    img.src=t.photoUrl;
+    preview.style.display='inline-block';
+    upload.style.display='none';
+  } else {
+    preview.style.display='none';
+    img.src='';
+    upload.style.display='';
+  }
+  document.getElementById('d-photo-status').textContent='';
+  document.getElementById('d-photo-input').value='';
+}
+async function uploadTaskPhoto(file){
+  if(!file||!detailId)return;
+  const t=tasks.find(x=>x.id===detailId);if(!t)return;
+  if(file.size>5*1024*1024){showToast('Photo must be under 5MB.','err');return;}
+  const status=document.getElementById('d-photo-status');
+  status.textContent='Uploading...';
+  try{
+    const token=sessionStorage.getItem('se_auth_token')||'';
+    const ext=file.name.split('.').pop()||'jpg';
+    const fname=`task-${t.id}-${Date.now()}.${ext}`;
+    const r=await fetch(`${PROXY_BASE}/api/photo?taskId=${t.id}&filename=${fname}`,{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+token,'Content-Type':file.type},
+      body:file
+    });
+    if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error||'Upload failed');}
+    const data=await r.json();
+    // If there's an existing photo, delete the old one
+    if(t.photoUrl){
+      fetch(`${PROXY_BASE}/api/photo?url=${encodeURIComponent(t.photoUrl)}`,{
+        method:'DELETE',headers:{'Authorization':'Bearer '+token}
+      }).catch(()=>{});
+    }
+    t.photoUrl=data.url;
+    await saveTasks();
+    showTaskPhoto(t);
+    showToast('Photo attached.');
+  }catch(e){
+    console.error('[photo] Upload error:',e);
+    status.textContent='Upload failed — try again';
+    showToast('Photo upload failed.','err');
+  }
+}
+async function removeTaskPhoto(){
+  const t=tasks.find(x=>x.id===detailId);if(!t||!t.photoUrl)return;
+  if(!confirm('Remove this photo?'))return;
+  try{
+    const token=sessionStorage.getItem('se_auth_token')||'';
+    fetch(`${PROXY_BASE}/api/photo?url=${encodeURIComponent(t.photoUrl)}`,{
+      method:'DELETE',headers:{'Authorization':'Bearer '+token}
+    }).catch(()=>{});
+  }catch(e){}
+  t.photoUrl=null;
+  await saveTasks();
+  showTaskPhoto(t);
+  showToast('Photo removed.');
+}
+/* Auto-cleanup: delete photos from tasks resolved more than 30 days ago */
+async function cleanupOldPhotos(){
+  const cutoff=Date.now()-30*24*60*60*1000;
+  const token=sessionStorage.getItem('se_auth_token')||'';
+  let changed=false;
+  for(const t of tasks){
+    if(!t.photoUrl)continue;
+    if(!['complete','resolved_by_guest'].includes(t.status))continue;
+    // Use completion date (last note or date field) or created date
+    const resolved=t.date||t.created;
+    if(!resolved)continue;
+    if(new Date(resolved+'T12:00:00').getTime()>cutoff)continue;
+    // This task was resolved 30+ days ago — delete the photo
+    try{
+      await fetch(`${PROXY_BASE}/api/photo?url=${encodeURIComponent(t.photoUrl)}`,{
+        method:'DELETE',headers:{'Authorization':'Bearer '+token}
+      });
+    }catch(e){}
+    t.photoUrl=null;
+    changed=true;
+    console.log(`[photo] Cleaned up photo for task ${t.id}`);
+  }
+  if(changed)await saveTasks();
 }
 /* Open the vendor-day modal showing all tasks for a vendor on a specific date */
 function openVendorDay(vendorName,date){
@@ -2320,7 +2422,7 @@ function buildSMS(t,p,v){
     if(nco){const fmt=nco.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});ds=`Next available date: ${fmt} (next checkout). Let me know if that day works for you.`;}
     else{ds='Scheduling TBD — please let us know your availability.';}
   }
-  return smsTemplate
+  let msg=smsTemplate
     .replace(/\{vendor_first_name\}/g, v.name.split(' ')[0])
     .replace(/\{property_name\}/g, pn)
     .replace(/\{address\}/g, addr)
@@ -2329,6 +2431,8 @@ function buildSMS(t,p,v){
     .replace(/\{guest_name\}/g, t.guest?`\nReported by guest: ${t.guest}`:'')
     .replace(/\{date_info\}/g, ds)
     .replace(/\{urgent_notice\}/g, urg);
+  if(t.photoUrl)msg+=`\n\nPhoto of the issue: ${t.photoUrl}`;
+  return msg;
 }
 /* Get all active tasks for a vendor on a specific date */
 function getVendorDayTasks(vendorName,date){
@@ -2353,6 +2457,7 @@ function buildMultiSMS(taskList,v){
     const pn=p?p.name:t.property,addr=p?p.address:'',door=p?p.door:'';
     let line=`Job ${i+1}: ${pn}\nAddress: ${addr}\nDoor Code: ${door}\nIssue: ${t.problem}`;
     if(t.guest)line+=`\nReported by guest: ${t.guest}`;
+    if(t.photoUrl)line+=`\nPhoto: ${t.photoUrl}`;
     if(t.urgent)line+=`\n*** URGENT ***`;
     return line;
   }).join('\n\n');
@@ -4172,6 +4277,7 @@ async function initApp(){
   hbStartPolling();
   rvFetch(); // fetch guest feedback reviews
   clFetch(); // pre-load cleaning log in background
+  cleanupOldPhotos(); // auto-delete photos from tasks resolved 30+ days ago
 }
 initApp();
 </script>
