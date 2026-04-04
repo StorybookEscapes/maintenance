@@ -2787,6 +2787,85 @@ async function deleteTask(){
 }
 
 // PROPERTY HISTORY
+/* Quick-add historical task form */
+let histFormOpen=false;
+function toggleHistForm(){histFormOpen=!histFormOpen;renderHistory();}
+async function saveHistTask(){
+  const date=document.getElementById('h-date').value;
+  const pid=document.getElementById('h-prop').value;
+  const cat=document.getElementById('h-cat').value;
+  const desc=document.getElementById('h-desc').value.trim();
+  const vendor=document.getElementById('h-vendor').value.trim();
+  if(!date||!pid||!desc){showToast('Date, property, and description are required.','err');return;}
+  const t={id:Date.now().toString(),property:pid,guest:'',problem:desc,category:cat,status:'complete',date,vendor,urgent:false,recurring:false,notes:[{text:'Added as historical record.',type:'admin',time:new Date().toISOString()}],vendorNotes:'',created:new Date().toISOString()};
+  tasks.unshift(t);await saveTasks();
+  histFormOpen=false;renderAll();showToast('Historical task added.');
+}
+function buildHistForm(){
+  const propOpts=NBS.map(nb=>{
+    const opts=nb.props.map(pid=>{const p=getProp(pid);return p?`<option value="${pid}">${p.name.split(' - ').pop()}</option>`:''}).join('');
+    return`<optgroup label="${nb.name}">${opts}</optgroup>`;
+  }).join('');
+  const vendorOpts=vendors.map(v=>`<option value="${v.name}">${v.name} — ${v.role}</option>`).join('');
+  return`<div style="background:var(--gold-pale);border:1px solid var(--gold-light);border-radius:var(--radius);padding:16px;margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--green)">Add Historical Record</div>
+      <button class="btn" onclick="toggleHistForm()" style="font-size:.7rem">Cancel</button>
+    </div>
+    <div style="display:grid;grid-template-columns:140px 1fr 140px;gap:10px;margin-bottom:10px">
+      <div><label style="font-size:.68rem;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:3px">Date</label><input type="date" id="h-date" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:.8rem"></div>
+      <div><label style="font-size:.68rem;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:3px">Property</label><select id="h-prop" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:.8rem"><option value="">Select...</option>${propOpts}</select></div>
+      <div><label style="font-size:.68rem;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:3px">Category</label><select id="h-cat" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:.8rem"><option value="handyman">Handyman</option><option value="plumbing">Plumbing</option><option value="hvac">HVAC</option><option value="electrical">Electrical</option><option value="pest">Pest Control</option><option value="hot_tub">Hot Tub</option><option value="pool">Pool</option><option value="landscaping">Landscaping</option><option value="arcade">Arcade</option><option value="septic">Septic</option><option value="water">Water Filtration</option><option value="cleaning">Cleaning</option><option value="other">Other</option></select></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 200px;gap:10px;margin-bottom:12px">
+      <div><label style="font-size:.68rem;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:3px">Description</label><input type="text" id="h-desc" placeholder="What was done?" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:.8rem"></div>
+      <div><label style="font-size:.68rem;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:3px">Vendor</label><input type="text" id="h-vendor" list="h-vendor-list" placeholder="Who did the work?" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:.8rem"><datalist id="h-vendor-list">${vendorOpts}</datalist></div>
+    </div>
+    <button class="btn btn-g" onclick="saveHistTask()">Add Record</button>
+  </div>`;
+}
+/* Repeat issue detection — analyzes completed tasks for patterns */
+function buildTrendInsights(doneTasks){
+  if(doneTasks.length<3)return''; // not enough data
+  const now=new Date();const sixMonthsAgo=new Date(now);sixMonthsAgo.setMonth(sixMonthsAgo.getMonth()-6);
+  // Group by property+category
+  const combos={};
+  doneTasks.forEach(t=>{
+    const d=t.date||t.created;if(!d)return;
+    const key=t.property+'||'+t.category;
+    if(!combos[key])combos[key]={property:t.property,category:t.category,total:0,recent:0,tasks:[]};
+    combos[key].total++;
+    combos[key].tasks.push(d);
+    if(new Date(d+'T12:00:00')>=sixMonthsAgo)combos[key].recent++;
+  });
+  // Find repeat offenders: 3+ same category at same property
+  const repeats=Object.values(combos).filter(c=>c.total>=3).sort((a,b)=>b.recent-a.recent||b.total-a.total);
+  if(!repeats.length)return'';
+  // Also find properties with the highest total issue count
+  const propTotals={};doneTasks.forEach(t=>{propTotals[t.property]=(propTotals[t.property]||0)+1;});
+  const topProps=Object.entries(propTotals).sort((a,b)=>b[1]-a[1]).slice(0,3);
+  let h=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px;box-shadow:var(--shadow)">`;
+  h+=`<div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--green);margin-bottom:10px">Repeat Issue Alerts</div>`;
+  h+=`<div style="display:flex;flex-direction:column;gap:6px">`;
+  repeats.slice(0,6).forEach(c=>{
+    const p=getProp(c.property);const pn=p?p.name.split(' - ').pop():c.property;
+    const nb=getNb(c.property);const nc=nb?nb.cls:'other';
+    const cat=(c.category||'other').replace('_',' ');
+    const dates=c.tasks.sort();const first=dates[0];const last=dates[dates.length-1];
+    const span=Math.round((new Date(last+'T12:00:00')-new Date(first+'T12:00:00'))/(864e5*30));
+    const spanLabel=span<=1?'in the last month':span<=6?`over ${span} months`:`over ${span} months`;
+    const severity=c.recent>=3?'var(--red)':c.recent>=2?'var(--gold)':'var(--text3)';
+    h+=`<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface2);border-radius:8px;border-left:3px solid ${severity};cursor:pointer" onclick="selProp='${c.property}';histCat='${c.category}';renderHistory()">
+      <div style="flex:1">
+        <span style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--${nc})">${pn}</span>
+        <span style="font-size:.75rem;color:var(--text);margin-left:6px"><strong>${c.total}</strong> ${cat} issue${c.total>1?'s':''} ${spanLabel}</span>
+        ${c.recent>=2?`<span style="font-size:.65rem;color:var(--red);margin-left:6px;font-weight:600">(${c.recent} in last 6 mo)</span>`:''}
+      </div>
+    </div>`;
+  });
+  h+=`</div></div>`;
+  return h;
+}
 function renderHistory(){
   const container=document.getElementById('hist-container');
   // Property grid grouped by neighborhood
@@ -2830,12 +2909,17 @@ function renderHistory(){
   }).join(''):'<div style="color:var(--text3);font-size:.82rem;padding:16px 0;font-style:italic">No completed tasks found.</div>';
   // Active filter label
   const filterLabel=selProp?`<span style="font-size:.76rem;color:var(--text2);margin-left:8px">Showing: <strong>${getProp(selProp)?.name.split(' - ').pop()}</strong> <button onclick="selPropFn(null)" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:.72rem;font-family:inherit;padding:0 4px">✕ Clear</button></span>`:'';
+  // Trend insights (only when viewing all properties)
+  const trendHtml=selProp?'':buildTrendInsights(allDone);
   container.innerHTML=`${gridHtml}
     <div style="margin-top:20px;padding-top:18px;border-top:2px solid var(--border)">
+      ${trendHtml}
       <div style="display:flex;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:6px">
         <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.3rem;color:var(--green);font-weight:600;margin:0">Completed Work</h2>
         ${filterLabel}
+        <button class="btn" onclick="toggleHistForm()" style="margin-left:auto;font-size:.72rem">${histFormOpen?'Cancel':'+ Add Historical Record'}</button>
       </div>
+      ${histFormOpen?buildHistForm():''}
       <div class="cat-chips" style="margin-bottom:14px">${chips}</div>
       ${done.length?`<div class="hi-header" style="display:flex;gap:0;padding:0 0 6px;border-bottom:1px solid var(--border);margin-bottom:8px">
         <span style="width:82px;padding-left:17px;font-size:.62rem;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text3)">Date</span>
