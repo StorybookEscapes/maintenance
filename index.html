@@ -3694,13 +3694,10 @@ function openRpDetail(id) {
   const propName = p ? p.name : item.property;
   const rv = item.review;
 
-  // Header: property + title (like task detail)
+  // Header: property + item name
   document.getElementById('rp-detail-prop').textContent = propName;
   document.getElementById('rp-detail-prop').style.color = nb ? `var(--${nb.cls})` : 'var(--gold)';
-
-  // Title: the item description (truncated version as headline)
-  const titleText = item.item.length > 100 ? item.item.slice(0, 100) + '...' : item.item;
-  document.getElementById('rp-detail-title').textContent = titleText;
+  document.getElementById('rp-detail-title').textContent = item.item;
 
   // Badges
   const statusBadge = item.status === 'purchased'
@@ -3714,8 +3711,8 @@ function openRpDetail(id) {
   // Body
   let h = '';
 
-  // Guest feedback section (if imported from review)
-  if (rv) {
+  // Guest feedback section (if imported from review with full data)
+  if (rv && (rv.feedback || rv.publicReview || rv.ratings?.length)) {
     // Stay info line
     if (rv.stayDates || rv.reviewDate) {
       h += `<div style="font-size:.74rem;color:var(--text2);margin-bottom:14px">Reviewed: ${rv.reviewDate || ''}${rv.stayDates ? ' · Stay: ' + rv.stayDates : ''}${rv.publicRating ? ' · Rating: ' + '★'.repeat(rv.publicRating) + '☆'.repeat(5 - rv.publicRating) : ''}</div>`;
@@ -3723,7 +3720,7 @@ function openRpDetail(id) {
 
     // Private feedback — full, no truncation
     if (rv.feedback) {
-      h += `<div class="stitle">Private Feedback</div>`;
+      h += `<div class="stitle">Guest Feedback</div>`;
       h += `<div class="notes"><div class="note-item" style="background:var(--surface2);border-radius:var(--radius);padding:12px 14px;font-size:.86rem;line-height:1.65;white-space:pre-wrap;word-break:break-word">${escHtml(rv.feedback)}</div></div>`;
     }
 
@@ -3747,16 +3744,13 @@ function openRpDetail(id) {
       h += `<div style="font-size:.82rem;color:var(--text2);line-height:1.5;font-style:italic;border-left:3px solid var(--gold);padding:8px 12px;background:var(--surface2);border-radius:0 var(--radius) var(--radius) 0;margin-bottom:8px">${escHtml(rv.publicReview)}</div>`;
     }
   } else {
-    // Manual item — show full item text and notes
-    h += `<div class="stitle">Item Description</div>`;
-    h += `<div class="notes"><div class="note-item" style="background:var(--surface2);border-radius:var(--radius);padding:12px 14px;font-size:.88rem;line-height:1.6;white-space:pre-wrap;word-break:break-word">${escHtml(item.item)}</div></div>`;
+    // Manual item or legacy import without full review data
     if (item.notes) {
-      h += `<div class="stitle">Notes</div>`;
-      h += `<div style="font-size:.82rem;color:var(--text);line-height:1.5;padding:4px 0">${escHtml(item.notes)}</div>`;
+      h += `<div style="font-size:.82rem;color:var(--text2);line-height:1.5;padding:4px 0;margin-bottom:8px">${escHtml(item.notes)}</div>`;
     }
   }
 
-  // Source line for review-imported items
+  // Source line
   if (item.notes && rv) {
     h += `<div style="font-size:.72rem;color:var(--text3);margin-top:12px;font-style:italic">${escHtml(item.notes)}</div>`;
   }
@@ -3806,12 +3800,14 @@ function renderReplacements() {
       items.forEach(item => {
         const source = item.review ? `From ${escHtml(item.review.guest || 'guest')}` : (item.notes || '');
         h += `<div class="rp-card" style="cursor:pointer;display:flex;align-items:center;gap:10px" onclick="openRpDetail('${item.id}')">
-          <button class="btn rp-btn-done" onclick="event.stopPropagation();markPurchased('${item.id}')" title="Bought it — moves to Purchase History" style="flex-shrink:0">&#10003;</button>
+          <div style="display:flex;gap:4px;flex-shrink:0">
+            <button class="btn rp-btn-done" onclick="event.stopPropagation();markPurchased('${item.id}')" title="Bought it — moves to Purchase History">&#10003;</button>
+            <button class="btn rp-btn-del" onclick="event.stopPropagation();deleteReplacement('${item.id}')" title="Skip — remove without buying" style="opacity:.5">&times;</button>
+          </div>
           <div style="flex:1;min-width:0">
             <div style="font-weight:600;font-size:.92rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(item.item)}</div>
             ${source ? `<div style="font-size:.74rem;color:var(--text2);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${source}</div>` : ''}
           </div>
-          <button class="btn rp-btn-del" onclick="event.stopPropagation();deleteReplacement('${item.id}')" title="Skip — remove without buying" style="flex-shrink:0;opacity:.5">&times;</button>
         </div>`;
       });
       h += '</div>';
@@ -3819,25 +3815,37 @@ function renderReplacements() {
     listEl.innerHTML = h;
   }
 
-  // ── Purchase History ──
+  // ── Purchase History (styled like Service History completed tasks) ──
   if (!purchased.length) {
     purchasedEl.innerHTML = '';
   } else {
-    let h = `<div class="rp-section-hdr"><span>Purchase History</span><span class="rp-count">${purchased.length}</span></div>`;
     purchased.sort((a, b) => new Date(b.purchasedAt || b.created) - new Date(a.purchasedAt || a.created));
+    let h = `<div style="margin-top:20px;padding-top:18px;border-top:2px solid var(--border)">
+      <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.3rem;color:var(--green);font-weight:600;margin:0 0 14px 0">Purchase History</h2>
+      <div style="display:flex;flex-direction:column;gap:8px">`;
     purchased.forEach(item => {
       const p = getProp(item.property);
-      const propName = p ? p.name : item.property;
+      const nb = getNb(item.property);
+      const nbc = nb ? 'nb-' + nb.cls : '';
+      const plc = nb ? 'pl-' + nb.cls : '';
+      const propShort = p ? p.name.split(' - ').pop() : item.property;
       const doneDate = item.purchasedAt ? new Date(item.purchasedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-      h += `<div class="rp-purchased-card" style="cursor:pointer;display:flex;align-items:center;gap:10px" onclick="openRpDetail('${item.id}')">
-        <div style="color:var(--green);font-size:.85rem;flex-shrink:0">&#10003;</div>
-        <div style="flex:1;min-width:0;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
-          <span style="font-weight:600;font-size:.85rem;color:var(--text2);text-decoration:line-through;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:45%">${escHtml(item.item)}</span>
-          <span style="font-size:.76rem;color:var(--text2)">${escHtml(propName)}</span>
-          ${doneDate ? `<span style="font-size:.72rem;color:var(--text3)">${doneDate}</span>` : ''}
+      const source = item.review?.guest ? `From ${item.review.guest}` : (item.notes || '');
+      h += `<div class="hi ${nbc}" onclick="openRpDetail('${item.id}')" style="border-left-width:3px">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+              <span style="font-size:.82rem;font-weight:700;color:var(--text)">${doneDate}</span>
+              <span style="font-size:.72rem;font-weight:600" class="${plc}">${escHtml(propShort)}</span>
+            </div>
+            <div style="font-size:.8rem;color:var(--text);line-height:1.4;margin-bottom:4px">${escHtml(item.item)}</div>
+            ${source ? `<div style="font-size:.7rem;color:var(--text2)">${escHtml(source)}</div>` : ''}
+          </div>
+          <span class="badge b-complete" style="flex-shrink:0">Purchased</span>
         </div>
       </div>`;
     });
+    h += '</div></div>';
     purchasedEl.innerHTML = h;
   }
 
