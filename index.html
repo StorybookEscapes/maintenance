@@ -3812,12 +3812,13 @@ function openRpDetail(id) {
     purchBtn.onclick = async () => { await markPurchased(id); closeModal('rp-detail-modal'); };
     convertBtn.style.display = '';
     convertBtn.onclick = async () => { await rpConvertToTask(id); };
-    delBtn.style.display = '';
+    delBtn.textContent = 'Skip — Don\u2019t Buy';
   } else {
     purchBtn.style.display = 'none';
     convertBtn.style.display = 'none';
-    delBtn.style.display = 'none';
+    delBtn.textContent = 'Remove from History';
   }
+  delBtn.style.display = '';
   delBtn.onclick = async () => { await deleteReplacement(id); closeModal('rp-detail-modal'); };
 
   rpDetailCurrentId = id;
