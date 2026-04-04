@@ -154,13 +154,13 @@ main{flex:1;padding:22px;max-width:1440px;margin:0 auto;width:100%}
 .cal-grid{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--white);box-shadow:var(--shadow);display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
 .cal-head-cell{padding:9px 6px;text-align:center;font-size:.67rem;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,.7);font-weight:600;background:var(--green);border-bottom:1px solid var(--border)}
 .dow-short{display:none}
-.cal-cell{border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-height:95px;padding:5px;overflow:hidden}
+.cal-cell{border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-height:120px;padding:5px}
 .cal-cell:nth-child(7n){border-right:none}
 .cal-cell.om{background:var(--surface2)}
 .cal-cell.td{background:var(--gold-pale)}
 .cdn{font-size:.73rem;font-weight:600;color:var(--text2);margin-bottom:3px;width:20px;height:20px;display:flex;align-items:center;justify-content:center}
 .cdn.today{background:var(--gold);color:#fff;border-radius:50%;font-weight:700}
-.ce{border-radius:3px;padding:2px 5px;font-size:.64rem;font-weight:500;margin-bottom:2px;cursor:pointer;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff}
+.ce{border-radius:3px;padding:2px 5px;font-size:.64rem;font-weight:500;margin-bottom:2px;cursor:pointer;line-height:1.4;color:#fff}
 .ce.urg{outline:2px solid var(--red);outline-offset:0}
 .ce.rec{border:1px dashed rgba(255,255,255,.6);opacity:.88}
 .ce.sug{background:var(--border);color:var(--text3);border:1px dashed var(--border-dark);outline:none}
@@ -328,10 +328,28 @@ textarea{resize:vertical;min-height:76px}
 .vg-pill:hover{opacity:.88;box-shadow:0 1px 4px rgba(0,0,0,.18)}
 .vg-pill .vg-count{background:rgba(255,255,255,.22);border-radius:3px;padding:0 4px;font-size:.6rem;font-weight:700;line-height:1.5;flex-shrink:0}
 .vg-pill.urg{outline:2px solid var(--red);outline-offset:0}
-.de.vg-pill-week{display:flex;flex-direction:column;gap:2px;background:var(--green);color:#fff;border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:6px 8px;cursor:pointer}
-.de.vg-pill-week:hover{opacity:.88}
-.de.vg-pill-week .de-prop{color:rgba(255,255,255,.8);margin-bottom:3px;border-bottom:1px solid rgba(255,255,255,.15);padding-bottom:3px}
-.de.vg-pill-week .de-title{color:#fff}
+/* Vendor group — weekly view */
+.vg-week-wrap{border:1px solid var(--border-dark);border-radius:6px;overflow:hidden;margin-bottom:5px;cursor:pointer;box-shadow:var(--shadow)}
+.vg-week-wrap:hover{box-shadow:var(--shadow-md)}
+.vg-week-wrap.urg{outline:2px solid var(--red)}
+.vg-week-hdr{display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:var(--green);color:#fff}
+.vg-week-name{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.vg-week-count{font-size:.62rem;opacity:.7;font-weight:500}
+.vg-week-task{padding:4px 8px;border-left:3px solid;font-size:.71rem}
+.vg-week-task+.vg-week-task{border-top:1px solid var(--border)}
+.vg-week-task-prop{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.4px;opacity:.75;margin-bottom:1px}
+.vg-week-task-desc{font-weight:500;line-height:1.3;color:var(--text)}
+.vg-t-prc{border-left-color:var(--prc);background:rgba(45,106,63,.06)}.vg-t-umc{border-left-color:var(--umc);background:rgba(184,131,10,.06)}.vg-t-gatlinburg{border-left-color:var(--gatlinburg);background:rgba(107,63,160,.06)}.vg-t-alpine{border-left-color:var(--alpine);background:rgba(192,57,43,.06)}.vg-t-sevierville{border-left-color:var(--sevierville);background:rgba(36,113,163,.06)}.vg-t-hillside{border-left-color:var(--hillside);background:rgba(26,58,92,.06)}.vg-t-other{border-left-color:#6b7c6e;background:rgba(107,124,110,.06)}
+/* Vendor group — monthly view */
+.vg-month-wrap{border-radius:4px;overflow:hidden;margin-bottom:2px;cursor:pointer;border:1px solid rgba(0,0,0,.1)}
+.vg-month-wrap:hover{opacity:.88}
+.vg-month-wrap.urg{outline:2px solid var(--red)}
+.vg-month-hdr{display:flex;align-items:center;gap:4px;padding:2px 5px;background:var(--green);color:#fff;font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+.vg-month-name{flex:1}
+.vg-month-count{background:rgba(255,255,255,.22);border-radius:3px;padding:0 4px;font-size:.55rem;line-height:1.5}
+.vg-month-task{padding:2px 5px;font-size:.6rem;line-height:1.3;border-left:3px solid;color:var(--text)}
+.vg-month-task+.vg-month-task{border-top:1px solid var(--border)}
+.vg-mt-prop{font-weight:700;text-transform:uppercase;font-size:.55rem;letter-spacing:.3px;opacity:.7}
 
 /* COMBINED SMS PANEL (detail modal) */
 .combined-sms-banner{background:linear-gradient(135deg,#eef4fa,#f0f5f8);border:1px solid #b8d4e8;border-radius:10px;padding:14px 16px;margin-bottom:14px}
@@ -504,9 +522,11 @@ textarea{resize:vertical;min-height:76px}
   .dow-short{display:inline}
   .cal-cell{min-height:60px;padding:2px;overflow:hidden}
   .cdn{font-size:.63rem;width:17px;height:17px;margin-bottom:1px}
-  .ce{font-size:.55rem;padding:1px 3px;margin-bottom:1px;line-height:1.3;max-width:100%;overflow:hidden;text-overflow:ellipsis}
-  .vg-pill{font-size:.55rem;padding:1px 3px;gap:2px;max-width:100%;overflow:hidden;text-overflow:ellipsis}
-  .vg-pill .vg-count{font-size:.5rem;padding:0 3px}
+  .ce{font-size:.55rem;padding:1px 3px;margin-bottom:1px;line-height:1.3;max-width:100%}
+  .vg-month-hdr{padding:1px 3px;font-size:.52rem}
+  .vg-month-task{padding:1px 3px;font-size:.52rem}
+  .vg-month-count{font-size:.48rem;padding:0 3px}
+  .vg-mt-prop{font-size:.48rem}
   /* Week view mobile */
   .wk-hrow{grid-template-columns:32px repeat(7,minmax(0,1fr))}
   .wk-brow{grid-template-columns:32px repeat(7,minmax(0,1fr))}
@@ -517,6 +537,11 @@ textarea{resize:vertical;min-height:76px}
   .wk-day{padding:3px;min-height:60px}
   .de{font-size:.62rem;padding:3px 5px}
   .de-prop{font-size:.53rem}
+  .vg-week-hdr{padding:3px 5px}
+  .vg-week-name{font-size:.6rem}
+  .vg-week-count{font-size:.52rem}
+  .vg-week-task{padding:3px 5px;font-size:.6rem}
+  .vg-week-task-prop{font-size:.5rem}
 }
 </style>
 </head>
@@ -1700,6 +1725,41 @@ document.addEventListener('click',e=>{
 });
 
 // CALENDAR
+/* Sort tasks by neighborhood name then property id — matches SMS/vendor-day order */
+function sortByNbProp(taskList){
+  return[...taskList].sort((a,b)=>{
+    const nbA=getNb(a.property),nbB=getNb(b.property);
+    const nA=nbA?nbA.name:'zzz',nB=nbB?nbB.name:'zzz';
+    if(nA!==nB)return nA.localeCompare(nB);
+    return(a.property||'').localeCompare(b.property||'');
+  });
+}
+/* Render a vendor group pill for the weekly view — sorted by neighborhood with color-coded sections */
+function buildVgWeek(vg,ds){
+  const hasUrg=vg.tasks.some(t=>t.urgent);const firstName=vg.name.split(' ')[0];
+  const sorted=sortByNbProp(vg.tasks);
+  let h=`<div class="vg-week-wrap ${hasUrg?'urg':''}" onclick="openVendorDay('${vg.name.replace(/'/g,"\\'")}','${ds}')">`;
+  h+=`<div class="vg-week-hdr"><span class="vg-week-name">${firstName}</span><span class="vg-week-count">${vg.tasks.length} jobs</span></div>`;
+  let lastNc='';
+  sorted.forEach(t=>{
+    const nc=getNbCls(t.property);const p=getProp(t.property);const sh=p?p.name.split(' - ').pop():t.property;
+    if(nc!==lastNc){lastNc=nc;}
+    h+=`<div class="vg-week-task vg-t-${nc}"><div class="vg-week-task-prop">${sh}</div><div class="vg-week-task-desc">${t.problem}</div></div>`;
+  });
+  return h+'</div>';
+}
+/* Render a vendor group pill for the monthly view — sorted by neighborhood with color-coded sections */
+function buildVgMonth(vg,ds){
+  const hasUrg=vg.tasks.some(t=>t.urgent);const firstName=vg.name.split(' ')[0];
+  const sorted=sortByNbProp(vg.tasks);
+  let h=`<div class="vg-month-wrap ${hasUrg?'urg':''}" onclick="openVendorDay('${vg.name.replace(/'/g,"\\'")}','${ds}')">`;
+  h+=`<div class="vg-month-hdr"><span class="vg-month-name">${firstName}</span><span class="vg-month-count">${vg.tasks.length}</span></div>`;
+  sorted.forEach(t=>{
+    const nc=getNbCls(t.property);const p=getProp(t.property);const sh=p?p.name.split(' - ').pop():t.property;
+    h+=`<div class="vg-month-task vg-t-${nc}"><span class="vg-mt-prop">${sh}:</span> ${t.problem}</div>`;
+  });
+  return h+'</div>';
+}
 function renderCalendar(){
   const MN=['January','February','March','April','May','June','July','August','September','October','November','December'];
   if(calMode==='month'){
@@ -1736,21 +1796,18 @@ function buildMonth(){
         if(t.vendor){const vk=t.vendor.toLowerCase();if(!vendorGroups[vk])vendorGroups[vk]={name:t.vendor,tasks:[]};vendorGroups[vk].tasks.push(t);}
         else ungrouped.push(t);
       });
-      // Render vendor groups (2+ tasks = pill, 1 task = normal)
+      // Render vendor groups (2+ tasks = expanded pill, 1 task = normal)
       Object.values(vendorGroups).forEach(vg=>{
         if(vg.tasks.length>=2){
-          const hasUrg=vg.tasks.some(t=>t.urgent);
-          const firstName=vg.name.split(' ')[0];
-          const summary=vg.tasks.map(t=>{const p=getProp(t.property);return(p?p.name.split(' - ').pop():t.property)+': '+t.problem;}).join(' | ');
-          h+=`<div class="vg-pill ${hasUrg?'urg':''}" onclick="openVendorDay('${vg.name.replace(/'/g,"\\'")}','${ds}')" title="${firstName}: ${summary}"><span class="vg-count">${vg.tasks.length}</span>${firstName}: ${vg.tasks.length} jobs</div>`;
+          h+=buildVgMonth(vg,ds);
         } else {
-          vg.tasks.forEach(t=>{const nc=getNbCls(t.property);const p=getProp(t.property);const sh=p?p.name.split(' - ').pop():t.property;h+=`<div class="ce ce-${nc} ${t.urgent?'urg':''} ${t.recurring?'rec':''}" onclick="openDetail('${t.id}')" title="${sh}: ${t.problem}">${sh}: ${t.problem.substring(0,30)}${t.problem.length>30?'...':''}</div>`;});
+          vg.tasks.forEach(t=>{const nc=getNbCls(t.property);const p=getProp(t.property);const sh=p?p.name.split(' - ').pop():t.property;h+=`<div class="ce ce-${nc} ${t.urgent?'urg':''} ${t.recurring?'rec':''}" onclick="openDetail('${t.id}')" title="${t.problem}">${sh}: ${t.problem}</div>`;});
         }
       });
       // Render unassigned tasks normally
       ungrouped.forEach(t=>{
         const nc=getNbCls(t.property);const p=getProp(t.property);const sh=p?p.name.split(' - ').pop():t.property;
-        h+=`<div class="ce ce-${nc} ${t.urgent?'urg':''} ${t.recurring?'rec':''}" onclick="openDetail('${t.id}')" title="${sh}: ${t.problem}">${sh}: ${t.problem.substring(0,30)}${t.problem.length>30?'...':''}</div>`;
+        h+=`<div class="ce ce-${nc} ${t.urgent?'urg':''} ${t.recurring?'rec':''}" onclick="openDetail('${t.id}')" title="${t.problem}">${sh}: ${t.problem}</div>`;
       });
       recurring.filter(r=>r.nextDue===ds).forEach(r=>{
         const pids=r.properties.includes('all')?PROPS.map(p=>p.id):r.properties;
@@ -1758,7 +1815,7 @@ function buildMonth(){
         const alreadyScheduled=tasks.some(x=>x.recurring&&x.problem===r.name&&x.date===ds&&pids.some(pid=>x.property===pid));
         if(alreadyScheduled)return;
         const nc=pids.length===1?getNbCls(pids[0]):'other';
-        h+=`<div class="ce ce-${nc} rec sug" title="${r.name} (recurring — go to Recurring tab to generate)" style="cursor:default">${r.name.substring(0,28)}${r.name.length>28?'...':''}</div>`;
+        h+=`<div class="ce ce-${nc} rec sug" title="${r.name} (recurring — go to Recurring tab to generate)" style="cursor:default">${r.name}</div>`;
       });
     }
     h+='</div>';
@@ -1784,10 +1841,7 @@ function buildWeek(ws){
     });
     Object.values(wkVendorGroups).forEach(vg=>{
       if(vg.tasks.length>=2){
-        const hasUrg=vg.tasks.some(t=>t.urgent);const firstName=vg.name.split(' ')[0];
-        h+=`<div class="de vg-pill-week ${hasUrg?'urg':''}" onclick="openVendorDay('${vg.name.replace(/'/g,"\\'")}','${ds}')"><div class="de-prop">${firstName} — ${vg.tasks.length} jobs</div>`;
-        vg.tasks.forEach(t=>{const p=getProp(t.property);const sh=p?p.name.split(' - ').pop():t.property;h+=`<div class="de-title" style="margin-bottom:2px"><span style="font-weight:700;text-transform:uppercase;font-size:.58rem;letter-spacing:.3px;opacity:.8">${sh}:</span> ${t.problem}</div>`;});
-        h+=`</div>`;
+        h+=buildVgWeek(vg,ds);
       } else {
         vg.tasks.forEach(t=>{const nc=getNbCls(t.property);const p=getProp(t.property);const cat=t.category?t.category.replace('_',' '):'';h+=`<div class="de de-${nc} ${t.urgent?'urg':''} ${t.recurring?'rec':''}" onclick="openDetail('${t.id}')"><div class="de-prop">${p?p.name.split(' - ').pop():''}</div><div class="de-title">${t.problem}</div>${cat?`<div class="de-cat">${cat}</div>`:''}</div>`;});
       }
