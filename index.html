@@ -812,7 +812,8 @@ textarea{resize:vertical;min-height:76px}
     <div class="mhdr">
       <div>
         <div id="d-prop" style="font-size:.67rem;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:4px"></div>
-        <div class="mtitle" id="d-title"></div>
+        <div class="mtitle" id="d-title" style="cursor:pointer" title="Click to edit description" onclick="taskStartEditTitle()"></div>
+        <input type="text" id="d-title-input" style="display:none;font-family:'Cormorant Garamond',serif;font-size:1.25rem;font-weight:600;color:var(--green);border:1px solid var(--gold);border-radius:var(--radius);padding:4px 8px;width:100%;background:var(--surface2);outline:none" onblur="taskSaveTitle()" onkeydown="if(event.key==='Enter'){this.blur();}if(event.key==='Escape'){taskCancelEditTitle();}">
       </div>
       <button class="mclose" onclick="closeModal('detail-modal')">&#x2715;</button>
     </div>
@@ -861,8 +862,8 @@ textarea{resize:vertical;min-height:76px}
     <div id="d-next-co" style="font-size:.72rem;color:var(--text2);margin:4px 0 8px"></div>
     <div class="stitle" id="d-vendors-title">Suggested Vendors</div>
     <div id="d-vendors"></div>
-    <div class="stitle">Vendor Completion Notes</div>
-    <textarea id="d-vnotes" rows="3" placeholder="Vendor fills this out after completing work..." onchange="updateField('vendorNotes',this.value)" oninput="clearTimeout(this._debounce);this._debounce=setTimeout(()=>updateField('vendorNotes',this.value),800)"></textarea>
+    <div id="d-vnotes-section" style="display:none"><div class="stitle">Vendor Completion Notes</div>
+    <textarea id="d-vnotes" rows="3" placeholder="Vendor fills this out after completing work..." onchange="updateField('vendorNotes',this.value)" oninput="clearTimeout(this._debounce);this._debounce=setTimeout(()=>updateField('vendorNotes',this.value),800)"></textarea></div>
     <div style="display:flex;gap:9px;margin-top:20px;justify-content:space-between;align-items:center;flex-wrap:wrap">
       <button class="btn btn-red" onclick="deleteTask()">Delete Task</button>
       <div style="display:flex;gap:7px">
@@ -2006,6 +2007,34 @@ async function openDetail(id){
   document.getElementById('complete-btn').style.display=isDone?'none':'';
   document.getElementById('resolved-guest-btn').style.display=isDone?'none':'';
   document.getElementById('detail-modal').classList.add('open');
+}
+function taskStartEditTitle() {
+  const titleEl = document.getElementById('d-title');
+  const inputEl = document.getElementById('d-title-input');
+  inputEl.value = titleEl.textContent;
+  titleEl.style.display = 'none';
+  inputEl.style.display = '';
+  inputEl.focus();
+  inputEl.select();
+}
+function taskCancelEditTitle() {
+  document.getElementById('d-title').style.display = '';
+  document.getElementById('d-title-input').style.display = 'none';
+}
+async function taskSaveTitle() {
+  const inputEl = document.getElementById('d-title-input');
+  const titleEl = document.getElementById('d-title');
+  const newText = inputEl.value.trim();
+  inputEl.style.display = 'none';
+  titleEl.style.display = '';
+  if (!newText || !detailId) return;
+  const t = tasks.find(x => x.id === detailId);
+  if (!t || t.problem === newText) return;
+  t.problem = newText;
+  titleEl.textContent = newText;
+  await saveTasks();
+  renderAll();
+  showToast('Description updated.');
 }
 /* Open the vendor-day modal showing all tasks for a vendor on a specific date */
 function openVendorDay(vendorName,date){
