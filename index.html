@@ -2532,11 +2532,10 @@ function renderHistory(){
     const short=t.problem.length>100?t.problem.substring(0,100)+'…':t.problem;
     const cat=(t.category||'').replace('_',' ');
     const vendorLabel=t.status==='resolved_by_guest'?'Resolved by Guest':(t.vendor||'—');
-    const showProp=!selProp;// hide property name when filtered to single property
     return`<div class="hi ${nbc}" onclick="openDetail('${t.id}')" style="border-left-width:3px">
       <div class="hi-block hi-date">${d}</div>
       <div class="hi-block hi-cat">${cat}</div>
-      <div class="hi-block hi-desc">${showProp&&p?`<div class="hi-prop ${plc}">${p.name.split(' - ').pop()}</div>`:''}${short}</div>
+      <div class="hi-block hi-desc">${short}</div>
       <div class="hi-block hi-vendor">${vendorLabel}</div>
     </div>`;
   }).join(''):'<div style="color:var(--text3);font-size:.82rem;padding:16px 0;font-style:italic">No completed tasks found.</div>';
