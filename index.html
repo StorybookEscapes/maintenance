@@ -786,7 +786,7 @@ textarea{resize:vertical;min-height:76px}
         <select id="f-category" onchange="onCatChange()">
           <option value="">Select category</option>
           <option value="cleaning">Cleaning / Light Handyman</option>
-          <option value="handyman">Handyman / Carpentry</option>
+          <option value="handyman">Handyman</option>
           <option value="plumbing">Plumbing</option>
           <option value="hvac">HVAC</option>
           <option value="electrical">Electrical</option>
@@ -849,7 +849,7 @@ textarea{resize:vertical;min-height:76px}
           <select id="d-prop-select" style="display:none;font-size:.72rem;font-family:inherit;padding:2px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);max-width:280px" onchange="confirmPropertyChange(this.value)"></select>
         </div>
         <div class="mtitle" id="d-title" style="cursor:pointer" title="Click to edit description" onclick="taskStartEditTitle()"></div>
-        <input type="text" id="d-title-input" style="display:none;font-family:'Cormorant Garamond',serif;font-size:1.25rem;font-weight:600;color:var(--green);border:1px solid var(--gold);border-radius:var(--radius);padding:4px 8px;width:100%;background:var(--surface2);outline:none" onblur="taskSaveTitle()" onkeydown="if(event.key==='Enter'){this.blur();}if(event.key==='Escape'){taskCancelEditTitle();}">
+        <textarea id="d-title-input" rows="3" style="display:none;font-family:'Cormorant Garamond',serif;font-size:1.25rem;font-weight:600;color:var(--green);border:1px solid var(--gold);border-radius:var(--radius);padding:6px 10px;width:100%;background:var(--surface2);outline:none;resize:vertical;line-height:1.35" onblur="taskSaveTitle()" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();this.blur();}if(event.key==='Escape'){taskCancelEditTitle();}"></textarea>
       </div>
       <button class="mclose" onclick="closeModal('detail-modal')">&#x2715;</button>
     </div>
@@ -891,7 +891,7 @@ textarea{resize:vertical;min-height:76px}
         <select id="d-category" onchange="updateField('category',this.value)">
           <option value="">No category</option>
           <option value="cleaning">Cleaning / Light Handyman</option>
-          <option value="handyman">Handyman / Carpentry</option>
+          <option value="handyman">Handyman</option>
           <option value="plumbing">Plumbing</option>
           <option value="hvac">HVAC</option>
           <option value="electrical">Electrical</option>
@@ -1163,7 +1163,7 @@ const DEF_VENDORS = [
   {id:'v1',name:'Lisa Hawthorne',phone:'(936) 648-3940',email:'',role:'Head Cleaner',categories:['cleaning'],note:'Primary cleaner for all Smokies properties. Provides linens, soaps, paper products.'},
   {id:'v2',name:'James Hawthorne',phone:'(936) 714-7249',email:'',role:'Light Handyman / Hot Tub',categories:['cleaning','handyman','hot_tub'],note:"Lisa's husband. First call for hot tub Vapor Lock / Flo code issues. Can respond same night."},
   {id:'v3',name:'Alisha Brown',phone:'(517) 320-6670',email:'',role:'Cleaning Coordinator',categories:['cleaning'],note:"Lisa's daughter and inspector. Contact when Lisa is unavailable."},
-  {id:'v4',name:'Michael Gilchrist',phone:'(423) 608-4516',email:'',role:'Handyman / Carpentry',categories:['handyman','electrical'],note:'$65 service fee plus hourly. Light carpentry, electrical, and plumbing repairs.'},
+  {id:'v4',name:'Michael Gilchrist',phone:'(423) 608-4516',email:'',role:'Handyman',categories:['handyman','electrical'],note:'$65 service fee plus hourly. Light carpentry, electrical, and plumbing repairs.'},
   {id:'v5',name:'Justin Nelson',phone:'(865) 801-1338',email:'',role:'Handyman / Landscaping',categories:['handyman','landscaping'],note:'Maintains several properties. Available for light handyman work.'},
   {id:'v6',name:'Gary Moyers Plumbing',phone:'(865) 850-5254',email:'',role:'Plumber — Primary',categories:['plumbing'],note:'First call for plumbing. Often same-day. Venmo payment — Chip handles.'},
   {id:'v7',name:'Javier Soto',phone:'(865) 315-5445',email:'',role:'Plumber — Emergency',categories:['plumbing'],note:'Fast response for emergencies.'},
@@ -1193,7 +1193,7 @@ const DEF_RECURRING = [
   {id:'rc8',name:'Bed Bug Prevention — Bearadise Lodge',properties:['bearadise'],category:'bed_bugs',frequency:'monthly',vendor:'All About Bugs',notes:'Bearadise Lodge had bed bugs twice (2023, 2025). Monthly prevention treatment.',nextDue:'2026-05-01'},
 ];
 const VCAT = [
-  {id:'cleaning',label:'Cleaning'},{id:'handyman',label:'Handyman / Carpentry'},
+  {id:'cleaning',label:'Cleaning'},{id:'handyman',label:'Handyman'},
   {id:'plumbing',label:'Plumbing'},{id:'hvac',label:'HVAC / Electrical'},
   {id:'pest',label:'Pest Control'},{id:'landscaping',label:'Landscaping'},
   {id:'hot_tub',label:'Hot Tub'},{id:'pool',label:'Pool'},
@@ -1322,7 +1322,7 @@ function renderStats(){
 }
 
 // TASKS
-const CAT_LABELS={handyman:'Handyman / Carpentry',plumbing:'Plumbing',hvac:'HVAC',electrical:'Electrical',hot_tub:'Hot Tub',pool:'Pool',pest:'Pest Control',cleaning:'Cleaning',landscaping:'Landscaping',arcade:'Arcade / Billiards',septic:'Septic',water:'Water Filtration',bed_bugs:'Bed Bugs',other:'Other','':`Uncategorized`};
+const CAT_LABELS={handyman:'Handyman',plumbing:'Plumbing',hvac:'HVAC',electrical:'Electrical',hot_tub:'Hot Tub',pool:'Pool',pest:'Pest Control',cleaning:'Cleaning',landscaping:'Landscaping',arcade:'Arcade / Billiards',septic:'Septic',water:'Water Filtration',bed_bugs:'Bed Bugs',other:'Other','':`Uncategorized`};
 let catFilter='all';
 let propFilter='all';
 let dateSort=false;
@@ -2131,6 +2131,8 @@ function taskStartEditTitle() {
   inputEl.value = titleEl.textContent;
   titleEl.style.display = 'none';
   inputEl.style.display = '';
+  inputEl.style.height = 'auto';
+  inputEl.style.height = inputEl.scrollHeight + 'px';
   inputEl.focus();
   inputEl.select();
 }
