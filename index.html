@@ -658,10 +658,10 @@ textarea{resize:vertical;min-height:76px}
           <div id="rp-detail-badges" style="display:flex;gap:7px;margin-bottom:16px;flex-wrap:wrap;align-items:center"></div>
           <div id="rp-detail-body"></div>
           <div style="display:flex;gap:9px;margin-top:20px;justify-content:space-between;align-items:center;flex-wrap:wrap">
-            <button class="btn btn-red" id="rp-detail-delete-btn">Delete Item</button>
+            <button class="btn" id="rp-detail-delete-btn" style="color:var(--text2);border-color:var(--border)">Skip — Don't Buy</button>
             <div style="display:flex;gap:7px">
               <button class="btn" onclick="closeModal('rp-detail-modal')">Close</button>
-              <button class="btn btn-g" id="rp-detail-purchase-btn">Mark Purchased</button>
+              <button class="btn btn-g" id="rp-detail-purchase-btn">Bought It &#10003;</button>
             </div>
           </div>
         </div>
@@ -3520,14 +3520,14 @@ function rvDismissAll() {
 // ── REPLACEMENTS & PURCHASES ──────────────────────────────────────
 let rpData = []; // { id, property, item, notes, status:'needed'|'purchased', created, purchasedAt? }
 
-const RP_PURCHASE_KEYWORDS = /\b(pots?|pans?|cookware|dishes?|plates?|cups?|glasses?|mugs?|utensils?|silverware|flatware|knife|knives|cutting board|bakeware|towels?|linens?|sheets?|bedding|comforter|blankets?|pillows?|mattress|supplies|toiletries|soap|shampoo|conditioner|toilet paper|paper towels?|coffee maker|keurig|toaster|blender|can opener|corkscrew|iron|ironing board|hangers?|curtains?|blinds?|rug|mat|broom|mop|vacuum|trash can|light bulb|batteries|remote|game|games|board game|puzzle|toys?|dvd|book|decor|decoration|furniture|chair|table|shelf|shelves|mirror|picture|artwork|sign)\b/i;
+const RP_PURCHASE_KEYWORDS = /\b(pots?|pans?|cookware|dishes?|plates?|cups?|glasses?|mugs?|utensils?|silverware|flatware|knife|knives|cutting boards?|bakeware|towels?|linens?|sheets?|bedding|comforters?|blankets?|pillows?|mattress(?:es)?|supplies|toiletries|soap|dish soap|shampoo|conditioner|toilet paper|paper towels?|coffee makers?|keurig|toasters?|blenders?|can openers?|corkscrews?|irons?|ironing boards?|hangers?|curtains?|blinds?|rugs?|mats?|brooms?|mops?|vacuums?|trash cans?|light bulbs?|batteries|remotes?|games?|board games?|puzzles?|toys?|dvds?|books?|decor|decorations?|furniture|chairs?|tables?|shelves?|shelf|mirrors?|pictures?|artwork|signs?|sponges?|dish rack|drying rack|wash cloths?|washcloths?|dish towels?|oven mitts?|pot holders?|shower curtains?|bath mats?|plungers?|fly swatters?|wine opener|bottle opener|colander|strainer|spatulas?|whisks?|tongs?|ladles?|peelers?|graters?|mixing bowls?|baking sheets?|cookie sheets?|tupperware|containers?|storage bins?|trash bags?|ziplock|ziploc|baggies|cleaning supplies|detergent|cleaner|windex|lysol|disinfectant|air freshener|candles?|night lights?|extension cords?|power strips?|surge protectors?|welcome mats?|door mats?|coat hooks?|key hooks?|drawer liners?|placemats?|coasters?|wine glasses|champagne glasses|shot glasses|measuring cups?|measuring spoons?|thermometers?|fire extinguishers?|smoke detectors?|carbon monoxide detectors?|first aid|band.?aids?|medicine)\b/i;
 
 // Extract just the item name from review text (e.g. "Coffee maker" not the whole paragraph)
 function rpExtractItemName(text) {
   if (!text) return '';
   // Match all purchasable items mentioned in the text
   const matches = [];
-  const re = /\b(pots?\s*(?:and|&)?\s*pans?|cookware|dishes?|plates?|cups?|glasses?|mugs?|utensils?|silverware|flatware|knives?|cutting boards?|bakeware|towels?|linens?|sheets?|bedding|comforters?|blankets?|pillows?|mattress(?:es)?|toiletries|soap|shampoo|conditioner|toilet paper|paper towels?|coffee makers?|keurig|toasters?|blenders?|can openers?|corkscrews?|irons?|ironing boards?|hangers?|curtains?|blinds?|rugs?|mats?|brooms?|mops?|vacuums?|trash cans?|light bulbs?|batteries|remotes?|board games?|puzzles?|toys?|dvds?|books?|decor|decorations?|furniture|chairs?|tables?|shelves?|shelf|mirrors?|pictures?|artwork|signs?)\b/gi;
+  const re = /\b(pots?\s*(?:and|&)?\s*pans?|cookware|dishes?|plates?|cups?|glasses?|wine glasses|champagne glasses|shot glasses|mugs?|utensils?|silverware|flatware|knives?|cutting boards?|bakeware|towels?|dish towels?|linens?|sheets?|bedding|comforters?|blankets?|pillows?|mattress(?:es)?|toiletries|soap|dish soap|shampoo|conditioner|toilet paper|paper towels?|coffee makers?|keurig|toasters?|blenders?|can openers?|corkscrews?|wine openers?|bottle openers?|irons?|ironing boards?|hangers?|curtains?|shower curtains?|blinds?|rugs?|bath mats?|mats?|brooms?|mops?|vacuums?|trash cans?|light bulbs?|batteries|remotes?|board games?|puzzles?|toys?|dvds?|books?|decor|decorations?|furniture|chairs?|tables?|shelves?|shelf|mirrors?|pictures?|artwork|signs?|sponges?|dish racks?|drying racks?|wash cloths?|washcloths?|oven mitts?|pot holders?|plungers?|fly swatters?|colanders?|strainers?|spatulas?|whisks?|tongs?|ladles?|peelers?|graters?|mixing bowls?|baking sheets?|cookie sheets?|tupperware|containers?|storage bins?|trash bags?|cleaning supplies|detergent|cleaner|air fresheners?|candles?|night lights?|extension cords?|power strips?|surge protectors?|welcome mats?|door mats?|coat hooks?|key hooks?|placemats?|coasters?|measuring cups?|measuring spoons?|thermometers?|fire extinguishers?|first aid)\b/gi;
   let m;
   while ((m = re.exec(text)) !== null) {
     matches.push(m[1]);
@@ -3562,6 +3562,18 @@ async function loadReplacements() {
     const r = await S.get('se_purchases');
     if (r) rpData = JSON.parse(r.value);
   } catch (e) { rpData = []; }
+  // One-time migration: re-extract item names for review-imported items that have long text
+  let migrated = false;
+  rpData.forEach(item => {
+    if (item.review && item.item && item.item.length > 40) {
+      const extracted = rpExtractItemName(item.review.feedback || item.item);
+      if (extracted && extracted.length < item.item.length) {
+        item.item = extracted;
+        migrated = true;
+      }
+    }
+  });
+  if (migrated) await saveReplacementData();
 }
 
 async function saveReplacementData() {
@@ -3794,12 +3806,12 @@ function renderReplacements() {
       items.forEach(item => {
         const source = item.review ? `From ${escHtml(item.review.guest || 'guest')}` : (item.notes || '');
         h += `<div class="rp-card" style="cursor:pointer;display:flex;align-items:center;gap:10px" onclick="openRpDetail('${item.id}')">
-          <button class="btn rp-btn-done" onclick="event.stopPropagation();markPurchased('${item.id}')" title="Mark purchased" style="flex-shrink:0">&#10003;</button>
+          <button class="btn rp-btn-done" onclick="event.stopPropagation();markPurchased('${item.id}')" title="Bought it — moves to Purchase History" style="flex-shrink:0">&#10003;</button>
           <div style="flex:1;min-width:0">
             <div style="font-weight:600;font-size:.92rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(item.item)}</div>
             ${source ? `<div style="font-size:.74rem;color:var(--text2);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${source}</div>` : ''}
           </div>
-          <button class="btn rp-btn-del" onclick="event.stopPropagation();deleteReplacement('${item.id}')" title="Remove" style="flex-shrink:0;opacity:.5">&times;</button>
+          <button class="btn rp-btn-del" onclick="event.stopPropagation();deleteReplacement('${item.id}')" title="Skip — remove without buying" style="flex-shrink:0;opacity:.5">&times;</button>
         </div>`;
       });
       h += '</div>';
