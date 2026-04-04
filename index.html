@@ -3569,8 +3569,10 @@ async function loadReplacements() {
   // One-time migration: re-extract item names for review-imported items that have long text
   let migrated = false;
   rpData.forEach(item => {
-    if (item.review && item.item && item.item.length > 40) {
-      const extracted = rpExtractItemName(item.review.feedback || item.item);
+    if (item.item && item.item.length > 40) {
+      // Use full review feedback if available, otherwise try the stored item text itself
+      const sourceText = item.review?.feedback || item.item;
+      const extracted = rpExtractItemName(sourceText);
       if (extracted && extracted.length < item.item.length) {
         item.item = extracted;
         migrated = true;
