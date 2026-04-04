@@ -2259,13 +2259,35 @@ function openVendorDay(vendorName,date){
     if(nA!==nB)return nA.localeCompare(nB);
     return(a.property||'').localeCompare(b.property||'');
   });
-  let th='';
-  sortedVd.forEach(t=>{
-    const p=getProp(t.property);const nc=getNbCls(t.property);const sh=p?p.name.split(' - ').pop():t.property;
+  let th='';let lastNb='';let lastProp='';let propCount=0;
+  // Pre-count tasks per property for grouping decisions
+  const propCounts={};sortedVd.forEach(t=>{propCounts[t.property]=(propCounts[t.property]||0)+1;});
+  sortedVd.forEach((t,i)=>{
+    const p=getProp(t.property);const nc=getNbCls(t.property);const nb=getNb(t.property);const sh=p?p.name.split(' - ').pop():t.property;
+    const nbName=nb?nb.name:'Other';
+    // Neighborhood header when neighborhood changes
+    if(nbName!==lastNb){
+      if(lastProp&&propCounts[lastProp]>1) th+=`</div>`; // close previous property group
+      if(lastNb) th+=`</div>`; // close previous neighborhood section
+      th+=`<div class="vd-nb-section" style="margin-bottom:2px">`;
+      th+=`<div class="vd-nb-hdr nb-${nc}-h" style="display:flex;align-items:center;gap:8px;padding:6px 0 4px;border-bottom:2px solid;margin-bottom:6px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px">${nbName}</div>`;
+      lastNb=nbName;lastProp='';
+    }
+    // Property sub-group container when property changes and has multiple tasks
+    if(t.property!==lastProp){
+      if(lastProp&&propCounts[lastProp]>1) th+=`</div>`; // close previous property group
+      if(propCounts[t.property]>1){
+        th+=`<div style="background:rgba(0,0,0,.02);border-radius:8px;padding:6px 6px 6px 6px;margin-bottom:4px">`;
+        th+=`<div style="font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);padding:2px 8px 4px;display:flex;align-items:center;gap:6px"><span style="color:var(--${nc})">${sh}</span><span style="font-weight:400;letter-spacing:0;text-transform:none">${propCounts[t.property]} tasks</span></div>`;
+      }
+      lastProp=t.property;
+    }
     th+=`<div class="tc nb-${nc}" style="cursor:pointer" onclick="closeModal('vendor-day-modal');openDetail('${t.id}')">
       <div class="tc-top"><div class="tdot dot-${t.status}"></div><div class="tmain"><div class="tprop pl-${nc}">${sh}</div><div class="tprob">${t.problem}</div>
       <div class="tmeta"><span class="badge b-${t.status}">${t.status.replace('_',' ')}</span>${t.urgent?'<span class="badge b-urgent">Urgent</span>':''}<span class="tmi">${t.category?t.category.replace('_',' '):''}</span></div></div></div></div>`;
   });
+  if(lastProp&&propCounts[lastProp]>1) th+=`</div>`; // close last property group
+  if(lastNb) th+=`</div>`; // close last neighborhood section
   document.getElementById('vd-tasks').innerHTML=th;
   document.getElementById('vendor-day-modal').classList.add('open');
 }
