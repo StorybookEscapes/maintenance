@@ -627,11 +627,12 @@ textarea{resize:vertical;min-height:76px}
         <div class="mo-content" style="max-width:480px">
           <div class="mo-hd"><h3>Add Replacement Item</h3><button class="mo-x" onclick="closeModal('replacement-modal')">&times;</button></div>
           <div class="mo-bd">
+            <div id="rp-import-preview" style="display:none;margin-bottom:14px"></div>
             <label class="fl">Property
               <select id="rp-property" style="width:100%;padding:8px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit"></select>
             </label>
-            <label class="fl">Item Description
-              <input type="text" id="rp-item" placeholder="e.g., New pots and pans set" style="width:100%;padding:8px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit">
+            <label class="fl">Item to Buy
+              <input type="text" id="rp-item" placeholder="e.g., Coffee maker, Bath towels" style="width:100%;padding:8px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit">
             </label>
             <label class="fl">Source / Notes <span style="font-size:.7rem;color:var(--text2)">(optional)</span>
               <input type="text" id="rp-notes" placeholder="e.g., Guest feedback, Amazon link, etc." style="width:100%;padding:8px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit">
@@ -639,7 +640,7 @@ textarea{resize:vertical;min-height:76px}
           </div>
           <div class="mo-ft">
             <button class="btn" onclick="closeModal('replacement-modal')">Cancel</button>
-            <button class="btn btn-g" onclick="saveReplacement()">Add Item</button>
+            <button class="btn btn-g" onclick="saveReplacement()">Add to Buy List</button>
           </div>
         </div>
       </div>
@@ -3292,7 +3293,7 @@ async function rvFetch() {
     // Auto-route purchase items directly to Replacements (skip the Tasks bar)
     const problem = rvBuildProblem(rv);
     if (rvIsPurchaseItem(problem)) {
-      await rpImportFromReview(rv);
+      await rpImportFromReviewSilent(rv);
       rvDismissed.push(rv.id);
       purchaseCount++;
       continue;
@@ -3424,14 +3425,13 @@ async function rvImport(id) {
   if (!rv) return;
   const problem = rvBuildProblem(rv);
 
-  // Route purchase/replacement items to the Replacements tab
+  // Route purchase/replacement items to the Replacements tab (interactive — opens editable modal)
   if (rvIsPurchaseItem(problem)) {
-    await rpImportFromReview(rv);
+    rpImportFromReview(rv);
     rvDismissed.push(id);
     localStorage.setItem('se_rv_dismissed', JSON.stringify(rvDismissed));
     rvItems = rvItems.filter(x => x.id !== id);
-    renderRV(); renderReplacements();
-    showToast('Item imported to Replacements & Purchases.');
+    renderRV();
     return;
   }
 
@@ -3469,9 +3469,9 @@ async function rvImportAll() {
   for (const rv of [...rvItems]) {
     const problem = rvBuildProblem(rv);
 
-    // Route purchase items to Replacements
+    // Route purchase items to Replacements (silent for bulk import)
     if (rvIsPurchaseItem(problem)) {
-      await rpImportFromReview(rv);
+      await rpImportFromReviewSilent(rv);
       rvDismissed.push(rv.id);
       nPurchases++;
       continue;
@@ -3521,6 +3521,41 @@ function rvDismissAll() {
 let rpData = []; // { id, property, item, notes, status:'needed'|'purchased', created, purchasedAt? }
 
 const RP_PURCHASE_KEYWORDS = /\b(pots?|pans?|cookware|dishes?|plates?|cups?|glasses?|mugs?|utensils?|silverware|flatware|knife|knives|cutting board|bakeware|towels?|linens?|sheets?|bedding|comforter|blankets?|pillows?|mattress|supplies|toiletries|soap|shampoo|conditioner|toilet paper|paper towels?|coffee maker|keurig|toaster|blender|can opener|corkscrew|iron|ironing board|hangers?|curtains?|blinds?|rug|mat|broom|mop|vacuum|trash can|light bulb|batteries|remote|game|games|board game|puzzle|toys?|dvd|book|decor|decoration|furniture|chair|table|shelf|shelves|mirror|picture|artwork|sign)\b/i;
+
+// Extract just the item name from review text (e.g. "Coffee maker" not the whole paragraph)
+function rpExtractItemName(text) {
+  if (!text) return '';
+  // Match all purchasable items mentioned in the text
+  const matches = [];
+  const re = /\b(pots?\s*(?:and|&)?\s*pans?|cookware|dishes?|plates?|cups?|glasses?|mugs?|utensils?|silverware|flatware|knives?|cutting boards?|bakeware|towels?|linens?|sheets?|bedding|comforters?|blankets?|pillows?|mattress(?:es)?|toiletries|soap|shampoo|conditioner|toilet paper|paper towels?|coffee makers?|keurig|toasters?|blenders?|can openers?|corkscrews?|irons?|ironing boards?|hangers?|curtains?|blinds?|rugs?|mats?|brooms?|mops?|vacuums?|trash cans?|light bulbs?|batteries|remotes?|board games?|puzzles?|toys?|dvds?|books?|decor|decorations?|furniture|chairs?|tables?|shelves?|shelf|mirrors?|pictures?|artwork|signs?)\b/gi;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    matches.push(m[1]);
+  }
+  if (!matches.length) return text.slice(0, 60);
+  // Capitalize first letter, deduplicate
+  const unique = [...new Set(matches.map(s => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()))];
+  // Try to grab context: look for adjective/qualifier before the item (e.g. "new pots and pans", "better towels")
+  const enhanced = unique.map(item => {
+    const itemLower = item.toLowerCase();
+    const idx = text.toLowerCase().indexOf(itemLower);
+    if (idx > 0) {
+      // Grab up to 3 words before the item for context
+      const before = text.slice(Math.max(0, idx - 30), idx).trim();
+      const words = before.split(/\s+/);
+      const qualifiers = /^(new|better|more|extra|additional|replacement|larger|bigger|smaller|nicer|good|real|proper|decent|quality|clean|fresh|matching|stainless\s*steel|nonstick|non-stick)$/i;
+      const contextWords = [];
+      for (let i = words.length - 1; i >= 0 && contextWords.length < 2; i--) {
+        if (qualifiers.test(words[i].replace(/[^a-z\s-]/gi, ''))) {
+          contextWords.unshift(words[i].replace(/[^a-zA-Z\s-]/g, ''));
+        } else break;
+      }
+      if (contextWords.length) return contextWords.join(' ') + ' ' + item.toLowerCase();
+    }
+    return item;
+  });
+  return enhanced.join(', ');
+}
 
 async function loadReplacements() {
   try {
@@ -3572,11 +3607,27 @@ function populateRpPropertySelect() {
   });
 }
 
+// Pending review data for the import-confirm flow
+let rpPendingReview = null;
+
 function openAddReplacement(prefill) {
+  rpPendingReview = prefill?._reviewData || null;
   populateRpPropertySelect();
   document.getElementById('rp-property').value = prefill?.property || '';
   document.getElementById('rp-item').value = prefill?.item || '';
   document.getElementById('rp-notes').value = prefill?.notes || '';
+  // Show/hide the review context preview
+  const previewEl = document.getElementById('rp-import-preview');
+  if (previewEl) {
+    if (rpPendingReview?.feedback) {
+      const truncated = rpPendingReview.feedback.length > 200 ? rpPendingReview.feedback.slice(0, 200) + '...' : rpPendingReview.feedback;
+      previewEl.innerHTML = `<div style="font-size:.72rem;text-transform:uppercase;letter-spacing:1px;color:var(--gold);font-weight:700;margin-bottom:5px">Guest Feedback</div><div style="font-size:.82rem;color:var(--text2);line-height:1.5;font-style:italic;border-left:3px solid var(--gold);padding:6px 10px;background:var(--surface2);border-radius:0 var(--radius) var(--radius) 0">${escHtml(truncated)}</div>`;
+      previewEl.style.display = '';
+    } else {
+      previewEl.innerHTML = '';
+      previewEl.style.display = 'none';
+    }
+  }
   document.getElementById('replacement-modal').classList.add('open');
 }
 
@@ -3585,14 +3636,21 @@ async function saveReplacement() {
   const item = document.getElementById('rp-item').value.trim();
   const notes = document.getElementById('rp-notes').value.trim();
   if (!property || !item) { showToast('Please select a property and enter an item description.'); return; }
-  rpData.unshift({
+  const entry = {
     id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
     property,
     item,
     notes,
     status: 'needed',
     created: new Date().toISOString(),
-  });
+  };
+  // Attach review context if this came from an import
+  if (rpPendingReview) {
+    entry.review = rpPendingReview;
+    entry.created = rpPendingReview._created || entry.created;
+    rpPendingReview = null;
+  }
+  rpData.unshift(entry);
   await saveReplacementData();
   closeModal('replacement-modal');
   renderReplacements();
@@ -3715,9 +3773,9 @@ function renderReplacements() {
   const needed = rpData.filter(x => x.status === 'needed' && (filter === 'all' || x.property === filter));
   const purchased = rpData.filter(x => x.status === 'purchased' && (filter === 'all' || x.property === filter));
 
-  // Group needed by property
+  // ── Buy List (Needed) ──
   if (!needed.length) {
-    listEl.innerHTML = '<div class="rp-empty">No replacement items needed. Use "Add Item" or import from guest feedback.</div>';
+    listEl.innerHTML = '<div class="rp-empty">Nothing on the buy list. Use "Add Item" or items will auto-import from guest reviews.</div>';
   } else {
     // Group by property
     const grouped = {};
@@ -3725,25 +3783,23 @@ function renderReplacements() {
       if (!grouped[item.property]) grouped[item.property] = [];
       grouped[item.property].push(item);
     });
-    let h = `<div class="rp-section-hdr"><span>Needed</span><span class="rp-count">${needed.length} item${needed.length !== 1 ? 's' : ''}</span></div>`;
+    let h = `<div class="rp-section-hdr"><span>Buy List</span><span class="rp-count">${needed.length} item${needed.length !== 1 ? 's' : ''}</span></div>`;
     for (const [pid, items] of Object.entries(grouped)) {
       const p = getProp(pid);
+      const nb = getNb(pid);
       const propName = p ? p.name : pid;
-      h += `<div style="margin-bottom:16px">
-        <div style="font-weight:600;font-size:.85rem;color:var(--gold);margin-bottom:6px">${escHtml(propName)}</div>`;
+      const propColor = nb ? `var(--${nb.cls})` : 'var(--gold)';
+      h += `<div style="margin-bottom:18px">
+        <div style="font-weight:700;font-size:.82rem;color:${propColor};margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">${escHtml(propName)} <span style="font-weight:400;font-size:.72rem;color:var(--text2);text-transform:none;letter-spacing:0">(${items.length})</span></div>`;
       items.forEach(item => {
-        const age = Math.floor((Date.now() - new Date(item.created).getTime()) / 86400000);
-        const ageStr = age === 0 ? 'Today' : age === 1 ? '1 day ago' : `${age} days ago`;
-        h += `<div class="rp-card" style="cursor:pointer" onclick="openRpDetail('${item.id}')">
+        const source = item.review ? `From ${escHtml(item.review.guest || 'guest')}` : (item.notes || '');
+        h += `<div class="rp-card" style="cursor:pointer;display:flex;align-items:center;gap:10px" onclick="openRpDetail('${item.id}')">
+          <button class="btn rp-btn-done" onclick="event.stopPropagation();markPurchased('${item.id}')" title="Mark purchased" style="flex-shrink:0">&#10003;</button>
           <div style="flex:1;min-width:0">
-            <div class="rp-card-item" style="font-weight:600;font-size:.9rem;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(item.item)}</div>
-            ${item.notes ? `<div style="font-size:.78rem;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(item.notes)}</div>` : ''}
-            <div style="font-size:.72rem;color:var(--text2);margin-top:4px">Added ${ageStr}</div>
+            <div style="font-weight:600;font-size:.92rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(item.item)}</div>
+            ${source ? `<div style="font-size:.74rem;color:var(--text2);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${source}</div>` : ''}
           </div>
-          <div style="display:flex;gap:6px;flex-shrink:0">
-            <button class="btn rp-btn-done" onclick="event.stopPropagation();markPurchased('${item.id}')" title="Mark purchased">&#10003;</button>
-            <button class="btn rp-btn-del" onclick="event.stopPropagation();deleteReplacement('${item.id}')" title="Remove">&times;</button>
-          </div>
+          <button class="btn rp-btn-del" onclick="event.stopPropagation();deleteReplacement('${item.id}')" title="Remove" style="flex-shrink:0;opacity:.5">&times;</button>
         </div>`;
       });
       h += '</div>';
@@ -3751,24 +3807,22 @@ function renderReplacements() {
     listEl.innerHTML = h;
   }
 
-  // Purchased section
+  // ── Purchase History ──
   if (!purchased.length) {
     purchasedEl.innerHTML = '';
   } else {
-    let h = `<div class="rp-section-hdr"><span>Purchased</span><span class="rp-count">${purchased.length}</span></div>`;
+    let h = `<div class="rp-section-hdr"><span>Purchase History</span><span class="rp-count">${purchased.length}</span></div>`;
     purchased.sort((a, b) => new Date(b.purchasedAt || b.created) - new Date(a.purchasedAt || a.created));
     purchased.forEach(item => {
       const p = getProp(item.property);
       const propName = p ? p.name : item.property;
-      const doneDate = item.purchasedAt ? new Date(item.purchasedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
-      h += `<div class="rp-purchased-card" style="cursor:pointer" onclick="openRpDetail('${item.id}')">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
-          <div style="flex:1;min-width:0">
-            <span class="rp-card-item" style="font-weight:600;font-size:.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:50%">${escHtml(item.item)}</span>
-            <span style="font-size:.78rem;color:var(--text2);margin-left:8px">${escHtml(propName)}</span>
-            ${doneDate ? `<span style="font-size:.72rem;color:var(--text2);margin-left:8px">Purchased ${doneDate}</span>` : ''}
-          </div>
-          <button class="btn rp-btn-del" onclick="event.stopPropagation();deleteReplacement('${item.id}')" title="Remove" style="opacity:.5">&times;</button>
+      const doneDate = item.purchasedAt ? new Date(item.purchasedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+      h += `<div class="rp-purchased-card" style="cursor:pointer;display:flex;align-items:center;gap:10px" onclick="openRpDetail('${item.id}')">
+        <div style="color:var(--green);font-size:.85rem;flex-shrink:0">&#10003;</div>
+        <div style="flex:1;min-width:0;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+          <span style="font-weight:600;font-size:.85rem;color:var(--text2);text-decoration:line-through;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:45%">${escHtml(item.item)}</span>
+          <span style="font-size:.76rem;color:var(--text2)">${escHtml(propName)}</span>
+          ${doneDate ? `<span style="font-size:.72rem;color:var(--text3)">${doneDate}</span>` : ''}
         </div>
       </div>`;
     });
@@ -3788,20 +3842,20 @@ function rvIsPurchaseItem(text) {
   return hasItem && hasSuggestion;
 }
 
-async function rpImportFromReview(rv) {
+// Silent import (for auto-routing during rvFetch bulk scan)
+async function rpImportFromReviewSilent(rv) {
   const problem = rvBuildProblem(rv);
+  const itemName = rpExtractItemName(problem);
   const guest = [rv.guest?.first_name, rv.guest?.last_name].filter(Boolean).join(' ') || 'Guest';
-  const prop = getProp(rv._pid);
   const reviewDate = new Date(rv.reviewed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const stayDates = rv.reservation ? `${new Date(rv.reservation.check_in).toLocaleDateString('en-US',{month:'short',day:'numeric'})} – ${new Date(rv.reservation.check_out).toLocaleDateString('en-US',{month:'short',day:'numeric'})}` : '';
   rpData.unshift({
     id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
     property: rv._pid || '',
-    item: problem.length > 120 ? problem.slice(0, 120) + '...' : problem,
-    notes: `From guest review by ${guest} (${reviewDate})${rv.reservation?.code ? ' — Res: ' + rv.reservation.code : ''}`,
+    item: itemName,
+    notes: `From ${guest} (${reviewDate})`,
     status: 'needed',
     created: rv.reviewed_at || new Date().toISOString(),
-    // Store full review context for detail view
     review: {
       feedback: rv.private?.feedback || '',
       ratings: rv.private?.detailed_ratings || [],
@@ -3811,9 +3865,35 @@ async function rpImportFromReview(rv) {
       reviewDate,
       stayDates,
       resCode: rv.reservation?.code || '',
+      _created: rv.reviewed_at || new Date().toISOString(),
     }
   });
   await saveReplacementData();
+}
+
+// Interactive import (opens editable modal for user confirmation)
+function rpImportFromReview(rv) {
+  const problem = rvBuildProblem(rv);
+  const itemName = rpExtractItemName(problem);
+  const guest = [rv.guest?.first_name, rv.guest?.last_name].filter(Boolean).join(' ') || 'Guest';
+  const reviewDate = new Date(rv.reviewed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const stayDates = rv.reservation ? `${new Date(rv.reservation.check_in).toLocaleDateString('en-US',{month:'short',day:'numeric'})} – ${new Date(rv.reservation.check_out).toLocaleDateString('en-US',{month:'short',day:'numeric'})}` : '';
+  openAddReplacement({
+    property: rv._pid || '',
+    item: itemName,
+    notes: `From ${guest} (${reviewDate})`,
+    _reviewData: {
+      feedback: rv.private?.feedback || '',
+      ratings: rv.private?.detailed_ratings || [],
+      publicReview: rv.public?.review || '',
+      publicRating: rv.public?.rating || null,
+      guest,
+      reviewDate,
+      stayDates,
+      resCode: rv.reservation?.code || '',
+      _created: rv.reviewed_at || new Date().toISOString(),
+    }
+  });
 }
 
 // START
