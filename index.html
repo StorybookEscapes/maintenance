@@ -834,11 +834,15 @@ textarea{resize:vertical;min-height:76px}
         <button onclick="removeTaskPhoto()" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:.7rem;display:flex;align-items:center;justify-content:center" title="Remove photo">&#x2715;</button>
       </div>
       <div id="d-photo-upload">
-        <label style="display:inline-flex;align-items:center;gap:6px;font-size:.74rem;color:var(--green);cursor:pointer;padding:5px 12px;border:1px dashed var(--border);border-radius:var(--radius);background:var(--surface2);transition:border-color .15s" onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--border)'">
-          <span style="font-size:1rem">&#x1F4F7;</span> Attach Photo
+        <div id="d-photo-dropzone" style="display:flex;align-items:center;gap:10px;padding:12px 16px;border:2px dashed var(--border);border-radius:var(--radius);background:var(--surface2);transition:border-color .2s,background .2s;cursor:pointer" onclick="document.getElementById('d-photo-input').click()">
+          <span style="font-size:1.1rem">&#x1F4F7;</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:.76rem;font-weight:500;color:var(--green)">Attach Photo</div>
+            <div style="font-size:.65rem;color:var(--text3);margin-top:1px">Click to browse, drag &amp; drop, or paste from clipboard</div>
+          </div>
           <input type="file" id="d-photo-input" accept="image/*" capture="environment" style="display:none" onchange="uploadTaskPhoto(this.files[0])">
-        </label>
-        <span id="d-photo-status" style="font-size:.68rem;color:var(--text3);margin-left:8px"></span>
+        </div>
+        <span id="d-photo-status" style="font-size:.68rem;color:var(--text3);margin-left:0;display:block;margin-top:4px"></span>
       </div>
     </div>
     <div id="d-combine"></div>
@@ -2129,6 +2133,40 @@ function showTaskPhoto(t){
   document.getElementById('d-photo-status').textContent='';
   document.getElementById('d-photo-input').value='';
 }
+/* Drag-and-drop + paste support for photo upload */
+(function(){
+  // Drag and drop on the dropzone
+  document.addEventListener('dragover',function(e){
+    const dz=document.getElementById('d-photo-dropzone');if(!dz||dz.offsetParent===null)return;
+    e.preventDefault();
+    dz.style.borderColor='var(--green)';dz.style.background='var(--green-light)';
+  });
+  document.addEventListener('dragleave',function(e){
+    const dz=document.getElementById('d-photo-dropzone');if(!dz)return;
+    if(e.target===dz||dz.contains(e.target)){dz.style.borderColor='var(--border)';dz.style.background='var(--surface2)';}
+  });
+  document.addEventListener('drop',function(e){
+    const dz=document.getElementById('d-photo-dropzone');if(!dz||dz.offsetParent===null)return;
+    e.preventDefault();
+    dz.style.borderColor='var(--border)';dz.style.background='var(--surface2)';
+    const file=e.dataTransfer.files&&e.dataTransfer.files[0];
+    if(file&&file.type.startsWith('image/'))uploadTaskPhoto(file);
+  });
+  // Paste from clipboard — only when detail modal is open
+  document.addEventListener('paste',function(e){
+    const modal=document.getElementById('detail-modal');
+    if(!modal||!modal.classList.contains('open'))return;
+    const items=e.clipboardData&&e.clipboardData.items;if(!items)return;
+    for(let i=0;i<items.length;i++){
+      if(items[i].type.startsWith('image/')){
+        e.preventDefault();
+        const file=items[i].getAsFile();
+        if(file)uploadTaskPhoto(file);
+        return;
+      }
+    }
+  });
+})();
 async function uploadTaskPhoto(file){
   if(!file||!detailId)return;
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
