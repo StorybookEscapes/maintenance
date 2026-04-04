@@ -746,7 +746,7 @@ textarea{resize:vertical;min-height:76px}
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px">
         <h3 style="font-size:.88rem;font-weight:600;color:var(--green);margin-bottom:4px">Product Roadmap / Notes</h3>
         <p style="font-size:.76rem;color:var(--text2);margin-bottom:14px;line-height:1.5">Jot down ideas, feature requests, and things to build later.</p>
-        <textarea id="roadmap-notes" style="width:100%;min-height:220px;font-family:'DM Sans',sans-serif;font-size:.82rem;padding:12px;border:1px solid var(--border);border-radius:8px;resize:vertical;line-height:1.6" placeholder="- Add photo uploads to tasks&#10;- Guest notification system&#10;- Monthly maintenance reports&#10;..."></textarea>
+        <textarea id="roadmap-notes" oninput="queueRoadmapSave()" style="width:100%;min-height:220px;font-family:'DM Sans',sans-serif;font-size:.82rem;padding:12px;border:1px solid var(--border);border-radius:8px;resize:vertical;line-height:1.6" placeholder="- Add photo uploads to tasks&#10;- Guest notification system&#10;- Monthly maintenance reports&#10;..."></textarea>
         <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
           <span id="roadmap-status" style="font-size:.72rem;color:var(--text3);align-self:center;margin-right:auto"></span>
           <button class="btn btn-g" onclick="saveRoadmap()">Save Notes</button>
@@ -2537,10 +2537,21 @@ async function removeLogo(){
 async function loadRoadmap(){
   try{const r=await S.get('se_notes');if(r&&r.value){const el=document.getElementById('roadmap-notes');if(el)el.value=r.value;}}catch(e){}
 }
-async function saveRoadmap(){
+let _roadmapTimer=null;
+function queueRoadmapSave(){
+  const st=document.getElementById('roadmap-status');
+  if(st)st.textContent='Unsaved changes...';
+  clearTimeout(_roadmapTimer);
+  _roadmapTimer=setTimeout(()=>saveRoadmap(true),1500);
+}
+async function saveRoadmap(auto){
+  clearTimeout(_roadmapTimer);
   const el=document.getElementById('roadmap-notes');if(!el)return;
+  const st=document.getElementById('roadmap-status');
   await S.set('se_notes',el.value);
-  showToast('Notes saved.');
+  if(st)st.textContent='Saved';
+  if(!auto)showToast('Notes saved.');
+  setTimeout(()=>{if(st&&st.textContent==='Saved')st.textContent='';},2000);
 }
 
 function buildSMS(t,p,v){
