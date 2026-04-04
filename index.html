@@ -658,7 +658,10 @@ textarea{resize:vertical;min-height:76px}
           <div id="rp-detail-badges" style="display:flex;gap:7px;margin-bottom:16px;flex-wrap:wrap;align-items:center"></div>
           <div id="rp-detail-body"></div>
           <div style="display:flex;gap:9px;margin-top:20px;justify-content:space-between;align-items:center;flex-wrap:wrap">
-            <button class="btn" id="rp-detail-delete-btn" style="color:var(--text2);border-color:var(--border)">Skip — Don't Buy</button>
+            <div style="display:flex;gap:7px">
+              <button class="btn" id="rp-detail-delete-btn" style="color:var(--text2);border-color:var(--border)">Skip — Don't Buy</button>
+              <button class="btn" id="rp-detail-convert-btn" style="border-color:var(--gold);color:var(--gold)">Convert to Task</button>
+            </div>
             <div style="display:flex;gap:7px">
               <button class="btn" onclick="closeModal('rp-detail-modal')">Close</button>
               <button class="btn btn-g" id="rp-detail-purchase-btn">Bought It &#10003;</button>
@@ -3686,6 +3689,46 @@ async function deleteReplacement(id) {
   showToast('Item removed.');
 }
 
+async function rpConvertToTask(id) {
+  const item = rpData.find(x => x.id === id);
+  if (!item) return;
+  const rv = item.review;
+  const guest = rv?.guest || '';
+  const feedback = rv?.feedback || item.item;
+  const cat = rvGuessCategory(feedback);
+  const t = {
+    id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
+    property: item.property || '',
+    guest: guest,
+    problem: item.item + (rv?.feedback && rv.feedback !== item.item ? '\n\n' + rv.feedback : ''),
+    category: cat,
+    status: 'open',
+    date: '',
+    vendor: '',
+    urgent: false,
+    recurring: false,
+    notes: [{
+      text: `Converted from replacement buy list.${rv?.resCode ? ' Reservation: ' + rv.resCode : ''}${guest ? ' Guest: ' + guest + '.' : ''}`,
+      type: 'admin',
+      time: new Date().toISOString()
+    }],
+    vendorNotes: '',
+    created: item.created || new Date().toISOString(),
+  };
+  tasks.unshift(t);
+  await saveTasks();
+  // Remove from replacements
+  rpData = rpData.filter(x => x.id !== id);
+  await saveReplacementData();
+  closeModal('rp-detail-modal');
+  renderReplacements();
+  renderAll();
+  showToast('Converted to maintenance task.');
+  // Open the new task detail
+  detailId = t.id;
+  openDetail(t.id);
+}
+
 function openRpDetail(id) {
   const item = rpData.find(x => x.id === id);
   if (!item) return;
@@ -3760,11 +3803,17 @@ function openRpDetail(id) {
   // Footer buttons
   const purchBtn = document.getElementById('rp-detail-purchase-btn');
   const delBtn = document.getElementById('rp-detail-delete-btn');
+  const convertBtn = document.getElementById('rp-detail-convert-btn');
   if (item.status === 'needed') {
     purchBtn.style.display = '';
     purchBtn.onclick = async () => { await markPurchased(id); closeModal('rp-detail-modal'); };
+    convertBtn.style.display = '';
+    convertBtn.onclick = async () => { await rpConvertToTask(id); };
+    delBtn.style.display = '';
   } else {
     purchBtn.style.display = 'none';
+    convertBtn.style.display = 'none';
+    delBtn.style.display = 'none';
   }
   delBtn.onclick = async () => { await deleteReplacement(id); closeModal('rp-detail-modal'); };
 
