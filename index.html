@@ -2563,6 +2563,7 @@ function buildSMS(t,p,v){
     .replace(/\{date_info\}/g, ds)
     .replace(/\{urgent_notice\}/g, urg);
   if(t.photoUrl)msg+=`\n\nPhoto of the issue: ${t.photoUrl}`;
+  if(/hvac\s*filter/i.test(t.problem)||t.category==='hvac'&&/filter/i.test(t.problem))msg+=`\n\nPlease write today's date on the new filter and send us a photo when it's installed.`;
   return msg;
 }
 /* Get all active tasks for a vendor on a specific date */
@@ -2589,6 +2590,7 @@ function buildMultiSMS(taskList,v){
     let line=`Job ${i+1}: ${pn}\nAddress: ${addr}\nDoor Code: ${door}\nIssue: ${t.problem}`;
     if(t.guest)line+=`\nReported by guest: ${t.guest}`;
     if(t.photoUrl)line+=`\nPhoto: ${t.photoUrl}`;
+    if(/hvac\s*filter/i.test(t.problem)||t.category==='hvac'&&/filter/i.test(t.problem))line+=`\nPlease write today's date on the new filter and send us a photo when it's installed.`;
     if(t.urgent)line+=`\n*** URGENT ***`;
     return line;
   }).join('\n\n');
