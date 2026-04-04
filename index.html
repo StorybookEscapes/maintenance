@@ -3612,17 +3612,51 @@ function openRpDetail(id) {
   const p = getProp(item.property);
   const propName = p ? p.name : item.property;
   const created = new Date(item.created).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+  const rv = item.review; // full review context (if imported from feedback)
 
   let h = `<div style="margin-bottom:14px">
     <div style="font-size:.78rem;color:var(--gold);font-weight:600;margin-bottom:4px">${escHtml(propName)}</div>
     <div style="font-size:.72rem;color:var(--text2)">Added ${created}${item.purchasedAt ? ' · Purchased ' + new Date(item.purchasedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</div>
+    ${rv ? `<div style="font-size:.72rem;color:var(--text2);margin-top:2px">Guest: ${escHtml(rv.guest)} · ${rv.reviewDate}${rv.stayDates ? ' · Stay: ' + rv.stayDates : ''}${rv.resCode ? ' · Res: ' + rv.resCode : ''}</div>` : ''}
+    ${rv?.publicRating ? `<div style="font-size:.78rem;color:var(--gold);margin-top:4px">${'★'.repeat(rv.publicRating)}${'☆'.repeat(5 - rv.publicRating)}</div>` : ''}
   </div>`;
 
-  // Full item text — this is the key part, no truncation
-  h += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:14px;font-size:.88rem;line-height:1.6;white-space:pre-wrap;word-break:break-word">${escHtml(item.item)}</div>`;
+  // If we have the full review, show that instead of the truncated item text
+  if (rv?.feedback) {
+    h += `<div style="margin-bottom:14px">
+      <div style="font-size:.72rem;color:var(--text2);font-weight:600;margin-bottom:6px">Private Feedback</div>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px;font-size:.86rem;line-height:1.65;white-space:pre-wrap;word-break:break-word">${escHtml(rv.feedback)}</div>
+    </div>`;
+  } else {
+    // Manual item or legacy import — show item text
+    h += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:14px;font-size:.88rem;line-height:1.6;white-space:pre-wrap;word-break:break-word">${escHtml(item.item)}</div>`;
+  }
+
+  // Rating breakdown from review
+  if (rv?.ratings?.length) {
+    h += `<div style="margin-bottom:14px">
+      <div style="font-size:.72rem;color:var(--text2);font-weight:600;margin-bottom:6px">Rating Breakdown</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">`;
+    rv.ratings.forEach(r => {
+      const rColor = r.rating <= 2 ? '#cc6644' : r.rating <= 3 ? '#c0a830' : '#6ab06a';
+      h += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:.76rem">
+        <span style="color:var(--text2)">${escHtml(r.type)}:</span> <span style="color:${rColor};font-weight:700">${r.rating}/5</span>
+        ${r.comment ? `<div style="font-size:.74rem;color:var(--text2);margin-top:3px;font-style:italic;line-height:1.4">${escHtml(r.comment)}</div>` : ''}
+      </div>`;
+    });
+    h += '</div></div>';
+  }
+
+  // Public review
+  if (rv?.publicReview) {
+    h += `<div style="margin-bottom:14px">
+      <div style="font-size:.72rem;color:var(--text2);font-weight:600;margin-bottom:6px">Public Review</div>
+      <div style="font-size:.82rem;color:var(--text2);line-height:1.5;font-style:italic;border-left:2px solid var(--border);padding-left:10px">${escHtml(rv.publicReview)}</div>
+    </div>`;
+  }
 
   // Notes / source
-  if (item.notes) {
+  if (item.notes && !rv) {
     h += `<div style="margin-bottom:10px">
       <div style="font-size:.72rem;color:var(--text2);font-weight:600;margin-bottom:4px">Source / Notes</div>
       <div style="font-size:.82rem;color:var(--text);line-height:1.5">${escHtml(item.notes)}</div>
@@ -3729,13 +3763,25 @@ async function rpImportFromReview(rv) {
   const guest = [rv.guest?.first_name, rv.guest?.last_name].filter(Boolean).join(' ') || 'Guest';
   const prop = getProp(rv._pid);
   const reviewDate = new Date(rv.reviewed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const stayDates = rv.reservation ? `${new Date(rv.reservation.check_in).toLocaleDateString('en-US',{month:'short',day:'numeric'})} – ${new Date(rv.reservation.check_out).toLocaleDateString('en-US',{month:'short',day:'numeric'})}` : '';
   rpData.unshift({
     id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
     property: rv._pid || '',
-    item: problem.length > 200 ? problem.slice(0, 200) + '...' : problem,
+    item: problem.length > 120 ? problem.slice(0, 120) + '...' : problem,
     notes: `From guest review by ${guest} (${reviewDate})${rv.reservation?.code ? ' — Res: ' + rv.reservation.code : ''}`,
     status: 'needed',
     created: rv.reviewed_at || new Date().toISOString(),
+    // Store full review context for detail view
+    review: {
+      feedback: rv.private?.feedback || '',
+      ratings: rv.private?.detailed_ratings || [],
+      publicReview: rv.public?.review || '',
+      publicRating: rv.public?.rating || null,
+      guest,
+      reviewDate,
+      stayDates,
+      resCode: rv.reservation?.code || '',
+    }
   });
   await saveReplacementData();
 }
