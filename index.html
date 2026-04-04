@@ -127,12 +127,16 @@ main{flex:1;padding:22px;max-width:1440px;margin:0 auto;width:100%}
 .chip{padding:3px 10px;border-radius:20px;font-size:.71rem;font-family:inherit;cursor:pointer;border:1px solid var(--border);background:var(--white);color:var(--text2);transition:all .15s}
 .chip.active{background:var(--green);color:#fff;border-color:var(--green)}
 .hist-list{display:flex;flex-direction:column;gap:6px}
-.hi{background:var(--white);border:1px solid var(--border);border-radius:8px;padding:11px 14px;cursor:pointer;transition:border-color .15s;box-shadow:var(--shadow)}
+.hi{background:var(--white);border:1px solid var(--border);border-radius:8px;padding:0;cursor:pointer;transition:border-color .15s;box-shadow:var(--shadow);display:flex;align-items:stretch;overflow:hidden}
 .hi:hover{border-color:var(--green)}
-.hi-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
-.hi-prob{font-size:.85rem;font-weight:500;flex:1;line-height:1.4}
-.hi-meta{display:flex;gap:10px;margin-top:6px;flex-wrap:wrap}
-.hi-meta span{font-size:.68rem;color:var(--text2)}
+.hi-block{display:flex;align-items:center;justify-content:center;padding:10px 14px;border-right:1px solid var(--border);flex-shrink:0;text-align:center}
+.hi-block:last-child{border-right:none}
+.hi-date{width:82px;font-size:.82rem;font-weight:700;color:var(--text);letter-spacing:.3px}
+.hi-cat{width:100px;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text)}
+.hi-desc{flex:1;min-width:0;padding:10px 14px;justify-content:flex-start;text-align:left;font-size:.78rem;color:var(--text2);line-height:1.4}
+.hi-desc .hi-prop{font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.8px;margin-bottom:2px}
+.hi-vendor{width:130px;font-size:.74rem;font-weight:500;color:var(--text2)}
+@media(max-width:600px){.hi{flex-wrap:wrap}.hi-date{width:70px;font-size:.74rem;padding:8px 10px}.hi-cat{width:80px;font-size:.62rem;padding:8px 10px}.hi-desc{flex-basis:100%;order:4;border-right:none;border-top:1px solid var(--border);padding:8px 12px}.hi-vendor{width:auto;flex:1;font-size:.7rem;padding:8px 10px;border-right:none}}
 .noprop{text-align:center;padding:50px 20px;color:var(--text3);font-family:'Cormorant Garamond',serif;font-style:italic;font-size:1.05rem}
 
 /* CALENDAR */
@@ -831,6 +835,26 @@ textarea{resize:vertical;min-height:76px}
           <option value="in_progress">In Progress</option>
           <option value="complete">Complete</option>
           <option value="resolved_by_guest">Resolved by Guest</option>
+        </select>
+      </div>
+      <div class="fgr">
+        <label>Category</label>
+        <select id="d-category" onchange="updateField('category',this.value)">
+          <option value="">No category</option>
+          <option value="cleaning">Cleaning / Light Handyman</option>
+          <option value="handyman">Handyman / Carpentry</option>
+          <option value="plumbing">Plumbing</option>
+          <option value="hvac">HVAC</option>
+          <option value="electrical">Electrical</option>
+          <option value="pest">Pest Control</option>
+          <option value="landscaping">Landscaping</option>
+          <option value="hot_tub">Hot Tub</option>
+          <option value="pool">Pool</option>
+          <option value="arcade">Arcade / Billiards</option>
+          <option value="septic">Septic</option>
+          <option value="water">Water Filtration</option>
+          <option value="bed_bugs">Bed Bugs</option>
+          <option value="other">Other</option>
         </select>
       </div>
       <div class="fgr">
@@ -1986,6 +2010,7 @@ async function openDetail(id){
   document.getElementById('d-prop').style.color=nb?`var(--${nb.cls})`:'var(--gold)';
   document.getElementById('d-title').textContent=t.problem;
   document.getElementById('d-status').value=t.status;
+  document.getElementById('d-category').value=t.category||'';
   document.getElementById('d-vendor').value=t.vendor||'';
   document.getElementById('d-vnotes').value=t.vendorNotes||'';
   const dv=t.date||'';
@@ -2500,26 +2525,19 @@ function renderHistory(){
   const cc={};scoped.forEach(t=>{if(t.category)cc[t.category]=(cc[t.category]||0)+1;});
   const uc=Object.entries(cc).sort((a,b)=>b[1]-a[1]);
   const chips=[`<button class="chip ${histCat==='all'?'active':''}" onclick="setHistCat('all')">All (${scoped.length})</button>`,...uc.map(([c,n])=>`<button class="chip ${histCat===c?'active':''}" onclick="setHistCat('${c}')">${c.replace('_',' ')} (${n})</button>`)].join('');
-  // Task list — date prominent, vendor, short description
+  // Task list — 4-block layout: Date | Category | Description | Vendor
   const list=done.length?done.map(t=>{
     const p=getProp(t.property);const nb=getNb(t.property);const nbc=nb?'nb-'+nb.cls:'';const plc=nb?'pl-'+nb.cls:'';
-    const d=t.date?new Date(t.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'';
-    const short=t.problem.length>80?t.problem.substring(0,80)+'...':t.problem;
+    const d=t.date?new Date(t.date+'T12:00:00').toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'2-digit'}):'';
+    const short=t.problem.length>100?t.problem.substring(0,100)+'…':t.problem;
+    const cat=(t.category||'').replace('_',' ');
+    const vendorLabel=t.status==='resolved_by_guest'?'Resolved by Guest':(t.vendor||'—');
+    const showProp=!selProp;// hide property name when filtered to single property
     return`<div class="hi ${nbc}" onclick="openDetail('${t.id}')" style="border-left-width:3px">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
-        <div style="flex:1;min-width:0">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:4px">
-            <span style="font-size:.82rem;font-weight:700;color:var(--text)">${d}</span>
-            <span style="font-size:.72rem;font-weight:600" class="${plc}">${p?p.name.split(' - ').pop():''}</span>
-          </div>
-          <div style="font-size:.8rem;color:var(--text);line-height:1.4;margin-bottom:4px">${short}</div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap">
-            ${t.vendor?`<span style="font-size:.7rem;color:var(--text2)">${t.vendor}</span>`:''}
-            ${t.category?`<span style="font-size:.7rem;color:var(--text3)">${t.category.replace('_',' ')}</span>`:''}
-          </div>
-        </div>
-        <span class="badge b-${t.status}" style="flex-shrink:0">${t.status.replace('_',' ')}</span>
-      </div>
+      <div class="hi-block hi-date">${d}</div>
+      <div class="hi-block hi-cat">${cat}</div>
+      <div class="hi-block hi-desc">${showProp&&p?`<div class="hi-prop ${plc}">${p.name.split(' - ').pop()}</div>`:''}${short}</div>
+      <div class="hi-block hi-vendor">${vendorLabel}</div>
     </div>`;
   }).join(''):'<div style="color:var(--text3);font-size:.82rem;padding:16px 0;font-style:italic">No completed tasks found.</div>';
   // Active filter label
@@ -2531,6 +2549,12 @@ function renderHistory(){
         ${filterLabel}
       </div>
       <div class="cat-chips" style="margin-bottom:14px">${chips}</div>
+      ${done.length?`<div class="hi-header" style="display:flex;gap:0;padding:0 0 6px;border-bottom:1px solid var(--border);margin-bottom:8px">
+        <span style="width:82px;padding-left:17px;font-size:.62rem;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text3)">Date</span>
+        <span style="width:100px;font-size:.62rem;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);text-align:center">Category</span>
+        <span style="flex:1;font-size:.62rem;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);padding-left:14px">Description</span>
+        <span style="width:130px;font-size:.62rem;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);text-align:center">Vendor</span>
+      </div>`:''}
       <div class="hist-list">${list}</div>
     </div>`;
 }
@@ -3593,6 +3617,7 @@ function rvDismissAll() {
 
 // ── REPLACEMENTS & PURCHASES ──────────────────────────────────────
 let rpData = []; // { id, property, item, notes, status:'needed'|'purchased', created, purchasedAt? }
+let rpHistProp = null; // selected property filter for Purchase History
 
 const RP_PURCHASE_KEYWORDS = /\b(pots?|pans?|cookware|dishes?|plates?|cups?|glasses?|mugs?|utensils?|silverware|flatware|knife|knives|cutting boards?|bakeware|towels?|linens?|sheets?|bedding|comforters?|blankets?|pillows?|mattress(?:es)?|supplies|toiletries|soap|dish soap|shampoo|conditioner|toilet paper|paper towels?|coffee makers?|keurig|toasters?|blenders?|can openers?|corkscrews?|irons?|ironing boards?|hangers?|curtains?|blinds?|rugs?|mats?|brooms?|mops?|vacuums?|trash cans?|light bulbs?|batteries|remotes?|games?|board games?|puzzles?|toys?|dvds?|books?|decor|decorations?|furniture|chairs?|tables?|shelves?|shelf|mirrors?|pictures?|artwork|signs?|sponges?|dish rack|drying rack|wash cloths?|washcloths?|dish towels?|oven mitts?|pot holders?|shower curtains?|bath mats?|plungers?|fly swatters?|wine opener|bottle opener|colander|strainer|spatulas?|whisks?|tongs?|ladles?|peelers?|graters?|mixing bowls?|baking sheets?|cookie sheets?|tupperware|containers?|storage bins?|trash bags?|ziplock|ziploc|baggies|cleaning supplies|detergent|cleaner|windex|lysol|disinfectant|air freshener|candles?|night lights?|extension cords?|power strips?|surge protectors?|welcome mats?|door mats?|coat hooks?|key hooks?|drawer liners?|placemats?|coasters?|wine glasses|champagne glasses|shot glasses|measuring cups?|measuring spoons?|thermometers?|fire extinguishers?|smoke detectors?|carbon monoxide detectors?|first aid|band.?aids?|medicine)\b/i;
 
@@ -3656,6 +3681,7 @@ async function saveReplacementData() {
   await save('se_purchases', rpData);
 }
 
+function rpSelHistProp(id) { rpHistProp = id || null; renderReplacements(); }
 function populateRpPropFilter() {
   const sel = document.getElementById('rp-prop-filter');
   if (!sel) return;
@@ -3976,11 +4002,34 @@ function renderReplacements() {
   if (!purchased.length) {
     purchasedEl.innerHTML = '';
   } else {
-    purchased.sort((a, b) => new Date(b.purchasedAt || b.created) - new Date(a.purchasedAt || a.created));
-    let h = `<div style="margin-top:20px;padding-top:18px;border-top:2px solid var(--border)">
-      <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.3rem;color:var(--green);font-weight:600;margin:0 0 14px 0">Purchase History</h2>
+    // Property grid grouped by neighborhood (like Service History)
+    let gridHtml = '';
+    NBS.forEach(nb => {
+      const cards = nb.props.map(pid => {
+        const p = getProp(pid); if (!p) return '';
+        const ct = purchased.filter(i => i.property === pid).length;
+        if (!ct) return '';
+        return `<div class="pc nb-${nb.cls} ${rpHistProp===pid?'sel':''}" onclick="rpSelHistProp('${pid}')" style="cursor:pointer">
+          <div class="pc-name">${p.name.split(' - ').pop()}</div>
+          <div class="pcs"><strong>${ct}</strong> purchased</div>
+        </div>`;
+      }).join('');
+      if (cards.replace(/\s/g, '')) {
+        gridHtml += `<div class="nb-section"><div class="nb-hdr nb-${nb.cls}-h"><h3>${nb.name}</h3><span class="nb-sub">${nb.sub}</span></div><div class="prop-grid">${cards}</div></div>`;
+      }
+    });
+
+    let filtered = rpHistProp ? purchased.filter(i => i.property === rpHistProp) : purchased;
+    filtered.sort((a, b) => new Date(b.purchasedAt || b.created) - new Date(a.purchasedAt || a.created));
+    const filterLabel = rpHistProp ? `<span style="font-size:.76rem;color:var(--text2);margin-left:8px">Showing: <strong>${getProp(rpHistProp)?.name.split(' - ').pop()}</strong> <button onclick="rpSelHistProp(null)" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:.72rem;font-family:inherit;padding:0 4px">✕ Clear</button></span>` : '';
+
+    let h = `${gridHtml}<div style="margin-top:20px;padding-top:18px;border-top:2px solid var(--border)">
+      <div style="display:flex;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:6px">
+        <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.3rem;color:var(--green);font-weight:600;margin:0">Purchase History</h2>
+        ${filterLabel}
+      </div>
       <div style="display:flex;flex-direction:column;gap:8px">`;
-    purchased.forEach(item => {
+    filtered.forEach(item => {
       const p = getProp(item.property);
       const nb = getNb(item.property);
       const nbc = nb ? 'nb-' + nb.cls : '';
