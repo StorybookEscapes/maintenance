@@ -3654,7 +3654,19 @@ function renderCleaningLog() {
 
 // ── Guest Feedback (Review Import) ─────────────────────────────
 let rvItems = []; // filtered, maintenance-relevant reviews
-let rvDismissed = JSON.parse(localStorage.getItem('se_rv_dismissed') || '[]');
+let rvDismissed = [];
+async function loadDismissed(){
+  try{
+    const r=await S.get('se_dismissed');
+    if(r&&r.value)rvDismissed=JSON.parse(r.value);
+    // Migrate from localStorage if KV is empty but localStorage has data
+    if(!rvDismissed.length){
+      const local=JSON.parse(localStorage.getItem('se_rv_dismissed')||'[]');
+      if(local.length){rvDismissed=local;await saveDismissed();localStorage.removeItem('se_rv_dismissed');}
+    }
+  }catch(e){rvDismissed=JSON.parse(localStorage.getItem('se_rv_dismissed')||'[]');}
+}
+async function saveDismissed(){try{await S.set('se_dismissed',JSON.stringify(rvDismissed));}catch(e){}}
 
 // Phrases that indicate actionable maintenance, cleaning, or repair issues
 // Deliberately narrow: must suggest something is BROKEN, DIRTY, INFESTED, or MALFUNCTIONING
@@ -3776,7 +3788,7 @@ async function rvFetch() {
   }
   // Persist dismissed IDs if any purchase items were auto-imported
   if (purchaseCount) {
-    localStorage.setItem('se_rv_dismissed', JSON.stringify(rvDismissed));
+    saveDismissed();
     renderReplacements();
   }
 
@@ -3902,7 +3914,7 @@ async function rvImport(id) {
   if (rvIsPurchaseItem(problem)) {
     rpImportFromReview(rv);
     rvDismissed.push(id);
-    localStorage.setItem('se_rv_dismissed', JSON.stringify(rvDismissed));
+    saveDismissed();
     rvItems = rvItems.filter(x => x.id !== id);
     renderRV();
     return;
@@ -3930,7 +3942,7 @@ async function rvImport(id) {
   tasks.unshift(t);
   await saveTasks();
   rvDismissed.push(id);
-  localStorage.setItem('se_rv_dismissed', JSON.stringify(rvDismissed));
+  saveDismissed();
   rvItems = rvItems.filter(x => x.id !== id);
   renderRV(); renderAll();
   showToast('Task imported from guest feedback.');
@@ -3965,7 +3977,7 @@ async function rvImportAll() {
     nTasks++;
   }
   await saveTasks();
-  localStorage.setItem('se_rv_dismissed', JSON.stringify(rvDismissed));
+  saveDismissed();
   rvItems = [];
   renderRV(); renderAll(); renderReplacements();
   const parts = [];
@@ -3976,7 +3988,7 @@ async function rvImportAll() {
 
 function rvDismiss(id) {
   rvDismissed.push(id);
-  localStorage.setItem('se_rv_dismissed', JSON.stringify(rvDismissed));
+  saveDismissed();
   rvItems = rvItems.filter(x => x.id !== id);
   renderRV();
   showToast('Feedback dismissed.');
@@ -3984,7 +3996,7 @@ function rvDismiss(id) {
 
 function rvDismissAll() {
   rvItems.forEach(rv => rvDismissed.push(rv.id));
-  localStorage.setItem('se_rv_dismissed', JSON.stringify(rvDismissed));
+  saveDismissed();
   rvItems = [];
   renderRV();
   showToast('All feedback dismissed.');
@@ -4509,6 +4521,7 @@ async function initApp(){
   populatePropFilter();
   renderAll();
   hbStartPolling();
+  await loadDismissed(); // load dismissed IDs from KV before fetching reviews
   rvFetch(); // fetch guest feedback reviews
   clFetch(); // pre-load cleaning log in background
   cleanupOldPhotos(); // auto-delete photos from tasks resolved 30+ days ago
