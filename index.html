@@ -651,7 +651,8 @@ textarea{resize:vertical;min-height:76px}
           <div class="mhdr">
             <div>
               <div id="rp-detail-prop" style="font-size:.67rem;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:4px;color:var(--gold)"></div>
-              <div class="mtitle" id="rp-detail-title"></div>
+              <div class="mtitle" id="rp-detail-title" style="cursor:pointer" title="Click to edit item name" onclick="rpStartEditTitle()"></div>
+              <input type="text" id="rp-detail-title-input" style="display:none;font-family:'Cormorant Garamond',serif;font-size:1.25rem;font-weight:600;color:var(--green);border:1px solid var(--gold);border-radius:var(--radius);padding:4px 8px;width:100%;background:var(--surface2);outline:none" onblur="rpSaveTitle()" onkeydown="if(event.key==='Enter'){this.blur();}if(event.key==='Escape'){rpCancelEditTitle();}">
             </div>
             <button class="mclose" onclick="closeModal('rp-detail-modal')">&#x2715;</button>
           </div>
@@ -3817,7 +3818,41 @@ function openRpDetail(id) {
   }
   delBtn.onclick = async () => { await deleteReplacement(id); closeModal('rp-detail-modal'); };
 
+  rpDetailCurrentId = id;
   document.getElementById('rp-detail-modal').classList.add('open');
+}
+
+let rpDetailCurrentId = null;
+
+function rpStartEditTitle() {
+  const titleEl = document.getElementById('rp-detail-title');
+  const inputEl = document.getElementById('rp-detail-title-input');
+  inputEl.value = titleEl.textContent;
+  titleEl.style.display = 'none';
+  inputEl.style.display = '';
+  inputEl.focus();
+  inputEl.select();
+}
+
+function rpCancelEditTitle() {
+  document.getElementById('rp-detail-title').style.display = '';
+  document.getElementById('rp-detail-title-input').style.display = 'none';
+}
+
+async function rpSaveTitle() {
+  const inputEl = document.getElementById('rp-detail-title-input');
+  const titleEl = document.getElementById('rp-detail-title');
+  const newName = inputEl.value.trim();
+  inputEl.style.display = 'none';
+  titleEl.style.display = '';
+  if (!newName || !rpDetailCurrentId) return;
+  const item = rpData.find(x => x.id === rpDetailCurrentId);
+  if (!item || item.item === newName) return;
+  item.item = newName;
+  titleEl.textContent = newName;
+  await saveReplacementData();
+  renderReplacements();
+  showToast('Item name updated.');
 }
 
 function renderReplacements() {
