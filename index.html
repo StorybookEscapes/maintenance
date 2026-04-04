@@ -412,41 +412,41 @@ textarea{resize:vertical;min-height:76px}
 .rv-btn-dismiss:hover{color:#e8d080;border-color:#d4a840}
 
 /* ── Cleaning Log ── */
-.cl-wrap{background:linear-gradient(135deg,#2a2418 0%,#3a2e1a 100%);border:1px solid #7a6530;border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow-md)}
+.cl-wrap{border-radius:var(--radius)}
 .cl-summary-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-bottom:20px}
-.cl-prop-card{background:rgba(255,255,255,.06);border:1px solid rgba(180,150,60,.25);border-radius:8px;padding:13px 16px;cursor:pointer;transition:border-color .15s}
-.cl-prop-card:hover{border-color:#d4a840}
-.cl-prop-card.has-issues{border-left:3px solid #e06050}
-.cl-prop-name{font-size:.78rem;font-weight:700;color:#d4a840;margin-bottom:4px;text-transform:uppercase;letter-spacing:.8px}
-.cl-prop-stat{font-size:.72rem;color:#b0a070;line-height:1.5}
-.cl-prop-stat .bad{color:#e06050;font-weight:700}
-.cl-entry{background:rgba(255,255,255,.06);border:1px solid rgba(180,150,60,.25);border-radius:8px;padding:12px 16px;margin-bottom:6px;transition:border-color .15s}
-.cl-entry:hover{border-color:rgba(180,150,60,.5)}
+.cl-prop-card{background:var(--white);border:1px solid var(--border);border-radius:8px;padding:13px 16px;cursor:pointer;transition:border-color .15s;box-shadow:var(--shadow)}
+.cl-prop-card:hover{border-color:var(--green)}
+.cl-prop-card.has-issues{border-left:3px solid var(--red)}
+.cl-prop-name{font-size:.78rem;font-weight:700;color:var(--green);margin-bottom:4px}
+.cl-prop-stat{font-size:.72rem;color:var(--text2);line-height:1.5}
+.cl-prop-stat .bad{color:var(--red);font-weight:700}
+.cl-entry{background:var(--white);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-bottom:6px;transition:border-color .15s;box-shadow:var(--shadow)}
+.cl-entry:hover{border-color:var(--green)}
 .cl-entry-hdr{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:6px}
-.cl-entry-date{font-size:.78rem;font-weight:700;color:#e8dcc0}
-.cl-entry-guest{font-size:.72rem;color:#b0a070}
+.cl-entry-date{font-size:.78rem;font-weight:700;color:var(--text)}
+.cl-entry-guest{font-size:.72rem;color:var(--text2)}
 .cl-entry-rating{font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:12px}
 .cl-entry-rating.good{background:rgba(90,176,90,.15);color:#6ab06a}
 .cl-entry-rating.ok{background:rgba(200,180,60,.15);color:#c0a830}
 .cl-entry-rating.bad{background:rgba(224,96,80,.15);color:#e06050}
-.cl-entry-text{font-size:.82rem;color:#e8dcc0;line-height:1.5;margin-top:4px}
-.cl-entry-source{font-size:.68rem;color:#8a7a50;margin-top:4px;font-style:italic}
-.cl-empty{text-align:center;padding:30px;color:#b0a070;font-size:.88rem}
+.cl-entry-text{font-size:.82rem;color:var(--text);line-height:1.5;margin-top:4px}
+.cl-entry-source{font-size:.68rem;color:var(--text3);margin-top:4px;font-style:italic}
+.cl-empty{text-align:center;padding:30px;color:var(--text2);font-size:.88rem}
 .cl-trend{display:inline-flex;align-items:center;gap:4px;font-size:.68rem;padding:2px 7px;border-radius:10px;margin-left:6px}
 .cl-trend.improving{background:rgba(90,176,90,.15);color:#6ab06a}
 .cl-trend.declining{background:rgba(224,96,80,.15);color:#e06050}
 .cl-trend.stable{background:rgba(200,180,60,.15);color:#c0a830}
 .cl-section{margin-bottom:22px}
-.cl-section-hdr{font-family:'Cormorant Garamond',serif;font-size:1.1rem;font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:8px;text-transform:uppercase;letter-spacing:1.2px;font-size:.76rem}
+.cl-section-hdr{font-family:'Cormorant Garamond',serif;font-size:1.1rem;font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:8px}
 .cl-section-hdr .icon{font-size:1rem}
-.cl-section-hdr.problems{color:#e06050}
-.cl-section-hdr.winners{color:#6ab06a}
-.cl-section-hdr.all-props{color:#d4a840}
-.cl-winner-card{background:rgba(255,255,255,.06);border:1px solid rgba(90,176,90,.3);border-left:3px solid #6ab06a;border-radius:8px;padding:13px 16px;cursor:pointer;transition:border-color .15s}
-.cl-winner-card:hover{border-color:#6ab06a}
-.cl-winner-stat{font-size:.72rem;color:#b0a070}
-.cl-winner-stat .good{color:#6ab06a;font-weight:700}
-.cl-no-data{font-size:.82rem;color:#8a7a50;padding:10px 0;font-style:italic}
+.cl-section-hdr.losers{color:var(--red)}
+.cl-section-hdr.winners{color:var(--green)}
+.cl-section-hdr.all-props{color:var(--green)}
+.cl-winner-card{background:var(--white);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:8px;padding:13px 16px;cursor:pointer;transition:border-color .15s;box-shadow:var(--shadow)}
+.cl-winner-card:hover{border-color:var(--green)}
+.cl-winner-stat{font-size:.72rem;color:var(--text2)}
+.cl-winner-stat .good{color:var(--green);font-weight:700}
+.cl-no-data{font-size:.82rem;color:var(--text2);padding:10px 0;font-style:italic}
 
 /* ── Replacements & Purchases ── */
 .rp-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;transition:border-color .15s}
@@ -594,15 +594,12 @@ textarea{resize:vertical;min-height:76px}
 
     <div class="view" id="view-cleaning">
       <div class="cl-wrap">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-          <div style="display:flex;align-items:center;gap:10px">
-            <svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:#d4a840;flex-shrink:0"><path d="M17 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zm0 18H7V4h10v16zM9 6h6v2H9V6zm0 4h6v2H9v-2zm0 4h4v2H9v-2z"/></svg>
-            <div>
-              <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:1.5px;color:#d4a840;font-weight:700">Cleaning Log</div>
-              <span id="cl-status" style="font-size:.66rem;color:#8a7a50"></span>
-            </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+          <div>
+            <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--green);font-weight:600;margin:0">Cleaning Log</h2>
+            <span id="cl-status" style="font-size:.7rem;color:var(--text2)"></span>
           </div>
-          <select id="cl-prop-filter" onchange="renderCleaningLog()" style="padding:6px 10px;border-radius:8px;border:1px solid rgba(180,150,60,.3);background:rgba(255,255,255,.06);color:#e8dcc0;font-size:.78rem;font-family:inherit"></select>
+          <select id="cl-prop-filter" onchange="renderCleaningLog()" style="padding:6px 10px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.82rem;font-family:inherit"></select>
         </div>
         <div id="cl-summary"></div>
         <div id="cl-log"></div>
@@ -3029,36 +3026,49 @@ function renderCleaningLog() {
       if (!allPropStats[pid]) allPropStats[pid] = { totalReviews: 0, recentReviews: 0, recentAvg: null, totalAvg: null, totalFlags: 0, recentFlags: 0 };
     }
 
-    // ── Problem Properties: trend-based, favoring repeated complaints over single bad scores ──
-    // Qualifies if: 3+ flags in 60 days (clear pattern), OR 2 flags + avg ≤ 4.0 (repeated + below par)
-    // A single low score alone does NOT qualify — that's an outlier, not a trend
-    const problemPids = Object.keys(allPropStats).filter(pid => {
-      const s = allPropStats[pid];
-      if (s.recentFlags >= 3) return true; // 3+ complaints = undeniable pattern
-      if (s.recentFlags >= 2 && s.recentAvg !== null && s.recentAvg <= 4.0) return true; // 2 complaints + below-average scores
-      return false;
-    }).sort((a, b) => {
-      const sa = allPropStats[a], sb = allPropStats[b];
-      return sb.recentFlags - sa.recentFlags || (sa.recentAvg || 5) - (sb.recentAvg || 5);
-    });
-
-    // ── Winners: 5+ recent reviews with avg ≥ 4.8 and zero flags in 60 days ──
+    // ── Winners: 60-day avg ≥ 4.8 with at least 3 reviews ──
     const winnerPids = Object.keys(allPropStats).filter(pid => {
       const s = allPropStats[pid];
-      return s.recentReviews >= 3 && s.recentAvg !== null && s.recentAvg >= 4.8 && s.recentFlags === 0;
+      return s.recentReviews >= 3 && s.recentAvg !== null && s.recentAvg >= 4.8;
     }).sort((a, b) => (allPropStats[b].recentAvg || 0) - (allPropStats[a].recentAvg || 0));
+
+    // ── Losers: 60-day avg < 4.8 with at least 3 reviews ──
+    const loserPids = Object.keys(allPropStats).filter(pid => {
+      const s = allPropStats[pid];
+      return s.recentReviews >= 3 && s.recentAvg !== null && s.recentAvg < 4.8;
+    }).sort((a, b) => (allPropStats[a].recentAvg || 5) - (allPropStats[b].recentAvg || 5));
 
     let sumH = '';
 
-    // ── Problem Properties Section ──
-    if (problemPids.length) {
-      sumH += `<div class="cl-section"><div class="cl-section-hdr problems"><span class="icon">⚠</span> Problem Properties <span style="font-size:.72rem;font-weight:400;color:var(--text2)">(last 60 days)</span></div>`;
+    // ── Winners Section (shown first) ──
+    if (winnerPids.length) {
+      sumH += `<div class="cl-section"><div class="cl-section-hdr winners"><span class="icon">★</span> Winners</div>`;
       sumH += '<div class="cl-summary-grid">';
-      for (const pid of problemPids) {
+      for (const pid of winnerPids) {
         const p = getProp(pid);
         if (!p) continue;
         const s = allPropStats[pid];
-        const avgStr = s.recentAvg !== null ? s.recentAvg.toFixed(1) : '—';
+        const recentStr = s.recentAvg !== null ? s.recentAvg.toFixed(1) : '—';
+        const overallStr = s.totalAvg !== null ? s.totalAvg.toFixed(1) : '—';
+        const perfectCount = (clAllRatings[pid] || []).filter(r => new Date(r.reviewedAt) > new Date(sixtyDaysAgo) && r.rating === 5).length;
+        sumH += `<div class="cl-winner-card" onclick="document.getElementById('cl-prop-filter').value='${pid}';renderCleaningLog()">
+          <div class="cl-prop-name">${escHtml(p.name)}</div>
+          <div class="cl-winner-stat"><span class="good">${recentStr}/5</span> 60-day avg · ${overallStr}/5 overall · ${s.recentReviews} reviews · ${perfectCount} perfect</div>
+        </div>`;
+      }
+      sumH += '</div></div>';
+    }
+
+    // ── Losers Section ──
+    if (loserPids.length) {
+      sumH += `<div class="cl-section"><div class="cl-section-hdr losers"><span class="icon">⚠</span> Losers</div>`;
+      sumH += '<div class="cl-summary-grid">';
+      for (const pid of loserPids) {
+        const p = getProp(pid);
+        if (!p) continue;
+        const s = allPropStats[pid];
+        const recentStr = s.recentAvg !== null ? s.recentAvg.toFixed(1) : '—';
+        const overallStr = s.totalAvg !== null ? s.totalAvg.toFixed(1) : '—';
         // Trend vs prior 60 days
         const prior60 = (clAllRatings[pid] || []).filter(r => { const d = new Date(r.reviewedAt).getTime(); return d > now - 120 * 86400000 && d <= now - 60 * 86400000; });
         const priorAvg = prior60.length ? prior60.reduce((s, r) => s + r.rating, 0) / prior60.length : null;
@@ -3069,43 +3079,23 @@ function renderCleaningLog() {
         }
         sumH += `<div class="cl-prop-card has-issues" onclick="document.getElementById('cl-prop-filter').value='${pid}';renderCleaningLog()">
           <div class="cl-prop-name">${escHtml(p.name)}</div>
-          <div class="cl-prop-stat"><span class="bad">${s.recentFlags} flag${s.recentFlags !== 1 ? 's' : ''}</span> in 60 days · avg cleanliness: ${avgStr}/5 ${trend} · ${s.recentReviews} review${s.recentReviews !== 1 ? 's' : ''}</div>
+          <div class="cl-prop-stat"><span class="bad">${recentStr}/5</span> 60-day avg · ${overallStr}/5 overall ${trend} · ${s.recentReviews} reviews${s.recentFlags > 0 ? ` · <span class="bad">${s.recentFlags} flag${s.recentFlags !== 1 ? 's' : ''}</span>` : ''}</div>
         </div>`;
       }
       sumH += '</div></div>';
     }
 
-    // ── Winners Section ──
-    if (winnerPids.length) {
-      sumH += `<div class="cl-section"><div class="cl-section-hdr winners"><span class="icon">★</span> Cleaning Winners <span style="font-size:.72rem;font-weight:400;color:var(--text2)">(last 60 days)</span></div>`;
-      sumH += '<div class="cl-summary-grid">';
-      for (const pid of winnerPids) {
-        const p = getProp(pid);
-        if (!p) continue;
-        const s = allPropStats[pid];
-        const avgStr = s.recentAvg !== null ? s.recentAvg.toFixed(1) : '—';
-        const perfectCount = (clAllRatings[pid] || []).filter(r => new Date(r.reviewedAt) > new Date(sixtyDaysAgo) && r.rating === 5).length;
-        sumH += `<div class="cl-winner-card" onclick="document.getElementById('cl-prop-filter').value='${pid}';renderCleaningLog()">
-          <div class="cl-prop-name">${escHtml(p.name)}</div>
-          <div class="cl-winner-stat"><span class="good">${avgStr}/5 avg</span> · ${s.recentReviews} reviews · ${perfectCount} perfect 5/5 scores</div>
-        </div>`;
-      }
-      sumH += '</div></div>';
-    }
-
-    if (!problemPids.length && !winnerPids.length) {
-      sumH += '<div class="cl-no-data">Not enough review data in the last 60 days to identify trends yet.</div>';
+    if (!winnerPids.length && !loserPids.length) {
+      sumH += '<div class="cl-no-data">Not enough review data in the last 60 days to identify trends yet (need at least 3 reviews per property).</div>';
     }
 
     // ── All Properties Grid (60-day weighted) ──
-    sumH += `<div class="cl-section"><div class="cl-section-hdr all-props"><span class="icon">◈</span> All Properties <span style="font-size:.72rem;font-weight:400;color:#8a7a50">(last 60 days)</span></div>`;
+    sumH += `<div class="cl-section"><div class="cl-section-hdr all-props"><span class="icon">◈</span> All Properties</div>`;
     sumH += '<div class="cl-summary-grid">';
-    // Show all properties with recent activity, sorted by flags then avg
     const allSorted = Object.keys(allPropStats)
       .filter(pid => allPropStats[pid].recentReviews > 0)
       .sort((a, b) => {
         const sa = allPropStats[a], sb = allPropStats[b];
-        // Sort: most flags first, then lowest avg
         if (sb.recentFlags !== sa.recentFlags) return sb.recentFlags - sa.recentFlags;
         return (sa.recentAvg || 5) - (sb.recentAvg || 5);
       });
@@ -3114,11 +3104,12 @@ function renderCleaningLog() {
         const p = getProp(pid);
         if (!p) continue;
         const s = allPropStats[pid];
-        const avg = s.recentAvg !== null ? s.recentAvg.toFixed(1) : '—';
+        const recentAvg = s.recentAvg !== null ? s.recentAvg.toFixed(1) : '—';
+        const overallAvg = s.totalAvg !== null ? s.totalAvg.toFixed(1) : '—';
         const hasFlags = s.recentFlags > 0;
         sumH += `<div class="cl-prop-card${hasFlags ? ' has-issues' : ''}" onclick="document.getElementById('cl-prop-filter').value='${pid}';renderCleaningLog()">
           <div class="cl-prop-name">${escHtml(p.name)}</div>
-          <div class="cl-prop-stat">${hasFlags ? `<span class="bad">${s.recentFlags} flag${s.recentFlags !== 1 ? 's' : ''}</span> · ` : ''}avg: ${avg}/5 · ${s.recentReviews} review${s.recentReviews !== 1 ? 's' : ''}${s.totalFlags > 0 ? ` · <span style="color:#8a7a50">${s.totalFlags} all-time</span>` : ''}</div>
+          <div class="cl-prop-stat">${hasFlags ? `<span class="bad">${s.recentFlags} flag${s.recentFlags !== 1 ? 's' : ''}</span> · ` : ''}${recentAvg}/5 60-day · ${overallAvg}/5 overall · ${s.recentReviews} review${s.recentReviews !== 1 ? 's' : ''}</div>
         </div>`;
       }
     } else {
@@ -3137,23 +3128,26 @@ function renderCleaningLog() {
     const recentAvg = sixtyDayRatings.length ? (sixtyDayRatings.reduce((s, r) => s + r.rating, 0) / sixtyDayRatings.length).toFixed(1) : '—';
     const perfect = sixtyDayRatings.filter(r => r.rating === 5).length;
     const recentFlags = entries.filter(e => new Date(e.reviewedAt) > new Date(Date.now() - 60 * 86400000)).length;
-    summaryEl.innerHTML = `<div style="background:rgba(255,255,255,.06);border:1px solid rgba(180,150,60,.25);border-radius:8px;padding:14px 16px;margin-bottom:16px">
-      <div style="font-size:.72rem;font-weight:700;color:#d4a840;text-transform:uppercase;letter-spacing:.8px">${escHtml(p?.name || filter)}</div>
-      <div style="font-size:.74rem;color:#b0a070;margin-top:6px">Last 60 days: ${sixtyDayRatings.length} reviews · avg ${recentAvg}/5 · ${perfect} perfect scores · ${recentFlags} flag${recentFlags !== 1 ? 's' : ''}</div>
-      <div style="font-size:.72rem;color:#8a7a50;margin-top:2px">${entries.length} flag${entries.length !== 1 ? 's' : ''} all-time · ${propRatings.length} total reviews · Overall avg: ${allAvg}/5</div>
-      <div style="margin-top:8px"><button style="padding:4px 12px;border-radius:7px;font-size:.7rem;font-family:inherit;font-weight:600;cursor:pointer;border:1px solid rgba(180,150,60,.3);background:transparent;color:#b0a070;transition:all .15s" onmouseover="this.style.color='#e8d080';this.style.borderColor='#d4a840'" onmouseout="this.style.color='#b0a070';this.style.borderColor='rgba(180,150,60,.3)'" onclick="document.getElementById('cl-prop-filter').value='all';renderCleaningLog()">← Back to all properties</button></div>
+    summaryEl.innerHTML = `<div style="background:var(--white);border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:16px;box-shadow:var(--shadow)">
+      <div style="font-family:'Cormorant Garamond',serif;font-size:1.15rem;font-weight:600;color:var(--green)">${escHtml(p?.name || filter)}</div>
+      <div style="font-size:.78rem;color:var(--text);margin-top:6px;font-weight:600">60-Day: <span style="color:${parseFloat(recentAvg) >= 4.8 ? 'var(--green)' : 'var(--red)'}">${recentAvg}/5 avg</span> · ${sixtyDayRatings.length} reviews · ${perfect} perfect · ${recentFlags} flag${recentFlags !== 1 ? 's' : ''}</div>
+      <div style="font-size:.74rem;color:var(--text2);margin-top:2px">Overall: ${allAvg}/5 avg · ${propRatings.length} total reviews · ${entries.length} flag${entries.length !== 1 ? 's' : ''} all-time</div>
+      <div style="margin-top:8px"><button class="btn" style="font-size:.72rem;padding:4px 12px" onclick="document.getElementById('cl-prop-filter').value='all';renderCleaningLog()">← Back to all properties</button></div>
     </div>`;
   }
 
-  // Log entries
+  // Log entries — split into recent (60 days) and older
   const filtered = filter === 'all' ? clData : clData.filter(e => e.pid === filter);
   if (!filtered.length) {
     logEl.innerHTML = '<div class="cl-empty">No cleaning flags for this property.</div>';
     return;
   }
 
-  let h = '';
-  filtered.forEach(e => {
+  const sixtyAgo = Date.now() - 60 * 86400000;
+  const recent = filtered.filter(e => new Date(e.reviewedAt).getTime() > sixtyAgo);
+  const older = filtered.filter(e => new Date(e.reviewedAt).getTime() <= sixtyAgo);
+
+  function clEntryHtml(e) {
     const prop = getProp(e.pid);
     const dateStr = new Date(e.reviewedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
     const stayStr = e.checkIn ? `${new Date(e.checkIn).toLocaleDateString('en-US', {month:'short',day:'numeric'})} – ${new Date(e.checkOut).toLocaleDateString('en-US', {month:'short',day:'numeric'})}` : '';
@@ -3162,11 +3156,11 @@ function renderCleaningLog() {
       if (e.cleanlinessRating <= 2) ratingClass = 'bad';
       else if (e.cleanlinessRating <= 3) ratingClass = 'ok';
     }
-    h += `<div class="cl-entry">
+    return `<div class="cl-entry">
       <div class="cl-entry-hdr">
         <div>
           <span class="cl-entry-date">${dateStr}</span>
-          ${filter === 'all' ? `<span style="font-size:.74rem;color:var(--gold);margin-left:8px;font-weight:600">${escHtml(prop?.name || e.pid)}</span>` : ''}
+          ${filter === 'all' ? `<span style="font-size:.74rem;color:var(--green);margin-left:8px;font-weight:600">${escHtml(prop?.name || e.pid)}</span>` : ''}
         </div>
         <div style="display:flex;gap:6px;align-items:center">
           ${e.cleanlinessRating !== null ? `<span class="cl-entry-rating ${ratingClass}">Cleanliness: ${e.cleanlinessRating}/5</span>` : ''}
@@ -3179,7 +3173,20 @@ function renderCleaningLog() {
         <span class="cl-entry-source">Source: ${e.source}</span>
       </div>
     </div>`;
-  });
+  }
+
+  let h = '';
+  if (recent.length) {
+    h += recent.map(clEntryHtml).join('');
+  } else {
+    h += '<div style="color:var(--text2);font-size:.82rem;padding:12px 0;font-style:italic">No cleaning flags in the last 60 days.</div>';
+  }
+  if (older.length) {
+    h += `<div style="margin-top:16px">
+      <button class="btn" id="cl-older-btn" style="width:100%;text-align:center;font-size:.8rem;padding:10px" onclick="document.getElementById('cl-older-entries').style.display='';this.style.display='none'">Older Reviews (${older.length})</button>
+      <div id="cl-older-entries" style="display:none;margin-top:8px">${older.map(clEntryHtml).join('')}</div>
+    </div>`;
+  }
   logEl.innerHTML = h;
 }
 
