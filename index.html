@@ -151,10 +151,10 @@ main{flex:1;padding:22px;max-width:1440px;margin:0 auto;width:100%}
 .cal-legend{display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap}
 .cli{display:flex;align-items:center;gap:5px;font-size:.71rem;color:var(--text2)}
 .cld{width:10px;height:10px;border-radius:2px;flex-shrink:0}
-.cal-grid{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--white);box-shadow:var(--shadow);display:grid;grid-template-columns:repeat(7,1fr)}
+.cal-grid{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--white);box-shadow:var(--shadow);display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
 .cal-head-cell{padding:9px 6px;text-align:center;font-size:.67rem;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,.7);font-weight:600;background:var(--green);border-bottom:1px solid var(--border)}
 .dow-short{display:none}
-.cal-cell{border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-height:95px;padding:5px}
+.cal-cell{border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-height:95px;padding:5px;overflow:hidden}
 .cal-cell:nth-child(7n){border-right:none}
 .cal-cell.om{background:var(--surface2)}
 .cal-cell.td{background:var(--gold-pale)}
