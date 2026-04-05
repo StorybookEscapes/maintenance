@@ -2423,21 +2423,34 @@ async function cleanupOldPhotos(){
   const token=sessionStorage.getItem('se_auth_token')||'';
   let changed=false;
   for(const t of tasks){
-    if(!t.photoUrl)continue;
     if(!['complete','resolved_by_guest'].includes(t.status))continue;
-    // Use completion date (last note or date field) or created date
     const resolved=t.date||t.created;
     if(!resolved)continue;
     if(new Date(resolved+'T12:00:00').getTime()>cutoff)continue;
-    // This task was resolved 30+ days ago — delete the photo
-    try{
-      await fetch(`${PROXY_BASE}/api/photo?url=${encodeURIComponent(t.photoUrl)}`,{
-        method:'DELETE',headers:{'Authorization':'Bearer '+token}
-      });
-    }catch(e){}
-    t.photoUrl=null;
-    changed=true;
-    console.log(`[photo] Cleaned up photo for task ${t.id}`);
+    // This task was resolved 30+ days ago — delete admin photo
+    if(t.photoUrl){
+      try{
+        await fetch(`${PROXY_BASE}/api/photo?url=${encodeURIComponent(t.photoUrl)}`,{
+          method:'DELETE',headers:{'Authorization':'Bearer '+token}
+        });
+      }catch(e){}
+      t.photoUrl=null;
+      changed=true;
+      console.log(`[photo] Cleaned up admin photo for task ${t.id}`);
+    }
+    // Delete vendor photos too
+    if(t.vendorPhotos&&t.vendorPhotos.length){
+      for(const vp of t.vendorPhotos){
+        try{
+          await fetch(`${PROXY_BASE}/api/photo?url=${encodeURIComponent(vp.url)}`,{
+            method:'DELETE',headers:{'Authorization':'Bearer '+token}
+          });
+        }catch(e){}
+        console.log(`[photo] Cleaned up vendor photo for task ${t.id}`);
+      }
+      t.vendorPhotos=[];
+      changed=true;
+    }
   }
   if(changed)await saveTasks();
 }
@@ -2776,7 +2789,7 @@ async function createVendorSheet(vendorName,date,taskIds){
   return token;
 }
 function vendorSheetUrl(token){
-  return'https://storybookescapes.github.io/maintenance/#v/'+token;
+  return'https://storybook-webhook.vercel.app/api/vendor-page?token='+token;
 }
 
 async function generateAndInsertSheet(smsId,vendorName,taskId,btnEl){
