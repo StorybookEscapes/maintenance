@@ -603,6 +603,31 @@ textarea{resize:vertical;min-height:76px}
 .vp-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
 .vp-grid img{max-height:120px;border-radius:var(--radius);border:1px solid var(--border);cursor:pointer}
 .vp-meta{font-size:.65rem;color:var(--text3);margin-top:2px}
+/* ROADMAP */
+.rm-tabs{display:flex;gap:2px;margin-bottom:14px;border-bottom:2px solid var(--border);padding-bottom:0}
+.rm-tab{padding:7px 16px;font-size:.76rem;font-family:inherit;font-weight:600;cursor:pointer;border:none;background:transparent;color:var(--text3);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s}
+.rm-tab:hover{color:var(--green)}
+.rm-tab.active{color:var(--green);border-bottom-color:var(--green)}
+.rm-tab .rm-badge{font-size:.66rem;background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:20px;padding:1px 7px;margin-left:5px;font-weight:700}
+.rm-tab.active .rm-badge{background:var(--green);color:#fff;border-color:var(--green)}
+.rm-add{display:flex;gap:8px;margin-bottom:14px}
+.rm-add input{flex:1;padding:9px 13px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:.82rem;background:var(--white)}
+.rm-add input:focus{outline:none;border-color:var(--green)}
+.rm-add button{flex-shrink:0}
+.rm-list{display:flex;flex-direction:column;gap:5px}
+.rm-item{display:flex;align-items:flex-start;gap:10px;background:var(--white);border:1px solid var(--border);border-radius:8px;padding:10px 13px;transition:all .15s}
+.rm-item:hover{box-shadow:var(--shadow)}
+.rm-item-text{flex:1;font-size:.84rem;line-height:1.5;color:var(--text);word-break:break-word}
+.rm-item-date{font-size:.68rem;color:var(--text3);margin-top:3px}
+.rm-item-actions{display:flex;gap:4px;flex-shrink:0;align-items:center}
+.rm-btn{width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--white);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:.82rem;transition:all .15s;padding:0}
+.rm-btn:hover{border-color:var(--green);color:var(--green)}
+.rm-btn-check:hover{background:#e6f4ea;border-color:var(--green);color:var(--green)}
+.rm-btn-dismiss:hover{background:var(--red-bg);border-color:var(--red);color:var(--red)}
+.rm-btn-restore:hover{background:var(--green-light);border-color:var(--green);color:var(--green)}
+.rm-item.completed .rm-item-text{text-decoration:line-through;color:var(--text3)}
+.rm-item.dismissed .rm-item-text{color:var(--text3);font-style:italic}
+.rm-empty{font-size:.82rem;color:var(--text3);text-align:center;padding:28px 16px;font-style:italic}
 </style>
 </head>
 <body>
@@ -818,13 +843,18 @@ textarea{resize:vertical;min-height:76px}
         </div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px">
-        <h3 style="font-size:.88rem;font-weight:600;color:var(--green);margin-bottom:4px">Product Roadmap / Notes</h3>
-        <p style="font-size:.76rem;color:var(--text2);margin-bottom:14px;line-height:1.5">Jot down ideas, feature requests, and things to build later.</p>
-        <textarea id="roadmap-notes" oninput="queueRoadmapSave()" style="width:100%;min-height:220px;font-family:'DM Sans',sans-serif;font-size:.82rem;padding:12px;border:1px solid var(--border);border-radius:8px;resize:vertical;line-height:1.6" placeholder="- Add photo uploads to tasks&#10;- Guest notification system&#10;- Monthly maintenance reports&#10;..."></textarea>
-        <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
-          <span id="roadmap-status" style="font-size:.72rem;color:var(--text3);align-self:center;margin-right:auto"></span>
-          <button class="btn btn-g" onclick="saveRoadmap()">Save Notes</button>
+        <h3 style="font-size:.88rem;font-weight:600;color:var(--green);margin-bottom:4px">Product Roadmap</h3>
+        <p style="font-size:.76rem;color:var(--text2);margin-bottom:14px;line-height:1.5">Track ideas, feature requests, and accomplishments.</p>
+        <div class="rm-tabs" id="rm-tabs">
+          <button class="rm-tab active" data-rm="active" onclick="rmSwitchTab('active')">Active <span class="rm-badge" id="rm-cnt-active">0</span></button>
+          <button class="rm-tab" data-rm="completed" onclick="rmSwitchTab('completed')">Completed <span class="rm-badge" id="rm-cnt-completed">0</span></button>
+          <button class="rm-tab" data-rm="dismissed" onclick="rmSwitchTab('dismissed')">Dismissed <span class="rm-badge" id="rm-cnt-dismissed">0</span></button>
         </div>
+        <div class="rm-add" id="rm-add-wrap">
+          <input type="text" id="rm-input" placeholder="Add an idea or feature request…" onkeydown="if(event.key==='Enter')rmAdd()">
+          <button class="btn btn-g" onclick="rmAdd()">Add</button>
+        </div>
+        <div class="rm-list" id="rm-list"></div>
       </div>
     </div>
   </main>
@@ -2755,25 +2785,125 @@ async function removeLogo(){
   if(rmBtn)rmBtn.style.display='none';
   showToast('Logo removed.');
 }
-// ROADMAP NOTES
+// ROADMAP
+let rmItems=[];
+let rmTab='active';
+
 async function loadRoadmap(){
-  try{const r=await S.get('se_notes');if(r&&r.value){const el=document.getElementById('roadmap-notes');if(el)el.value=r.value;}}catch(e){}
+  try{
+    const r=await S.get('se_roadmap');
+    if(r&&r.value){
+      try{rmItems=JSON.parse(r.value);}catch(e){rmItems=[];}
+      if(!Array.isArray(rmItems))rmItems=[];
+    }
+    // Auto-migrate from old se_notes text format
+    if(rmItems.length===0){
+      try{
+        const old=await S.get('se_notes');
+        if(old&&old.value&&old.value.trim()){
+          const lines=old.value.split('\n').map(l=>l.replace(/^[\s\-–—•*]+/,'').trim()).filter(Boolean);
+          lines.forEach(line=>{
+            rmItems.push({id:'rm_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),text:line,status:'active',created:new Date().toISOString()});
+          });
+          if(rmItems.length>0){
+            await saveRoadmap();
+            showToast(rmItems.length+' roadmap items migrated from notes.');
+          }
+        }
+      }catch(e){}
+    }
+  }catch(e){}
+  renderRoadmap();
 }
-let _roadmapTimer=null;
-function queueRoadmapSave(){
-  const st=document.getElementById('roadmap-status');
-  if(st)st.textContent='Unsaved changes...';
-  clearTimeout(_roadmapTimer);
-  _roadmapTimer=setTimeout(()=>saveRoadmap(true),1500);
+
+async function saveRoadmap(){
+  try{await S.set('se_roadmap',JSON.stringify(rmItems));}catch(e){}
 }
-async function saveRoadmap(auto){
-  clearTimeout(_roadmapTimer);
-  const el=document.getElementById('roadmap-notes');if(!el)return;
-  const st=document.getElementById('roadmap-status');
-  await S.set('se_notes',el.value);
-  if(st)st.textContent='Saved';
-  if(!auto)showToast('Notes saved.');
-  setTimeout(()=>{if(st&&st.textContent==='Saved')st.textContent='';},2000);
+
+function rmSwitchTab(tab){
+  rmTab=tab;
+  document.querySelectorAll('.rm-tab').forEach(t=>t.classList.toggle('active',t.dataset.rm===tab));
+  const addWrap=document.getElementById('rm-add-wrap');
+  if(addWrap)addWrap.style.display=tab==='active'?'flex':'none';
+  renderRoadmap();
+}
+
+function rmAdd(){
+  const inp=document.getElementById('rm-input');if(!inp)return;
+  const text=inp.value.trim();if(!text)return;
+  rmItems.push({id:'rm_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),text,status:'active',created:new Date().toISOString()});
+  inp.value='';
+  saveRoadmap();
+  renderRoadmap();
+}
+
+function rmComplete(id){
+  const item=rmItems.find(i=>i.id===id);if(!item)return;
+  item.status='completed';item.completedAt=new Date().toISOString();
+  saveRoadmap();renderRoadmap();
+  showToast('Marked complete!');
+}
+
+function rmDismiss(id){
+  const item=rmItems.find(i=>i.id===id);if(!item)return;
+  item.status='dismissed';item.dismissedAt=new Date().toISOString();
+  saveRoadmap();renderRoadmap();
+  showToast('Idea dismissed.');
+}
+
+function rmRestore(id){
+  const item=rmItems.find(i=>i.id===id);if(!item)return;
+  item.status='active';delete item.completedAt;delete item.dismissedAt;
+  saveRoadmap();renderRoadmap();
+  showToast('Restored to active.');
+}
+
+function rmDelete(id){
+  rmItems=rmItems.filter(i=>i.id!==id);
+  saveRoadmap();renderRoadmap();
+}
+
+function rmFmtDate(iso){
+  if(!iso)return '';
+  const d=new Date(iso);
+  return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+}
+
+function renderRoadmap(){
+  const list=document.getElementById('rm-list');if(!list)return;
+  const active=rmItems.filter(i=>i.status==='active');
+  const completed=rmItems.filter(i=>i.status==='completed').sort((a,b)=>(b.completedAt||'').localeCompare(a.completedAt||''));
+  const dismissed=rmItems.filter(i=>i.status==='dismissed').sort((a,b)=>(b.dismissedAt||'').localeCompare(a.dismissedAt||''));
+
+  // Update badge counts
+  const ca=document.getElementById('rm-cnt-active');if(ca)ca.textContent=active.length;
+  const cc=document.getElementById('rm-cnt-completed');if(cc)cc.textContent=completed.length;
+  const cd=document.getElementById('rm-cnt-dismissed');if(cd)cd.textContent=dismissed.length;
+
+  const items=rmTab==='active'?active:rmTab==='completed'?completed:dismissed;
+  if(items.length===0){
+    const msg=rmTab==='active'?'No active ideas yet. Add one above!':rmTab==='completed'?'No completed items yet.':'No dismissed items.';
+    list.innerHTML='<div class="rm-empty">'+msg+'</div>';
+    return;
+  }
+  let html='';
+  items.forEach(item=>{
+    const cls=item.status==='completed'?'completed':item.status==='dismissed'?'dismissed':'';
+    const dateLabel=item.status==='completed'?'Completed '+rmFmtDate(item.completedAt):item.status==='dismissed'?'Dismissed '+rmFmtDate(item.dismissedAt):'Added '+rmFmtDate(item.created);
+    let actions='';
+    if(rmTab==='active'){
+      actions='<button class="rm-btn rm-btn-check" onclick="rmComplete(\''+item.id+'\')" title="Mark complete">✓</button>'
+        +'<button class="rm-btn rm-btn-dismiss" onclick="rmDismiss(\''+item.id+'\')" title="Dismiss">✕</button>';
+    } else {
+      actions='<button class="rm-btn rm-btn-restore" onclick="rmRestore(\''+item.id+'\')" title="Restore to active">↩</button>'
+        +'<button class="rm-btn rm-btn-dismiss" onclick="rmDelete(\''+item.id+'\')" title="Delete permanently">🗑</button>';
+    }
+    html+='<div class="rm-item '+cls+'">'
+      +'<div style="flex:1"><div class="rm-item-text">'+item.text.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>'
+      +'<div class="rm-item-date">'+dateLabel+'</div></div>'
+      +'<div class="rm-item-actions">'+actions+'</div></div>';
+  });
+  list.innerHTML=html;
 }
 
 // ── Vendor Share Token ──
