@@ -1478,12 +1478,13 @@ const S = {
           signal: AbortSignal.timeout(8000)
         });
         if (r.ok) { const d = await r.json(); return d.value ? { value: d.value } : null; }
-      } catch(e) { console.warn('[storage] Server get failed, using localStorage:', e.message); }
+      } catch(e) { console.warn('[storage] Server get failed:', e.message); }
     }
-    const v = localStorage.getItem(k); return v ? { value: v } : null;
+    // No localStorage fallback — KV is the single source of truth
+    return null;
   },
   set: async (k, v) => {
-    localStorage.setItem(k, v);
+    // Write to KV only — no localStorage (prevents cross-device drift)
     const token = getAuthToken();
     if (token) {
       try {
@@ -4466,12 +4467,7 @@ async function loadDismissed(){
   try{
     const r=await S.get('se_dismissed');
     if(r&&r.value)rvDismissed=JSON.parse(r.value);
-    // Migrate from localStorage if KV is empty but localStorage has data
-    if(!rvDismissed.length){
-      const local=JSON.parse(localStorage.getItem('se_rv_dismissed')||'[]');
-      if(local.length){rvDismissed=local;await saveDismissed();localStorage.removeItem('se_rv_dismissed');}
-    }
-  }catch(e){rvDismissed=JSON.parse(localStorage.getItem('se_rv_dismissed')||'[]');}
+  }catch(e){console.warn('[dismissed] Failed to load from KV:',e.message);}
 }
 async function saveDismissed(){try{await S.set('se_dismissed',JSON.stringify(rvDismissed));}catch(e){}}
 
