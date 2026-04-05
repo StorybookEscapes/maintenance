@@ -453,7 +453,7 @@ textarea{resize:vertical;min-height:76px}
 .ga-msg-preview{background:rgba(0,0,0,.2);border:1px solid rgba(230,52,98,.15);border-radius:8px;padding:10px 12px;margin-bottom:8px}
 .ga-msg-text{font-size:.8rem;color:#e8d0d8;line-height:1.55;white-space:pre-wrap;word-break:break-word}
 .ga-msg-edit{width:100%;background:rgba(0,0,0,.3);border:1px solid rgba(230,52,98,.3);border-radius:8px;padding:10px 12px;font-size:.8rem;color:#f0e0e8;line-height:1.55;font-family:inherit;resize:vertical;min-height:80px;display:none}
-.ga-msg-edit:focus{outline:none;border-color:#e63462}
+.ga-msg-edit:focus{outline:none;border-color:rgba(230,52,98,.5)}
 .ga-item-btns{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .ga-btn{padding:5px 11px;border-radius:7px;font-size:.73rem;font-family:inherit;font-weight:600;cursor:pointer;border:1px solid;transition:all .15s;white-space:nowrap}
 .ga-btn-send{background:#c42a52;color:#fff;border-color:#e63462}
@@ -752,10 +752,11 @@ textarea{resize:vertical;min-height:76px}
       <div id="ga-wrap"></div>
       <!-- Review Detail Modal -->
       <div class="mo" id="rv-detail-modal">
-        <div class="mo-content" style="max-width:560px;background:linear-gradient(135deg,#2a2418 0%,#3a2e1a 100%);border:1px solid #7a6530">
-          <div class="mo-hd" style="border-bottom-color:rgba(180,150,60,.25)"><h3 id="rv-detail-title" style="color:#d4a840">Guest Feedback</h3><button class="mo-x" onclick="closeModal('rv-detail-modal')" style="color:#b0a070">&times;</button></div>
-          <div class="mo-bd" id="rv-detail-body" style="max-height:60vh;overflow-y:auto"></div>
-          <div class="mo-ft" id="rv-detail-ft" style="border-top-color:rgba(180,150,60,.25)"></div>
+        <div style="position:relative;max-width:560px;width:100%;background:linear-gradient(135deg,#2a2418 0%,#3a2e1a 100%);border:1px solid #7a6530;border-radius:14px;margin:auto;padding:24px 28px;box-shadow:0 8px 32px rgba(0,0,0,.4)">
+          <button onclick="closeModal('rv-detail-modal')" style="position:absolute;top:14px;right:16px;background:none;border:none;color:#b0a070;font-size:1.5rem;cursor:pointer;padding:4px 8px;line-height:1;z-index:1">&times;</button>
+          <h3 id="rv-detail-title" style="color:#d4a840;font-family:'Cormorant Garamond',serif;font-size:1.3rem;font-weight:600;margin-bottom:16px;padding-right:30px">Guest Feedback</h3>
+          <div id="rv-detail-body" style="max-height:60vh;overflow-y:auto;margin-bottom:16px"></div>
+          <div id="rv-detail-ft" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;border-top:1px solid rgba(180,150,60,.25);padding-top:14px"></div>
         </div>
       </div>
       <div id="ub-wrap"></div>
@@ -4708,17 +4709,20 @@ function openRvDetail(id) {
   document.getElementById('rv-detail-modal').classList.add('open');
 }
 
-function rvConvertToReplacement(id) {
+async function rvConvertToReplacement(id) {
   const rv = rvItems.find(x => x.id === id);
   if (!rv) return;
-  rpImportFromReview(rv);
+  await rpImportFromReviewSilent(rv);
   // Mark the card so user knows it's been converted, but don't dismiss — Import as Task still available
   const card = document.getElementById('rv-' + id);
   if (card) {
     const btn = card.querySelector('.rv-btn-replacement');
     if (btn) { btn.textContent = 'Converted ✓'; btn.disabled = true; btn.style.opacity = '.6'; }
   }
-  showToast('Sent to Replacements — you can still import as a task too.');
+  // Also mark in detail modal if open
+  const ftBtns = document.querySelectorAll('#rv-detail-ft .rv-btn-replacement');
+  ftBtns.forEach(btn => { btn.textContent = 'Converted ✓'; btn.disabled = true; btn.style.opacity = '.6'; });
+  showToast('Replacement item created — you can still import as a task too.');
 }
 
 async function rvImport(id) {
@@ -5631,10 +5635,12 @@ function rpImportFromReview(rv) {
 
 // ── Guest Alert Banner — notify incoming guests about active issues ──
 let gaItems=[]; // array of {task, reservation, propName, guestName, daysOut, message, reservationId}
-let gaDismissed=new Set(); // dismissed alert IDs (transient per session)
+let gaDismissed=new Set(); // dismissed alert IDs (persisted via rvDismissed/se_dismissed)
 let gaSent=new Set(); // sent message IDs (transient per session)
 
 async function gaFetch(){
+  // Populate gaDismissed from persisted rvDismissed array
+  rvDismissed.forEach(id=>gaDismissed.add(id));
   const today=new Date();today.setHours(0,0,0,0);
   const lookAhead=2; // days to look ahead for arrivals
   const alerts=[];
@@ -5692,8 +5698,8 @@ async function gaFetch(){
 }
 
 function gaGenerateMessage(guestFirst,propName,issue,daysOut){
-  const arrival=daysOut===0?'today':daysOut===1?'tomorrow':'in a couple of days';
-  return `Hi ${guestFirst}! We're looking forward to welcoming you to ${propName}${daysOut===0?'':' '+arrival}. We wanted to give you a heads-up that we're currently working on a minor maintenance item — ${issue.toLowerCase().replace(/\.$/,'')}. Our team is on it and we're doing our best to have it resolved before your stay. It shouldn't affect your overall experience, but we wanted you to know so there are no surprises. Please don't hesitate to reach out if you have any questions. We want to make sure your stay is wonderful!`;
+  const issueLower=issue.toLowerCase().replace(/\.$/,'');
+  return `Hey ${guestFirst}! Just wanted to give you a heads-up — the last guest mentioned that ${issueLower}. We're looking into it but just in case it gives you any trouble, shoot me a message and I can get someone over to take care of it!`;
 }
 
 function renderGA(){
@@ -5779,6 +5785,8 @@ async function gaSend(id){
 
 function gaDismiss(id){
   gaDismissed.add(id);
+  // Persist to same dismissed store as reviews (se_dismissed via KV)
+  if(!rvDismissed.includes(id)){rvDismissed.push(id);saveDismissed();}
   renderGA();
 }
 
