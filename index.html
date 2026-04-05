@@ -2783,9 +2783,18 @@ function generateVendorToken(){
   return t;
 }
 async function createVendorSheet(vendorName,date,taskIds){
-  const token=generateVendorToken();
-  const sheet={vendor:vendorName,date:date,taskIds:taskIds,created:new Date().toISOString()};
-  await S.set('se_vs_'+token,JSON.stringify(sheet));
+  // Deterministic token based on vendor+date so the same link is reused
+  // (adding/removing tasks from their day is reflected automatically)
+  const raw=vendorName.toLowerCase().replace(/\s+/g,'')+':'+date;
+  let hash=0;for(let i=0;i<raw.length;i++){hash=((hash<<5)-hash)+raw.charCodeAt(i);hash|=0;}
+  const token='vd'+Math.abs(hash).toString(36)+date.replace(/-/g,'');
+  const key='se_vs_'+token;
+  // Only write if token doesn't already exist
+  const existing=await S.get(key);
+  if(!existing||!existing.value){
+    const sheet={vendor:vendorName,date:date,created:new Date().toISOString()};
+    await S.set(key,JSON.stringify(sheet));
+  }
   return token;
 }
 function vendorSheetUrl(token){
@@ -4806,6 +4815,13 @@ function rpImportFromReview(rv) {
       document.getElementById('vs-loading').style.display='none';
       document.getElementById('vs-tasks').style.display='block';
       vsRender();
+      // Auto-expand the first task after a short delay to teach vendors that cards are tappable
+      if(vTasks.length){
+        setTimeout(()=>{
+          const first=document.querySelector('.vs-card');
+          if(first)first.classList.add('vs-expanded');
+        },400);
+      }
     }catch(e){
       console.error('[vendor-sheet]',e);
       vsShowError();
