@@ -596,7 +596,8 @@ textarea{resize:vertical;min-height:76px}
 .vs-card+.vs-card{border-top:none}
 .vs-card.vs-done{border-color:var(--green);background:var(--green-pale)}
 .vs-card-banner{padding:14px 16px;cursor:pointer;display:flex;align-items:flex-start;gap:12px}
-.vs-card-check{width:28px;height:28px;border-radius:50%;border:2px solid var(--border-dark);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s;margin-top:2px;font-size:.9rem;color:transparent;background:var(--white)}
+.vs-card-check{width:28px;height:28px;border-radius:50%;border:2px solid var(--border-dark);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s;margin-top:2px;font-size:.9rem;color:transparent;background:var(--white);cursor:pointer;-webkit-tap-highlight-color:transparent;position:relative}
+.vs-card-check::before{content:'';position:absolute;inset:-8px;border-radius:50%}
 .vs-card.vs-done .vs-card-check{background:var(--green);border-color:var(--green);color:#fff}
 .vs-card-info{flex:1;min-width:0}
 .vs-card-prop{font-size:.68rem;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:3px}
@@ -620,8 +621,6 @@ textarea{resize:vertical;min-height:76px}
 .vs-note-input button{padding:8px 16px;border-radius:8px;background:var(--green);color:#fff;border:none;font-family:inherit;font-size:.78rem;font-weight:500;cursor:pointer;white-space:nowrap}
 .vs-done-bar{padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px}
 .vs-done-btn{padding:10px 20px;border-radius:8px;font-family:inherit;font-size:.85rem;font-weight:600;cursor:pointer;border:none;transition:all .15s}
-.vs-done-btn.vs-btn-mark{background:var(--green);color:#fff}
-.vs-done-btn.vs-btn-mark:hover{background:var(--green-mid)}
 .vs-done-btn.vs-btn-undo{background:transparent;color:var(--text2);border:1px solid var(--border)}
 .vs-done-status{font-size:.78rem;color:var(--green);font-weight:500}
 .vs-card.vs-done .vs-card-prob{text-decoration:line-through;color:var(--text2)}
@@ -756,7 +755,7 @@ textarea{resize:vertical;min-height:76px}
           <button onclick="closeModal('rv-detail-modal')" style="position:absolute;top:14px;right:16px;background:none;border:none;color:#b0a070;font-size:1.5rem;cursor:pointer;padding:4px 8px;line-height:1;z-index:1">&times;</button>
           <h3 id="rv-detail-title" style="color:#d4a840;font-family:'Cormorant Garamond',serif;font-size:1.3rem;font-weight:600;margin-bottom:16px;padding-right:30px">Guest Feedback</h3>
           <div id="rv-detail-body" style="max-height:60vh;overflow-y:auto;margin-bottom:16px"></div>
-          <div id="rv-detail-ft" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;border-top:1px solid rgba(180,150,60,.25);padding-top:14px"></div>
+          <div id="rv-detail-ft" style="display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid rgba(180,150,60,.25);padding-top:14px"></div>
         </div>
       </div>
       <div id="ub-wrap"></div>
@@ -4473,6 +4472,7 @@ async function saveDismissed(){try{await S.set('se_dismissed',JSON.stringify(rvD
 
 // Phrases that indicate actionable maintenance, cleaning, or repair issues
 // Deliberately narrow: must suggest something is BROKEN, DIRTY, INFESTED, or MALFUNCTIONING
+const RV_SKIP_RATINGS = new Set(['facilities', 'staff', 'services']);
 const RV_MAINT_KEYWORDS = /\b(broke|broken|leak|leaking|leaks|dirty|filthy|smell|odor|stain|stained|mold|mildew|cobweb|cobwebs|mouse|mice|rat|roach|cockroach|ant infestation|spider|critter|rodent|mouse feces|droppings|not work|doesn.t work|didn.t work|stopped work|won.t work|isn.t work|wasn.t work|needs? (to be )?(fix|replace|repair|clean)|broke down|out of order|clog|clogged|backed up|overflow|rusted|rusty|rotting|rotten|wobbly|wobbles|peeling|cracked|crack in)\b/i;
 
 // Second-pass phrases: only match if they appear in a NEGATIVE context (near a problem indicator)
@@ -4624,8 +4624,8 @@ function renderRV() {
     const dateStr = reviewDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     const stayDates = rv.reservation ? `${new Date(rv.reservation.check_in).toLocaleDateString('en-US', {month:'short',day:'numeric'})} – ${new Date(rv.reservation.check_out).toLocaleDateString('en-US', {month:'short',day:'numeric'})}` : '';
     // Show low ratings
-    const lowRatings = (rv.private?.detailed_ratings || []).filter(r => r.rating > 0 && r.rating <= 3);
-    const ratingComments = (rv.private?.detailed_ratings || []).filter(r => r.comment);
+    const lowRatings = (rv.private?.detailed_ratings || []).filter(r => r.rating > 0 && r.rating <= 3 && !RV_SKIP_RATINGS.has(r.type?.toLowerCase()));
+    const ratingComments = (rv.private?.detailed_ratings || []).filter(r => r.comment && !RV_SKIP_RATINGS.has(r.type?.toLowerCase()));
 
     h += `<div class="rv-item" id="rv-${rv.id}" style="cursor:pointer" onclick="openRvDetail('${rv.id}')">
       <div class="rv-item-top">
@@ -4678,7 +4678,7 @@ function openRvDetail(id) {
   }
 
   // Detailed ratings with comments
-  const detailedRatings = rv.private?.detailed_ratings || [];
+  const detailedRatings = (rv.private?.detailed_ratings || []).filter(r => !RV_SKIP_RATINGS.has(r.type?.toLowerCase()));
   if (detailedRatings.length) {
     h += `<div style="margin-bottom:14px">
       <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:1px;color:#8a7a50;font-weight:600;margin-bottom:6px">Rating Breakdown</div>
@@ -4703,10 +4703,10 @@ function openRvDetail(id) {
 
   document.getElementById('rv-detail-body').innerHTML = h;
   document.getElementById('rv-detail-ft').innerHTML = `
-    <button class="rv-btn rv-btn-dismiss" onclick="closeModal('rv-detail-modal')">Close</button>
-    <button class="rv-btn rv-btn-dismiss" onclick="rvDismiss('${rv.id}');closeModal('rv-detail-modal')">Dismiss</button>
-    <button class="rv-btn rv-btn-replacement" onclick="rvConvertToReplacement('${rv.id}')" style="background:rgba(180,150,60,.15);color:#b8830a;border-color:rgba(180,150,60,.3)">To Replacements</button>
-    <button class="rv-btn rv-btn-import" onclick="rvImport('${rv.id}');closeModal('rv-detail-modal')">Import as Task</button>`;
+    <button class="rv-btn rv-btn-import" style="flex:1 1 100%;text-align:center" onclick="rvImport('${rv.id}');closeModal('rv-detail-modal')">Import as Task</button>
+    <button class="rv-btn rv-btn-replacement" onclick="rvConvertToReplacement('${rv.id}')" style="background:rgba(180,150,60,.15);color:#b8830a;border-color:rgba(180,150,60,.3);flex:1">To Replacements</button>
+    <button class="rv-btn rv-btn-dismiss" style="flex:1" onclick="rvDismiss('${rv.id}');closeModal('rv-detail-modal')">Dismiss</button>
+    <button class="rv-btn rv-btn-dismiss" style="flex:1" onclick="closeModal('rv-detail-modal')">Close</button>`;
   document.getElementById('rv-detail-modal').classList.add('open');
 }
 
@@ -5075,10 +5075,11 @@ function openRpDetail(id) {
     }
 
     // Rating breakdown
-    if (rv.ratings?.length) {
+    const filteredRatings = (rv.ratings || []).filter(r => !RV_SKIP_RATINGS.has(r.type?.toLowerCase()));
+    if (filteredRatings.length) {
       h += `<div class="stitle">Rating Breakdown</div>`;
       h += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">';
-      rv.ratings.forEach(r => {
+      filteredRatings.forEach(r => {
         const rColor = r.rating <= 2 ? '#cc6644' : r.rating <= 3 ? '#c0a830' : 'var(--green)';
         h += `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;font-size:.76rem">
           <span style="color:var(--text2)">${escHtml(r.type)}:</span> <span style="color:${rColor};font-weight:700">${r.rating}/5</span>
@@ -5436,7 +5437,7 @@ function rpImportFromReview(rv) {
     ).join('');
     return`<div class="vs-card ${done?'vs-done':''}" id="vsc-${t.id}" style="border-left:3px solid var(--${nbCls||'green'})">
       <div class="vs-card-banner" onclick="window._vsToggle('${t.id}')">
-        <div class="vs-card-check">${done?'&#x2713;':''}</div>
+        <div class="vs-card-check" onclick="event.stopPropagation();window._vsCircleCheck('${t.id}',${!!done})">${done?'&#x2713;':''}</div>
         <div class="vs-card-info">
           <div class="vs-card-prob">${t.problem}</div>
           <div class="vs-card-badges">
@@ -5462,11 +5463,9 @@ function rpImportFromReview(rv) {
             <button onclick="window._vsAddNote('${t.id}')">Send</button>
           </div>
         </div>
-        <div class="vs-done-bar">
-          ${done
-            ?`<span class="vs-done-status">Submitted — awaiting confirmation</span><button class="vs-done-btn vs-btn-undo" onclick="window._vsUndoDone('${t.id}')">Undo</button>`
-            :`<button class="vs-done-btn vs-btn-mark" onclick="window._vsMarkDone('${t.id}')">Mark Complete</button>`}
-        </div>
+        ${done?`<div class="vs-done-bar">
+          <span class="vs-done-status">Submitted — awaiting confirmation</span><button class="vs-done-btn vs-btn-undo" onclick="window._vsUndoDone('${t.id}')">Undo</button>
+        </div>`:''}
       </div>
     </div>`;
   }
@@ -5474,6 +5473,11 @@ function rpImportFromReview(rv) {
   window._vsToggle=function(id){
     const el=document.getElementById('vsc-'+id);
     if(el)el.classList.toggle('vs-expanded');
+  };
+
+  window._vsCircleCheck=function(id,isDone){
+    if(isDone) window._vsUndoDone(id);
+    else window._vsMarkDone(id);
   };
 
   window._vsMarkDone=async function(id){
