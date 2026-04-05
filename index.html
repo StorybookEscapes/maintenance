@@ -2442,16 +2442,27 @@ async function cleanupOldPhotos(){
   if(changed)await saveTasks();
 }
 /* Open the vendor-day modal showing all tasks for a vendor on a specific date */
-function openVendorDay(vendorName,date){
+async function openVendorDay(vendorName,date){
   const vdTasks=getVendorDayTasks(vendorName,date);
   if(!vdTasks.length)return;
   const v=vendors.find(x=>x.name.toLowerCase()===vendorName.toLowerCase());
   const fmtD=new Date(date+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
   document.getElementById('vd-date').textContent=fmtD;
   document.getElementById('vd-title').textContent=`${vendorName} — ${vdTasks.length} Jobs`;
+  // Pre-generate vendor sheet token
+  let sheetUrl='';
+  if(v&&date){
+    try{
+      const ids=vdTasks.map(x=>x.id);
+      if(ids.length){
+        const token=await createVendorSheet(vendorName,date,ids);
+        sheetUrl=vendorSheetUrl(token);
+      }
+    }catch(e){console.error('[vendor-sheet] Token gen error:',e);}
+  }
   // Render combined SMS if vendor exists in our list
   if(v){
-    document.getElementById('vd-combined-sms').innerHTML=combinedVendorCard(v,vdTasks);
+    document.getElementById('vd-combined-sms').innerHTML=combinedVendorCard(v,vdTasks,sheetUrl);
   } else {
     document.getElementById('vd-combined-sms').innerHTML=`<div style="font-size:.82rem;color:var(--text2);padding:6px 0;margin-bottom:8px"><strong>${vendorName}</strong> is not in the vendor list — add them to send a combined message.</div>`;
   }
@@ -2857,7 +2868,7 @@ function buildMultiSMS(taskList,v,sheetUrlParam){
     .replace(/\{signoff\}/g, '— Chip Burns, Storybook Escapes');
 }
 /* Render combined SMS card for a vendor with multiple same-day tasks */
-function combinedVendorCard(v,taskList){
+function combinedVendorCard(v,taskList,sheetUrl){
   // Sort tasks by neighborhood then property for grouped display
   const sorted=[...taskList].sort((a,b)=>{
     const nbA=getNb(a.property),nbB=getNb(b.property);
@@ -2865,7 +2876,7 @@ function combinedVendorCard(v,taskList){
     if(nA!==nB)return nA.localeCompare(nB);
     return(a.property||'').localeCompare(b.property||'');
   });
-  const sms=buildMultiSMS(sorted,v);const tel=v.phone.replace(/\D/g,'');
+  const sms=buildMultiSMS(sorted,v,sheetUrl||'');const tel=v.phone.replace(/\D/g,'');
   const smsId='sms-combined-'+v.id;
   const taskSummary=sorted.map(t=>{const p=getProp(t.property);return`<li>${p?p.name.split(' - ').pop():t.property}: ${t.problem}${t.urgent?' <span style="color:var(--red);font-weight:700">URGENT</span>':''}</li>`;}).join('');
   return`<div class="combined-sms-banner">
