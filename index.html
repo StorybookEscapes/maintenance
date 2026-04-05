@@ -653,10 +653,26 @@ textarea{resize:vertical;min-height:76px}
 .rm-add input{flex:1;padding:9px 13px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:.82rem;background:var(--white)}
 .rm-add input:focus{outline:none;border-color:var(--green)}
 .rm-add button{flex-shrink:0}
-.rm-list{display:flex;flex-direction:column;gap:5px}
-.rm-item{display:flex;align-items:flex-start;gap:10px;background:var(--white);border:1px solid var(--border);border-radius:8px;padding:10px 13px;transition:all .15s}
+.rm-list{display:flex;flex-direction:column;gap:16px}
+.rm-section{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.rm-section-hdr{display:flex;align-items:center;justify-content:space-between;padding:9px 13px;background:var(--green-light);border-bottom:1px solid var(--border);cursor:default}
+.rm-section-name{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--green);flex:1;cursor:text;border:1px solid transparent;border-radius:4px;padding:2px 4px;background:transparent}
+.rm-section-name:hover{border-color:var(--border)}
+.rm-section-name:focus{outline:none;border-color:var(--green);background:var(--white)}
+.rm-section-count{font-size:.64rem;background:var(--green);color:#fff;border-radius:12px;padding:1px 8px;font-weight:700;margin-left:8px;flex-shrink:0}
+.rm-section-actions{display:flex;gap:4px;margin-left:8px;flex-shrink:0}
+.rm-section-btn{width:24px;height:24px;border-radius:5px;border:1px solid var(--border);background:var(--white);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:.7rem;color:var(--text3);transition:all .15s;padding:0}
+.rm-section-btn:hover{border-color:var(--green);color:var(--green)}
+.rm-section-btn.del:hover{border-color:var(--red);color:var(--red);background:var(--red-bg)}
+.rm-section-body{min-height:36px;padding:6px}
+.rm-section-body.drag-over{background:rgba(13,53,40,.06);border:2px dashed var(--green);border-radius:0 0 8px 8px;margin:-1px}
+.rm-item{display:flex;align-items:flex-start;gap:10px;background:var(--white);border:1px solid var(--border);border-radius:8px;padding:10px 13px;transition:all .15s;cursor:grab}
+.rm-item:active{cursor:grabbing}
 .rm-item:hover{box-shadow:var(--shadow)}
-.rm-item-text{flex:1;font-size:.84rem;line-height:1.5;color:var(--text);word-break:break-word}
+.rm-item.dragging{opacity:.4;box-shadow:var(--shadow-md)}
+.rm-item-text{flex:1;font-size:.84rem;line-height:1.5;color:var(--text);word-break:break-word;cursor:text;border:1px solid transparent;border-radius:4px;padding:1px 3px;background:transparent;min-height:1.5em}
+.rm-item-text:hover{border-color:var(--border)}
+.rm-item-text:focus{outline:none;border-color:var(--green);background:var(--white)}
 .rm-item-date{font-size:.68rem;color:var(--text3);margin-top:3px}
 .rm-item-actions{display:flex;gap:4px;flex-shrink:0;align-items:center}
 .rm-btn{width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--white);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:.82rem;transition:all .15s;padding:0}
@@ -666,7 +682,12 @@ textarea{resize:vertical;min-height:76px}
 .rm-btn-restore:hover{background:var(--green-light);border-color:var(--green);color:var(--green)}
 .rm-item.completed .rm-item-text{text-decoration:line-through;color:var(--text3)}
 .rm-item.dismissed .rm-item-text{color:var(--text3);font-style:italic}
-.rm-empty{font-size:.82rem;color:var(--text3);text-align:center;padding:28px 16px;font-style:italic}
+.rm-empty{font-size:.78rem;color:var(--text3);text-align:center;padding:16px;font-style:italic}
+.rm-add-section{display:flex;gap:8px;margin-top:10px}
+.rm-add-section input{flex:1;padding:7px 11px;border:1px solid var(--border);border-radius:7px;font-family:inherit;font-size:.78rem;background:var(--white)}
+.rm-add-section input:focus{outline:none;border-color:var(--green)}
+.rm-drag-handle{color:var(--text3);font-size:.7rem;cursor:grab;flex-shrink:0;padding:2px;user-select:none}
+.rm-drag-handle:active{cursor:grabbing}
 /* PAYMENT PROMPT (vendor sheet) */
 .vp-overlay{position:fixed;inset:0;background:rgba(13,53,40,.6);z-index:500;display:flex;align-items:center;justify-content:center;padding:20px;animation:vpFadeIn .3s ease}
 @keyframes vpFadeIn{from{opacity:0}to{opacity:1}}
@@ -907,7 +928,7 @@ textarea{resize:vertical;min-height:76px}
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px">
         <h3 style="font-size:.88rem;font-weight:600;color:var(--green);margin-bottom:4px">Product Roadmap</h3>
-        <p style="font-size:.76rem;color:var(--text2);margin-bottom:14px;line-height:1.5">Track ideas, feature requests, and accomplishments.</p>
+        <p style="font-size:.76rem;color:var(--text2);margin-bottom:14px;line-height:1.5">Track ideas, feature requests, and accomplishments. Drag items between sections to reorganize.</p>
         <div class="rm-tabs" id="rm-tabs">
           <button class="rm-tab active" data-rm="active" onclick="rmSwitchTab('active')">Active <span class="rm-badge" id="rm-cnt-active">0</span></button>
           <button class="rm-tab" data-rm="completed" onclick="rmSwitchTab('completed')">Completed <span class="rm-badge" id="rm-cnt-completed">0</span></button>
@@ -918,6 +939,10 @@ textarea{resize:vertical;min-height:76px}
           <button class="btn btn-g" onclick="rmAdd()">Add</button>
         </div>
         <div class="rm-list" id="rm-list"></div>
+        <div class="rm-add-section" id="rm-add-section-wrap">
+          <input type="text" id="rm-section-input" placeholder="Add a new section…" onkeydown="if(event.key==='Enter')rmAddSection()">
+          <button class="btn" onclick="rmAddSection()">+ Section</button>
+        </div>
       </div>
     </div>
   </main>
@@ -2886,21 +2911,35 @@ async function removeLogo(){
 let rmItems=[];
 let rmTab='active';
 
+// Default sections for new installs
+const RM_DEFAULT_SECTIONS=['Guest Communication','Data Sync & Mobile','Smart Routing','UI & Polish','New Features','Infrastructure'];
+let rmSections=[]; // array of {id, name, order}
+
 async function loadRoadmap(){
   try{
     const r=await S.get('se_roadmap');
     if(r&&r.value){
-      try{rmItems=JSON.parse(r.value);}catch(e){rmItems=[];}
-      if(!Array.isArray(rmItems))rmItems=[];
+      try{
+        const parsed=JSON.parse(r.value);
+        // New format: {sections:[], items:[]}
+        if(parsed&&parsed.sections){
+          rmSections=parsed.sections;
+          rmItems=parsed.items||[];
+        } else if(Array.isArray(parsed)){
+          // Old format: flat array of items — auto-migrate
+          rmItems=parsed;
+          rmSections=[];
+        }
+      }catch(e){rmItems=[];rmSections=[];}
     }
     // Auto-migrate from old se_notes text format
-    if(rmItems.length===0){
+    if(rmItems.length===0&&rmSections.length===0){
       try{
         const old=await S.get('se_notes');
         if(old&&old.value&&old.value.trim()){
           const lines=old.value.split('\n').map(l=>l.replace(/^[\s\-–—•*]+/,'').trim()).filter(Boolean);
           lines.forEach(line=>{
-            rmItems.push({id:'rm_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),text:line,status:'active',created:new Date().toISOString()});
+            rmItems.push({id:rmUid(),text:line,status:'active',section:null,created:new Date().toISOString()});
           });
           if(rmItems.length>0){
             await saveRoadmap();
@@ -2909,12 +2948,25 @@ async function loadRoadmap(){
         }
       }catch(e){}
     }
+    // Migrate old flat items that have no section field
+    if(rmItems.length>0&&rmSections.length===0){
+      const unsectioned=rmItems.filter(i=>!i.section&&i.status==='active');
+      if(unsectioned.length>0){
+        // Create a default "Unsorted" section for existing items
+        const sec={id:rmUid(),name:'Unsorted',order:0};
+        rmSections.push(sec);
+        unsectioned.forEach(i=>i.section=sec.id);
+        await saveRoadmap();
+      }
+    }
   }catch(e){}
   renderRoadmap();
 }
 
+function rmUid(){return 'rm_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);}
+
 async function saveRoadmap(){
-  try{await S.set('se_roadmap',JSON.stringify(rmItems));}catch(e){}
+  try{await S.set('se_roadmap',JSON.stringify({sections:rmSections,items:rmItems}));}catch(e){}
 }
 
 function rmSwitchTab(tab){
@@ -2922,42 +2974,82 @@ function rmSwitchTab(tab){
   document.querySelectorAll('.rm-tab').forEach(t=>t.classList.toggle('active',t.dataset.rm===tab));
   const addWrap=document.getElementById('rm-add-wrap');
   if(addWrap)addWrap.style.display=tab==='active'?'flex':'none';
+  const secWrap=document.getElementById('rm-add-section-wrap');
+  if(secWrap)secWrap.style.display=tab==='active'?'flex':'none';
   renderRoadmap();
+}
+
+function rmAddSection(){
+  const inp=document.getElementById('rm-section-input');if(!inp)return;
+  const name=inp.value.trim();if(!name)return;
+  const maxOrder=rmSections.reduce((m,s)=>Math.max(m,s.order||0),0);
+  rmSections.push({id:rmUid(),name,order:maxOrder+1});
+  inp.value='';
+  saveRoadmap();renderRoadmap();
+}
+
+function rmDeleteSection(secId){
+  // Move items to unsorted (null section) then delete section
+  rmItems.forEach(i=>{if(i.section===secId)i.section=null;});
+  rmSections=rmSections.filter(s=>s.id!==secId);
+  saveRoadmap();renderRoadmap();
+}
+
+function rmRenameSectionSave(secId,el){
+  const sec=rmSections.find(s=>s.id===secId);
+  if(!sec)return;
+  const newName=el.textContent.trim();
+  if(newName&&newName!==sec.name){sec.name=newName;saveRoadmap();}
+  else{el.textContent=sec.name;}
 }
 
 function rmAdd(){
   const inp=document.getElementById('rm-input');if(!inp)return;
   const text=inp.value.trim();if(!text)return;
-  rmItems.push({id:'rm_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),text,status:'active',created:new Date().toISOString()});
+  // Add to first section if one exists, otherwise unsectioned
+  const firstSec=rmSections.sort((a,b)=>(a.order||0)-(b.order||0))[0];
+  rmItems.push({id:rmUid(),text,status:'active',section:firstSec?firstSec.id:null,created:new Date().toISOString()});
   inp.value='';
-  saveRoadmap();
-  renderRoadmap();
+  saveRoadmap();renderRoadmap();
+}
+
+function rmAddToSection(secId){
+  const inp=document.getElementById('rm-sec-input-'+secId);if(!inp)return;
+  const text=inp.value.trim();if(!text)return;
+  rmItems.push({id:rmUid(),text,status:'active',section:secId,created:new Date().toISOString()});
+  inp.value='';
+  saveRoadmap();renderRoadmap();
 }
 
 function rmComplete(id){
   const item=rmItems.find(i=>i.id===id);if(!item)return;
   item.status='completed';item.completedAt=new Date().toISOString();
-  saveRoadmap();renderRoadmap();
-  showToast('Marked complete!');
+  saveRoadmap();renderRoadmap();showToast('Marked complete!');
 }
 
 function rmDismiss(id){
   const item=rmItems.find(i=>i.id===id);if(!item)return;
   item.status='dismissed';item.dismissedAt=new Date().toISOString();
-  saveRoadmap();renderRoadmap();
-  showToast('Idea dismissed.');
+  saveRoadmap();renderRoadmap();showToast('Idea dismissed.');
 }
 
 function rmRestore(id){
   const item=rmItems.find(i=>i.id===id);if(!item)return;
   item.status='active';delete item.completedAt;delete item.dismissedAt;
-  saveRoadmap();renderRoadmap();
-  showToast('Restored to active.');
+  saveRoadmap();renderRoadmap();showToast('Restored to active.');
 }
 
 function rmDelete(id){
   rmItems=rmItems.filter(i=>i.id!==id);
   saveRoadmap();renderRoadmap();
+}
+
+function rmEditSave(id,el){
+  const item=rmItems.find(i=>i.id===id);
+  if(!item)return;
+  const newText=el.textContent.trim();
+  if(newText&&newText!==item.text){item.text=newText;saveRoadmap();}
+  else{el.textContent=item.text;}
 }
 
 function rmFmtDate(iso){
@@ -2966,41 +3058,173 @@ function rmFmtDate(iso){
   return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
 }
 
+// ── Drag and Drop ──
+let _rmDragId=null;
+
+function rmDragStart(e,id){
+  _rmDragId=id;
+  e.dataTransfer.effectAllowed='move';
+  e.dataTransfer.setData('text/plain',id);
+  setTimeout(()=>{const el=document.getElementById('rmi-'+id);if(el)el.classList.add('dragging');},0);
+}
+
+function rmDragEnd(e){
+  document.querySelectorAll('.rm-item.dragging').forEach(el=>el.classList.remove('dragging'));
+  document.querySelectorAll('.rm-section-body.drag-over').forEach(el=>el.classList.remove('drag-over'));
+  _rmDragId=null;
+}
+
+function rmDragOver(e){
+  e.preventDefault();
+  e.dataTransfer.dropEffect='move';
+  const body=e.target.closest('.rm-section-body');
+  if(body){
+    document.querySelectorAll('.rm-section-body.drag-over').forEach(el=>{if(el!==body)el.classList.remove('drag-over');});
+    body.classList.add('drag-over');
+  }
+}
+
+function rmDragLeave(e){
+  const body=e.target.closest('.rm-section-body');
+  if(body&&!body.contains(e.relatedTarget))body.classList.remove('drag-over');
+}
+
+function rmDrop(e,secId){
+  e.preventDefault();
+  document.querySelectorAll('.rm-section-body.drag-over').forEach(el=>el.classList.remove('drag-over'));
+  if(!_rmDragId)return;
+  const item=rmItems.find(i=>i.id===_rmDragId);
+  if(!item)return;
+
+  // Determine drop position within section
+  const body=e.target.closest('.rm-section-body');
+  if(body){
+    const cards=[...body.querySelectorAll('.rm-item')];
+    const mouseY=e.clientY;
+    let insertIdx=-1;
+    for(let i=0;i<cards.length;i++){
+      const rect=cards[i].getBoundingClientRect();
+      if(mouseY<rect.top+rect.height/2){insertIdx=i;break;}
+    }
+    // Move item to this section
+    item.section=secId;
+    // Reorder items within section
+    const secItems=rmItems.filter(i=>i.section===secId&&i.status==='active'&&i.id!==item.id);
+    // Remove from global array and re-insert
+    rmItems=rmItems.filter(i=>i.id!==item.id);
+    if(insertIdx===-1){
+      // Drop at end — find last item in this section
+      const lastIdx=rmItems.reduce((acc,it,idx)=>it.section===secId&&it.status==='active'?idx:acc,-1);
+      rmItems.splice(lastIdx+1,0,item);
+    }else{
+      // Find the global index of the item currently at insertIdx
+      const targetItemId=cards[insertIdx]?.dataset?.id;
+      if(targetItemId){
+        const globalIdx=rmItems.findIndex(i=>i.id===targetItemId);
+        rmItems.splice(globalIdx,0,item);
+      }else{
+        rmItems.push(item);
+      }
+    }
+  }else{
+    item.section=secId;
+  }
+  _rmDragId=null;
+  saveRoadmap();renderRoadmap();
+}
+
 function renderRoadmap(){
   const list=document.getElementById('rm-list');if(!list)return;
   const active=rmItems.filter(i=>i.status==='active');
   const completed=rmItems.filter(i=>i.status==='completed').sort((a,b)=>(b.completedAt||'').localeCompare(a.completedAt||''));
   const dismissed=rmItems.filter(i=>i.status==='dismissed').sort((a,b)=>(b.dismissedAt||'').localeCompare(a.dismissedAt||''));
 
-  // Update badge counts
   const ca=document.getElementById('rm-cnt-active');if(ca)ca.textContent=active.length;
   const cc=document.getElementById('rm-cnt-completed');if(cc)cc.textContent=completed.length;
   const cd=document.getElementById('rm-cnt-dismissed');if(cd)cd.textContent=dismissed.length;
 
-  const items=rmTab==='active'?active:rmTab==='completed'?completed:dismissed;
+  // Active tab: render as sections with drag-and-drop
+  if(rmTab==='active'){
+    const sortedSections=[...rmSections].sort((a,b)=>(a.order||0)-(b.order||0));
+    const unsectioned=active.filter(i=>!i.section||!rmSections.find(s=>s.id===i.section));
+    let html='';
+
+    sortedSections.forEach(sec=>{
+      const secItems=active.filter(i=>i.section===sec.id);
+      html+=`<div class="rm-section" id="rm-sec-${sec.id}">
+        <div class="rm-section-hdr">
+          <span class="rm-section-name" contenteditable="true" spellcheck="false"
+            onblur="rmRenameSectionSave('${sec.id}',this)"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">${escHtml(sec.name)}</span>
+          <span class="rm-section-count">${secItems.length}</span>
+          <div class="rm-section-actions">
+            <button class="rm-section-btn del" onclick="rmDeleteSection('${sec.id}')" title="Delete section">✕</button>
+          </div>
+        </div>
+        <div class="rm-section-body" ondragover="rmDragOver(event)" ondragleave="rmDragLeave(event)" ondrop="rmDrop(event,'${sec.id}')">`;
+      if(secItems.length===0){
+        html+='<div class="rm-empty">Drag items here</div>';
+      }else{
+        secItems.forEach(item=>{html+=rmItemHtml(item,'active');});
+      }
+      html+=`<div style="display:flex;gap:6px;padding:4px 2px;margin-top:2px">
+          <input type="text" id="rm-sec-input-${sec.id}" placeholder="Add item…" style="flex:1;padding:5px 9px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:.76rem;background:var(--white)" onkeydown="if(event.key==='Enter')rmAddToSection('${sec.id}')">
+          <button class="btn" style="padding:4px 10px;font-size:.72rem" onclick="rmAddToSection('${sec.id}')">+</button>
+        </div>`;
+      html+='</div></div>';
+    });
+
+    // Unsectioned items
+    if(unsectioned.length>0){
+      html+=`<div class="rm-section" id="rm-sec-unsorted">
+        <div class="rm-section-hdr">
+          <span class="rm-section-name" style="cursor:default">Unsorted</span>
+          <span class="rm-section-count">${unsectioned.length}</span>
+        </div>
+        <div class="rm-section-body" ondragover="rmDragOver(event)" ondragleave="rmDragLeave(event)" ondrop="rmDrop(event,null)">`;
+      unsectioned.forEach(item=>{html+=rmItemHtml(item,'active');});
+      html+='</div></div>';
+    }
+
+    if(sortedSections.length===0&&unsectioned.length===0){
+      html='<div class="rm-empty">No active ideas yet. Add a section and start adding items!</div>';
+    }
+    list.innerHTML=html;
+    return;
+  }
+
+  // Completed / Dismissed tabs: flat list (no sections)
+  const items=rmTab==='completed'?completed:dismissed;
   if(items.length===0){
-    const msg=rmTab==='active'?'No active ideas yet. Add one above!':rmTab==='completed'?'No completed items yet.':'No dismissed items.';
+    const msg=rmTab==='completed'?'No completed items yet.':'No dismissed items.';
     list.innerHTML='<div class="rm-empty">'+msg+'</div>';
     return;
   }
   let html='';
-  items.forEach(item=>{
-    const cls=item.status==='completed'?'completed':item.status==='dismissed'?'dismissed':'';
-    const dateLabel=item.status==='completed'?'Completed '+rmFmtDate(item.completedAt):item.status==='dismissed'?'Dismissed '+rmFmtDate(item.dismissedAt):'Added '+rmFmtDate(item.created);
-    let actions='';
-    if(rmTab==='active'){
-      actions='<button class="rm-btn rm-btn-check" onclick="rmComplete(\''+item.id+'\')" title="Mark complete">✓</button>'
-        +'<button class="rm-btn rm-btn-dismiss" onclick="rmDismiss(\''+item.id+'\')" title="Dismiss">✕</button>';
-    } else {
-      actions='<button class="rm-btn rm-btn-restore" onclick="rmRestore(\''+item.id+'\')" title="Restore to active">↩</button>'
-        +'<button class="rm-btn rm-btn-dismiss" onclick="rmDelete(\''+item.id+'\')" title="Delete permanently">🗑</button>';
-    }
-    html+='<div class="rm-item '+cls+'">'
-      +'<div style="flex:1"><div class="rm-item-text">'+item.text.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>'
-      +'<div class="rm-item-date">'+dateLabel+'</div></div>'
-      +'<div class="rm-item-actions">'+actions+'</div></div>';
-  });
+  items.forEach(item=>{html+=rmItemHtml(item,rmTab);});
   list.innerHTML=html;
+}
+
+function rmItemHtml(item,tab){
+  const cls=item.status==='completed'?'completed':item.status==='dismissed'?'dismissed':'';
+  const dateLabel=item.status==='completed'?'Completed '+rmFmtDate(item.completedAt):item.status==='dismissed'?'Dismissed '+rmFmtDate(item.dismissedAt):'Added '+rmFmtDate(item.created);
+  let actions='';
+  if(tab==='active'){
+    actions='<button class="rm-btn rm-btn-check" onclick="event.stopPropagation();rmComplete(\''+item.id+'\')" title="Mark complete">✓</button>'
+      +'<button class="rm-btn rm-btn-dismiss" onclick="event.stopPropagation();rmDismiss(\''+item.id+'\')" title="Dismiss">✕</button>';
+  }else{
+    actions='<button class="rm-btn rm-btn-restore" onclick="rmRestore(\''+item.id+'\')" title="Restore to active">↩</button>'
+      +'<button class="rm-btn rm-btn-dismiss" onclick="rmDelete(\''+item.id+'\')" title="Delete permanently">🗑</button>';
+  }
+  const draggable=tab==='active'?' draggable="true" ondragstart="rmDragStart(event,\''+item.id+'\')" ondragend="rmDragEnd(event)"':'';
+  return '<div class="rm-item '+cls+'" id="rmi-'+item.id+'" data-id="'+item.id+'"'+draggable+'>'
+    +'<span class="rm-drag-handle" title="Drag to reorder"'+(tab==='active'?'':'style="display:none"')+'>⠿</span>'
+    +'<div style="flex:1"><div class="rm-item-text" contenteditable="'+(tab==='active'?'true':'false')+'" spellcheck="false"'
+    +' onblur="rmEditSave(\''+item.id+'\',this)"'
+    +' onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();this.blur();}"'
+    +'>'+escHtml(item.text)+'</div>'
+    +'<div class="rm-item-date">'+dateLabel+'</div></div>'
+    +'<div class="rm-item-actions">'+actions+'</div></div>';
 }
 
 // ── Vendor Share Token ──
