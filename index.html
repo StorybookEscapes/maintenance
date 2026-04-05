@@ -546,6 +546,54 @@ textarea{resize:vertical;min-height:76px}
   .vg-week-task{padding:3px 5px;font-size:.6rem}
   .vg-week-task-prop{font-size:.5rem}
 }
+/* ── Vendor Day Sheet ── */
+#vendor-sheet{min-height:100vh;background:var(--bg);font-family:'DM Sans',sans-serif}
+.vs-header{background:var(--green);padding:20px 24px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.vs-logo{height:40px}
+.vs-header-text{flex:1}
+.vs-title{font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--gold-light);margin:0;font-weight:600}
+.vs-subtitle{font-size:.82rem;color:rgba(255,255,255,.65);margin:2px 0 0}
+.vs-body{max-width:640px;margin:0 auto;padding:16px}
+.vs-card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px;box-shadow:var(--shadow);overflow:hidden;transition:border-color .15s}
+.vs-card.vs-done{border-color:var(--green);background:var(--green-pale)}
+.vs-card-banner{padding:14px 16px;cursor:pointer;display:flex;align-items:flex-start;gap:12px}
+.vs-card-check{width:28px;height:28px;border-radius:50%;border:2px solid var(--border-dark);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s;margin-top:2px;font-size:.9rem;color:transparent;background:var(--white)}
+.vs-card.vs-done .vs-card-check{background:var(--green);border-color:var(--green);color:#fff}
+.vs-card-info{flex:1;min-width:0}
+.vs-card-prop{font-size:.68rem;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:3px}
+.vs-card-prob{font-size:.92rem;font-weight:500;color:var(--text)}
+.vs-card-badges{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.vs-urgent{background:var(--red);color:#fff;font-size:.6rem;font-weight:700;padding:2px 8px;border-radius:20px;text-transform:uppercase}
+.vs-card-detail{display:none;padding:0 16px 16px;border-top:1px solid var(--border)}
+.vs-card.vs-expanded .vs-card-detail{display:block;padding-top:14px}
+.vs-detail-row{display:flex;gap:8px;margin-bottom:8px;font-size:.82rem}
+.vs-detail-label{color:var(--text3);min-width:80px;flex-shrink:0;font-weight:500}
+.vs-detail-val{color:var(--text);word-break:break-word}
+.vs-photos{margin:12px 0}
+.vs-photos img{max-width:100%;max-height:250px;border-radius:var(--radius);border:1px solid var(--border);cursor:pointer;margin-bottom:6px}
+.vs-photo-upload{display:flex;align-items:center;gap:10px;padding:12px 16px;border:2px dashed var(--border);border-radius:var(--radius);background:var(--surface2);cursor:pointer;transition:border-color .2s}
+.vs-photo-upload:hover{border-color:var(--green)}
+.vs-notes{margin-top:12px}
+.vs-note{padding:8px 12px;background:var(--surface2);border-radius:8px;margin-bottom:6px;font-size:.82rem}
+.vs-note-meta{font-size:.7rem;color:var(--text3);margin-bottom:2px}
+.vs-note-input{display:flex;gap:8px;margin-top:8px}
+.vs-note-input textarea{flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:.82rem;resize:none;min-height:36px}
+.vs-note-input button{padding:8px 16px;border-radius:8px;background:var(--green);color:#fff;border:none;font-family:inherit;font-size:.78rem;font-weight:500;cursor:pointer;white-space:nowrap}
+.vs-done-bar{padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.vs-done-btn{padding:10px 20px;border-radius:8px;font-family:inherit;font-size:.85rem;font-weight:600;cursor:pointer;border:none;transition:all .15s}
+.vs-done-btn.vs-btn-mark{background:var(--green);color:#fff}
+.vs-done-btn.vs-btn-mark:hover{background:var(--green-mid)}
+.vs-done-btn.vs-btn-undo{background:transparent;color:var(--text2);border:1px solid var(--border)}
+.vs-done-status{font-size:.78rem;color:var(--green);font-weight:500}
+.vs-card.vs-done .vs-card-prob{text-decoration:line-through;color:var(--text2)}
+/* Vendor-done badge for admin task cards */
+.vd-badge{display:inline-flex;align-items:center;gap:3px;background:#e8f5e9;color:#2e7d32;font-size:.62rem;font-weight:600;padding:2px 7px;border-radius:12px;border:1px solid #a5d6a7;text-transform:uppercase;letter-spacing:.5px}
+.vd-badge::before{content:'\\2713';font-size:.7rem}
+/* Vendor photos in admin detail */
+.vp-section{margin-top:10px}
+.vp-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.vp-grid img{max-height:120px;border-radius:var(--radius);border:1px solid var(--border);cursor:pointer}
+.vp-meta{font-size:.65rem;color:var(--text3);margin-top:2px}
 </style>
 </head>
 <body>
@@ -937,6 +985,10 @@ textarea{resize:vertical;min-height:76px}
     <div id="d-vendors"></div>
     <div id="d-vnotes-section" style="display:none"><div class="stitle">Vendor Completion Notes</div>
     <textarea id="d-vnotes" rows="3" placeholder="Vendor fills this out after completing work..." onchange="updateField('vendorNotes',this.value)" oninput="clearTimeout(this._debounce);this._debounce=setTimeout(()=>updateField('vendorNotes',this.value),800)"></textarea></div>
+    <div id="d-vendor-done-notice" style="display:none;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:var(--radius);padding:12px 16px;margin-bottom:10px">
+      <div style="font-size:.78rem;font-weight:600;color:#2e7d32;margin-bottom:3px">✓ Vendor marked this complete</div>
+      <div style="font-size:.72rem;color:#4a6355">Submitted at <span class="vd-time"></span>. Review photos and notes before approving.</div>
+    </div>
     <div style="display:flex;gap:9px;margin-top:20px;justify-content:space-between;align-items:center;flex-wrap:wrap">
       <button class="btn btn-red" onclick="deleteTask()">Delete Task</button>
       <div style="display:flex;gap:7px">
@@ -1022,6 +1074,25 @@ textarea{resize:vertical;min-height:76px}
   </div>
 </div>
 
+<!-- ── Vendor Day Sheet ── -->
+<div id="vendor-sheet" style="display:none">
+  <div class="vs-header">
+    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAQFUlEQVR4nO1ba3RUVZb+9rlVlfdDMLx8jA8abKK97BZblMakgAZEZ+xe3VWtJqlKoiQSfLSiPTO9ZtbNnbWc1lFRIFWheAYEnalqxx4dAUlVbiIRUdHWRrK6ZRBGRh7hEZKQVFJ179l7fxxSpYYQwjMof+pb61b9c+t839n7u/v7DoD/R/cCM8ChI1d/9gsnTHrRlXKq9uL8DwnAIVUFMCP+0rGCufSOuaFo4t7J8Z0SIB/1goiYpcl8AqKJe/1z/M4Ioqt5Nqf2YNRWFc7IGpI2EyQaE9/U99vvOyFAMOhSnFqDUVt7r7HbbatO2PSMBGIkTmsalpaM6WmKtSMV9VwzNWrqnuf2BaY+tem39kgeHzJi17PBJ+/es//nIl3RCbLjQOFMLIFZVqs9pSo2aSc4rcjLePNTSqU6es/KfrAZ6VUW6VKLXS1OOVATSGBwnokOGoeyc9ujyPVY7qy54sYQ4IwHUOne33p73wMTszJSNMcOodj68ck59oPhWELnZ5Lsk43qABTN3E6EDTAyCgwgAqFkQRSBpeX7F8j8CiaCKkFvAFZIX0h1OWwArldWrvCPsyconzPgi2mXMS02x/b1h8M2S5edM9B+m5LBdpn3ufMR/tG//Bl/xVQZhkiLwcyHE7WBuYpgv5JWv2mC1sTZZLldQJlaaAYyrZ5d4uuKdlgDMIFSqVI9dDh7BepLDPqG72/hMUeh7DPrQNI21gsQR0+QcUjCcmbLBYBLUyiz3SMlb0xX67I7Zq762iI5oSZ8LQpEQ1GaYWGMIen3qrGX7j/9dVdRX1otvvPkRAlzB4y1m7fxHk1J+MMR0OgeWRZ6OAKSriY1LxOd5LT016b62zu7ujFRHUkc0FmdGqxCUwRImCPvBfIiBViReh8kAkA3GMCGEA4zDIGwm0Jr82SveAIDGpaVO05SzhBBjTEN+yeDauJSN9uavtp8qM9SrXOmGSB9mSDMlZtgP/s3jVx4gGlhMGbAAVj2v1lf0THZ6ym+7YgZSkuxo7+g+xMQ6kahDXL4PdP6X85HQ0W97xjurCtMcR3Etk3IbQNOJeCKB7AAiRFiYV16zCQAaAp5pUoppknk0wEwk9kHy/zCjGQq3ksndUBSY0kwGC5sQFCPwlwejnU3uuaHoQDkNWICeXN7YsLCwJCMteXl3zOgGsMWU8A+/vOP3N7pDsdP50b6o95f+ECTvh6ApLAFA1oMRclas3Gy12bCwdJRDiQ+XJFJJSDIlxRwKH+lsdxycMbd3uV07vyDT4VAyUodGD9/hHpgQpxTACnrvLPDclZKsvC2EoO7u+EbJFCCmZggkEyFZgiUxTGbJColjJmsyTAAQxFISS5aCFWGyNBVpU9AlJbdHY0bUrtgvsztovABmMOFWZs5k4M+Q/KEgfMqsbGc2D0o7t7NiN+xx0yEhsqQpR5LCKWxSVBE4EIvadk5/clnLQINhvwL0kOc6n3emzS6WS0ayYZgAEYiRJgQpkhkASwb1vPoCgNgESBIgmTnxFzCRuAyATIANEJkEmGA2mChKQAtLbiMiIsJQACmSQSCOAdRJ4BYp0SYUdDBTTBCxhDSJqcmEsT0mk/ZCdLWl7f+6faA7ygG5QG2g6Oohit3Y1RIzsrKTCAkW8bR49JjK7XE6VuhIUbIkcAAZ9svkHgBdR1s4py2Vo0My+eqR+7hpG3DdqMu4fcxIPnCgiV0XeO3vi8FVXu4BA1SpqlQJINTURHAl7rv6/AOEVYzJ2dZM+ciXqNQYBJyX3aR13sfMdPyFM7vQe+H464LjfwGt4mD6pZ1APgAAAABJRU5ErkJggg==" class="vs-logo" alt="Storybook Escapes">
+    <div class="vs-header-text">
+      <h1 class="vs-title">Storybook Escapes</h1>
+      <p class="vs-subtitle" id="vs-subtitle">Loading...</p>
+    </div>
+  </div>
+  <div class="vs-body">
+    <div id="vs-loading" style="text-align:center;padding:40px;color:var(--text2)">Loading your tasks...</div>
+    <div id="vs-error" style="display:none;text-align:center;padding:40px">
+      <div style="font-size:1.1rem;font-weight:600;color:var(--red);margin-bottom:8px">Link Expired or Invalid</div>
+      <div style="color:var(--text2);font-size:.88rem">This job sheet link is no longer active. Please contact Storybook Escapes if you need access.</div>
+    </div>
+    <div id="vs-tasks" style="display:none"></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1030,6 +1101,21 @@ textarea{resize:vertical;min-height:76px}
   const GOOGLE_CLIENT_ID='998506456904-tlionif2dmsafl74qk0sinb4rvljdddm.apps.googleusercontent.com';
   const API_BASE='https://storybook-webhook.vercel.app';
   const ALLOWED=['properties@chipburns.com','cb@chipburns.com'];
+
+  // ── Vendor Day Sheet mode ──
+  // URL: #v/{token} — skip auth, show vendor view only
+  const _hash = window.location.hash;
+  if (_hash.startsWith('#v/')) {
+    const _vtoken = _hash.slice(3);
+    if (_vtoken.length >= 6) {
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('app').style.display = 'none';
+      document.getElementById('vendor-sheet').style.display = 'block';
+      window._vendorToken = _vtoken;
+      window._vendorMode = true;
+      return; // Skip all auth — vendor.js endpoint handles access control
+    }
+  }
 
   // Dev bypass: skip auth on non-production hosts
   if(window.location.hostname!=='storybookescapes.github.io'){
@@ -1347,7 +1433,7 @@ function taskCard(t){
         ${t.recurring?'<span class="badge b-rec">Recurring</span>':''}
         <span class="badge b-${t.status}">${t.status.replace('_',' ')}</span>
         ${t.date?`<span class="tmi">${t.date}</span>${overdueBadge(t)}`:(t.status!=='scheduled'?'<span class="tmi" style="color:var(--text3)">Not scheduled</span>':'')}
-        ${t.vendor?`<span class="tmi">${t.vendor}</span>`:''}
+        ${t.vendor?`<span class="tmi">${t.vendor}</span>`:''}${t.vendorDone?'<span class="vd-badge">Vendor Done</span>':''}
         ${t.guest?`<span class="tmi">Reported by ${t.guest}</span>`:''}
       </div>
     </div></div>
@@ -2117,12 +2203,21 @@ async function openDetail(id){
     ${t.created?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${fmtReported(t.created)}</span>`:''}`;
   renderUrgentToggle(t);
   showTaskPhoto(t);
+  showVendorPhotos(t);
   renderDetailVendors(t,p);renderNotes(t);checkCombine();
   closeVendorDD(); // reset dropdown state when opening a new task
   renderMiniCal(t.property).then(()=>renderDetailVendors(t,p));
   const isDone=['complete','resolved_by_guest'].includes(t.status);
   document.getElementById('complete-btn').style.display=isDone?'none':'';
   document.getElementById('resolved-guest-btn').style.display=isDone?'none':'';
+  // Vendor-done approval notice
+  const vdNotice=document.getElementById('d-vendor-done-notice');
+  if(vdNotice){
+    if(t.vendorDone&&!['complete','resolved_by_guest'].includes(t.status)){
+      vdNotice.style.display='';
+      vdNotice.querySelector('.vd-time').textContent=new Date(t.vendorDone).toLocaleString();
+    }else{vdNotice.style.display='none';}
+  }
   document.getElementById('detail-modal').classList.add('open');
 }
 function taskStartEditTitle() {
@@ -2200,6 +2295,21 @@ function showTaskPhoto(t){
   }
   document.getElementById('d-photo-status').textContent='';
   document.getElementById('d-photo-input').value='';
+}
+function showVendorPhotos(t){
+  let el=document.getElementById('d-vendor-photos');
+  if(!el){
+    // Create the vendor photos section after the main photo section
+    const photoSection=document.getElementById('d-photo-section');
+    if(!photoSection)return;
+    el=document.createElement('div');el.id='d-vendor-photos';el.className='vp-section';
+    photoSection.after(el);
+  }
+  const vp=t.vendorPhotos||[];
+  if(!vp.length){el.innerHTML='';return;}
+  el.innerHTML='<div class="stitle" style="margin-top:10px">Vendor Photos ('+vp.length+')</div><div class="vp-grid">'+
+    vp.map(p=>`<div><img src="${p.url}" onclick="window.open('${p.url}','_blank')" title="Click to view full size"><div class="vp-meta">${p.uploadedBy||'Vendor'} — ${new Date(p.uploadedAt).toLocaleDateString()}</div></div>`).join('')+
+    '</div>';
 }
 /* Drag-and-drop + paste support for photo upload */
 (function(){
@@ -2388,6 +2498,7 @@ function renderDetailVendors(t,p){
         <div class="sms-acts">
           <a id="${smsId}-link" href="sms:${tel}?body=${encodeURIComponent(sms)}" class="sms-btn sms-send" onclick="updateSmsLink('${smsId}','${tel}')">Open in Messages</a>
           <button class="sms-btn sms-copy" onclick="copySms('${smsId}')">Copy Text</button>
+          <button class="sms-btn" onclick="generateAndInsertSheet('${smsId}','${v.name.replace(/'/g,"\\'")}',${JSON.stringify(t.id).replace(/'/g,"\\'")})">📋 Job Sheet Link</button>
         </div>
       </div>
     </div>`;
@@ -2557,6 +2668,43 @@ async function saveRoadmap(auto){
   setTimeout(()=>{if(st&&st.textContent==='Saved')st.textContent='';},2000);
 }
 
+// ── Vendor Share Token ──
+function generateVendorToken(){
+  const chars='abcdefghijklmnopqrstuvwxyz0123456789';
+  let t='';for(let i=0;i<12;i++)t+=chars[Math.floor(Math.random()*chars.length)];
+  return t;
+}
+async function createVendorSheet(vendorName,date,taskIds){
+  const token=generateVendorToken();
+  const sheet={vendor:vendorName,date:date,taskIds:taskIds,created:new Date().toISOString()};
+  await S.set('se_vs_'+token,JSON.stringify(sheet));
+  return token;
+}
+function vendorSheetUrl(token){
+  return'https://storybookescapes.github.io/maintenance/#v/'+token;
+}
+
+async function generateAndInsertSheet(smsId,vendorName,taskId){
+  // Collect all task IDs for this vendor+date
+  const t=tasks.find(x=>x.id===taskId);
+  if(!t||!t.date)return;
+  const sameDayIds=tasks.filter(x=>x.vendor&&x.vendor.toLowerCase()===vendorName.toLowerCase()&&x.date===t.date&&!['complete','resolved_by_guest'].includes(x.status)).map(x=>x.id);
+  if(!sameDayIds.length)return;
+  try{
+    const token=await createVendorSheet(vendorName,t.date,sameDayIds);
+    const url=vendorSheetUrl(token);
+    const ta=document.getElementById(smsId);
+    if(ta){
+      ta.value+='\n\nView your full job sheet: '+url;
+      // Update the sms: link too
+      const tel=(ta.closest('.sms-box')||ta.parentElement).querySelector('.sms-send');
+      if(tel)tel.href='sms:'+tel.href.split('sms:')[1].split('?')[0]+'?body='+encodeURIComponent(ta.value);
+    }
+    // Brief visual feedback
+    const btn=event.target;if(btn){btn.textContent='✓ Link Added';btn.disabled=true;setTimeout(()=>{btn.textContent='📋 Job Sheet Link';btn.disabled=false;},2000);}
+  }catch(e){console.error('[vendor-sheet] Token gen error:',e);alert('Failed to generate link.');}
+}
+
 function buildSMS(t,p,v){
   const pn=p?p.name:t.property,addr=p?p.address:'',door=p?p.door:'';
   const urg=t.urgent?'\n\nThis is URGENT — same-day response needed if possible.':'';
@@ -2578,6 +2726,7 @@ function buildSMS(t,p,v){
     .replace(/\{urgent_notice\}/g, urg);
   if(t.photoUrl)msg+=`\n\nPhoto of the issue: ${t.photoUrl}`;
   if(/hvac\s*filter/i.test(t.problem)||t.category==='hvac'&&/filter/i.test(t.problem))msg+=`\n\nPlease write today's date on the new filter and send us a photo when it's installed.`;
+  if(t._vendorSheetUrl)msg+='\n\nView your full job sheet: '+t._vendorSheetUrl;
   return msg;
 }
 /* Get all active tasks for a vendor on a specific date */
@@ -2608,7 +2757,9 @@ function buildMultiSMS(taskList,v){
     if(t.urgent)line+=`\n*** URGENT ***`;
     return line;
   }).join('\n\n');
-  return`Hi ${v.name.split(' ')[0]}, we have ${taskList.length} maintenance jobs for you on the same day.${urg}\n\n${jobLines}\n\n${ds}\n\nThank you — Chip Burns, Storybook Escapes`;
+  const sheetUrl=sorted[0]._vendorSheetUrl||'';
+  const sheetLine=sheetUrl?'\n\nView your full job sheet with details, photos & check-off: '+sheetUrl:'';
+  return`Hi ${v.name.split(' ')[0]}, we have ${taskList.length} maintenance jobs for you on the same day.${urg}\n\n${jobLines}\n\n${ds}${sheetLine}\n\nThank you — Chip Burns, Storybook Escapes`;
 }
 /* Render combined SMS card for a vendor with multiple same-day tasks */
 function combinedVendorCard(v,taskList){
@@ -2631,6 +2782,7 @@ function combinedVendorCard(v,taskList){
       <div class="sms-acts">
         <a id="${smsId}-link" href="sms:${tel}?body=${encodeURIComponent(sms)}" class="sms-btn sms-send" onclick="updateSmsLink('${smsId}','${tel}')">Open in Messages</a>
         <button class="sms-btn sms-copy" onclick="copySms('${smsId}')">Copy Text</button>
+        <button class="sms-btn" onclick="generateAndInsertSheet('${smsId}','${v.name.replace(/'/g,"\\'")}',${JSON.stringify(sorted[0].id).replace(/'/g,"\\'")})">📋 Job Sheet Link</button>
       </div>
     </div>
   </div>`;
@@ -4508,6 +4660,157 @@ function rpImportFromReview(rv) {
     }
   });
 }
+
+// ── Vendor Day Sheet Logic ──────────────────────────────
+(function(){
+  if(!window._vendorMode)return;
+  const VAPI=PROXY_BASE+'/api/vendor';
+  const token=window._vendorToken;
+  let vTasks=[];
+  let vVendor='';
+  let vDate='';
+
+  async function vsLoad(){
+    try{
+      const r=await fetch(VAPI+'?token='+encodeURIComponent(token));
+      if(!r.ok){vsShowError();return;}
+      const data=await r.json();
+      vTasks=data.tasks||[];
+      vVendor=data.vendor||'';
+      vDate=data.date||'';
+      document.getElementById('vs-subtitle').textContent=
+        vVendor+' — Jobs for '+new Date(vDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+      document.getElementById('vs-loading').style.display='none';
+      document.getElementById('vs-tasks').style.display='block';
+      vsRender();
+    }catch(e){
+      console.error('[vendor-sheet]',e);
+      vsShowError();
+    }
+  }
+
+  function vsShowError(){
+    document.getElementById('vs-loading').style.display='none';
+    document.getElementById('vs-error').style.display='block';
+  }
+
+  function vsRender(){
+    const wrap=document.getElementById('vs-tasks');
+    if(!vTasks.length){wrap.innerHTML='<div style="text-align:center;padding:30px;color:var(--text2)">No tasks assigned for today.</div>';return;}
+    wrap.innerHTML=vTasks.map(t=>vsCard(t)).join('');
+  }
+
+  function vsCard(t){
+    const done=!!t.vendorDone;
+    const photos=[];
+    if(t.photoUrl)photos.push({url:t.photoUrl,label:'Admin photo'});
+    (t.vendorPhotos||[]).forEach(p=>photos.push({url:p.url,label:'Uploaded by vendor — '+new Date(p.uploadedAt).toLocaleDateString()}));
+    const notes=(t.notes||[]).map(n=>
+      `<div class="vs-note"><div class="vs-note-meta">${n.type==='vendor'?'You':'Storybook Escapes'} — ${new Date(n.time).toLocaleString()}</div><div>${n.text.replace(/</g,'&lt;')}</div></div>`
+    ).join('');
+    return`<div class="vs-card ${done?'vs-done':''}" id="vsc-${t.id}">
+      <div class="vs-card-banner" onclick="window._vsToggle('${t.id}')">
+        <div class="vs-card-check">${done?'&#x2713;':''}</div>
+        <div class="vs-card-info">
+          <div class="vs-card-prop" style="color:var(--green)">${t.propertyName}</div>
+          <div class="vs-card-prob">${t.problem}</div>
+          <div class="vs-card-badges">
+            ${t.urgent?'<span class="vs-urgent">Urgent</span>':''}
+            ${done?'<span style="font-size:.7rem;color:var(--green);font-weight:500">Submitted ✓</span>':''}
+          </div>
+        </div>
+        <span style="font-size:.8rem;color:var(--text3)">&#x25BE;</span>
+      </div>
+      <div class="vs-card-detail">
+        <div class="vs-detail-row"><span class="vs-detail-label">Address</span><span class="vs-detail-val">${t.address||'—'}</span></div>
+        <div class="vs-detail-row"><span class="vs-detail-label">Door Code</span><span class="vs-detail-val">${t.doorCode||'—'}</span></div>
+        ${t.date?`<div class="vs-detail-row"><span class="vs-detail-label">Scheduled</span><span class="vs-detail-val">${t.date}</span></div>`:''}
+        ${photos.length?`<div class="vs-photos">${photos.map(p=>`<div><img src="${p.url}" onclick="window.open('${p.url}','_blank')" title="Tap to view full size"><div style="font-size:.65rem;color:var(--text3)">${p.label}</div></div>`).join('')}</div>`:''}
+        <div class="vs-photo-upload" onclick="document.getElementById('vpi-${t.id}').click()">
+          <span style="font-size:1.1rem">&#x1F4F7;</span>
+          <div>
+            <div style="font-size:.76rem;font-weight:500;color:var(--green)">Upload Photo</div>
+            <div style="font-size:.65rem;color:var(--text3)">Tap to take or upload a photo</div>
+          </div>
+          <input type="file" id="vpi-${t.id}" accept="image/*" capture="environment" style="display:none" onchange="window._vsUploadPhoto('${t.id}',this.files[0])">
+        </div>
+        <div class="vs-notes">${notes}
+          <div class="vs-note-input">
+            <textarea id="vsn-${t.id}" placeholder="Leave a note..." rows="1"></textarea>
+            <button onclick="window._vsAddNote('${t.id}')">Send</button>
+          </div>
+        </div>
+        <div class="vs-done-bar">
+          ${done
+            ?`<span class="vs-done-status">Submitted — awaiting confirmation</span><button class="vs-done-btn vs-btn-undo" onclick="window._vsUndoDone('${t.id}')">Undo</button>`
+            :`<button class="vs-done-btn vs-btn-mark" onclick="window._vsMarkDone('${t.id}')">Mark Complete</button>`}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  window._vsToggle=function(id){
+    const el=document.getElementById('vsc-'+id);
+    if(el)el.classList.toggle('vs-expanded');
+  };
+
+  window._vsMarkDone=async function(id){
+    try{
+      const r=await fetch(VAPI,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,action:'markDone',taskId:id})});
+      if(!r.ok){alert('Failed to submit. Please try again.');return;}
+      const data=await r.json();
+      const t=vTasks.find(x=>x.id===id);
+      if(t){t.vendorDone=data.vendorDone;if(!t.notes)t.notes=[];t.notes.push({text:'Marked as done by vendor.',type:'vendor',time:data.vendorDone});}
+      vsRender();
+    }catch(e){alert('Network error. Please try again.');}
+  };
+
+  window._vsUndoDone=async function(id){
+    try{
+      const r=await fetch(VAPI,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,action:'undoDone',taskId:id})});
+      if(!r.ok){alert('Failed. Please try again.');return;}
+      const t=vTasks.find(x=>x.id===id);
+      if(t){t.vendorDone=null;if(!t.notes)t.notes=[];t.notes.push({text:'Unmarked as done by vendor.',type:'vendor',time:new Date().toISOString()});}
+      vsRender();
+    }catch(e){alert('Network error. Please try again.');}
+  };
+
+  window._vsAddNote=async function(id){
+    const inp=document.getElementById('vsn-'+id);
+    const txt=(inp?inp.value:'').trim();
+    if(!txt)return;
+    try{
+      const r=await fetch(VAPI,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,action:'addNote',taskId:id,text:txt})});
+      if(!r.ok){alert('Failed to send note.');return;}
+      const t=vTasks.find(x=>x.id===id);
+      if(t){if(!t.notes)t.notes=[];t.notes.push({text:txt,type:'vendor',time:new Date().toISOString()});}
+      vsRender();
+      // Re-expand the card
+      setTimeout(()=>{const el=document.getElementById('vsc-'+id);if(el)el.classList.add('vs-expanded');},10);
+    }catch(e){alert('Network error.');}
+  };
+
+  window._vsUploadPhoto=async function(id,file){
+    if(!file)return;
+    if(file.size>5*1024*1024){alert('Photo must be under 5MB.');return;}
+    const ext=file.name.split('.').pop()||'jpg';
+    const fname=`vendor-${id}-${Date.now()}.${ext}`;
+    try{
+      const r=await fetch(VAPI+'?token='+encodeURIComponent(token)+'&taskId='+encodeURIComponent(id)+'&filename='+encodeURIComponent(fname),{
+        method:'POST',headers:{'Content-Type':file.type},body:file
+      });
+      if(!r.ok){alert('Upload failed. Please try again.');return;}
+      const data=await r.json();
+      const t=vTasks.find(x=>x.id===id);
+      if(t){if(!t.vendorPhotos)t.vendorPhotos=[];t.vendorPhotos.push({url:data.url,uploadedAt:new Date().toISOString(),uploadedBy:vVendor});}
+      vsRender();
+      setTimeout(()=>{const el=document.getElementById('vsc-'+id);if(el)el.classList.add('vs-expanded');},10);
+    }catch(e){alert('Upload failed. Please try again.');}
+  };
+
+  // Boot vendor sheet
+  vsLoad();
+})();
 
 // START
 async function initApp(){
