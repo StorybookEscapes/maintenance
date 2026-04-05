@@ -1084,7 +1084,7 @@ textarea{resize:vertical;min-height:76px}
   <div class="vs-header">
     <img id="vs-logo" src="" class="vs-logo" alt="Storybook Escapes">
     <div class="vs-header-text">
-      <h1 class="vs-title">Storybook Escapes</h1>
+      <h1 class="vs-title">Maintenance</h1>
       <p class="vs-subtitle" id="vs-subtitle">Loading...</p>
     </div>
   </div>
@@ -2503,7 +2503,7 @@ async function renderDetailVendors(t,p){
 
   function vendorCard(v,showAssign){
     let sms=buildSMS(t,p,v);
-    if(sheetUrl&&!sms.includes('job sheet'))sms+='\n\nView your full job sheet: '+sheetUrl;
+    if(sheetUrl&&!sms.includes('link for all the details'))sms+='\n\nClick this link for all the details!\n'+sheetUrl;
     const tel=v.phone.replace(/\D/g,'');
     const smsId='sms-'+v.id+'-'+t.id;
     return`<div class="vsc">
@@ -2523,8 +2523,7 @@ async function renderDetailVendors(t,p){
   }
 
   function combinedCard(v,taskList){
-    let sms=buildMultiSMS(taskList,v);
-    if(sheetUrl&&!sms.includes('job sheet'))sms+='\n\nView your full job sheet: '+sheetUrl;
+    let sms=buildMultiSMS(taskList,v,sheetUrl);
     const tel=v.phone.replace(/\D/g,'');
     const smsId='sms-combined-'+v.id;
     const sorted=[...taskList].sort((a,b)=>{
@@ -2740,7 +2739,7 @@ async function generateAndInsertSheet(smsId,vendorName,taskId,btnEl){
     const url=vendorSheetUrl(token);
     const ta=document.getElementById(smsId);
     if(ta){
-      ta.value+='\n\nView your full job sheet: '+url;
+      ta.value+='\n\nClick this link for all the details!\n'+url;
       // Update the sms: link too
       const link=(ta.closest('.sms-box')||ta.parentElement).querySelector('.sms-send');
       if(link)link.href='sms:'+link.href.split('sms:')[1].split('?')[0]+'?body='+encodeURIComponent(ta.value);
@@ -2762,10 +2761,10 @@ async function autoInjectSheetLink(vendorName,task){
   try{
     const token=await createVendorSheet(vendorName,task.date,sameDayIds);
     const url=vendorSheetUrl(token);
-    const sheetLine='\n\nView your full job sheet: '+url;
+    const sheetLine='\n\nClick this link for all the details!\n'+url;
     // Update all SMS textareas in the vendor detail area
     document.querySelectorAll('#d-vendors .sms-edit').forEach(ta=>{
-      if(!ta.value.includes('job sheet'))ta.value+=sheetLine;
+      if(!ta.value.includes('link for all the details'))ta.value+=sheetLine;
       // Update matching sms: link
       const link=ta.closest('.sms-box')?.querySelector('.sms-send');
       if(link)link.href='sms:'+link.href.split('sms:')[1].split('?')[0]+'?body='+encodeURIComponent(ta.value);
@@ -2794,7 +2793,7 @@ function buildSMS(t,p,v){
     .replace(/\{urgent_notice\}/g, urg);
   if(t.photoUrl)msg+=`\n\nPhoto of the issue: ${t.photoUrl}`;
   if(/hvac\s*filter/i.test(t.problem)||t.category==='hvac'&&/filter/i.test(t.problem))msg+=`\n\nPlease write today's date on the new filter and send us a photo when it's installed.`;
-  if(t._vendorSheetUrl)msg+='\n\nView your full job sheet: '+t._vendorSheetUrl;
+  if(t._vendorSheetUrl)msg+='\n\nClick this link for all the details!\n'+t._vendorSheetUrl;
   return msg;
 }
 /* Get all active tasks for a vendor on a specific date */
@@ -2803,7 +2802,7 @@ function getVendorDayTasks(vendorName,date){
   return tasks.filter(t=>t.vendor&&t.vendor.toLowerCase()===vendorName.toLowerCase()&&t.date===date&&!['complete','resolved_by_guest'].includes(t.status));
 }
 /* Build a consolidated SMS for multiple tasks going to the same vendor on the same day */
-function buildMultiSMS(taskList,v){
+function buildMultiSMS(taskList,v,sheetUrlParam){
   // Sort tasks by neighborhood then property so same-property/area jobs are consecutive
   const sorted=[...taskList].sort((a,b)=>{
     const nbA=getNb(a.property),nbB=getNb(b.property);
@@ -2824,9 +2823,9 @@ function buildMultiSMS(taskList,v){
     if(/hvac\s*filter/i.test(t.problem)||t.category==='hvac'&&/filter/i.test(t.problem))line+=`\nPlease write today's date on the new filter and send us a photo when it's installed.`;
     if(t.urgent)line+=`\n*** URGENT ***`;
     return line;
-  }).join('\n\n');
-  const sheetUrl=sorted[0]._vendorSheetUrl||'';
-  const sheetLine=sheetUrl?'\n\nView your full job sheet with details, photos & check-off: '+sheetUrl:'';
+  }).join('\n');
+  const resolvedUrl=sheetUrlParam||sorted[0]._vendorSheetUrl||'';
+  const sheetLine=resolvedUrl?'\n\nClick this link for all the details!\n'+resolvedUrl:'';
   return`Hi ${v.name.split(' ')[0]}, we have ${taskList.length} maintenance jobs for you on the same day.${urg}\n\n${jobLines}\n\n${ds}${sheetLine}\n\nThank you — Chip Burns, Storybook Escapes`;
 }
 /* Render combined SMS card for a vendor with multiple same-day tasks */
@@ -4817,7 +4816,6 @@ function rpImportFromReview(rv) {
         <span style="font-size:.8rem;color:var(--text3)">&#x25BE;</span>
       </div>
       <div class="vs-card-detail">
-        ${t.date?`<div class="vs-detail-row"><span class="vs-detail-label">Scheduled</span><span class="vs-detail-val">${t.date}</span></div>`:''}
         ${photos.length?`<div class="vs-photos">${photos.map(p=>`<div><img src="${p.url}" onclick="window.open('${p.url}','_blank')" title="Tap to view full size"><div style="font-size:.65rem;color:var(--text3)">${p.label}</div></div>`).join('')}</div>`:''}
         <div class="vs-photo-upload" onclick="document.getElementById('vpi-${t.id}').click()">
           <span style="font-size:1.1rem">&#x1F4F7;</span>
