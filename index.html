@@ -1806,12 +1806,14 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
       const isToday=d.toDateString()===today.toDateString();
       const st=dayState(d);
       const isGuestInHouse=st==='booked';
+      // Allow past dates when editing a completed task (retroactive fix dates)
+      const allowPast=px==='d'&&detailId&&tasks.find(x=>x.id===detailId&&(x.status==='complete'||x.status==='resolved_by_guest'));
       let cls='dp-cell';
       if(isToday)cls+=' dp-today-cell';
       if(isSel)cls+=' dp-selected';
       const dnCls='dp-dn'+(isToday?' dp-today-num':'');
       const warn=isGuestInHouse?',true':'';
-      const click=!isPast?`onclick="selDate('${px}','${ds}'${warn})"`:'' ;
+      const click=(!isPast||allowPast)?`onclick="selDate('${px}','${ds}'${warn})"`:'' ;
       h+=`<div class="${cls}" ${click}><div class="${dnCls}">${dn}</div></div>`;
     });
 
@@ -2598,6 +2600,18 @@ async function renderMiniCal(pid){
 async function renderDetailVendors(t,p){
   const area=document.getElementById('d-vendors');
   const titleEl=document.getElementById('d-vendors-title');
+
+  // Completed tasks: just show who did it, no SMS or suggestions
+  if(t.status==='complete'||t.status==='resolved_by_guest'){
+    titleEl.textContent='Vendor';
+    if(t.vendor){
+      area.innerHTML=`<div style="font-size:.82rem;color:var(--text2);padding:6px 0">Completed by <strong>${t.vendor}</strong></div>`;
+    } else {
+      area.innerHTML=`<div style="font-size:.82rem;color:var(--text3);padding:6px 0">No vendor assigned.</div>`;
+    }
+    return;
+  }
+
   const m=vendors.filter(v=>v.categories.includes(t.category));
   const assignedVendor=t.vendor?vendors.find(v=>v.name.toLowerCase()===t.vendor.toLowerCase()):null;
 
