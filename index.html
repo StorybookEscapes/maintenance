@@ -636,7 +636,7 @@ textarea{resize:vertical;min-height:76px}
 .vs-prop-meta{font-size:.68rem;color:var(--text2);margin-top:1px;font-weight:400}
 .vs-guest-alert{font-size:.72rem;padding:5px 8px;border-radius:6px;margin-top:5px;display:flex;align-items:center;gap:6px;font-weight:500}
 .vs-guest-alert-checkout{background:#fff3e0;color:#e65100;border:1px solid #ffcc80}
-.vs-guest-alert-checkin{background:#e3f2fd;color:#1565c0;border:1px solid #90caf9}
+.vs-guest-alert-checkin{background:var(--green-light);color:var(--green);border:1px solid var(--border-dark)}
 /* Vendor-done badge for admin task cards */
 .vd-badge{display:inline-flex;align-items:center;gap:3px;background:#e8f5e9;color:#2e7d32;font-size:.62rem;font-weight:600;padding:2px 7px;border-radius:12px;border:1px solid #a5d6a7;text-transform:uppercase;letter-spacing:.5px}
 .vd-badge::before{content:'\\2713';font-size:.7rem}
@@ -5783,10 +5783,14 @@ async function gaSend(id){
   }
 }
 
-function gaDismiss(id){
+async function gaDismiss(id){
   gaDismissed.add(id);
   // Persist to same dismissed store as reviews (se_dismissed via KV)
-  if(!rvDismissed.includes(id)){rvDismissed.push(id);saveDismissed();}
+  if(!rvDismissed.includes(id)){
+    rvDismissed.push(id);
+    await saveDismissed();
+    console.log('[ga-dismiss] Saved dismissed ID:',id,'Total dismissed:',rvDismissed.length);
+  }
   renderGA();
 }
 
