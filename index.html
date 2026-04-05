@@ -437,6 +437,44 @@ textarea{resize:vertical;min-height:76px}
 .rv-btn-dismiss{background:transparent;color:#b0a070;border-color:rgba(180,150,60,.3)}
 .rv-btn-dismiss:hover{color:#e8d080;border-color:#d4a840}
 
+/* ── Guest Alert Banner (active issues + arriving soon) — Hospitable brand coral ── */
+.ga-banner{background:linear-gradient(135deg,#2a1520 0%,#3a1828 100%);border:1px solid #8a3050;border-radius:var(--radius);padding:14px 18px;margin-bottom:16px;box-shadow:var(--shadow-md)}
+.ga-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px}
+.ga-title{font-size:.72rem;text-transform:uppercase;letter-spacing:1.5px;color:#e63462;font-weight:700;display:flex;align-items:center;gap:8px}
+.ga-title svg{width:16px;height:16px;fill:#e63462;flex-shrink:0}
+.ga-count{font-size:.68rem;background:#5a2038;color:#f0a0b8;border-radius:20px;padding:2px 9px;font-weight:700}
+.ga-item{background:rgba(255,255,255,.06);border:1px solid rgba(230,52,98,.25);border-radius:8px;padding:12px 14px;margin-bottom:6px;transition:border-color .15s}
+.ga-item:hover{border-color:#e63462}
+.ga-item-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.ga-item-prop{font-size:.69rem;text-transform:uppercase;letter-spacing:1.2px;color:#e63462;font-weight:700;margin-bottom:3px}
+.ga-item-issue{font-size:.82rem;font-weight:500;color:#e8d0d8;line-height:1.4;margin-bottom:6px}
+.ga-item-guest{font-size:.76rem;color:#d8a0b0;margin-bottom:8px}
+.ga-item-guest strong{color:#f0b8c8;font-weight:600}
+.ga-msg-preview{background:rgba(0,0,0,.2);border:1px solid rgba(230,52,98,.15);border-radius:8px;padding:10px 12px;margin-bottom:8px}
+.ga-msg-text{font-size:.8rem;color:#e8d0d8;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+.ga-msg-edit{width:100%;background:rgba(0,0,0,.3);border:1px solid rgba(230,52,98,.3);border-radius:8px;padding:10px 12px;font-size:.8rem;color:#f0e0e8;line-height:1.55;font-family:inherit;resize:vertical;min-height:80px;display:none}
+.ga-msg-edit:focus{outline:none;border-color:#e63462}
+.ga-item-btns{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.ga-btn{padding:5px 11px;border-radius:7px;font-size:.73rem;font-family:inherit;font-weight:600;cursor:pointer;border:1px solid;transition:all .15s;white-space:nowrap}
+.ga-btn-send{background:#c42a52;color:#fff;border-color:#e63462}
+.ga-btn-send:hover{background:#e63462}
+.ga-btn-edit{background:transparent;color:#d8a0b0;border-color:rgba(230,52,98,.3)}
+.ga-btn-edit:hover{color:#f0b8c8;border-color:#e63462}
+.ga-btn-dismiss{background:transparent;color:#9a6878;border-color:rgba(230,52,98,.2)}
+.ga-btn-dismiss:hover{color:#d8a0b0;border-color:rgba(230,52,98,.4)}
+.ga-sent{font-size:.72rem;color:#6abe6a;font-weight:600;display:none}
+/* Guest context in task detail */
+.gc-wrap{background:var(--green-pale);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:6px}
+.gc-guest{font-size:.82rem;font-weight:600;color:var(--text);margin-bottom:4px}
+.gc-meta{font-size:.72rem;color:var(--text2);margin-bottom:4px}
+.gc-msgs{max-height:200px;overflow-y:auto;margin-top:8px;scrollbar-width:thin}
+.gc-msg{padding:6px 10px;border-radius:6px;margin-bottom:4px;font-size:.77rem;line-height:1.5}
+.gc-msg.host{background:var(--green-light);color:var(--green-mid);margin-left:20px}
+.gc-msg.guest{background:var(--white);border:1px solid var(--border);margin-right:20px}
+.gc-msg-sender{font-size:.64rem;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px;color:var(--text3)}
+.gc-msg-time{font-size:.62rem;color:var(--text3);margin-top:2px}
+.gc-loading{font-size:.76rem;color:var(--text3);font-style:italic;padding:8px 0}
+
 /* ── Cleaning Log ── */
 .cl-wrap{border-radius:var(--radius)}
 .cl-summary-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-bottom:20px}
@@ -687,6 +725,7 @@ textarea{resize:vertical;min-height:76px}
     <div class="view active" id="view-tasks">
       <div id="hb-wrap"></div>
       <div id="rv-wrap"></div>
+      <div id="ga-wrap"></div>
       <!-- Review Detail Modal -->
       <div class="mo" id="rv-detail-modal">
         <div class="mo-content" style="max-width:560px;background:linear-gradient(135deg,#2a2418 0%,#3a2e1a 100%);border:1px solid #7a6530">
@@ -1060,6 +1099,7 @@ textarea{resize:vertical;min-height:76px}
       <button class="btn btn-g" onclick="addNote('admin')">Add</button>
     </div>
     <div id="d-next-co" style="font-size:.72rem;color:var(--text2);margin:4px 0 8px"></div>
+    <div id="d-guest-context"></div>
     <div class="stitle" id="d-vendors-title">Suggested Vendors</div>
     <div id="d-vendors"></div>
     <div id="d-vnotes-section" style="display:none"><div class="stitle">Vendor Completion Notes</div>
@@ -1677,7 +1717,11 @@ async function fetchIcal(pid){
           .map(rv=>({
             start:pd(rv.arrival_date),
             end:pd(rv.departure_date),
-            summary:rv.guest_name||rv.guest?.name||(rv.guest?.first_name?rv.guest.first_name+' '+rv.guest.last_name:'Guest')
+            summary:rv.guest_name||rv.guest?.name||(rv.guest?.first_name?rv.guest.first_name+' '+rv.guest.last_name:'Guest'),
+            reservationId:rv.id||null,
+            guestPhone:rv.guest?.phone||null,
+            guestEmail:rv.guest?.email||null,
+            platform:rv.platform||rv.source||null
           }))
           .filter(ev=>ev.start&&ev.end);
         console.log(`Loaded ${pid}: ${evs.length} individual reservations via API`);
@@ -2302,6 +2346,7 @@ async function openDetail(id){
   renderDetailVendors(t,p);renderNotes(t);checkCombine();
   closeVendorDD(); // reset dropdown state when opening a new task
   renderMiniCal(t.property).then(()=>renderDetailVendors(t,p));
+  renderGuestContext(t,p); // show reservation info + message thread
   const isDone=['complete','resolved_by_guest'].includes(t.status);
   document.getElementById('complete-btn').style.display=isDone?'none':'';
   document.getElementById('resolved-guest-btn').style.display=isDone?'none':'';
@@ -5314,6 +5359,246 @@ function rpImportFromReview(rv) {
   vsLoad();
 })();
 
+// ── Guest Alert Banner — notify incoming guests about active issues ──
+let gaItems=[]; // array of {task, reservation, propName, guestName, daysOut, message, reservationId}
+let gaDismissed=new Set(); // dismissed alert IDs (transient per session)
+let gaSent=new Set(); // sent message IDs (transient per session)
+
+async function gaFetch(){
+  const today=new Date();today.setHours(0,0,0,0);
+  const lookAhead=2; // days to look ahead for arrivals
+  const alerts=[];
+
+  // Find open/scheduled tasks (not complete, not resolved_by_guest)
+  const activeTasks=tasks.filter(t=>!['complete','resolved_by_guest'].includes(t.status));
+  if(!activeTasks.length){document.getElementById('ga-wrap').innerHTML='';gaItems=[];return;}
+
+  // Group active tasks by property
+  const byProp={};
+  activeTasks.forEach(t=>{
+    if(!byProp[t.property])byProp[t.property]=[];
+    byProp[t.property].push(t);
+  });
+
+  // For each property with active tasks, check for upcoming arrivals
+  for(const [pid,propTasks] of Object.entries(byProp)){
+    const hospId=HOSPITABLE_IDS[pid];
+    if(!hospId)continue;
+    // Use cached reservation data or fetch
+    let evs=icalCache[pid];
+    if(!evs||evs==='error'){evs=await fetchIcal(pid);if(evs==='error')continue;}
+
+    evs.forEach(ev=>{
+      if(!ev.start||!ev.reservationId)return;
+      const arrival=new Date(ev.start);arrival.setHours(0,0,0,0);
+      const diffDays=Math.round((arrival-today)/(86400000));
+      // Check arrivals within lookAhead days (including today)
+      if(diffDays<0||diffDays>lookAhead)return;
+      const p=getProp(pid);
+      const propName=p?p.name:pid;
+      propTasks.forEach(t=>{
+        const alertId=`${t.id}_${ev.reservationId}`;
+        if(gaDismissed.has(alertId))return;
+        const guestFirst=(ev.summary||'Guest').split(' ')[0];
+        const msg=gaGenerateMessage(guestFirst,propName,t.problem,diffDays);
+        alerts.push({
+          id:alertId,
+          task:t,
+          reservation:ev,
+          propName,
+          guestName:ev.summary||'Guest',
+          guestFirst,
+          daysOut:diffDays,
+          message:msg,
+          reservationId:ev.reservationId
+        });
+      });
+    });
+  }
+  gaItems=alerts;
+  renderGA();
+}
+
+function gaGenerateMessage(guestFirst,propName,issue,daysOut){
+  const arrival=daysOut===0?'today':daysOut===1?'tomorrow':'in a couple of days';
+  return `Hi ${guestFirst}! We're looking forward to welcoming you to ${propName}${daysOut===0?'':' '+arrival}. We wanted to give you a heads-up that we're currently working on a minor maintenance item — ${issue.toLowerCase().replace(/\.$/,'')}. Our team is on it and we're doing our best to have it resolved before your stay. It shouldn't affect your overall experience, but we wanted you to know so there are no surprises. Please don't hesitate to reach out if you have any questions. We want to make sure your stay is wonderful!`;
+}
+
+function renderGA(){
+  const el=document.getElementById('ga-wrap');
+  const active=gaItems.filter(a=>!gaSent.has(a.id));
+  if(!active.length){el.innerHTML='';return;}
+  let h=`<div class="ga-banner">
+    <div class="ga-hdr">
+      <div class="ga-title">
+        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+        Guest Heads-Up — Active Issues
+      </div>
+      <span class="ga-count">${active.length} alert${active.length!==1?'s':''}</span>
+    </div>`;
+  active.forEach(a=>{
+    const dayLabel=a.daysOut===0?'Checking in TODAY':a.daysOut===1?'Checking in tomorrow':`Checking in in ${a.daysOut} days`;
+    h+=`<div class="ga-item" id="ga-${a.id.replace(/[^a-zA-Z0-9_]/g,'-')}">
+      <div class="ga-item-top">
+        <div style="flex:1;min-width:0">
+          <div class="ga-item-prop">${escHtml(a.propName)}</div>
+          <div class="ga-item-issue">${escHtml(a.task.problem)}</div>
+          <div class="ga-item-guest"><strong>${escHtml(a.guestName)}</strong> — ${dayLabel}</div>
+        </div>
+      </div>
+      <div class="ga-msg-preview" id="ga-preview-${a.id.replace(/[^a-zA-Z0-9_]/g,'-')}">
+        <div class="ga-msg-text">${escHtml(a.message)}</div>
+      </div>
+      <textarea class="ga-msg-edit" id="ga-edit-${a.id.replace(/[^a-zA-Z0-9_]/g,'-')}">${escHtml(a.message)}</textarea>
+      <div class="ga-item-btns">
+        <button class="ga-btn ga-btn-send" onclick="gaSend('${a.id}')">Send to ${escHtml(a.guestFirst)}</button>
+        <button class="ga-btn ga-btn-edit" onclick="gaToggleEdit('${a.id}')">Edit</button>
+        <button class="ga-btn ga-btn-dismiss" onclick="gaDismiss('${a.id}')">Dismiss</button>
+        <span class="ga-sent" id="ga-sent-${a.id.replace(/[^a-zA-Z0-9_]/g,'-')}">✓ Sent</span>
+      </div>
+    </div>`;
+  });
+  h+='</div>';
+  el.innerHTML=h;
+}
+
+function gaToggleEdit(id){
+  const safeId=id.replace(/[^a-zA-Z0-9_]/g,'-');
+  const preview=document.getElementById('ga-preview-'+safeId);
+  const edit=document.getElementById('ga-edit-'+safeId);
+  if(!preview||!edit)return;
+  if(edit.style.display==='none'||!edit.style.display){
+    edit.style.display='block';preview.style.display='none';edit.focus();
+  }else{
+    // Save edits back to preview
+    const a=gaItems.find(x=>x.id===id);
+    if(a)a.message=edit.value;
+    preview.querySelector('.ga-msg-text').textContent=edit.value;
+    edit.style.display='none';preview.style.display='';
+  }
+}
+
+async function gaSend(id){
+  const a=gaItems.find(x=>x.id===id);
+  if(!a||!a.reservationId)return;
+  const safeId=id.replace(/[^a-zA-Z0-9_]/g,'-');
+  // Get possibly-edited message
+  const editEl=document.getElementById('ga-edit-'+safeId);
+  const msg=editEl&&editEl.style.display==='block'?editEl.value:a.message;
+  if(!msg.trim()){showToast('Message is empty.');return;}
+
+  // Show sending state
+  const sendBtn=document.querySelector(`#ga-${safeId} .ga-btn-send`);
+  if(sendBtn){sendBtn.textContent='Sending...';sendBtn.disabled=true;}
+
+  try{
+    const r=await fetch(`${PROXY_BASE}/api/hospitable?action=send_message&rid=${a.reservationId}`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({message:msg})
+    });
+    if(!r.ok){
+      const err=await r.json().catch(()=>({}));
+      throw new Error(err.detail||`API returned ${r.status}`);
+    }
+    // Mark sent
+    gaSent.add(id);
+    const sentEl=document.getElementById('ga-sent-'+safeId);
+    if(sentEl)sentEl.style.display='inline';
+    if(sendBtn){sendBtn.textContent='Sent ✓';sendBtn.style.background='#2e7d52';sendBtn.style.borderColor='#2e7d52';}
+    // Add note to the task
+    const t=a.task;
+    if(t){
+      if(!t.notes)t.notes=[];
+      t.notes.push({by:'admin',text:`Guest heads-up sent to ${a.guestName}: "${msg.slice(0,80)}${msg.length>80?'...':''}"`,time:new Date().toISOString()});
+      await saveTasks();
+    }
+    showToast(`Message sent to ${a.guestName}!`);
+    // Re-render after a moment
+    setTimeout(()=>renderGA(),1500);
+  }catch(e){
+    console.error('Failed to send guest message:',e);
+    showToast('Failed to send: '+e.message);
+    if(sendBtn){sendBtn.textContent=`Send to ${a.guestFirst}`;sendBtn.disabled=false;}
+  }
+}
+
+function gaDismiss(id){
+  gaDismissed.add(id);
+  renderGA();
+}
+
+// ── Guest Context in Task Detail — show reservation + messages ──
+async function renderGuestContext(t,p){
+  const el=document.getElementById('d-guest-context');
+  if(!el)return;
+  el.innerHTML='';
+  if(!t.property)return;
+  const pid=t.property;
+  const hospId=HOSPITABLE_IDS[pid];
+  if(!hospId)return;
+
+  // Find the relevant reservation: match by date overlap or closest upcoming
+  let evs=icalCache[pid];
+  if(!evs||evs==='error'){evs=await fetchIcal(pid);if(evs==='error')return;}
+
+  // Find reservation that overlaps with task date, or closest upcoming
+  let bestRes=null;
+  const taskDate=t.date?new Date(t.date+'T12:00:00'):new Date();
+  evs.forEach(ev=>{
+    if(!ev.start||!ev.end)return;
+    // Check if task date falls within reservation stay
+    if(taskDate>=ev.start&&taskDate<=ev.end){
+      bestRes=ev;
+    }
+    // Also check: next upcoming arrival if no overlap
+    if(!bestRes&&ev.start>=new Date()){
+      if(!bestRes||ev.start<bestRes.start)bestRes=ev;
+    }
+  });
+
+  if(!bestRes||!bestRes.reservationId)return;
+
+  // Render basic reservation info immediately
+  const checkin=bestRes.start.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  const checkout=bestRes.end.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  el.innerHTML=`<div class="stitle">Guest & Reservation</div>
+    <div class="gc-wrap">
+      <div class="gc-guest">${escHtml(bestRes.summary)}</div>
+      <div class="gc-meta">${checkin} – ${checkout}${bestRes.platform?' · '+bestRes.platform:''}</div>
+      <div class="gc-msgs" id="d-gc-msgs"><div class="gc-loading">Loading messages...</div></div>
+    </div>`;
+
+  // Fetch message thread in background
+  try{
+    const r=await fetch(`${PROXY_BASE}/api/hospitable?action=messages&rid=${bestRes.reservationId}`);
+    if(!r.ok)throw new Error('API '+r.status);
+    const json=await r.json();
+    const msgsEl=document.getElementById('d-gc-msgs');
+    if(!msgsEl)return;
+    const msgs=(json.data||[]).slice(-10); // show last 10 messages
+    if(!msgs.length){msgsEl.innerHTML='<div class="gc-loading">No messages yet.</div>';return;}
+    let mh='';
+    msgs.forEach(m=>{
+      const isHost=m.sender_type==='host'||m.sender?.type==='host'||m.direction==='outgoing';
+      const cls=isHost?'host':'guest';
+      const sender=isHost?'Host':(bestRes.summary||'Guest');
+      const time=m.created_at?new Date(m.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';
+      const body=m.body||m.message||m.text||'';
+      mh+=`<div class="gc-msg ${cls}">
+        <div class="gc-msg-sender">${escHtml(sender)}</div>
+        <div>${escHtml(body.slice(0,500))}${body.length>500?'...':''}</div>
+        ${time?`<div class="gc-msg-time">${time}</div>`:''}
+      </div>`;
+    });
+    msgsEl.innerHTML=mh;
+  }catch(e){
+    console.warn('Could not load guest messages:',e.message);
+    const msgsEl=document.getElementById('d-gc-msgs');
+    if(msgsEl)msgsEl.innerHTML='<div class="gc-loading">Messages unavailable.</div>';
+  }
+}
+
 // START
 async function initApp(){
   await load();
@@ -5331,6 +5616,7 @@ async function initApp(){
   rvFetch(); // fetch guest feedback reviews
   clFetch(); // pre-load cleaning log in background
   cleanupOldPhotos(); // auto-delete photos from tasks resolved 30+ days ago
+  gaFetch(); // check for active issues at properties with arriving guests
 }
 if(!window._vendorMode) initApp();
 </script>
