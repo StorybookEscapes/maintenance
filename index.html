@@ -5594,7 +5594,9 @@ async function gaFetch(){
   const alerts=[];
 
   // Find open/scheduled tasks (not complete, not resolved_by_guest)
-  const activeTasks=tasks.filter(t=>!['complete','resolved_by_guest'].includes(t.status));
+  // Exclude routine recurring items that don't affect guest experience (HVAC filters, etc.)
+  const GA_EXCLUDE=/hvac\s*filter|filter\s*replace/i;
+  const activeTasks=tasks.filter(t=>!['complete','resolved_by_guest'].includes(t.status)&&!GA_EXCLUDE.test(t.problem||''));
   if(!activeTasks.length){document.getElementById('ga-wrap').innerHTML='';gaItems=[];return;}
 
   // Group active tasks by property
