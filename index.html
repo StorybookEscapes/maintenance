@@ -788,6 +788,22 @@ textarea{resize:vertical;min-height:76px}
         </div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px">
+        <h3 style="font-size:.88rem;font-weight:600;color:var(--green);margin-bottom:4px">Combined SMS Template</h3>
+        <p style="font-size:.76rem;color:var(--text2);margin-bottom:14px;line-height:1.5">Customize the message sent when a vendor has multiple tasks on the same day. The job sheet link is automatically appended.</p>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+          <span class="badge" style="background:var(--green-light);color:var(--green);border:1px solid var(--border);font-size:.68rem;cursor:pointer" onclick="insertPlaceholder('sms-combined-template','{vendor_first_name}')">{vendor_first_name}</span>
+          <span class="badge" style="background:var(--green-light);color:var(--green);border:1px solid var(--border);font-size:.68rem;cursor:pointer" onclick="insertPlaceholder('sms-combined-template','{task_count}')">{task_count}</span>
+          <span class="badge" style="background:var(--green-light);color:var(--green);border:1px solid var(--border);font-size:.68rem;cursor:pointer" onclick="insertPlaceholder('sms-combined-template','{date}')">{date}</span>
+          <span class="badge" style="background:var(--green-light);color:var(--green);border:1px solid var(--border);font-size:.68rem;cursor:pointer" onclick="insertPlaceholder('sms-combined-template','{link_text}')">{link_text}</span>
+          <span class="badge" style="background:var(--green-light);color:var(--green);border:1px solid var(--border);font-size:.68rem;cursor:pointer" onclick="insertPlaceholder('sms-combined-template','{signoff}')">{signoff}</span>
+        </div>
+        <textarea id="sms-combined-template" style="width:100%;min-height:120px;font-family:'DM Sans',sans-serif;font-size:.82rem;padding:12px;border:1px solid var(--border);border-radius:8px;resize:vertical;line-height:1.6"></textarea>
+        <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
+          <button class="btn" onclick="resetCombinedSmsTemplate()">Reset to Default</button>
+          <button class="btn btn-g" onclick="saveCombinedSmsTemplate()">Save Template</button>
+        </div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px">
         <h3 style="font-size:.88rem;font-weight:600;color:var(--green);margin-bottom:4px">App Logo</h3>
         <p style="font-size:.76rem;color:var(--text2);margin-bottom:14px;line-height:1.5">Upload a PNG or JPG image to use as the header logo and browser favicon. Recommended: square image, at least 128×128px.</p>
         <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
@@ -2639,6 +2655,30 @@ function resetSmsTemplate(){
   const el=document.getElementById('sms-template');if(el)el.value=smsTemplate;
   showToast('Template reset to default. Click Save to apply.');
 }
+const DEFAULT_COMBINED_SMS_TEMPLATE=`Hey {vendor_first_name}! I've got {task_count} tasks for you on {date}.
+
+{link_text}
+
+{signoff}`;
+
+let combinedSmsTemplate=DEFAULT_COMBINED_SMS_TEMPLATE;
+
+async function loadCombinedSmsTemplate(){
+  try{const r=await S.get('se_sms_combined');if(r&&r.value)combinedSmsTemplate=r.value;}catch(e){}
+  const el=document.getElementById('sms-combined-template');
+  if(el)el.value=combinedSmsTemplate;
+}
+async function saveCombinedSmsTemplate(){
+  const el=document.getElementById('sms-combined-template');if(!el)return;
+  combinedSmsTemplate=el.value;
+  await save('se_sms_combined',combinedSmsTemplate);
+  showToast('Combined SMS template saved.');
+}
+function resetCombinedSmsTemplate(){
+  combinedSmsTemplate=DEFAULT_COMBINED_SMS_TEMPLATE;
+  const el=document.getElementById('sms-combined-template');if(el)el.value=combinedSmsTemplate;
+  showToast('Template reset to default. Click Save to apply.');
+}
 function insertPlaceholder(textareaId,placeholder){
   const ta=document.getElementById(textareaId);if(!ta)return;
   const start=ta.selectionStart,end=ta.selectionEnd;
@@ -2804,30 +2844,17 @@ function getVendorDayTasks(vendorName,date){
 }
 /* Build a consolidated SMS for multiple tasks going to the same vendor on the same day */
 function buildMultiSMS(taskList,v,sheetUrlParam){
-  // Sort tasks by neighborhood then property so same-property/area jobs are consecutive
-  const sorted=[...taskList].sort((a,b)=>{
-    const nbA=getNb(a.property),nbB=getNb(b.property);
-    const nA=nbA?nbA.name:'zzz',nB=nbB?nbB.name:'zzz';
-    if(nA!==nB)return nA.localeCompare(nB);
-    return(a.property||'').localeCompare(b.property||'');
-  });
-  const hasUrgent=sorted.some(t=>t.urgent);
-  const urg=hasUrgent?'\n\nOne or more of these is URGENT — same-day response needed if possible.':'';
-  const date=sorted[0].date;
-  const ds=date?`All scheduled for: ${date}`:'Scheduling TBD — please let us know your availability.';
-  let jobLines=sorted.map((t,i)=>{
-    const p=getProp(t.property);
-    const pn=p?p.name:t.property;
-    let line=`Job ${i+1}: ${pn}\nIssue: ${t.problem}`;
-    if(t.guest)line+=`\nReported by guest: ${t.guest}`;
-    // Photo link removed — job sheet handles this now
-    if(/hvac\s*filter/i.test(t.problem)||t.category==='hvac'&&/filter/i.test(t.problem))line+=`\nPlease write today's date on the new filter and send us a photo when it's installed.`;
-    if(t.urgent)line+=`\n*** URGENT ***`;
-    return line;
-  }).join('\n');
-  const resolvedUrl=sheetUrlParam||sorted[0]._vendorSheetUrl||'';
-  const sheetLine=resolvedUrl?'\n\nClick this link for all the details!\n'+resolvedUrl:'';
-  return`Hi ${v.name.split(' ')[0]}, we have ${taskList.length} maintenance jobs for you on the same day.${urg}\n\n${jobLines}\n\n${ds}${sheetLine}\n\nThank you — Chip Burns, Storybook Escapes`;
+  const firstName=v.name.split(' ')[0];
+  const date=taskList[0]&&taskList[0].date||'';
+  const dateFmt=date?new Date(date+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}):'today';
+  const resolvedUrl=sheetUrlParam||(taskList[0]&&taskList[0]._vendorSheetUrl)||'';
+  const linkText=resolvedUrl?'Click this link for all the details!\n'+resolvedUrl:'';
+  return combinedSmsTemplate
+    .replace(/\{vendor_first_name\}/g, firstName)
+    .replace(/\{task_count\}/g, String(taskList.length))
+    .replace(/\{date\}/g, dateFmt)
+    .replace(/\{link_text\}/g, linkText)
+    .replace(/\{signoff\}/g, '— Chip Burns, Storybook Escapes');
 }
 /* Render combined SMS card for a vendor with multiple same-day tasks */
 function combinedVendorCard(v,taskList){
@@ -4915,6 +4942,7 @@ async function initApp(){
   await load();
   await loadReplacements();
   await loadSmsTemplate();
+  await loadCombinedSmsTemplate();
   await loadLogo();
   await loadRoadmap();
   populatePropSel('f-property');
