@@ -565,8 +565,8 @@ textarea{resize:vertical;min-height:76px}
 .vs-card-prob{font-size:.92rem;font-weight:500;color:var(--text)}
 .vs-card-badges{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
 .vs-urgent{background:var(--red);color:#fff;font-size:.6rem;font-weight:700;padding:2px 8px;border-radius:20px;text-transform:uppercase}
-.vs-card-detail{display:none;padding:0 16px 16px;border-top:1px solid var(--border)}
-.vs-card.vs-expanded .vs-card-detail{display:block;padding-top:14px}
+.vs-card-detail{max-height:0;overflow:hidden;padding:0 16px;border-top:0 solid var(--border);transition:max-height .4s ease,padding .4s ease,border-top-width .1s ease;opacity:0}
+.vs-card.vs-expanded .vs-card-detail{max-height:800px;padding:14px 16px 16px;border-top:1px solid var(--border);opacity:1;transition:max-height .4s ease,padding .4s ease,border-top-width .1s ease,opacity .3s ease .1s}
 .vs-detail-row{display:flex;gap:8px;margin-bottom:8px;font-size:.82rem}
 .vs-detail-label{color:var(--text3);min-width:80px;flex-shrink:0;font-weight:500}
 .vs-detail-val{color:var(--text);word-break:break-word}
@@ -587,6 +587,7 @@ textarea{resize:vertical;min-height:76px}
 .vs-done-btn.vs-btn-undo{background:transparent;color:var(--text2);border:1px solid var(--border)}
 .vs-done-status{font-size:.78rem;color:var(--green);font-weight:500}
 .vs-card.vs-done .vs-card-prob{text-decoration:line-through;color:var(--text2)}
+.vs-card.vs-expanded .vs-chevron{transform:rotate(180deg)}
 .vs-nb-header{font-family:'Cormorant Garamond',serif;font-size:1.05rem;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;margin:20px 0 6px;padding-bottom:4px;border-bottom:1px solid var(--border)}
 .vs-nb-header:first-child{margin-top:0}
 .vs-prop-group .vs-card:first-child{border-radius:var(--radius) var(--radius) 0 0}
@@ -628,6 +629,29 @@ textarea{resize:vertical;min-height:76px}
 .rm-item.completed .rm-item-text{text-decoration:line-through;color:var(--text3)}
 .rm-item.dismissed .rm-item-text{color:var(--text3);font-style:italic}
 .rm-empty{font-size:.82rem;color:var(--text3);text-align:center;padding:28px 16px;font-style:italic}
+/* PAYMENT PROMPT (vendor sheet) */
+.vp-overlay{position:fixed;inset:0;background:rgba(13,53,40,.6);z-index:500;display:flex;align-items:center;justify-content:center;padding:20px;animation:vpFadeIn .3s ease}
+@keyframes vpFadeIn{from{opacity:0}to{opacity:1}}
+@keyframes vpSlideUp{from{transform:translateY(30px);opacity:0}to{transform:translateY(0);opacity:1}}
+.vp-prompt{background:var(--white);border-radius:16px;max-width:400px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden;animation:vpSlideUp .4s ease .1s both}
+.vp-prompt-hdr{background:var(--green);padding:24px 24px 20px;text-align:center}
+.vp-prompt-check{width:52px;height:52px;border-radius:50%;background:rgba(201,168,76,.2);border:2px solid var(--gold);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-size:1.5rem;color:var(--gold)}
+.vp-prompt-title{font-family:'Cormorant Garamond',serif;font-size:1.3rem;color:var(--gold-light);font-weight:600}
+.vp-prompt-sub{font-size:.78rem;color:rgba(255,255,255,.65);margin-top:4px;line-height:1.4}
+.vp-prompt-body{padding:20px 24px 24px}
+.vp-prompt-props{font-size:.78rem;color:var(--text2);margin-bottom:16px;line-height:1.5;text-align:center}
+.vp-prompt-props strong{color:var(--text);font-weight:600}
+.vp-prompt-note{font-size:.76rem;color:var(--text2);text-align:center;margin-bottom:16px;line-height:1.4;background:var(--green-pale);padding:10px 14px;border-radius:8px;border:1px solid var(--border)}
+.vp-pay-btns{display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
+.vp-pay-btn{display:flex;align-items:center;justify-content:center;gap:10px;padding:14px 20px;border-radius:12px;font-family:inherit;font-size:.9rem;font-weight:600;cursor:pointer;border:none;text-decoration:none;transition:all .15s;text-align:center}
+.vp-pay-btn.venmo{background:#008CFF;color:#fff}
+.vp-pay-btn.venmo:hover{background:#0074d4}
+.vp-pay-btn.cashapp{background:#00D632;color:#fff}
+.vp-pay-btn.cashapp:hover{background:#00b82a}
+.vp-pay-ids{font-size:.72rem;color:var(--text3);text-align:center;margin-bottom:16px;line-height:1.6}
+.vp-pay-ids strong{color:var(--text2)}
+.vp-prompt-skip{display:block;width:100%;text-align:center;padding:10px;font-size:.78rem;color:var(--text3);background:none;border:none;cursor:pointer;font-family:inherit}
+.vp-prompt-skip:hover{color:var(--text2)}
 </style>
 </head>
 <body>
@@ -1350,6 +1374,20 @@ let tasks=[], vendors=[], recurring=[], filter='all', detailId=null, selProp=nul
 // Example: 'https://your-project-name.vercel.app'
 const PROXY_BASE = 'https://storybook-webhook.vercel.app';
 // ────────────────────────────────────────────────────────────────
+
+// Payment groups: properties sharing a bank account are grouped
+const PAY_GROUPS=[
+  {id:'prc',label:'Paradise Ridge',props:['prc1','prc2','prc3','prc4','prc5','prc6']},
+  {id:'umc',label:'Upper Middle Creek',props:['umc10','umc20','umc30','umc40','umc50','umc60']},
+  {id:'hillside',label:'Hillside Haven',props:['hillside_big','hillside_cottage']},
+  {id:'bearadise',label:'Bearadise Lodge',props:['bearadise']},
+  {id:'wizards',label:"The Wizard's Edge",props:['wizards']},
+  {id:'hibernation',label:'Hibernation Station',props:['hibernation']},
+  {id:'hero',label:'Hero Hideout',props:['hero']},
+  {id:'magic',label:'Magic Mountain',props:['magic']},
+];
+const VENMO_USER='Chip-Burns';
+const CASHAPP_TAG='chipburns';
 
 let calDate=new Date(), calMode='month', editVendorId=null, icalCache={};
 
@@ -3182,6 +3220,61 @@ async function markComplete(){
   document.getElementById('complete-btn').style.display='none';
   document.getElementById('resolved-guest-btn').style.display='none';
   await saveTasks();closeModal('detail-modal');renderAll();showToast('Task marked complete.');
+  // Check if this completes a payment group where vendor requested payment
+  checkAdminPaymentPrompt(t);
+}
+
+function checkAdminPaymentPrompt(justCompleted){
+  if(!justCompleted.vendorPaymentRequested)return;
+  if(!justCompleted.vendor||!justCompleted.date)return;
+  const group=PAY_GROUPS.find(g=>g.props.includes(justCompleted.property));
+  if(!group)return;
+  // Find all tasks from this vendor on this date in this payment group that had a payment request
+  const groupTasks=tasks.filter(x=>
+    x.vendor&&x.vendor.toLowerCase()===justCompleted.vendor.toLowerCase()
+    &&x.date===justCompleted.date
+    &&group.props.includes(x.property)
+    &&x.vendorPaymentRequested
+  );
+  if(groupTasks.length===0)return;
+  // Check if ALL are now complete
+  const allConfirmed=groupTasks.every(x=>x.status==='complete'||x.status==='resolved_by_guest');
+  if(!allConfirmed)return;
+  // Show admin payment prompt
+  const vendorName=justCompleted.vendor;
+  const firstName=vendorName.split(' ')[0];
+  const method=justCompleted.vendorPaymentRequested.method||'venmo';
+  const taskCount=groupTasks.length;
+  const propNames=[...new Set(groupTasks.map(x=>{
+    const p=PROPS.find(pp=>pp.id===x.property);
+    return p?(p.name.replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'')):x.property;
+  }))];
+  const dateStr=justCompleted.date?new Date(justCompleted.date+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}):'';
+  const methodLabel=method==='venmo'?'Venmo':'Cash App';
+  const venmoUrl=`venmo://paycharge?txn=pay&recipients=${encodeURIComponent(VENMO_USER)}&note=${encodeURIComponent('Maintenance '+dateStr+' - '+group.label)}`;
+  const cashappUrl=`https://cash.app/$${CASHAPP_TAG}`;
+
+  const overlay=document.createElement('div');
+  overlay.className='vp-overlay';
+  overlay.innerHTML=`<div class="vp-prompt">
+    <div class="vp-prompt-hdr" style="background:var(--gold);background:linear-gradient(135deg,#b8960f 0%,#c9a84c 100%)">
+      <div class="vp-prompt-check" style="background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.5);color:#fff">💰</div>
+      <div class="vp-prompt-title" style="color:#fff">${firstName} sent a ${methodLabel} request</div>
+      <div class="vp-prompt-sub" style="color:rgba(255,255,255,.8)">${taskCount} task${taskCount!==1?'s':''} confirmed at ${group.label}</div>
+    </div>
+    <div class="vp-prompt-body">
+      <div class="vp-prompt-note">
+        <strong>${vendorName}</strong> completed work at <strong>${propNames.join(', ')}</strong> on ${dateStr} and sent a <strong>${methodLabel}</strong> payment request.
+      </div>
+      <div class="vp-pay-btns">
+        ${method==='venmo'?`<a href="${venmoUrl}" class="vp-pay-btn venmo" target="_blank"><span style="font-size:1.1rem">💸</span> Open Venmo to Pay</a>`
+        :`<a href="${cashappUrl}" class="vp-pay-btn cashapp" target="_blank"><span style="font-size:1.1rem">💵</span> Open Cash App to Pay</a>`}
+      </div>
+      <button class="vp-prompt-skip" onclick="this.closest('.vp-overlay').remove()">I'll handle this later</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click',function(e){if(e.target===overlay)overlay.remove();});
 }
 async function markResolvedByGuest(){
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
@@ -5017,7 +5110,7 @@ function rpImportFromReview(rv) {
             ${done?'<span style="font-size:.7rem;color:var(--green);font-weight:500">Submitted &#x2713;</span>':''}
           </div>
         </div>
-        <span style="font-size:.8rem;color:var(--text3)">&#x25BE;</span>
+        <span class="vs-chevron" style="font-size:.8rem;color:var(--text3);transition:transform .3s ease;display:inline-block">&#x25BE;</span>
       </div>
       <div class="vs-card-detail">
         ${photos.length?`<div class="vs-photos">${photos.map(p=>`<div><img src="${p.url}" onclick="window.open('${p.url}','_blank')" title="Tap to view full size"><div style="font-size:.65rem;color:var(--text3)">${p.label}</div></div>`).join('')}</div>`:''}
@@ -5057,6 +5150,8 @@ function rpImportFromReview(rv) {
       const t=vTasks.find(x=>x.id===id);
       if(t){t.vendorDone=data.vendorDone;if(!t.notes)t.notes=[];t.notes.push({text:'Marked as done by vendor.',type:'vendor',time:data.vendorDone});}
       vsRender();
+      // Check if this completes a payment group → prompt for Venmo/Cash App
+      checkPaymentPrompt(id);
     }catch(e){alert('Network error. Please try again.');}
   };
 
@@ -5102,6 +5197,104 @@ function rpImportFromReview(rv) {
       setTimeout(()=>{const el=document.getElementById('vsc-'+id);if(el)el.classList.add('vs-expanded');},10);
     }catch(e){alert('Upload failed. Please try again.');}
   };
+
+  // ── Payment Prompt Logic ────────────────────────────────
+  // Payment groups: properties that share a bank account get grouped
+  // PRC (all 6), UMC (all 6), Hillside (both) = shared accounts
+  // Gatlinburg, Alpine, Sevierville properties = individual accounts
+  const PAY_GROUPS=[
+    {id:'prc',label:'Paradise Ridge',props:['prc1','prc2','prc3','prc4','prc5','prc6']},
+    {id:'umc',label:'Upper Middle Creek',props:['umc10','umc20','umc30','umc40','umc50','umc60']},
+    {id:'hillside',label:'Hillside Haven',props:['hillside_big','hillside_cottage']},
+    {id:'bearadise',label:'Bearadise Lodge',props:['bearadise']},
+    {id:'wizards',label:"The Wizard's Edge",props:['wizards']},
+    {id:'hibernation',label:'Hibernation Station',props:['hibernation']},
+    {id:'hero',label:'Hero Hideout',props:['hero']},
+    {id:'magic',label:'Magic Mountain',props:['magic']},
+  ];
+  const VENMO_USER='Chip-Burns';
+  const CASHAPP_TAG='chipburns';
+  // Track which groups we've already prompted for (avoid re-prompting on re-render)
+  const _payPrompted=new Set();
+
+  function getPayGroup(propId){
+    return PAY_GROUPS.find(g=>g.props.includes(propId))||null;
+  }
+
+  function checkPaymentPrompt(justCompletedTaskId){
+    const justDone=vTasks.find(t=>t.id===justCompletedTaskId);
+    if(!justDone)return;
+    const group=getPayGroup(justDone.property);
+    if(!group)return;
+    if(_payPrompted.has(group.id))return;
+
+    // Get all tasks in this payment group
+    const groupTasks=vTasks.filter(t=>group.props.includes(t.property));
+    if(groupTasks.length===0)return;
+
+    // Check if ALL tasks in this group are now done
+    const allDone=groupTasks.every(t=>!!t.vendorDone);
+    if(!allDone)return;
+
+    _payPrompted.add(group.id);
+
+    // Build property list for the note
+    const propNames=[...new Set(groupTasks.map(t=>{
+      const short=t.propertyName.replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
+      return short;
+    }))];
+    const taskCount=groupTasks.length;
+    const dateStr=vDate?new Date(vDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'today';
+    const noteText=`Maintenance ${dateStr} - ${group.label}`;
+
+    // Venmo deep link (request/charge)
+    const venmoUrl=`venmo://paycharge?txn=charge&recipients=${encodeURIComponent(VENMO_USER)}&note=${encodeURIComponent(noteText)}`;
+    // Cash App link
+    const cashappUrl=`https://cash.app/$${CASHAPP_TAG}`;
+
+    // Record payment request to API so admin side knows
+    function recordPayment(method){
+      fetch(VAPI,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        token,action:'paymentRequested',method,groupProps:group.props
+      })}).catch(()=>{});
+      // Also update local task data
+      groupTasks.forEach(t=>t.vendorPaymentRequested={method,time:new Date().toISOString()});
+    }
+
+    // Build and show prompt overlay
+    const overlay=document.createElement('div');
+    overlay.className='vp-overlay';
+    overlay.id='vp-overlay-'+group.id;
+    overlay.innerHTML=`<div class="vp-prompt">
+      <div class="vp-prompt-hdr">
+        <div class="vp-prompt-check">&#x2713;</div>
+        <div class="vp-prompt-title">${group.label} — All Done!</div>
+        <div class="vp-prompt-sub">${taskCount} task${taskCount!==1?'s':''} completed</div>
+      </div>
+      <div class="vp-prompt-body">
+        <div class="vp-prompt-note">Send a payment request for your work at <strong>${propNames.join(', ')}</strong></div>
+        <div class="vp-pay-btns">
+          <a href="${venmoUrl}" class="vp-pay-btn venmo" id="vp-venmo-${group.id}" target="_blank">
+            <span style="font-size:1.1rem">💸</span> Request via Venmo
+          </a>
+          <a href="${cashappUrl}" class="vp-pay-btn cashapp" id="vp-cash-${group.id}" target="_blank">
+            <span style="font-size:1.1rem">💵</span> Request via Cash App
+          </a>
+        </div>
+        <div class="vp-pay-ids">
+          <strong>Venmo:</strong> @${VENMO_USER}<br>
+          <strong>Cash App:</strong> $${CASHAPP_TAG}
+        </div>
+        <button class="vp-prompt-skip" onclick="this.closest('.vp-overlay').remove()">I'll send a request later</button>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    // Track which payment method they chose
+    document.getElementById('vp-venmo-'+group.id).addEventListener('click',()=>recordPayment('venmo'));
+    document.getElementById('vp-cash-'+group.id).addEventListener('click',()=>recordPayment('cashapp'));
+    // Close on backdrop click
+    overlay.addEventListener('click',function(e){if(e.target===overlay)overlay.remove();});
+  }
 
   // Boot vendor sheet
   vsLoad();
