@@ -551,10 +551,11 @@ textarea{resize:vertical;min-height:76px}
 .vs-header{background:var(--green);padding:20px 24px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 8px rgba(0,0,0,.2)}
 .vs-logo{height:40px}
 .vs-header-text{flex:1}
-.vs-title{font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--gold-light);margin:0;font-weight:600}
+.vs-title{font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--gold-light);margin:0;font-weight:600;text-transform:uppercase;letter-spacing:2px}
 .vs-subtitle{font-size:.82rem;color:rgba(255,255,255,.65);margin:2px 0 0}
 .vs-body{max-width:640px;margin:0 auto;padding:16px}
-.vs-card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px;box-shadow:var(--shadow);overflow:hidden;transition:border-color .15s}
+.vs-card{background:var(--white);border:1px solid var(--border);border-radius:0;margin-bottom:0;box-shadow:none;overflow:hidden;transition:border-color .15s}
+.vs-card+.vs-card{border-top:none}
 .vs-card.vs-done{border-color:var(--green);background:var(--green-pale)}
 .vs-card-banner{padding:14px 16px;cursor:pointer;display:flex;align-items:flex-start;gap:12px}
 .vs-card-check{width:28px;height:28px;border-radius:50%;border:2px solid var(--border-dark);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s;margin-top:2px;font-size:.9rem;color:transparent;background:var(--white)}
@@ -588,6 +589,9 @@ textarea{resize:vertical;min-height:76px}
 .vs-card.vs-done .vs-card-prob{text-decoration:line-through;color:var(--text2)}
 .vs-nb-header{font-family:'Cormorant Garamond',serif;font-size:1.05rem;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;margin:20px 0 6px;padding-bottom:4px;border-bottom:1px solid var(--border)}
 .vs-nb-header:first-child{margin-top:0}
+.vs-prop-group .vs-card:first-child{border-radius:var(--radius) var(--radius) 0 0}
+.vs-prop-group .vs-card:last-child{border-radius:0 0 var(--radius) var(--radius);box-shadow:var(--shadow)}
+.vs-prop-group .vs-card:only-child{border-radius:var(--radius);box-shadow:var(--shadow)}
 .vs-prop-header{margin:12px 0 6px;padding-left:10px;border-left:3px solid var(--green)}
 .vs-prop-name{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text)}
 .vs-prop-meta{font-size:.68rem;color:var(--text2);margin-top:1px;font-weight:400}
@@ -1084,7 +1088,7 @@ textarea{resize:vertical;min-height:76px}
   <div class="vs-header">
     <img id="vs-logo" src="" class="vs-logo" alt="Storybook Escapes">
     <div class="vs-header-text">
-      <h1 class="vs-title">Maintenance</h1>
+      <h1 class="vs-title">MAINTENANCE</h1>
       <p class="vs-subtitle" id="vs-subtitle">Loading...</p>
     </div>
   </div>
@@ -2612,9 +2616,6 @@ function getNextCheckout(pid){
 const DEFAULT_SMS_TEMPLATE=`Hi {vendor_first_name}, we have a maintenance issue at one of our properties.{urgent_notice}
 
 Property: {property_name}
-Address: {address}
-Door Code: {door_code}
-
 Issue: {issue}{guest_name}
 {date_info}
 
@@ -2791,7 +2792,7 @@ function buildSMS(t,p,v){
     .replace(/\{guest_name\}/g, t.guest?`\nReported by guest: ${t.guest}`:'')
     .replace(/\{date_info\}/g, ds)
     .replace(/\{urgent_notice\}/g, urg);
-  if(t.photoUrl)msg+=`\n\nPhoto of the issue: ${t.photoUrl}`;
+  // Photo link removed — job sheet handles this now
   if(/hvac\s*filter/i.test(t.problem)||t.category==='hvac'&&/filter/i.test(t.problem))msg+=`\n\nPlease write today's date on the new filter and send us a photo when it's installed.`;
   if(t._vendorSheetUrl)msg+='\n\nClick this link for all the details!\n'+t._vendorSheetUrl;
   return msg;
@@ -2816,10 +2817,10 @@ function buildMultiSMS(taskList,v,sheetUrlParam){
   const ds=date?`All scheduled for: ${date}`:'Scheduling TBD — please let us know your availability.';
   let jobLines=sorted.map((t,i)=>{
     const p=getProp(t.property);
-    const pn=p?p.name:t.property,addr=p?p.address:'',door=p?p.door:'';
-    let line=`Job ${i+1}: ${pn}\nAddress: ${addr}\nDoor Code: ${door}\nIssue: ${t.problem}`;
+    const pn=p?p.name:t.property;
+    let line=`Job ${i+1}: ${pn}\nIssue: ${t.problem}`;
     if(t.guest)line+=`\nReported by guest: ${t.guest}`;
-    if(t.photoUrl)line+=`\nPhoto: ${t.photoUrl}`;
+    // Photo link removed — job sheet handles this now
     if(/hvac\s*filter/i.test(t.problem)||t.category==='hvac'&&/filter/i.test(t.problem))line+=`\nPlease write today's date on the new filter and send us a photo when it's installed.`;
     if(t.urgent)line+=`\n*** URGENT ***`;
     return line;
@@ -4772,23 +4773,29 @@ function rpImportFromReview(rv) {
     let html='';
     let lastNb='';
     let lastProp='';
+    let propGroupOpen=false;
     vTasks.forEach(t=>{
       const nb=t.neighborhood||'Other';
       const nbCls=t.neighborhoodCls||'';
       if(nb!==lastNb){
+        if(propGroupOpen){html+='</div>';propGroupOpen=false;}
         html+=`<div class="vs-nb-header" style="color:var(--${nbCls||'green'})">${nb}</div>`;
         lastNb=nb;lastProp='';
       }
       if(t.propertyName!==lastProp){
+        if(propGroupOpen){html+='</div>';}
         const shortName=t.propertyName.replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
         html+=`<div class="vs-prop-header" style="border-left-color:var(--${nbCls||'green'})">
           <div class="vs-prop-name">${shortName}</div>
           <div class="vs-prop-meta">${t.address||''}${t.doorCode?' &middot; Code: '+t.doorCode:''}</div>
         </div>`;
+        html+='<div class="vs-prop-group">';
+        propGroupOpen=true;
         lastProp=t.propertyName;
       }
       html+=vsCard(t);
     });
+    if(propGroupOpen)html+='</div>';
     wrap.innerHTML=html;
   }
 
