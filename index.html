@@ -586,6 +586,9 @@ textarea{resize:vertical;min-height:76px}
 .vs-done-btn.vs-btn-undo{background:transparent;color:var(--text2);border:1px solid var(--border)}
 .vs-done-status{font-size:.78rem;color:var(--green);font-weight:500}
 .vs-card.vs-done .vs-card-prob{text-decoration:line-through;color:var(--text2)}
+.vs-nb-header{font-family:'Cormorant Garamond',serif;font-size:1.05rem;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;margin:20px 0 6px;padding-bottom:4px;border-bottom:1px solid var(--border)}
+.vs-nb-header:first-child{margin-top:0}
+.vs-prop-header{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text);margin:12px 0 6px;padding-left:10px;border-left:3px solid var(--green)}
 /* Vendor-done badge for admin task cards */
 .vd-badge{display:inline-flex;align-items:center;gap:3px;background:#e8f5e9;color:#2e7d32;font-size:.62rem;font-weight:600;padding:2px 7px;border-radius:12px;border:1px solid #a5d6a7;text-transform:uppercase;letter-spacing:.5px}
 .vd-badge::before{content:'\\2713';font-size:.7rem}
@@ -1077,7 +1080,7 @@ textarea{resize:vertical;min-height:76px}
 <!-- ── Vendor Day Sheet ── -->
 <div id="vendor-sheet" style="display:none">
   <div class="vs-header">
-    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAQFUlEQVR4nO1ba3RUVZb+9rlVlfdDMLx8jA8abKK97BZblMakgAZEZ+xe3VWtJqlKoiQSfLSiPTO9ZtbNnbWc1lFRIFWheAYEnalqxx4dAUlVbiIRUdHWRrK6ZRBGRh7hEZKQVFJ179l7fxxSpYYQwjMof+pb61b9c+t839n7u/v7DoD/R/cCM8ChI1d/9gsnTHrRlXKq9uL8DwnAIVUFMCP+0rGCufSOuaFo4t7J8Z0SIB/1goiYpcl8AqKJe/1z/M4Ioqt5Nqf2YNRWFc7IGpI2EyQaE9/U99vvOyFAMOhSnFqDUVt7r7HbbatO2PSMBGIkTmsalpaM6WmKtSMV9VwzNWrqnuf2BaY+tem39kgeHzJi17PBJ+/es//nIl3RCbLjQOFMLIFZVqs9pSo2aSc4rcjLePNTSqU6es/KfrAZ6VUW6VKLXS1OOVATSGBwnokOGoeyc9ujyPVY7qy54sYQ4IwHUOne33p73wMTszJSNMcOodj68ck59oPhWELnZ5Lsk43qABTN3E6EDTAyCgwgAqFkQRSBpeX7F8j8CiaCKkFvAFZIX0h1OWwArldWrvCPsyconzPgi2mXMS02x/b1h8M2S5edM9B+m5LBdpn3ufMR/tG//Bl/xVQZhkiLwcyHE7WBuYpgv5JWv2mC1sTZZLldQJlaaAYyrZ5d4uuKdlgDMIFSqVI9dDh7BepLDPqG72/hMUeh7DPrQNI21gsQR0+QcUjCcmbLBYBLUyiz3SMlb0xX67I7Zq762iI5oSZ8LQpEQ1GaYWGMIen3qrGX7j/9dVdRX1otvvPkRAlzB4y1m7fxHk1J+MMR0OgeWRZ6OAKSriY1LxOd5LT016b62zu7ujFRHUkc0FmdGqxCUwRImCPvBfIiBViReh8kAkA3GMCGEA4zDIGwm0Jr82SveAIDGpaVO05SzhBBjTEN+yeDauJSN9uavtp8qM9SrXOmGSB9mSDMlZtgP/s3jVx4gGlhMGbAAVj2v1lf0THZ6ym+7YgZSkuxo7+g+xMQ6kahDXL4PdP6X85HQ0W97xjurCtMcR3Etk3IbQNOJeCKB7AAiRFiYV16zCQAaAp5pUoppknk0wEwk9kHy/zCjGQq3ksndUBSY0kwGC5sQFCPwlwejnU3uuaHoQDkNWICeXN7YsLCwJCMteXl3zOgGsMWU8A+/vOP3N7pDsdP50b6o95f+ECTvh6ApLAFA1oMRclas3Gy12bCwdJRDiQ+XJFJJSDIlxRwKH+lsdxycMbd3uV07vyDT4VAyUodGD9/hHpgQpxTACnrvLPDclZKsvC2EoO7u+EbJFCCmZggkEyFZgiUxTGbJColjJmsyTAAQxFISS5aCFWGyNBVpU9AlJbdHY0bUrtgvsztovABmMOFWZs5k4M+Q/KEgfMqsbGc2D0o7t7NiN+xx0yEhsqQpR5LCKWxSVBE4EIvadk5/clnLQINhvwL0kOc6n3emzS6WS0ayYZgAEYiRJgQpkhkASwb1vPoCgNgESBIgmTnxFzCRuAyATIANEJkEmGA2mChKQAtLbiMiIsJQACmSQSCOAdRJ4BYp0SYUdDBTTBCxhDSJqcmEsT0mk/ZCdLWl7f+6faA7ygG5QG2g6Oohit3Y1RIzsrKTCAkW8bR49JjK7XE6VuhIUbIkcAAZ9svkHgBdR1s4py2Vo0My+eqR+7hpG3DdqMu4fcxIPnCgiV0XeO3vi8FVXu4BA1SpqlQJINTURHAl7rv6/AOEVYzJ2dZM+ciXqNQYBJyX3aR13sfMdPyFM7vQe+H464LjfwGt4mD6pZ1APgAAAABJRU5ErkJggg==" class="vs-logo" alt="Storybook Escapes">
+    <img id="vs-logo" src="" class="vs-logo" alt="Storybook Escapes">
     <div class="vs-header-text">
       <h1 class="vs-title">Storybook Escapes</h1>
       <p class="vs-subtitle" id="vs-subtitle">Loading...</p>
@@ -2498,7 +2501,6 @@ function renderDetailVendors(t,p){
         <div class="sms-acts">
           <a id="${smsId}-link" href="sms:${tel}?body=${encodeURIComponent(sms)}" class="sms-btn sms-send" onclick="updateSmsLink('${smsId}','${tel}')">Open in Messages</a>
           <button class="sms-btn sms-copy" onclick="copySms('${smsId}')">Copy Text</button>
-          <button class="sms-btn" onclick="generateAndInsertSheet('${smsId}','${v.name.replace(/'/g,"\\'")}','${t.id}',this)">📋 Job Sheet Link</button>
         </div>
       </div>
     </div>`;
@@ -2526,6 +2528,8 @@ function renderDetailVendors(t,p){
       h+=`</details>`;
     }
     area.innerHTML=h;
+    // Auto-generate job sheet link and inject into SMS textareas
+    if(t.date) autoInjectSheetLink(assignedVendor.name,t);
     return;
   }
 
@@ -2710,6 +2714,25 @@ async function generateAndInsertSheet(smsId,vendorName,taskId,btnEl){
   }
 }
 
+// Auto-inject job sheet link into all SMS textareas for a vendor after render
+async function autoInjectSheetLink(vendorName,task){
+  if(!task.date||!vendorName)return;
+  const sameDayIds=tasks.filter(x=>x.vendor&&x.vendor.toLowerCase()===vendorName.toLowerCase()&&x.date===task.date&&!['complete','resolved_by_guest'].includes(x.status)).map(x=>x.id);
+  if(!sameDayIds.length)return;
+  try{
+    const token=await createVendorSheet(vendorName,task.date,sameDayIds);
+    const url=vendorSheetUrl(token);
+    const sheetLine='\n\nView your full job sheet: '+url;
+    // Update all SMS textareas in the vendor detail area
+    document.querySelectorAll('#d-vendors .sms-edit').forEach(ta=>{
+      if(!ta.value.includes('job sheet'))ta.value+=sheetLine;
+      // Update matching sms: link
+      const link=ta.closest('.sms-box')?.querySelector('.sms-send');
+      if(link)link.href='sms:'+link.href.split('sms:')[1].split('?')[0]+'?body='+encodeURIComponent(ta.value);
+    });
+  }catch(e){console.error('[vendor-sheet] Auto-inject error:',e);}
+}
+
 function buildSMS(t,p,v){
   const pn=p?p.name:t.property,addr=p?p.address:'',door=p?p.door:'';
   const urg=t.urgent?'\n\nThis is URGENT — same-day response needed if possible.':'';
@@ -2787,7 +2810,6 @@ function combinedVendorCard(v,taskList){
       <div class="sms-acts">
         <a id="${smsId}-link" href="sms:${tel}?body=${encodeURIComponent(sms)}" class="sms-btn sms-send" onclick="updateSmsLink('${smsId}','${tel}')">Open in Messages</a>
         <button class="sms-btn sms-copy" onclick="copySms('${smsId}')">Copy Text</button>
-        <button class="sms-btn" onclick="generateAndInsertSheet('${smsId}','${v.name.replace(/'/g,"\\'")}','${sorted[0].id}',this)">📋 Job Sheet Link</button>
       </div>
     </div>
   </div>`;
@@ -4675,6 +4697,9 @@ function rpImportFromReview(rv) {
   let vVendor='';
   let vDate='';
 
+  // Set logo from DEFAULT_LOGO constant (defined in main script)
+  try{document.getElementById('vs-logo').src=DEFAULT_LOGO;}catch(e){}
+
   async function vsLoad(){
     try{
       const r=await fetch(VAPI+'?token='+encodeURIComponent(token));
@@ -4702,26 +4727,46 @@ function rpImportFromReview(rv) {
   function vsRender(){
     const wrap=document.getElementById('vs-tasks');
     if(!vTasks.length){wrap.innerHTML='<div style="text-align:center;padding:30px;color:var(--text2)">No tasks assigned for today.</div>';return;}
-    wrap.innerHTML=vTasks.map(t=>vsCard(t)).join('');
+    // Group by neighborhood, then property (tasks come pre-sorted from API)
+    let html='';
+    let lastNb='';
+    let lastProp='';
+    vTasks.forEach(t=>{
+      const nb=t.neighborhood||'Other';
+      const nbCls=t.neighborhoodCls||'';
+      if(nb!==lastNb){
+        html+=`<div class="vs-nb-header" style="color:var(--${nbCls||'green'})">${nb}</div>`;
+        lastNb=nb;lastProp='';
+      }
+      if(t.propertyName!==lastProp){
+        const shortName=t.propertyName.replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
+        html+=`<div class="vs-prop-header" style="border-left-color:var(--${nbCls||'green'})">${shortName}</div>`;
+        lastProp=t.propertyName;
+      }
+      html+=vsCard(t);
+    });
+    wrap.innerHTML=html;
   }
 
   function vsCard(t){
     const done=!!t.vendorDone;
+    const nbCls=t.neighborhoodCls||'';
     const photos=[];
-    if(t.photoUrl)photos.push({url:t.photoUrl,label:'Admin photo'});
-    (t.vendorPhotos||[]).forEach(p=>photos.push({url:p.url,label:'Uploaded by vendor — '+new Date(p.uploadedAt).toLocaleDateString()}));
-    const notes=(t.notes||[]).map(n=>
+    if(t.photoUrl)photos.push({url:t.photoUrl,label:'Reference photo'});
+    (t.vendorPhotos||[]).forEach(p=>photos.push({url:p.url,label:'Uploaded — '+new Date(p.uploadedAt).toLocaleDateString()}));
+    // Filter notes: skip "Combined with" and "Marked as done/unmarked" auto-notes
+    const filteredNotes=(t.notes||[]).filter(n=>!/^Combined with existing task/i.test(n.text));
+    const notes=filteredNotes.map(n=>
       `<div class="vs-note"><div class="vs-note-meta">${n.type==='vendor'?'You':'Storybook Escapes'} — ${new Date(n.time).toLocaleString()}</div><div>${n.text.replace(/</g,'&lt;')}</div></div>`
     ).join('');
-    return`<div class="vs-card ${done?'vs-done':''}" id="vsc-${t.id}">
+    return`<div class="vs-card ${done?'vs-done':''}" id="vsc-${t.id}" style="border-left:3px solid var(--${nbCls||'green'})">
       <div class="vs-card-banner" onclick="window._vsToggle('${t.id}')">
         <div class="vs-card-check">${done?'&#x2713;':''}</div>
         <div class="vs-card-info">
-          <div class="vs-card-prop" style="color:var(--green)">${t.propertyName}</div>
           <div class="vs-card-prob">${t.problem}</div>
           <div class="vs-card-badges">
             ${t.urgent?'<span class="vs-urgent">Urgent</span>':''}
-            ${done?'<span style="font-size:.7rem;color:var(--green);font-weight:500">Submitted ✓</span>':''}
+            ${done?'<span style="font-size:.7rem;color:var(--green);font-weight:500">Submitted &#x2713;</span>':''}
           </div>
         </div>
         <span style="font-size:.8rem;color:var(--text3)">&#x25BE;</span>
@@ -4834,7 +4879,7 @@ async function initApp(){
   clFetch(); // pre-load cleaning log in background
   cleanupOldPhotos(); // auto-delete photos from tasks resolved 30+ days ago
 }
-initApp();
+if(!window._vendorMode) initApp();
 </script>
 </body>
 </html>
