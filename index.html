@@ -588,7 +588,9 @@ textarea{resize:vertical;min-height:76px}
 .vs-card.vs-done .vs-card-prob{text-decoration:line-through;color:var(--text2)}
 .vs-nb-header{font-family:'Cormorant Garamond',serif;font-size:1.05rem;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;margin:20px 0 6px;padding-bottom:4px;border-bottom:1px solid var(--border)}
 .vs-nb-header:first-child{margin-top:0}
-.vs-prop-header{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text);margin:12px 0 6px;padding-left:10px;border-left:3px solid var(--green)}
+.vs-prop-header{margin:12px 0 6px;padding-left:10px;border-left:3px solid var(--green)}
+.vs-prop-name{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text)}
+.vs-prop-meta{font-size:.68rem;color:var(--text2);margin-top:1px;font-weight:400}
 /* Vendor-done badge for admin task cards */
 .vd-badge{display:inline-flex;align-items:center;gap:3px;background:#e8f5e9;color:#2e7d32;font-size:.62rem;font-weight:600;padding:2px 7px;border-radius:12px;border:1px solid #a5d6a7;text-transform:uppercase;letter-spacing:.5px}
 .vd-badge::before{content:'\\2713';font-size:.7rem}
@@ -920,7 +922,7 @@ textarea{resize:vertical;min-height:76px}
             <div style="font-size:.76rem;font-weight:500;color:var(--green)">Attach Photo</div>
             <div style="font-size:.65rem;color:var(--text3);margin-top:1px">Click to browse, drag &amp; drop, or paste from clipboard</div>
           </div>
-          <input type="file" id="d-photo-input" accept="image/*" capture="environment" style="display:none" onchange="uploadTaskPhoto(this.files[0])">
+          <input type="file" id="d-photo-input" accept="image/*" style="display:none" onchange="uploadTaskPhoto(this.files[0])">
         </div>
         <span id="d-photo-status" style="font-size:.68rem;color:var(--text3);margin-left:0;display:block;margin-top:4px"></span>
       </div>
@@ -2481,14 +2483,28 @@ async function renderMiniCal(pid){
   const fco=av.find(a=>a.status==='checkout');
   nco.innerHTML=fco?`Next checkout: <strong style="color:var(--gold)">${fco.date.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</strong> — earliest recommended window`:'';
 }
-function renderDetailVendors(t,p){
+async function renderDetailVendors(t,p){
   const area=document.getElementById('d-vendors');
   const titleEl=document.getElementById('d-vendors-title');
   const m=vendors.filter(v=>v.categories.includes(t.category));
   const assignedVendor=t.vendor?vendors.find(v=>v.name.toLowerCase()===t.vendor.toLowerCase()):null;
 
+  // Pre-generate vendor sheet URL if we have an assigned vendor + date
+  let sheetUrl='';
+  if(assignedVendor&&t.date){
+    try{
+      const sameDayIds=tasks.filter(x=>x.vendor&&x.vendor.toLowerCase()===assignedVendor.name.toLowerCase()&&x.date===t.date&&!['complete','resolved_by_guest'].includes(x.status)).map(x=>x.id);
+      if(sameDayIds.length){
+        const token=await createVendorSheet(assignedVendor.name,t.date,sameDayIds);
+        sheetUrl=vendorSheetUrl(token);
+      }
+    }catch(e){console.error('[vendor-sheet] Token gen error:',e);}
+  }
+
   function vendorCard(v,showAssign){
-    const sms=buildSMS(t,p,v);const tel=v.phone.replace(/\D/g,'');
+    let sms=buildSMS(t,p,v);
+    if(sheetUrl&&!sms.includes('job sheet'))sms+='\n\nView your full job sheet: '+sheetUrl;
+    const tel=v.phone.replace(/\D/g,'');
     const smsId='sms-'+v.id+'-'+t.id;
     return`<div class="vsc">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
@@ -2506,6 +2522,32 @@ function renderDetailVendors(t,p){
     </div>`;
   }
 
+  function combinedCard(v,taskList){
+    let sms=buildMultiSMS(taskList,v);
+    if(sheetUrl&&!sms.includes('job sheet'))sms+='\n\nView your full job sheet: '+sheetUrl;
+    const tel=v.phone.replace(/\D/g,'');
+    const smsId='sms-combined-'+v.id;
+    const sorted=[...taskList].sort((a,b)=>{
+      const nbA=getNb(a.property),nbB=getNb(b.property);
+      const nA=nbA?nbA.name:'zzz',nB=nbB?nbB.name:'zzz';
+      if(nA!==nB)return nA.localeCompare(nB);
+      return(a.property||'').localeCompare(b.property||'');
+    });
+    const taskSummary=sorted.map(t=>{const p=getProp(t.property);return`<li>${p?p.name.split(' - ').pop():t.property}: ${t.problem}${t.urgent?' <span style="color:var(--red);font-weight:700">URGENT</span>':''}</li>`;}).join('');
+    return`<div class="combined-sms-banner">
+      <div class="combined-sms-hdr"><span class="combined-sms-title">Combined Message for ${v.name}</span><span class="combined-sms-count">${taskList.length} jobs</span></div>
+      <ul class="combined-sms-tasks">${taskSummary}</ul>
+      <div class="sms-box" style="margin-top:0">
+        <div class="sms-lbl">Ready-to-Send Combined Text</div>
+        <textarea class="sms-edit" id="${smsId}" style="min-height:200px">${sms.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+        <div class="sms-acts">
+          <a id="${smsId}-link" href="sms:${tel}?body=${encodeURIComponent(sms)}" class="sms-btn sms-send" onclick="updateSmsLink('${smsId}','${tel}')">Open in Messages</a>
+          <button class="sms-btn sms-copy" onclick="copySms('${smsId}')">Copy Text</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
   // If a vendor is assigned and they're in our list
   if(assignedVendor){
     titleEl.textContent='Assigned Vendor';
@@ -2513,7 +2555,7 @@ function renderDetailVendors(t,p){
     // Check for same-vendor same-day grouping → show combined SMS banner
     const sameDayTasks=getVendorDayTasks(assignedVendor.name,t.date);
     if(sameDayTasks.length>=2){
-      h+=combinedVendorCard(assignedVendor,sameDayTasks);
+      h+=combinedCard(assignedVendor,sameDayTasks);
       h+=`<details style="margin-top:10px"><summary style="font-size:.78rem;color:var(--text2);cursor:pointer;padding:6px 0">Single-task message for this job only</summary>`;
       h+=vendorCard(assignedVendor,false);
       h+=`</details>`;
@@ -2528,8 +2570,6 @@ function renderDetailVendors(t,p){
       h+=`</details>`;
     }
     area.innerHTML=h;
-    // Auto-generate job sheet link and inject into SMS textareas
-    if(t.date) autoInjectSheetLink(assignedVendor.name,t);
     return;
   }
 
@@ -4697,7 +4737,7 @@ function rpImportFromReview(rv) {
   let vVendor='';
   let vDate='';
 
-  // Set logo from DEFAULT_LOGO constant (defined in main script)
+  // Set default logo initially (will be overridden by KV logo from API if available)
   try{document.getElementById('vs-logo').src=DEFAULT_LOGO;}catch(e){}
 
   async function vsLoad(){
@@ -4708,6 +4748,8 @@ function rpImportFromReview(rv) {
       vTasks=data.tasks||[];
       vVendor=data.vendor||'';
       vDate=data.date||'';
+      // Apply logo from API (KV-stored custom logo) if available
+      if(data.logo){try{document.getElementById('vs-logo').src=data.logo;}catch(e){}}
       document.getElementById('vs-subtitle').textContent=
         vVendor+' — Jobs for '+new Date(vDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
       document.getElementById('vs-loading').style.display='none';
@@ -4740,7 +4782,10 @@ function rpImportFromReview(rv) {
       }
       if(t.propertyName!==lastProp){
         const shortName=t.propertyName.replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
-        html+=`<div class="vs-prop-header" style="border-left-color:var(--${nbCls||'green'})">${shortName}</div>`;
+        html+=`<div class="vs-prop-header" style="border-left-color:var(--${nbCls||'green'})">
+          <div class="vs-prop-name">${shortName}</div>
+          <div class="vs-prop-meta">${t.address||''}${t.doorCode?' &middot; Code: '+t.doorCode:''}</div>
+        </div>`;
         lastProp=t.propertyName;
       }
       html+=vsCard(t);
@@ -4772,8 +4817,6 @@ function rpImportFromReview(rv) {
         <span style="font-size:.8rem;color:var(--text3)">&#x25BE;</span>
       </div>
       <div class="vs-card-detail">
-        <div class="vs-detail-row"><span class="vs-detail-label">Address</span><span class="vs-detail-val">${t.address||'—'}</span></div>
-        <div class="vs-detail-row"><span class="vs-detail-label">Door Code</span><span class="vs-detail-val">${t.doorCode||'—'}</span></div>
         ${t.date?`<div class="vs-detail-row"><span class="vs-detail-label">Scheduled</span><span class="vs-detail-val">${t.date}</span></div>`:''}
         ${photos.length?`<div class="vs-photos">${photos.map(p=>`<div><img src="${p.url}" onclick="window.open('${p.url}','_blank')" title="Tap to view full size"><div style="font-size:.65rem;color:var(--text3)">${p.label}</div></div>`).join('')}</div>`:''}
         <div class="vs-photo-upload" onclick="document.getElementById('vpi-${t.id}').click()">
@@ -4782,7 +4825,7 @@ function rpImportFromReview(rv) {
             <div style="font-size:.76rem;font-weight:500;color:var(--green)">Upload Photo</div>
             <div style="font-size:.65rem;color:var(--text3)">Tap to take or upload a photo</div>
           </div>
-          <input type="file" id="vpi-${t.id}" accept="image/*" capture="environment" style="display:none" onchange="window._vsUploadPhoto('${t.id}',this.files[0])">
+          <input type="file" id="vpi-${t.id}" accept="image/*" style="display:none" onchange="window._vsUploadPhoto('${t.id}',this.files[0])">
         </div>
         <div class="vs-notes">${notes}
           <div class="vs-note-input">
