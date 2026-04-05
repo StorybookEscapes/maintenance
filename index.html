@@ -421,16 +421,16 @@ textarea{resize:vertical;min-height:76px}
 .rv-count{font-size:.68rem;background:#5a4a20;color:#e8d080;border-radius:20px;padding:2px 9px;font-weight:700}
 .rv-item{background:rgba(255,255,255,.06);border:1px solid rgba(180,150,60,.25);border-radius:8px;padding:11px 14px;margin-bottom:6px;transition:border-color .15s}
 .rv-item:hover{border-color:#d4a840}
-.rv-item-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.rv-item-top{display:flex;flex-direction:column;gap:8px}
 .rv-item-prop{font-size:.69rem;text-transform:uppercase;letter-spacing:1.2px;color:#d4a840;font-weight:700;margin-bottom:3px}
-.rv-item-prob{font-size:.87rem;font-weight:500;color:#e8dcc0;line-height:1.4}
+.rv-item-prob{font-size:.84rem;font-weight:500;color:#e8dcc0;line-height:1.45;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
 .rv-item-meta{display:flex;gap:12px;margin-top:6px;flex-wrap:wrap}
 .rv-item-meta span{font-size:.69rem;color:#b0a070}
 .rv-item-snippet{font-size:.76rem;color:#c0b080;background:rgba(0,0,0,.15);border-radius:6px;padding:7px 10px;margin-top:7px;line-height:1.4;font-style:italic;border-left:2px solid #8a7030}
 .rv-item-ratings{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap}
 .rv-rating{font-size:.65rem;color:#b0a070;background:rgba(180,150,60,.12);border-radius:4px;padding:2px 6px}
 .rv-rating.low{color:#e06050;background:rgba(224,96,80,.12);font-weight:700}
-.rv-item-btns{display:flex;gap:6px;flex-shrink:0;align-items:flex-start}
+.rv-item-btns{display:flex;gap:6px;align-items:center}
 .rv-btn{padding:5px 11px;border-radius:7px;font-size:.73rem;font-family:inherit;font-weight:600;cursor:pointer;border:1px solid;transition:all .15s;white-space:nowrap}
 .rv-btn-import{background:#7a6020;color:#fff;border-color:#9a7a30}
 .rv-btn-import:hover{background:#9a7a30}
@@ -4629,23 +4629,23 @@ function renderRV() {
 
     h += `<div class="rv-item" id="rv-${rv.id}" style="cursor:pointer" onclick="openRvDetail('${rv.id}')">
       <div class="rv-item-top">
-        <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
           <div class="rv-item-prop">${escHtml(propName)}</div>
-          <div class="rv-item-prob" style="overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical">${escHtml(problem)}</div>
-          <div class="rv-item-meta">
-            <span>Guest: ${escHtml(guest)}</span>
-            <span>Reviewed: ${dateStr}</span>
-            ${stayDates ? `<span>Stay: ${stayDates}</span>` : ''}
-            ${rv.public?.rating ? `<span>Rating: ${'★'.repeat(rv.public.rating)}${'☆'.repeat(5 - rv.public.rating)}</span>` : ''}
+          <div class="rv-item-btns">
+            <button class="rv-btn rv-btn-import" onclick="event.stopPropagation();rvImport('${rv.id}')">Import</button>
+            <button class="rv-btn rv-btn-replacement" onclick="event.stopPropagation();rvConvertToReplacement('${rv.id}')" style="background:rgba(180,150,60,.15);color:#b8830a;border-color:rgba(180,150,60,.3)">To Replacements</button>
+            <button class="rv-btn rv-btn-dismiss" onclick="event.stopPropagation();rvDismiss('${rv.id}')">Dismiss</button>
           </div>
-          ${lowRatings.length ? `<div class="rv-item-ratings">${lowRatings.map(r => `<span class="rv-rating low">${r.type}: ${r.rating}/5</span>`).join('')}</div>` : ''}
-          ${ratingComments.length ? `<div class="rv-item-snippet">${ratingComments.map(r => escHtml(r.type + ': ' + r.comment)).join(' · ')}</div>` : ''}
         </div>
-        <div class="rv-item-btns">
-          <button class="rv-btn rv-btn-import" onclick="event.stopPropagation();rvImport('${rv.id}')">Import</button>
-          <button class="rv-btn rv-btn-replacement" onclick="event.stopPropagation();rvConvertToReplacement('${rv.id}')" style="background:rgba(180,150,60,.15);color:#b8830a;border-color:rgba(180,150,60,.3)">To Replacements</button>
-          <button class="rv-btn rv-btn-dismiss" onclick="event.stopPropagation();rvDismiss('${rv.id}')">Dismiss</button>
+        <div class="rv-item-prob">${escHtml(problem)}</div>
+        <div class="rv-item-meta">
+          <span>${escHtml(guest)}</span>
+          <span>${dateStr}</span>
+          ${stayDates ? `<span>${stayDates}</span>` : ''}
+          ${rv.public?.rating ? `<span>${'★'.repeat(rv.public.rating)}${'☆'.repeat(5 - rv.public.rating)}</span>` : ''}
         </div>
+        ${lowRatings.length ? `<div class="rv-item-ratings">${lowRatings.map(r => `<span class="rv-rating low">${r.type}: ${r.rating}/5</span>`).join('')}</div>` : ''}
+        ${ratingComments.length ? `<div class="rv-item-snippet">${ratingComments.map(r => escHtml(r.type + ': ' + r.comment)).join(' · ')}</div>` : ''}
       </div>
     </div>`;
   });
