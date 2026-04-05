@@ -1129,7 +1129,10 @@ textarea{resize:vertical;min-height:76px}
     </div>
     <div id="d-next-co" style="font-size:.72rem;color:var(--text2);margin:4px 0 8px"></div>
     <div id="d-guest-context"></div>
-    <div class="stitle" id="d-vendors-title">Suggested Vendors</div>
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div class="stitle" id="d-vendors-title" style="margin-bottom:0">Suggested Vendors</div>
+      <button class="btn" onclick="assignToGuest()" id="assign-guest-btn" style="border-color:var(--gold);color:var(--gold);font-size:.72rem;padding:4px 11px">Assign to Guest</button>
+    </div>
     <div id="d-vendors"></div>
     <div id="d-vnotes-section" style="display:none"><div class="stitle">Vendor Completion Notes</div>
     <textarea id="d-vnotes" rows="3" placeholder="Vendor fills this out after completing work..." onchange="updateField('vendorNotes',this.value)" oninput="clearTimeout(this._debounce);this._debounce=setTimeout(()=>updateField('vendorNotes',this.value),800)"></textarea></div>
@@ -1141,7 +1144,6 @@ textarea{resize:vertical;min-height:76px}
       <button class="btn btn-red" onclick="deleteTask()">Delete Task</button>
       <div style="display:flex;gap:7px">
         <button class="btn" onclick="closeModal('detail-modal')">Close</button>
-        <button class="btn" onclick="assignToGuest()" id="assign-guest-btn" style="border-color:var(--gold);color:var(--gold)">Assign to Guest</button>
         <button class="btn" onclick="markResolvedByGuest()" id="resolved-guest-btn" style="border-color:var(--green);color:var(--green)">Resolved by Guest</button>
         <button class="btn btn-g" onclick="markComplete()" id="complete-btn">Mark Complete</button>
       </div>
@@ -2269,10 +2271,13 @@ function checkCombine(){
     if(!r.nextDue)return false;
     const diff=Math.abs(td-new Date(r.nextDue+'T12:00:00'))/(864e5);if(diff>10)return false;
     const ps=r.properties.includes('all')?PROPS.map(p=>p.id):r.properties;if(!ps.includes(t.property))return false;
+    // Fuzzy match: recurring task names may be longer than the task problem (e.g. "HVAC Filter Replacement" vs "HVAC Filter Replacement – Write date...")
+    const rLow=(r.name||'').toLowerCase();
+    const matchesRecurring=(prob)=>{const p=(prob||'').toLowerCase();return p===rLow||rLow.startsWith(p)||p.startsWith(rLow);};
     // Skip if the current task IS this recurring item (don't suggest combining with itself)
-    if(t.recurring&&t.problem===r.name)return false;
-    // Hide if already scheduled: a recurring task with this name already exists as an active task for this property (any date)
-    const alreadyScheduled=tasks.some(x=>x.property===t.property&&x.recurring&&x.problem===r.name&&!['complete','resolved_by_guest'].includes(x.status));
+    if(t.recurring&&matchesRecurring(t.problem))return false;
+    // Hide if already scheduled: a recurring task matching this name already exists as an active task for this property (any date)
+    const alreadyScheduled=tasks.some(x=>x.property===t.property&&x.recurring&&matchesRecurring(x.problem)&&!['complete','resolved_by_guest'].includes(x.status));
     return !alreadyScheduled;
   });
   if(!nearby.length)return;
