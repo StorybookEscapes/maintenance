@@ -2498,7 +2498,7 @@ function renderDetailVendors(t,p){
         <div class="sms-acts">
           <a id="${smsId}-link" href="sms:${tel}?body=${encodeURIComponent(sms)}" class="sms-btn sms-send" onclick="updateSmsLink('${smsId}','${tel}')">Open in Messages</a>
           <button class="sms-btn sms-copy" onclick="copySms('${smsId}')">Copy Text</button>
-          <button class="sms-btn" onclick="generateAndInsertSheet('${smsId}','${v.name.replace(/'/g,"\\'")}',${JSON.stringify(t.id).replace(/'/g,"\\'")})">📋 Job Sheet Link</button>
+          <button class="sms-btn" onclick="generateAndInsertSheet('${smsId}','${v.name.replace(/'/g,"\\'")}','${t.id}',this)">📋 Job Sheet Link</button>
         </div>
       </div>
     </div>`;
@@ -2684,12 +2684,13 @@ function vendorSheetUrl(token){
   return'https://storybookescapes.github.io/maintenance/#v/'+token;
 }
 
-async function generateAndInsertSheet(smsId,vendorName,taskId){
+async function generateAndInsertSheet(smsId,vendorName,taskId,btnEl){
   // Collect all task IDs for this vendor+date
   const t=tasks.find(x=>x.id===taskId);
-  if(!t||!t.date)return;
+  if(!t||!t.date){alert('Task needs a scheduled date before generating a job sheet link.');return;}
   const sameDayIds=tasks.filter(x=>x.vendor&&x.vendor.toLowerCase()===vendorName.toLowerCase()&&x.date===t.date&&!['complete','resolved_by_guest'].includes(x.status)).map(x=>x.id);
   if(!sameDayIds.length)return;
+  if(btnEl){btnEl.textContent='Generating...';btnEl.disabled=true;}
   try{
     const token=await createVendorSheet(vendorName,t.date,sameDayIds);
     const url=vendorSheetUrl(token);
@@ -2697,12 +2698,16 @@ async function generateAndInsertSheet(smsId,vendorName,taskId){
     if(ta){
       ta.value+='\n\nView your full job sheet: '+url;
       // Update the sms: link too
-      const tel=(ta.closest('.sms-box')||ta.parentElement).querySelector('.sms-send');
-      if(tel)tel.href='sms:'+tel.href.split('sms:')[1].split('?')[0]+'?body='+encodeURIComponent(ta.value);
+      const link=(ta.closest('.sms-box')||ta.parentElement).querySelector('.sms-send');
+      if(link)link.href='sms:'+link.href.split('sms:')[1].split('?')[0]+'?body='+encodeURIComponent(ta.value);
     }
-    // Brief visual feedback
-    const btn=event.target;if(btn){btn.textContent='✓ Link Added';btn.disabled=true;setTimeout(()=>{btn.textContent='📋 Job Sheet Link';btn.disabled=false;},2000);}
-  }catch(e){console.error('[vendor-sheet] Token gen error:',e);alert('Failed to generate link.');}
+    // Visual feedback
+    if(btnEl){btnEl.textContent='✓ Link Added';setTimeout(()=>{btnEl.textContent='📋 Job Sheet Link';btnEl.disabled=false;},2000);}
+  }catch(e){
+    console.error('[vendor-sheet] Token gen error:',e);
+    if(btnEl){btnEl.textContent='📋 Job Sheet Link';btnEl.disabled=false;}
+    alert('Failed to generate link. Check console for details.');
+  }
 }
 
 function buildSMS(t,p,v){
@@ -2782,7 +2787,7 @@ function combinedVendorCard(v,taskList){
       <div class="sms-acts">
         <a id="${smsId}-link" href="sms:${tel}?body=${encodeURIComponent(sms)}" class="sms-btn sms-send" onclick="updateSmsLink('${smsId}','${tel}')">Open in Messages</a>
         <button class="sms-btn sms-copy" onclick="copySms('${smsId}')">Copy Text</button>
-        <button class="sms-btn" onclick="generateAndInsertSheet('${smsId}','${v.name.replace(/'/g,"\\'")}',${JSON.stringify(sorted[0].id).replace(/'/g,"\\'")})">📋 Job Sheet Link</button>
+        <button class="sms-btn" onclick="generateAndInsertSheet('${smsId}','${v.name.replace(/'/g,"\\'")}','${sorted[0].id}',this)">📋 Job Sheet Link</button>
       </div>
     </div>
   </div>`;
