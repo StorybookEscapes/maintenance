@@ -634,6 +634,9 @@ textarea{resize:vertical;min-height:76px}
 .vs-prop-header{margin:12px 0 6px;padding-left:10px;border-left:3px solid var(--green)}
 .vs-prop-name{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text)}
 .vs-prop-meta{font-size:.68rem;color:var(--text2);margin-top:1px;font-weight:400}
+.vs-guest-alert{font-size:.72rem;padding:5px 8px;border-radius:6px;margin-top:5px;display:flex;align-items:center;gap:6px;font-weight:500}
+.vs-guest-alert-checkout{background:#fff3e0;color:#e65100;border:1px solid #ffcc80}
+.vs-guest-alert-checkin{background:#e3f2fd;color:#1565c0;border:1px solid #90caf9}
 /* Vendor-done badge for admin task cards */
 .vd-badge{display:inline-flex;align-items:center;gap:3px;background:#e8f5e9;color:#2e7d32;font-size:.62rem;font-weight:600;padding:2px 7px;border-radius:12px;border:1px solid #a5d6a7;text-transform:uppercase;letter-spacing:.5px}
 .vd-badge::before{content:'\\2713';font-size:.7rem}
@@ -1137,6 +1140,7 @@ textarea{resize:vertical;min-height:76px}
       <button class="btn btn-red" onclick="deleteTask()">Delete Task</button>
       <div style="display:flex;gap:7px">
         <button class="btn" onclick="closeModal('detail-modal')">Close</button>
+        <button class="btn" onclick="assignToGuest()" id="assign-guest-btn" style="border-color:var(--gold);color:var(--gold)">Assign to Guest</button>
         <button class="btn" onclick="markResolvedByGuest()" id="resolved-guest-btn" style="border-color:var(--green);color:var(--green)">Resolved by Guest</button>
         <button class="btn btn-g" onclick="markComplete()" id="complete-btn">Mark Complete</button>
       </div>
@@ -2258,7 +2262,7 @@ async function genFromRec(id){
 function checkCombine(){
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
   const area=document.getElementById('d-combine');area.innerHTML='';
-  if(!t.date||['complete','resolved_by_guest'].includes(t.status))return;
+  if(!t.date||['complete','resolved_by_guest'].includes(t.status)||t.assignedToGuest)return;
   const td=new Date(t.date+'T12:00:00');
   const nearby=recurring.filter(r=>{
     if(!r.nextDue)return false;
@@ -2266,9 +2270,9 @@ function checkCombine(){
     const ps=r.properties.includes('all')?PROPS.map(p=>p.id):r.properties;if(!ps.includes(t.property))return false;
     // Skip if the current task IS this recurring item (don't suggest combining with itself)
     if(t.recurring&&t.problem===r.name)return false;
-    // Hide if already combined: a recurring task with this name already exists on this date for this property
-    const alreadyCombined=tasks.some(x=>x.property===t.property&&x.date===t.date&&x.recurring&&x.problem===r.name);
-    return !alreadyCombined;
+    // Hide if already scheduled: a recurring task with this name already exists as an active task for this property (any date)
+    const alreadyScheduled=tasks.some(x=>x.property===t.property&&x.recurring&&x.problem===r.name&&!['complete','resolved_by_guest'].includes(x.status));
+    return !alreadyScheduled;
   });
   if(!nearby.length)return;
   nearby.forEach(r=>{
@@ -2375,6 +2379,7 @@ async function openDetail(id){
   const isDone=['complete','resolved_by_guest'].includes(t.status);
   document.getElementById('complete-btn').style.display=isDone?'none':'';
   document.getElementById('resolved-guest-btn').style.display=isDone?'none':'';
+  document.getElementById('assign-guest-btn').style.display=(isDone||t.assignedToGuest)?'none':'';
   // Vendor-done approval notice
   const vdNotice=document.getElementById('d-vendor-done-notice');
   if(vdNotice){
@@ -3565,6 +3570,17 @@ async function markResolvedByGuest(){
   t.notes=t.notes||[];t.notes.push({text:'Marked as resolved by guest.',type:'admin',time:new Date().toISOString()});
   await saveTasks();closeModal('detail-modal');renderAll();showToast('Task marked as resolved by guest.');
 }
+async function assignToGuest(){
+  const t=tasks.find(x=>x.id===detailId);if(!t)return;
+  t.vendor='Guest (Ask Next Guest)';
+  t.assignedToGuest=true;
+  t.notes=t.notes||[];t.notes.push({text:'Assigned to guest — will ask next guest to verify/address.',type:'admin',time:new Date().toISOString()});
+  await saveTasks();
+  document.getElementById('d-vendor').value='Guest (Ask Next Guest)';
+  const p=getProp(t.property);
+  renderDetailVendors(t,p);renderAll();
+  showToast('Task assigned to guest.');
+}
 async function deleteTask(){
   const deleted=tasks.find(x=>x.id===detailId);if(!deleted)return;
   const idx=tasks.indexOf(deleted);
@@ -4625,6 +4641,7 @@ function renderRV() {
         </div>
         <div class="rv-item-btns">
           <button class="rv-btn rv-btn-import" onclick="event.stopPropagation();rvImport('${rv.id}')">Import</button>
+          <button class="rv-btn rv-btn-replacement" onclick="event.stopPropagation();rvConvertToReplacement('${rv.id}')" style="background:rgba(180,150,60,.15);color:#b8830a;border-color:rgba(180,150,60,.3)">To Replacements</button>
           <button class="rv-btn rv-btn-dismiss" onclick="event.stopPropagation();rvDismiss('${rv.id}')">Dismiss</button>
         </div>
       </div>
@@ -4686,8 +4703,22 @@ function openRvDetail(id) {
   document.getElementById('rv-detail-ft').innerHTML = `
     <button class="rv-btn rv-btn-dismiss" onclick="closeModal('rv-detail-modal')">Close</button>
     <button class="rv-btn rv-btn-dismiss" onclick="rvDismiss('${rv.id}');closeModal('rv-detail-modal')">Dismiss</button>
+    <button class="rv-btn rv-btn-replacement" onclick="rvConvertToReplacement('${rv.id}')" style="background:rgba(180,150,60,.15);color:#b8830a;border-color:rgba(180,150,60,.3)">To Replacements</button>
     <button class="rv-btn rv-btn-import" onclick="rvImport('${rv.id}');closeModal('rv-detail-modal')">Import as Task</button>`;
   document.getElementById('rv-detail-modal').classList.add('open');
+}
+
+function rvConvertToReplacement(id) {
+  const rv = rvItems.find(x => x.id === id);
+  if (!rv) return;
+  rpImportFromReview(rv);
+  // Mark the card so user knows it's been converted, but don't dismiss — Import as Task still available
+  const card = document.getElementById('rv-' + id);
+  if (card) {
+    const btn = card.querySelector('.rv-btn-replacement');
+    if (btn) { btn.textContent = 'Converted ✓'; btn.disabled = true; btn.style.opacity = '.6'; }
+  }
+  showToast('Sent to Replacements — you can still import as a task too.');
 }
 
 async function rvImport(id) {
@@ -5302,6 +5333,7 @@ function rpImportFromReview(rv) {
   let vTasks=[];
   let vVendor='';
   let vDate='';
+  let vGuestAlerts={}; // {propId: [{type:'checkin'|'checkout', guest, time}]}
 
   // Set default logo initially (will be overridden by KV logo from API if available)
   try{document.getElementById('vs-logo').src=DEFAULT_LOGO;}catch(e){}
@@ -5314,6 +5346,7 @@ function rpImportFromReview(rv) {
       vTasks=data.tasks||[];
       vVendor=data.vendor||'';
       vDate=data.date||'';
+      vGuestAlerts=data.guestAlerts||{};
       // Apply logo from API (KV-stored custom logo) if available
       if(data.logo){try{document.getElementById('vs-logo').src=data.logo;}catch(e){}}
       document.getElementById('vs-subtitle').textContent=
@@ -5358,9 +5391,22 @@ function rpImportFromReview(rv) {
       if(t.propertyName!==lastProp){
         if(propGroupOpen){html+='</div>';}
         const shortName=t.propertyName.replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
+        // Guest alerts for this property
+        const propAlerts=vGuestAlerts[t.property]||[];
+        let alertHtml='';
+        if(propAlerts.length){
+          alertHtml=propAlerts.map(a=>{
+            const icon=a.type==='checkout'?'&#x1F6AA;':'&#x1F3E0;';
+            const label=a.type==='checkout'
+              ?`Guests checking out this morning`
+              :`Guests checking in this afternoon`;
+            return `<div class="vs-guest-alert vs-guest-alert-${a.type}">${icon} <strong>${label}</strong></div>`;
+          }).join('');
+        }
         html+=`<div class="vs-prop-header" style="border-left-color:var(--${nbCls||'green'})">
           <div class="vs-prop-name">${shortName}</div>
           <div class="vs-prop-meta">${t.address||''}${t.doorCode?' &middot; Code: '+t.doorCode:''}</div>
+          ${alertHtml}
         </div>`;
         html+='<div class="vs-prop-group">';
         propGroupOpen=true;
@@ -5596,7 +5642,7 @@ async function gaFetch(){
   // Find open/scheduled tasks (not complete, not resolved_by_guest)
   // Exclude routine recurring items that don't affect guest experience (HVAC filters, etc.)
   const GA_EXCLUDE=/hvac\s*filter|filter\s*replace/i;
-  const activeTasks=tasks.filter(t=>!['complete','resolved_by_guest'].includes(t.status)&&!GA_EXCLUDE.test(t.problem||''));
+  const activeTasks=tasks.filter(t=>!['complete','resolved_by_guest'].includes(t.status)&&!GA_EXCLUDE.test(t.problem||'')&&!t.assignedToGuest);
   if(!activeTasks.length){document.getElementById('ga-wrap').innerHTML='';gaItems=[];return;}
 
   // Group active tasks by property
@@ -5652,7 +5698,7 @@ function gaGenerateMessage(guestFirst,propName,issue,daysOut){
 
 function renderGA(){
   const el=document.getElementById('ga-wrap');
-  const active=gaItems.filter(a=>!gaSent.has(a.id));
+  const active=gaItems.filter(a=>!gaSent.has(a.id)&&!gaDismissed.has(a.id));
   if(!active.length){el.innerHTML='';return;}
   let h=`<div class="ga-banner">
     <div class="ga-hdr">
@@ -5672,13 +5718,9 @@ function renderGA(){
           <div class="ga-item-guest"><strong>${escHtml(a.guestName)}</strong> — ${dayLabel}</div>
         </div>
       </div>
-      <div class="ga-msg-preview" id="ga-preview-${a.id.replace(/[^a-zA-Z0-9_]/g,'-')}">
-        <div class="ga-msg-text">${escHtml(a.message)}</div>
-      </div>
-      <textarea class="ga-msg-edit" id="ga-edit-${a.id.replace(/[^a-zA-Z0-9_]/g,'-')}">${escHtml(a.message)}</textarea>
+      <textarea class="ga-msg-edit" id="ga-edit-${a.id.replace(/[^a-zA-Z0-9_]/g,'-')}" style="display:block">${escHtml(a.message)}</textarea>
       <div class="ga-item-btns">
         <button class="ga-btn ga-btn-send" onclick="gaSend('${a.id}')">Send to ${escHtml(a.guestFirst)}</button>
-        <button class="ga-btn ga-btn-edit" onclick="gaToggleEdit('${a.id}')">Edit</button>
         <button class="ga-btn ga-btn-dismiss" onclick="gaDismiss('${a.id}')">Dismiss</button>
         <span class="ga-sent" id="ga-sent-${a.id.replace(/[^a-zA-Z0-9_]/g,'-')}">✓ Sent</span>
       </div>
@@ -5688,29 +5730,15 @@ function renderGA(){
   el.innerHTML=h;
 }
 
-function gaToggleEdit(id){
-  const safeId=id.replace(/[^a-zA-Z0-9_]/g,'-');
-  const preview=document.getElementById('ga-preview-'+safeId);
-  const edit=document.getElementById('ga-edit-'+safeId);
-  if(!preview||!edit)return;
-  if(edit.style.display==='none'||!edit.style.display){
-    edit.style.display='block';preview.style.display='none';edit.focus();
-  }else{
-    // Save edits back to preview
-    const a=gaItems.find(x=>x.id===id);
-    if(a)a.message=edit.value;
-    preview.querySelector('.ga-msg-text').textContent=edit.value;
-    edit.style.display='none';preview.style.display='';
-  }
-}
+// gaToggleEdit removed — textarea is now always visible and directly editable
 
 async function gaSend(id){
   const a=gaItems.find(x=>x.id===id);
   if(!a||!a.reservationId)return;
   const safeId=id.replace(/[^a-zA-Z0-9_]/g,'-');
-  // Get possibly-edited message
+  // Get message from the always-visible textarea
   const editEl=document.getElementById('ga-edit-'+safeId);
-  const msg=editEl&&editEl.style.display==='block'?editEl.value:a.message;
+  const msg=editEl?editEl.value:a.message;
   if(!msg.trim()){showToast('Message is empty.');return;}
 
   // Show sending state
