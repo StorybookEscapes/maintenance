@@ -2537,8 +2537,13 @@ function showVendorPhotos(t){
 /* Drag-and-drop + paste support for photo upload */
 (function(){
   // Drag and drop on the dropzone
+  function dzVisible(){
+    const modal=document.getElementById('detail-modal');
+    if(!modal||!modal.classList.contains('open'))return null;
+    return document.getElementById('d-photo-dropzone');
+  }
   document.addEventListener('dragover',function(e){
-    const dz=document.getElementById('d-photo-dropzone');if(!dz||dz.offsetParent===null)return;
+    const dz=dzVisible();if(!dz)return;
     e.preventDefault();
     dz.style.borderColor='var(--green)';dz.style.background='var(--green-light)';
   });
@@ -2547,7 +2552,7 @@ function showVendorPhotos(t){
     if(e.target===dz||dz.contains(e.target)){dz.style.borderColor='var(--border)';dz.style.background='var(--surface2)';}
   });
   document.addEventListener('drop',function(e){
-    const dz=document.getElementById('d-photo-dropzone');if(!dz||dz.offsetParent===null)return;
+    const dz=dzVisible();if(!dz)return;
     e.preventDefault();
     dz.style.borderColor='var(--border)';dz.style.background='var(--surface2)';
     const files=e.dataTransfer.files;
