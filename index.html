@@ -636,6 +636,7 @@ textarea{resize:vertical;min-height:76px}
 .vs-guest-alert{font-size:.72rem;padding:5px 8px;border-radius:6px;margin-top:5px;display:flex;align-items:center;gap:6px;font-weight:500}
 .vs-guest-alert-checkout{background:#fff3e0;color:#e65100;border:1px solid #ffcc80}
 .vs-guest-alert-checkin{background:var(--green-light);color:var(--green);border:1px solid var(--border-dark)}
+.vs-guest-alert-inhouse{background:#fff8e1;color:#f57f17;border:1px solid #ffe082}
 /* Vendor-done badge for admin task cards */
 .vd-badge{display:inline-flex;align-items:center;gap:3px;background:#e8f5e9;color:#2e7d32;font-size:.62rem;font-weight:600;padding:2px 7px;border-radius:12px;border:1px solid #a5d6a7;text-transform:uppercase;letter-spacing:.5px}
 .vd-badge::before{content:'\\2713';font-size:.7rem}
@@ -5402,9 +5403,11 @@ function rpImportFromReview(rv) {
         let alertHtml='';
         if(propAlerts.length){
           alertHtml=propAlerts.map(a=>{
-            const icon=a.type==='checkout'?'&#x1F6AA;':'&#x1F3E0;';
+            const icon=a.type==='checkout'?'&#x1F6AA;':a.type==='inhouse'?'&#x1F6A8;':'&#x1F3E0;';
             const label=a.type==='checkout'
               ?`Guests checking out this morning`
+              :a.type==='inhouse'
+              ?`Guests are in house. Please announce yourself!`
               :`Guests checking in this afternoon`;
             return `<div class="vs-guest-alert vs-guest-alert-${a.type}">${icon} <strong>${label}</strong></div>`;
           }).join('');
