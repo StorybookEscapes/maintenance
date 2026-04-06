@@ -489,6 +489,82 @@ textarea{resize:vertical;min-height:76px}
 .gc-msg-time{font-size:.62rem;color:var(--text3);margin-top:2px}
 .gc-loading{font-size:.76rem;color:var(--text3);font-style:italic;padding:8px 0}
 
+/* ── Guest Communication (task detail) ── */
+.guest-comm{background:#fdf0f4;border:1px solid #e8b8c8;border-radius:var(--radius);padding:14px 16px;margin-top:10px;margin-bottom:14px}
+.guest-comm-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.guest-comm-header .gc-hosp-badge{font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;background:#c42a52;color:#fff;padding:2px 7px;border-radius:4px}
+.gc-guest-name{font-size:.88rem;font-weight:600;color:var(--text);margin-bottom:2px}
+.gc-guest-dates{font-size:.72rem;color:var(--text2);margin-bottom:6px}
+.gc-contact-row{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.gc-contact-btn{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:8px;font-size:.76rem;font-weight:500;font-family:inherit;cursor:pointer;transition:all .15s;text-decoration:none;border:1px solid var(--border);background:var(--white);color:var(--text)}
+.gc-contact-btn:hover{border-color:var(--green);color:var(--green)}
+.gc-contact-btn svg{width:14px;height:14px;fill:currentColor}
+.gc-msg-box{display:flex;gap:6px;margin-top:6px}
+.gc-msg-box textarea{flex:1;padding:8px 10px;border:1px solid #e8b8c8;border-radius:var(--radius);font-family:inherit;font-size:.8rem;background:var(--white);resize:vertical;min-height:42px;max-height:120px}
+.gc-msg-box textarea:focus{outline:none;border-color:#c42a52}
+.gc-msg-box textarea::placeholder{color:var(--text3)}
+.gc-send-btn{padding:8px 16px;border-radius:var(--radius);border:1px solid #c42a52;background:#c42a52;color:#fff;font-family:inherit;font-size:.76rem;font-weight:600;cursor:pointer;white-space:nowrap;align-self:flex-end}
+.gc-send-btn:hover{background:#e63462}
+
+/* ── Editable notes (task detail) ── */
+.note-actions{display:inline-flex;gap:4px;margin-left:auto}
+.note-action-btn{background:none;border:none;font-size:.64rem;color:var(--text3);cursor:pointer;padding:1px 4px;border-radius:4px;font-family:inherit}
+.note-action-btn:hover{color:var(--green);background:var(--green-light)}
+.note-action-btn.del:hover{color:var(--red);background:var(--red-bg)}
+.note-edit-area{margin-top:4px}
+.note-edit-area textarea{width:100%;padding:6px 8px;border:1px solid var(--green);border-radius:6px;font-family:inherit;font-size:.8rem;resize:vertical;min-height:40px;outline:none;background:var(--white)}
+.note-edit-btns{display:flex;gap:4px;margin-top:4px}
+.note-edit-btns button{font-size:.68rem;padding:3px 10px}
+.note-del-confirm{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(255,255,255,.95);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border-radius:8px;z-index:5;padding:8px}
+.note-del-confirm p{font-size:.78rem;color:var(--text2);text-align:center}
+
+/* ── Calendar completed toggle ── */
+.cal-toggle{display:flex;align-items:center;gap:8px}
+.cal-toggle label{font-size:.74rem;color:var(--text2);cursor:pointer;user-select:none}
+.toggle-track{width:36px;height:20px;border-radius:10px;background:var(--border);cursor:pointer;position:relative;transition:background .2s}
+.toggle-track.on{background:var(--green)}
+.toggle-thumb{width:16px;height:16px;border-radius:50%;background:var(--white);position:absolute;top:2px;left:2px;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.toggle-track.on .toggle-thumb{left:18px}
+.ce.done{opacity:.5;text-decoration:line-through;font-style:italic}
+.ce.done .ce-check{color:var(--green);font-size:.58rem;margin-right:2px}
+
+/* ── Service History near-click detail ── */
+.prop-detail{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow-md);animation:detailSlideIn .25s ease;margin-top:8px;position:relative}
+@keyframes detailSlideIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.prop-detail-arrow{position:absolute;top:-6px;width:12px;height:12px;background:var(--white);border-top:1px solid var(--border);border-left:1px solid var(--border);transform:rotate(45deg)}
+.prop-detail-close{position:absolute;top:8px;right:10px;background:none;border:none;font-size:1rem;color:var(--text3);cursor:pointer;padding:2px 6px}
+.prop-detail-close:hover{color:var(--text)}
+
+/* ── Vendor sheet: feedback modal ── */
+.vs-fb-overlay{position:fixed;inset:0;background:rgba(13,53,40,.6);z-index:500;display:flex;align-items:center;justify-content:center;padding:16px;animation:vpFadeIn .3s ease}
+.vs-fb-modal{background:var(--white);border-radius:14px;max-width:420px;width:100%;padding:24px;box-shadow:var(--shadow-md);animation:vpSlideUp .4s ease .1s both}
+.vs-fb-title{font-family:'Cormorant Garamond',serif;font-size:1.15rem;font-weight:600;color:var(--green);margin-bottom:4px}
+.vs-fb-sub{font-size:.76rem;color:var(--text2);margin-bottom:14px}
+.vs-fb-textarea{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);font-family:inherit;font-size:.85rem;resize:vertical;min-height:70px;outline:none}
+.vs-fb-textarea:focus{border-color:var(--green)}
+.vs-fb-charcount{font-size:.64rem;color:var(--text3);margin-top:3px;text-align:right}
+.vs-fb-photo-req{display:flex;align-items:center;gap:6px;padding:8px 12px;background:var(--red-bg);border:1px solid var(--red-border);border-radius:8px;margin-top:8px;font-size:.74rem;color:var(--red);font-weight:500}
+.vs-fb-upload-row{display:flex;gap:8px;margin-top:10px}
+.vs-fb-upload-btn{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;border:2px dashed var(--border);border-radius:8px;background:var(--surface2);cursor:pointer;font-size:.76rem;font-weight:500;color:var(--green);transition:border-color .15s}
+.vs-fb-upload-btn:hover{border-color:var(--green)}
+.vs-fb-actions{display:flex;gap:8px;margin-top:14px;justify-content:flex-end}
+@keyframes vpFadeIn{from{opacity:0}to{opacity:1}}
+@keyframes vpSlideUp{from{transform:translateY(30px);opacity:0}to{transform:translateY(0);opacity:1}}
+
+/* ── Vendor sheet: completion animation ── */
+.vs-card.vs-collapsing{transition:max-height .4s ease,opacity .3s ease,margin .3s ease,padding .3s ease;max-height:0!important;opacity:0;margin-bottom:0;overflow:hidden}
+.vs-check-pop{animation:checkPop .4s ease}
+@keyframes checkPop{0%{transform:scale(1)}30%{transform:scale(1.4)}60%{transform:scale(.9)}100%{transform:scale(1)}}
+@keyframes vsShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+
+/* ── Vendor sheet: purchase callout at property header ── */
+.vs-purchase-callout{background:var(--red-bg);border:1px solid var(--red-border);border-radius:8px;padding:8px 12px;margin-top:8px}
+.vs-purchase-callout p{font-size:.8rem;color:#6b2018;font-weight:500;line-height:1.4}
+
+/* ── Vendor sheet: report issue button ── */
+.vs-report-btn{display:flex;align-items:center;justify-content:space-between;width:100%;padding:12px 16px;border:2px solid var(--green-mid);border-radius:var(--radius);background:linear-gradient(135deg,var(--green-pale),var(--green-light));cursor:pointer;font-family:inherit;font-size:.82rem;font-weight:600;color:var(--green);box-shadow:var(--shadow);transition:all .15s;margin-top:12px}
+.vs-report-btn:hover{border-color:var(--green);box-shadow:var(--shadow-md)}
+
 /* ── Cleaning Log ── */
 .cl-wrap{border-radius:var(--radius)}
 .cl-summary-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-bottom:20px}
@@ -798,6 +874,30 @@ textarea{resize:vertical;min-height:76px}
 .vp-pay-ids strong{color:var(--text2)}
 .vp-prompt-skip{display:block;width:100%;text-align:center;padding:10px;font-size:.78rem;color:var(--text3);background:none;border:none;cursor:pointer;font-family:inherit}
 .vp-prompt-skip:hover{color:var(--text2)}
+.vp-cashapp-steps{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:16px;font-size:.78rem;line-height:1.6;color:var(--text)}
+.vp-cashapp-steps .step{display:flex;gap:8px;margin-bottom:6px;align-items:flex-start}
+.vp-cashapp-steps .step:last-child{margin-bottom:0}
+.vp-cashapp-steps .num{width:20px;height:20px;border-radius:50%;background:var(--green);color:#fff;font-size:.65rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.vp-copy-btn{display:inline-flex;padding:2px 8px;font-size:.65rem;font-weight:600;border:1px solid var(--border);border-radius:4px;background:var(--white);color:var(--green);cursor:pointer;margin-left:6px;font-family:inherit;vertical-align:middle;transition:all .15s}
+.vp-copy-btn:hover{border-color:var(--green);background:var(--green-pale)}
+.vp-copy-btn.copied{background:var(--green);color:#fff;border-color:var(--green)}
+.vp-invoice{background:var(--white);border:1.5px solid var(--border);border-radius:12px;margin:16px 0;overflow:hidden}
+.vp-invoice-hdr{background:var(--green);padding:14px 18px;display:flex;align-items:center;justify-content:space-between}
+.vp-invoice-date{font-size:.7rem;color:rgba(255,255,255,.6)}
+.vp-invoice-body{padding:16px 18px}
+.vp-invoice-row{display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border);font-size:.8rem}
+.vp-invoice-row:last-child{border-bottom:none}
+.vp-invoice-row.total{border-top:2px solid var(--green);border-bottom:none;padding-top:12px;margin-top:4px;font-weight:700;font-size:.88rem}
+.vp-invoice-label{color:var(--text);flex:1}
+.vp-invoice-label small{display:block;font-size:.68rem;color:var(--text3);font-weight:400;margin-top:1px}
+.vp-invoice-val{color:var(--text);font-weight:500;text-align:right;flex-shrink:0}
+.vp-invoice-meta{display:flex;gap:16px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+.vp-invoice-meta-item{font-size:.72rem;color:var(--text2);line-height:1.4}
+.vp-invoice-meta-item strong{color:var(--text);display:block;font-size:.68rem;text-transform:uppercase;letter-spacing:.5px;margin-bottom:1px}
+.vp-invoice-actions{display:flex;gap:8px;padding:12px 18px;border-top:1px solid var(--border);background:var(--surface2)}
+.vp-invoice-actions button{flex:1;padding:9px 14px;border-radius:8px;font-family:inherit;font-size:.76rem;font-weight:600;cursor:pointer;transition:all .15s}
+.vp-invoice-actions .save{background:var(--green);color:#fff;border:1px solid var(--green)}
+.vp-invoice-actions .share{background:var(--white);color:var(--text);border:1px solid var(--border)}
 </style>
 </head>
 <body>
@@ -862,6 +962,10 @@ textarea{resize:vertical;min-height:76px}
           <div class="cal-modes">
             <button class="cal-mode active" onclick="setCalMode('month',this)">Month</button>
             <button class="cal-mode" onclick="setCalMode('week',this)">Week</button>
+          </div>
+          <div class="cal-toggle">
+            <label onclick="toggleShowDone()">Show completed</label>
+            <div class="toggle-track" id="toggle-done" onclick="toggleShowDone()"><div class="toggle-thumb"></div></div>
           </div>
         </div>
       </div>
@@ -1195,10 +1299,10 @@ textarea{resize:vertical;min-height:76px}
         </div>
         <input type="hidden" id="d-date">
       </div>
-      <div class="fgr full" style="position:relative">
+      <div class="fgr" style="position:relative">
         <label>Assigned Vendor</label>
         <div class="vd-wrap" id="vd-wrap">
-          <input type="text" id="d-vendor" autocomplete="off" placeholder="Search or select a vendor..." oninput="filterVendorDD(this.value)" onfocus="openVendorDD()" onchange="updateField('vendor',this.value)">
+          <input type="text" id="d-vendor" autocomplete="off" placeholder="Search or select..." oninput="filterVendorDD(this.value)" onfocus="openVendorDD()" onchange="updateField('vendor',this.value)">
           <button type="button" class="vd-arrow" onclick="toggleVendorDD()">&#x25BC;</button>
           <div class="vd-dropdown" id="vd-dropdown" style="display:none"></div>
         </div>
@@ -1215,6 +1319,7 @@ textarea{resize:vertical;min-height:76px}
       </div>
       <div id="d-purchase-saved" style="font-size:.64rem;color:var(--green);margin-top:3px;display:none">Saved — vendor will be notified to purchase this.</div>
     </div>
+    <div id="d-guest-comm-section"></div>
     <div class="stitle">Notes</div>
     <div class="notes" id="d-notes"></div>
     <div class="note-row">
@@ -1438,6 +1543,13 @@ textarea{resize:vertical;min-height:76px}
 </script>
 
 <script>
+// ── User Name Mapping (for note attribution) ─────────────────
+const USER_NAME_MAP={'cb@chipburns.com':'Chip','properties@chipburns.com':'Chip'};
+function getCurrentUserName(){
+  try{const t=sessionStorage.getItem('se_auth_token');if(t){const p=JSON.parse(atob(t.split('.')[1]));return USER_NAME_MAP[(p.email||'').toLowerCase()]||p.name||'Admin';}}catch(e){}
+  return 'Chip'; // fallback for dev
+}
+
 // ── Hospitable REST API v2 (replaces iCal) ──────────────────
 // Property shortnames → Hospitable UUID property IDs
 const HOSPITABLE_IDS = {
@@ -1476,10 +1588,10 @@ const PROPS = [
   {id:'prc4',name:'PRC - 4 - Snuggle Shack',address:'1627 Paradise Ridge Dr. Unit 4',door:'1474'},
   {id:'prc5',name:'PRC - 5 - Pink Paradise',address:'1627 Paradise Ridge Dr. Unit 5',door:'1475'},
   {id:'prc6',name:"PRC - 6 - The Ringbearer's Roost",address:'1627 Paradise Ridge Dr. Unit 6',door:'1476'},
-  {id:'umc10',name:'UMC - 10 - The Whispering Wand',address:'1181 Upper Middle Creek, Cabin 10',door:'5582'},
-  {id:'umc20',name:'UMC - 20 - Honey Haven',address:'1181 Upper Middle Creek, Cabin 20',door:'5583'},
-  {id:'umc30',name:'UMC - 30 - Rebel Refuge',address:'1181 Upper Middle Creek, Cabin 30',door:'5584'},
-  {id:'umc40',name:'UMC - 40 - Lookout on the Roadside',address:'1181 Upper Middle Creek, Cabin 40',door:'5581'},
+  {id:'umc10',name:'UMC - 10 - The Whispering Wand',address:'1181 Upper Middle Creek Rd., Cabin 10',door:'5582'},
+  {id:'umc20',name:'UMC - 20 - Honey Haven',address:'1181 Upper Middle Creek Rd., Cabin 20',door:'5583'},
+  {id:'umc30',name:'UMC - 30 - Rebel Refuge',address:'1181 Upper Middle Creek Rd., Cabin 30',door:'5584'},
+  {id:'umc40',name:'UMC - 40 - Lookout on the Roadside',address:'1181 Upper Middle Creek Rd., Cabin 40',door:'5581'},
   {id:'umc50',name:'UMC - 50 - Rosy Ridge',address:'1619 Rebel Hill Dr. Cabin 50',door:'5585'},
   {id:'umc60',name:'UMC - 60 - Hero Hangout',address:'1619 Rebel Hill Dr. Cabin 60',door:'5586'},
   {id:'bearadise',name:'Bearadise Lodge',address:'734 Heiden Dr. Gatlinburg, TN',door:'1967'},
@@ -1555,7 +1667,8 @@ const PAY_GROUPS=[
 const VENMO_USER='Chip-Burns';
 const CASHAPP_TAG='chipburns';
 
-let calDate=new Date(), calMode='month', editVendorId=null, icalCache={};
+let calDate=new Date(), calMode='month', editVendorId=null, icalCache={}, showDone=false;
+function toggleShowDone(){showDone=!showDone;document.getElementById('toggle-done').classList.toggle('on',showDone);renderCalendar();}
 
 // STORAGE
 const STORAGE_API = 'https://storybook-webhook.vercel.app/api/storage';
@@ -2286,6 +2399,13 @@ function buildMonth(){
         const nc=getNbCls(t.property);const p=getProp(t.property);const sh=p?p.name.split(' - ').pop():t.property;
         h+=`<div class="ce ce-${nc} ${t.urgent?'urg':''} ${t.recurring?'rec':''}" onclick="openDetail('${t.id}')" title="${t.problem}">${sh}: ${t.problem}</div>`;
       });
+      // Completed tasks (only when showDone toggle is on)
+      if(showDone){
+        tasks.filter(t=>t.date===ds&&['complete','resolved_by_guest'].includes(t.status)).forEach(t=>{
+          const nc=getNbCls(t.property);const p=getProp(t.property);const sh=p?p.name.split(' - ').pop():t.property;
+          h+=`<div class="ce ce-${nc} done" onclick="openDetail('${t.id}')" title="${t.problem} (completed)"><span class="ce-check">&#x2713;</span>${sh}: ${t.problem}</div>`;
+        });
+      }
       recurring.filter(r=>r.nextDue===ds).forEach(r=>{
         const pids=r.properties.includes('all')?PROPS.map(p=>p.id):r.properties;
         // Skip if a real task already exists for this recurring item on this date
@@ -2326,6 +2446,13 @@ function buildWeek(ws){
     wkUngrouped.forEach(t=>{const nc=getNbCls(t.property);const p=getProp(t.property);
       h+=`<div class="de de-${nc} ${t.urgent?'urg':''} ${t.recurring?'rec':''}" onclick="openDetail('${t.id}')"><div class="de-prop">${p?p.name.split(' - ').pop():''}</div><div class="de-title">${t.problem}</div>${t.vendor?`<div class="de-cat">${t.vendor}</div>`:''}</div>`;
     });
+    // Completed tasks (only when showDone toggle is on)
+    if(showDone){
+      tasks.filter(t=>t.date===ds&&['complete','resolved_by_guest'].includes(t.status)).forEach(t=>{
+        const nc=getNbCls(t.property);const p=getProp(t.property);
+        h+=`<div class="de de-${nc} done" onclick="openDetail('${t.id}')"><div class="de-prop">${p?p.name.split(' - ').pop():''}</div><div class="de-title" style="text-decoration:line-through;opacity:.6"><span style="color:var(--green);margin-right:3px">&#x2713;</span>${t.problem}</div></div>`;
+      });
+    }
     recurring.filter(r=>r.nextDue===ds).forEach(r=>{
       const pids=r.properties.includes('all')?PROPS.map(p=>p.id):r.properties;
       // Skip if a real task already exists for this recurring item on this date
@@ -2599,6 +2726,8 @@ async function openDetail(id){
   renderMiniCal(t.property).then(()=>renderDetailVendors(t,p));
   // Guest context section removed — not useful for admin workflow
   document.getElementById('d-guest-context').innerHTML='';
+  // Guest communication tools — only during active guest stay
+  renderGuestComm(t);
   const isDone=['complete','resolved_by_guest'].includes(t.status);
   document.getElementById('complete-btn').style.display=isDone?'none':'';
   document.getElementById('resolved-guest-btn').style.display=isDone?'none':'';
@@ -2937,6 +3066,61 @@ async function renderMiniCal(pid){
   const av=getAvail(evs,today,60);
   const fco=av.find(a=>a.status==='checkout');
   nco.innerHTML=fco?`Next checkout: <strong style="color:var(--gold)">${fco.date.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</strong> — earliest recommended window`:'';
+}
+// ── Guest Communication in Task Detail ──────────────────────
+async function renderGuestComm(t){
+  const el=document.getElementById('d-guest-comm-section');
+  if(!el){return;}
+  el.innerHTML='';
+  if(!t.property)return;
+  const pid=t.property;
+  const hospId=HOSPITABLE_IDS[pid];
+  if(!hospId)return;
+  let evs=icalCache[pid];
+  if(!evs||evs==='error'){evs=await fetchIcal(pid);if(evs==='error')return;}
+  // Find reservation whose stay overlaps with today (guest currently there)
+  const now=new Date();now.setHours(12,0,0,0);
+  let activeRes=null;
+  evs.forEach(ev=>{
+    if(!ev.start||!ev.end)return;
+    if(now>=ev.start&&now<=ev.end)activeRes=ev;
+  });
+  if(!activeRes||!activeRes.reservationId)return;
+  const guestName=activeRes.summary||'Guest';
+  const guestFirst=guestName.split(' ')[0];
+  const checkin=activeRes.start.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  const checkout=activeRes.end.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  const phone=activeRes.guestPhone||'';
+  const phoneFmt=phone?phone.replace(/(\d{3})(\d{3})(\d{4})/,'($1) $2-$3'):phone;
+  const phoneLinks=phone?`<div class="gc-contact-row">
+    <a href="sms:${phone}" class="gc-contact-btn"><svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg> Text ${phoneFmt}</a>
+    <a href="tel:${phone}" class="gc-contact-btn"><svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:currentColor"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg> Call ${phoneFmt}</a>
+  </div>`:'';
+  el.innerHTML=`<div class="guest-comm">
+    <div class="guest-comm-header"><span style="font-size:.72rem;font-weight:600;color:var(--text2)">Guest at this property</span><span class="gc-hosp-badge">Hospitable</span></div>
+    <div class="gc-guest-name">${guestName}</div>
+    <div class="gc-guest-dates">${checkin} – ${checkout}${activeRes.platform?' · '+activeRes.platform:''}</div>
+    ${phoneLinks}
+    <div class="gc-msg-box">
+      <textarea id="gc-msg-input" placeholder="Send a message to ${guestFirst} via Hospitable..."></textarea>
+      <button class="gc-send-btn" onclick="sendGuestCommMsg('${activeRes.reservationId}','${guestFirst}')">Send</button>
+    </div>
+  </div>`;
+}
+async function sendGuestCommMsg(rid,guestFirst){
+  const inp=document.getElementById('gc-msg-input');
+  const msg=inp.value.trim();if(!msg)return;
+  const btn=inp.nextElementSibling;btn.textContent='Sending...';btn.disabled=true;
+  try{
+    const r=await fetch(`${PROXY_BASE}/api/hospitable?action=send_message&rid=${rid}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg})});
+    if(!r.ok)throw new Error('API '+r.status);
+    inp.value='';btn.textContent='Sent ✓';btn.style.background='#2e7d52';btn.style.borderColor='#2e7d52';
+    // Add note to task
+    const t=tasks.find(x=>x.id===detailId);
+    if(t){if(!t.notes)t.notes=[];t.notes.push({text:`Message sent to ${guestFirst}: "${msg.slice(0,80)}${msg.length>80?'...':''}"`,type:'admin',time:new Date().toISOString(),by:getCurrentUserName()});await saveTasks();renderNotes(t);}
+    showToast(`Message sent to ${guestFirst}!`);
+    setTimeout(()=>{btn.textContent='Send';btn.style.background='';btn.style.borderColor='';btn.disabled=false;},2000);
+  }catch(e){showToast('Failed to send: '+e.message);btn.textContent='Send';btn.disabled=false;}
 }
 async function renderDetailVendors(t,p){
   const area=document.getElementById('d-vendors');
@@ -3659,12 +3843,29 @@ function combinedVendorCard(v,taskList,sheetUrl){
 function renderNotes(t){
   const el=document.getElementById('d-notes');const ns=t.notes||[];
   if(!ns.length){el.innerHTML='<div style="color:var(--text3);font-size:.79rem">No notes yet.</div>';return;}
-  el.innerHTML=ns.map(n=>`<div class="note ${n.type}"><div class="note-meta">${n.type==='vendor'?'Vendor':'Admin'} — ${new Date(n.time).toLocaleString()}</div><div>${n.text}</div></div>`).join('');
+  el.innerHTML=ns.map((n,i)=>{
+    const isAdmin=n.type!=='vendor';
+    const name=isAdmin?(n.by||getCurrentUserName()):'Vendor';
+    const time=new Date(n.time).toLocaleString();
+    const actions=isAdmin?`<span class="note-actions"><button class="note-action-btn" onclick="event.stopPropagation();editNoteInline(${i})" title="Edit">Edit</button><button class="note-action-btn del" onclick="event.stopPropagation();deleteNoteInline(${i})" title="Delete">Delete</button></span>`:'';
+    return`<div class="note ${n.type}" id="detail-note-${i}" style="position:relative"><div class="note-meta" style="display:flex;align-items:center;gap:6px"><span>${name} — ${time}</span>${actions}</div><div class="note-text" id="nt-${i}">${n.text}</div><div class="note-edit-area" id="ne-${i}" style="display:none"><textarea id="nei-${i}">${n.text}</textarea><div class="note-edit-btns"><button class="btn btn-g" onclick="saveNoteEdit(${i})">Save</button><button class="btn" onclick="cancelNoteEdit(${i})">Cancel</button></div></div></div>`;
+  }).join('');
 }
+function editNoteInline(i){document.getElementById('nt-'+i).style.display='none';document.getElementById('ne-'+i).style.display='';const ta=document.getElementById('nei-'+i);ta.focus();ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';}
+function cancelNoteEdit(i){document.getElementById('nt-'+i).style.display='';document.getElementById('ne-'+i).style.display='none';}
+async function saveNoteEdit(i){const t=tasks.find(x=>x.id===detailId);if(!t||!t.notes||!t.notes[i])return;const txt=document.getElementById('nei-'+i).value.trim();if(!txt)return;t.notes[i].text=txt;await saveTasks();renderNotes(t);showToast('Note updated');}
+async function deleteNoteInline(i){
+  const el=document.getElementById('detail-note-'+i);
+  if(el.querySelector('.note-del-confirm')){el.querySelector('.note-del-confirm').remove();return;}
+  const c=document.createElement('div');c.className='note-del-confirm';
+  c.innerHTML=`<p>Delete this note?</p><div style="display:flex;gap:6px"><button class="btn btn-red" onclick="confirmDeleteNote(${i})">Delete</button><button class="btn" onclick="this.closest('.note-del-confirm').remove()">Cancel</button></div>`;
+  el.appendChild(c);
+}
+async function confirmDeleteNote(i){const t=tasks.find(x=>x.id===detailId);if(!t||!t.notes)return;t.notes.splice(i,1);await saveTasks();renderNotes(t);showToast('Note deleted');}
 async function addNote(type){
   const inp=document.getElementById('d-note-input');const txt=inp.value.trim();if(!txt)return;
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
-  if(!t.notes)t.notes=[];t.notes.push({text:txt,type,time:new Date().toISOString()});
+  if(!t.notes)t.notes=[];t.notes.push({text:txt,type,time:new Date().toISOString(),by:getCurrentUserName()});
   await saveTasks();renderNotes(t);inp.value='';
 }
 async function updateField(f,v){
@@ -3834,7 +4035,7 @@ function checkAdminPaymentPrompt(justCompleted){
   }))];
   const dateStr=justCompleted.date?new Date(justCompleted.date+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}):'';
   const methodLabel=method==='venmo'?'Venmo':'Cash App';
-  const venmoUrl=`venmo://paycharge?txn=pay&recipients=${encodeURIComponent(VENMO_USER)}&note=${encodeURIComponent('Maintenance '+dateStr+' - '+group.label)}`;
+  const venmoUrl=`https://venmo.com/${VENMO_USER}?txn=pay&note=${encodeURIComponent('Maintenance '+dateStr+' - '+group.label)}`;
   const cashappUrl=`https://cash.app/$${CASHAPP_TAG}`;
 
   const overlay=document.createElement('div');
@@ -3853,8 +4054,80 @@ function checkAdminPaymentPrompt(justCompleted){
         ${method==='venmo'?`<a href="${venmoUrl}" class="vp-pay-btn venmo" target="_blank"><span style="font-size:1.1rem">💸</span> Open Venmo to Pay</a>`
         :`<a href="${cashappUrl}" class="vp-pay-btn cashapp" target="_blank"><span style="font-size:1.1rem">💵</span> Open Cash App to Pay</a>`}
       </div>
+      <button class="btn" style="width:100%;margin-bottom:10px;padding:10px;font-size:.78rem" onclick="generateInvoice('${vendorName}','${method}','${dateStr}',${JSON.stringify(groupTasks.map(x=>x.id)).replace(/"/g,'&quot;')})">View Invoice</button>
       <button class="vp-prompt-skip" onclick="this.closest('.vp-overlay').remove()">I'll handle this later</button>
     </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click',function(e){if(e.target===overlay)overlay.remove();});
+}
+function generateInvoice(vendorName,method,dateStr,taskIds){
+  const invTasks=taskIds.map(id=>tasks.find(t=>t.id===id)).filter(Boolean);
+  if(!invTasks.length)return;
+  const firstName=vendorName.split(' ')[0];
+  const initials=vendorName.split(' ').map(w=>w[0]).join('').toUpperCase();
+  const invNum='SE-'+new Date().toISOString().slice(0,10).replace(/-/g,'')+'-'+initials;
+  const methodLabel=method==='venmo'?`Venmo (@${VENMO_USER})`:`Cash App ($${CASHAPP_TAG})`;
+  const today=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  // Build task rows
+  let taskRows='';
+  invTasks.forEach(t=>{
+    const p=getProp(t.property);const nb=getNb(t.property);
+    const pn=p?p.name.split(' - ').pop():t.property;
+    const nbn=nb?nb.name:'';
+    taskRows+=`<div class="vp-invoice-row"><div class="vp-invoice-label">${t.problem}<small>${pn} &middot; ${nbn}</small></div></div>`;
+  });
+  // Receipts (from vendor photos tagged as receipts, if any)
+  let receiptRows='';let receiptTotal=0;
+  invTasks.forEach(t=>{
+    if(t.vendorReceipts&&t.vendorReceipts.length){
+      t.vendorReceipts.forEach(r=>{
+        receiptRows+=`<div class="vp-invoice-row" style="border-top:1px dashed var(--border)"><div class="vp-invoice-label" style="color:var(--text2)">Receipt: ${r.description||'Vendor receipt'}<small>${r.store||'Uploaded by vendor'}</small></div><div class="vp-invoice-val">$${(r.amount||0).toFixed(2)}</div></div>`;
+        receiptTotal+=(r.amount||0);
+      });
+    }
+  });
+  // Payment amount (from vendorPaymentRequested.amount if Cash App)
+  const payReq=invTasks[0]?.vendorPaymentRequested;
+  const laborAmt=payReq?.amount||0;
+  const total=receiptTotal+laborAmt;
+  let totalRows='';
+  if(receiptTotal>0)totalRows+=`<div class="vp-invoice-row" style="border-top:1px dashed var(--border);margin-top:4px;padding-top:8px"><div class="vp-invoice-label" style="color:var(--text2)">Receipt reimbursement subtotal</div><div class="vp-invoice-val">$${receiptTotal.toFixed(2)}</div></div>`;
+  if(laborAmt>0)totalRows+=`<div class="vp-invoice-row"><div class="vp-invoice-label" style="color:var(--text2)">${method==='venmo'?'Venmo':'Cash App'} request amount (labor)</div><div class="vp-invoice-val">$${laborAmt.toFixed(2)}</div></div>`;
+  if(total>0)totalRows+=`<div class="vp-invoice-row total"><div class="vp-invoice-label">Total</div><div class="vp-invoice-val" style="color:var(--green);font-size:.95rem">$${total.toFixed(2)}</div></div>`;
+  // Load logo from KV if available
+  const logoHtml=appLogo?`<img src="${appLogo}" style="height:36px" alt="Storybook Escapes">`:`<span style="font-family:'Cormorant Garamond',serif;font-size:1rem;color:var(--gold-light);font-weight:600;letter-spacing:2.5px;text-transform:uppercase">Storybook Escapes</span>`;
+  const overlay=document.createElement('div');
+  overlay.className='vp-overlay';
+  overlay.style.alignItems='flex-start';overlay.style.paddingTop='40px';overlay.style.overflowY='auto';
+  overlay.innerHTML=`<div class="vp-prompt" style="max-width:460px">
+    <div class="vp-invoice">
+      <div class="vp-invoice-hdr">
+        <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
+          <div style="display:flex;align-items:center;gap:6px">
+            <div style="height:36px;display:flex;align-items:center">${logoHtml}</div>
+            <span style="color:rgba(255,255,255,.25);font-size:1rem;margin:0 4px">|</span>
+            <span style="font-family:'Cormorant Garamond',serif;font-size:1rem;color:rgba(255,255,255,.6);font-weight:400">Invoice</span>
+          </div>
+          <div class="vp-invoice-date">${today}</div>
+        </div>
+      </div>
+      <div class="vp-invoice-body">
+        <div class="vp-invoice-meta">
+          <div class="vp-invoice-meta-item" style="flex:1"><strong>Vendor</strong>${vendorName}</div>
+          <div class="vp-invoice-meta-item" style="flex:1"><strong>Payment Method</strong>${methodLabel}</div>
+          <div class="vp-invoice-meta-item"><strong>Invoice #</strong>${invNum}</div>
+        </div>
+        ${taskRows}
+        ${receiptRows}
+        ${totalRows}
+      </div>
+      <div class="vp-invoice-actions">
+        <button class="save" onclick="showToast('Invoice saved (PDF generation coming soon)')">Save as PDF</button>
+        <button class="share" onclick="showToast('Share link copied (coming soon)')">Share</button>
+      </div>
+    </div>
+    <button class="vp-prompt-skip" style="margin-top:8px" onclick="this.closest('.vp-overlay').remove()">Close</button>
   </div>`;
   document.body.appendChild(overlay);
   overlay.addEventListener('click',function(e){if(e.target===overlay)overlay.remove();});
@@ -3966,55 +4239,50 @@ function buildTrendInsights(doneTasks){
 }
 function renderHistory(){
   const container=document.getElementById('hist-container');
-  // Property grid grouped by neighborhood
+  // Property grid grouped by neighborhood — with detail slots
   let gridHtml='';
   NBS.forEach(nb=>{
     const cards=nb.props.map(pid=>{
       const p=getProp(pid);if(!p)return'';
       const done=tasks.filter(t=>t.property===pid&&['complete','resolved_by_guest'].includes(t.status)).length;
-      return`<div class="pc nb-${nb.cls} ${selProp===pid?'sel':''}" onclick="selPropFn('${pid}')" style="cursor:pointer">
+      return`<div class="pc nb-${nb.cls} ${selProp===pid?'sel':''}" id="pc-${pid}" onclick="selPropFn('${pid}')" style="cursor:pointer">
         <div class="pc-name">${p.name.split(' - ').pop()}</div>
         <div class="pcs"><strong>${done}</strong> completed</div>
       </div>`;
     }).join('');
-    gridHtml+=`<div class="nb-section"><div class="nb-hdr nb-${nb.cls}-h"><h3>${nb.name}</h3><span class="nb-sub">${nb.sub}</span></div><div class="prop-grid">${cards}</div></div>`;
+    gridHtml+=`<div class="nb-section" id="nb-${nb.cls}"><div class="nb-hdr nb-${nb.cls}-h"><h3>${nb.name}</h3><span class="nb-sub">${nb.sub}</span></div><div class="prop-grid nb-${nb.cls}">${cards}</div><div id="detail-slot-${nb.cls}"></div></div>`;
   });
-  // Completed tasks with filters applied
+  // Completed tasks list (shown when NO property is selected)
   const allDone=tasks.filter(t=>['complete','resolved_by_guest'].includes(t.status));
-  let done=selProp?allDone.filter(t=>t.property===selProp):allDone;
-  const scoped=done;// before cat filter, for chip counts
-  if(histCat!=='all')done=done.filter(t=>t.category===histCat);
-  done.sort((a,b)=>{const da=a.date||a.created;const db=b.date||b.created;return db.localeCompare(da);});
-  // Category chips from scoped set
-  const cc={};scoped.forEach(t=>{if(t.category)cc[t.category]=(cc[t.category]||0)+1;});
-  const uc=Object.entries(cc).sort((a,b)=>b[1]-a[1]);
-  const chips=[`<button class="chip ${histCat==='all'?'active':''}" onclick="setHistCat('all')">All (${scoped.length})</button>`,...uc.map(([c,n])=>`<button class="chip ${histCat===c?'active':''}" onclick="setHistCat('${c}')">${c.replace('_',' ')} (${n})</button>`)].join('');
-  // Task list — 4-block layout: Date | Category | Description | Vendor
-  const list=done.length?done.map(t=>{
-    const p=getProp(t.property);const nb=getNb(t.property);const nbc=nb?'nb-'+nb.cls:'';const plc=nb?'pl-'+nb.cls:'';
-    const d=t.date?new Date(t.date+'T12:00:00').toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'2-digit'}):'';
-    const short=t.problem.length>100?t.problem.substring(0,100)+'…':t.problem;
-    const cat=(t.category||'').replace('_',' ');
-    const vendorLabel=t.status==='resolved_by_guest'?'Resolved by Guest':(t.vendor||'—');
-    const propName=p?p.name.split(' - ').pop():'';
-    return`<div class="hi ${nbc}" onclick="openDetail('${t.id}')" style="border-left-width:3px">
-      <div class="hi-block hi-date">${d}</div>
-      <div class="hi-block hi-cat">${cat}</div>
-      <div class="hi-block hi-desc">${short}</div>
-      ${!selProp?`<div class="hi-block hi-prop-col">${propName}</div>`:''}
-      <div class="hi-block hi-vendor">${vendorLabel}</div>
-    </div>`;
-  }).join(''):'<div style="color:var(--text3);font-size:.82rem;padding:16px 0;font-style:italic">No completed tasks found.</div>';
-  // Active filter label
-  const filterLabel=selProp?`<span style="font-size:.76rem;color:var(--text2);margin-left:8px">Showing: <strong>${getProp(selProp)?.name.split(' - ').pop()}</strong> <button onclick="selPropFn(null)" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:.72rem;font-family:inherit;padding:0 4px">✕ Clear</button></span>`:'';
-  // Trend insights (only when viewing all properties)
-  const trendHtml=selProp?'':buildTrendInsights(allDone);
-  container.innerHTML=`${gridHtml}
-    <div style="margin-top:20px;padding-top:18px;border-top:2px solid var(--border)">
+  let bottomHtml='';
+  if(!selProp){
+    let done=allDone;
+    const scoped=done;
+    if(histCat!=='all')done=done.filter(t=>t.category===histCat);
+    done.sort((a,b)=>{const da=a.date||a.created;const db=b.date||b.created;return db.localeCompare(da);});
+    const cc={};scoped.forEach(t=>{if(t.category)cc[t.category]=(cc[t.category]||0)+1;});
+    const uc=Object.entries(cc).sort((a,b)=>b[1]-a[1]);
+    const chips=[`<button class="chip ${histCat==='all'?'active':''}" onclick="setHistCat('all')">All (${scoped.length})</button>`,...uc.map(([c,n])=>`<button class="chip ${histCat===c?'active':''}" onclick="setHistCat('${c}')">${c.replace('_',' ')} (${n})</button>`)].join('');
+    const list=done.length?done.map(t=>{
+      const p=getProp(t.property);const nb=getNb(t.property);const nbc=nb?'nb-'+nb.cls:'';
+      const d=t.date?new Date(t.date+'T12:00:00').toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'2-digit'}):'';
+      const short=t.problem.length>100?t.problem.substring(0,100)+'…':t.problem;
+      const cat=(t.category||'').replace('_',' ');
+      const vendorLabel=t.status==='resolved_by_guest'?'Resolved by Guest':(t.vendor||'—');
+      const propName=p?p.name.split(' - ').pop():'';
+      return`<div class="hi ${nbc}" onclick="openDetail('${t.id}')" style="border-left-width:3px">
+        <div class="hi-block hi-date">${d}</div>
+        <div class="hi-block hi-cat">${cat}</div>
+        <div class="hi-block hi-desc">${short}</div>
+        <div class="hi-block hi-prop-col">${propName}</div>
+        <div class="hi-block hi-vendor">${vendorLabel}</div>
+      </div>`;
+    }).join(''):'<div style="color:var(--text3);font-size:.82rem;padding:16px 0;font-style:italic">No completed tasks found.</div>';
+    const trendHtml=buildTrendInsights(allDone);
+    bottomHtml=`<div style="margin-top:20px;padding-top:18px;border-top:2px solid var(--border)">
       ${trendHtml}
       <div style="display:flex;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:6px">
         <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.3rem;color:var(--green);font-weight:600;margin:0">Completed Work</h2>
-        ${filterLabel}
         <button class="btn" onclick="toggleHistForm()" style="margin-left:auto;font-size:.72rem">${histFormOpen?'Cancel':'+ Add Historical Record'}</button>
       </div>
       ${histFormOpen?buildHistForm():''}
@@ -4023,14 +4291,60 @@ function renderHistory(){
         <span style="width:82px;padding-left:17px;font-size:.62rem;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text3)">Date</span>
         <span style="width:100px;font-size:.62rem;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);text-align:center">Category</span>
         <span style="flex:1;font-size:.62rem;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);padding-left:14px">Description</span>
-        ${!selProp?'<span style="width:130px;font-size:.62rem;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);text-align:center">Property</span>':''}
+        <span style="width:130px;font-size:.62rem;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);text-align:center">Property</span>
         <span style="width:130px;font-size:.62rem;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);text-align:center">Vendor</span>
       </div>`:''}
       <div class="hist-list">${list}</div>
     </div>`;
+  } else {
+    bottomHtml=`<div style="margin-top:12px;text-align:center"><button class="btn" onclick="toggleHistForm()" style="font-size:.72rem">${histFormOpen?'Cancel':'+ Add Historical Record'}</button>${histFormOpen?buildHistForm():''}</div>`;
+  }
+  container.innerHTML=gridHtml+bottomHtml;
+  // If a property is selected, render detail in the right slot
+  if(selProp) renderPropDetail(selProp);
 }
-function selPropFn(id){selProp=id||null;histCat='all';renderHistory();}
-window.setHistCat=cat=>{histCat=cat;renderHistory();};
+function renderPropDetail(pid){
+  const nb=getNb(pid);if(!nb)return;
+  const slot=document.getElementById('detail-slot-'+nb.cls);if(!slot)return;
+  const p=getProp(pid);
+  const done=tasks.filter(t=>t.property===pid&&['complete','resolved_by_guest'].includes(t.status));
+  let filtered=histCat==='all'?done:done.filter(t=>t.category===histCat);
+  filtered.sort((a,b)=>(b.date||b.created||'').localeCompare(a.date||a.created||''));
+  // Category chips
+  const cc={};done.forEach(t=>{if(t.category)cc[t.category]=(cc[t.category]||0)+1;});
+  const chips=[`<button class="chip ${histCat==='all'?'active':''}" onclick="setHistCat('all')">All (${done.length})</button>`,
+    ...Object.entries(cc).sort((a,b)=>b[1]-a[1]).map(([c,n])=>
+      `<button class="chip ${histCat===c?'active':''}" onclick="setHistCat('${c}')">${c.replace('_',' ')} (${n})</button>`)
+  ].join('');
+  // Task list
+  const nbc='nb-'+nb.cls;
+  const list=filtered.length?filtered.map(t=>{
+    const d=t.date?new Date(t.date+'T12:00:00').toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'2-digit'}):'';
+    const cat=(t.category||'').replace('_',' ');
+    const vendorLabel=t.status==='resolved_by_guest'?'Resolved by Guest':(t.vendor||'—');
+    return`<div class="hi ${nbc}" onclick="openDetail('${t.id}')" style="cursor:pointer">
+      <div class="hi-block hi-date">${d}</div>
+      <div class="hi-block hi-cat">${cat}</div>
+      <div class="hi-block hi-desc">${t.problem}</div>
+      <div class="hi-block hi-vendor">${vendorLabel}</div>
+    </div>`;
+  }).join(''):'<div style="color:var(--text3);font-size:.82rem;padding:8px 0;font-style:italic">No completed tasks.</div>';
+  // Arrow position based on clicked card
+  const card=document.getElementById('pc-'+pid);
+  const grid=card?.parentElement;
+  let arrowLeft=30;
+  if(card&&grid){const cr=card.getBoundingClientRect();const gr=grid.getBoundingClientRect();arrowLeft=(cr.left-gr.left)+(cr.width/2)-6;}
+  slot.innerHTML=`<div class="prop-detail">
+    <div class="prop-detail-arrow" style="left:${arrowLeft}px"></div>
+    <button class="prop-detail-close" onclick="selPropFn(null)">&#x2715;</button>
+    <h4 style="font-family:'Cormorant Garamond',serif;font-size:1.1rem;color:var(--green);font-weight:600;margin-bottom:8px">${p?p.name.split(' - ').pop():pid}</h4>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${chips}</div>
+    ${list}
+  </div>`;
+  slot.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function selPropFn(id){if(selProp===id){selProp=null;histCat='all';}else{selProp=id||null;histCat='all';}renderHistory();}
+window.setHistCat=cat=>{histCat=cat;if(selProp)renderPropDetail(selProp);else renderHistory();};
 
 // VENDORS
 function renderVendors(){
@@ -5835,9 +6149,18 @@ function rpImportFromReview(rv) {
         }
         html+=`<div class="vs-prop-header" style="border-left-color:var(--${nbCls||'green'})">
           <div class="vs-prop-name">${shortName}</div>
-          <div class="vs-prop-meta">${t.address||''}${t.doorCode?' &middot; Code: '+t.doorCode:''}</div>
+          <div class="vs-prop-meta">${t.address?'<a href="https://maps.google.com/?q='+encodeURIComponent(t.address)+'" target="_blank">'+t.address+'</a>':''}${t.doorCode?' &middot; Code: '+t.doorCode:''}</div>
           ${alertHtml}
         </div>`;
+        // Purchase callout at property level
+        const propPurchases=vTasks.filter(pt=>pt.property===t.property&&pt.purchaseNote);
+        if(propPurchases.length){
+          html+='<div class="vs-purchase-callout">';
+          propPurchases.forEach(pt=>{
+            html+=`<p style="margin:4px 0"><span style="font-size:.66rem;text-transform:uppercase;letter-spacing:1px;font-weight:700;color:var(--red)">&#x1F6D2; Purchase needed:</span> ${pt.purchaseNote.replace(/</g,'&lt;')}</p>`;
+          });
+          html+='</div>';
+        }
         html+='<div class="vs-prop-group">';
         propGroupOpen=true;
         lastProp=t.propertyName;
@@ -5857,11 +6180,12 @@ function rpImportFromReview(rv) {
     const refPhotos=Array.isArray(t.photos)&&t.photos.length?t.photos:t.photoUrl?[t.photoUrl]:[];
     refPhotos.forEach((u,i)=>photos.push({url:u,label:refPhotos.length>1?'Reference photo '+(i+1):'Reference photo'}));
     (t.vendorPhotos||[]).forEach(p=>photos.push({url:p.url,label:'Uploaded — '+new Date(p.uploadedAt).toLocaleDateString()}));
-    // Filter notes: skip "Combined with" and "Marked as done/unmarked" auto-notes
-    const filteredNotes=(t.notes||[]).filter(n=>!/^Combined with existing task/i.test(n.text));
-    const notes=filteredNotes.map(n=>
-      `<div class="vs-note"><div class="vs-note-meta">${n.type==='vendor'?'You':'Storybook Escapes'} — ${new Date(n.time).toLocaleString()}</div><div>${n.text.replace(/</g,'&lt;')}</div></div>`
-    ).join('');
+    // Filter notes: skip "Combined with" and "Imported from Hostbuddy AI"
+    const filteredNotes=(t.notes||[]).filter(n=>!/^Combined with existing task/i.test(n.text)&&!/Imported from Hostbuddy AI/i.test(n.text));
+    const notes=filteredNotes.map(n=>{
+      const who=n.type==='vendor'?'You':(n.by||'Storybook Escapes');
+      return`<div class="vs-note"><div class="vs-note-meta">${who} — ${new Date(n.time).toLocaleString()}</div><div>${n.text.replace(/</g,'&lt;')}</div></div>`;
+    }).join('');
     return`<div class="vs-card ${done?'vs-done':''}" id="vsc-${t.id}" style="border-left:3px solid var(--${nbCls||'green'})">
       <div class="vs-card-banner" onclick="window._vsToggle('${t.id}')">
         <div class="vs-card-check" onclick="event.stopPropagation();window._vsCircleCheck('${t.id}',${!!done})">${done?'&#x2713;':''}</div>
@@ -5884,13 +6208,9 @@ function rpImportFromReview(rv) {
           </div>
         </div>`:''}
         ${photos.length?`<div class="vs-photos">${photos.map(p=>`<div><img src="${p.url}" onclick="window.open('${p.url}','_blank')" title="Tap to view full size"><div class="vs-photo-label">${p.label}</div></div>`).join('')}</div>`:''}
-        <div class="vs-photo-upload" onclick="document.getElementById('vpi-${t.id}').click()">
-          <span style="font-size:1.1rem">&#x1F4F7;</span>
-          <div>
-            <div style="font-size:.76rem;font-weight:500;color:var(--green)">Upload Photo</div>
-            <div style="font-size:.65rem;color:var(--text3)">Tap to take or upload a photo</div>
-          </div>
-          <input type="file" id="vpi-${t.id}" accept="image/*" multiple style="display:none" onchange="window._vsUploadPhotos('${t.id}',this.files)">
+        <div class="vs-fb-upload-row">
+          <div class="vs-fb-upload-btn" onclick="document.getElementById('vpi-${t.id}').click()">&#x1F4F7; Photo<input type="file" id="vpi-${t.id}" accept="image/*" multiple style="display:none" onchange="window._vsUploadPhotos('${t.id}',this.files)"></div>
+          <div class="vs-fb-upload-btn" onclick="document.getElementById('vri-${t.id}').click()">&#x1F9FE; Receipt<input type="file" id="vri-${t.id}" accept="image/*" style="display:none" onchange="window._vsUploadPhotos('${t.id}',this.files)"></div>
         </div>
         <div id="vps-${t.id}" style="font-size:.72rem;color:var(--text3);margin:4px 0"></div>
         <div class="vs-notes">${notes}
@@ -6053,17 +6373,104 @@ function rpImportFromReview(rv) {
     else window._vsMarkDone(id);
   };
 
-  window._vsMarkDone=async function(id){
+  // Feedback modal state
+  let _vsFbFiles=[];let _vsFbReceiptFiles=[];
+
+  window._vsMarkDone=function(id){
+    const t=vTasks.find(x=>x.id===id);if(!t)return;
+    _vsFbFiles=[];_vsFbReceiptFiles=[];
+    const isHvac=(t.category||'').toLowerCase()==='hvac';
+    const overlay=document.createElement('div');
+    overlay.className='vs-fb-overlay';
+    overlay.id='vsfb-overlay';
+    overlay.innerHTML=`<div class="vs-fb-modal">
+      <div class="vs-fb-title">Mark as Done</div>
+      <div class="vs-fb-sub">Quick notes on what you did — helps Chip keep records straight.</div>
+      <div style="font-size:.82rem;font-weight:500;color:var(--text);margin-bottom:14px;padding:10px 12px;background:var(--surface2);border-radius:8px;border-left:3px solid var(--green)">${t.problem}</div>
+      <textarea class="vs-fb-textarea" id="vsfb-text" placeholder="What did you do? Any notes for Chip..." oninput="window._vsFbCount()"></textarea>
+      <div class="vs-fb-charcount" id="vsfb-cc">0 / 10 minimum</div>
+      ${isHvac?'<div class="vs-fb-photo-req"><span>&#x1F4F7;</span> HVAC tasks require a photo of the completed work</div>':''}
+      <div class="vs-fb-upload-row">
+        <div class="vs-fb-upload-btn" onclick="document.getElementById('vsfb-photo').click()">&#x1F4F7; Photo<input type="file" id="vsfb-photo" accept="image/*" multiple style="display:none" onchange="window._vsFbPreview('photo',this.files)"></div>
+        <div class="vs-fb-upload-btn" onclick="document.getElementById('vsfb-receipt').click()">&#x1F9FE; Receipt<input type="file" id="vsfb-receipt" accept="image/*" style="display:none" onchange="window._vsFbPreview('receipt',this.files)"></div>
+      </div>
+      <div id="vsfb-previews" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"></div>
+      <div class="vs-fb-actions">
+        <button style="padding:10px 22px;border-radius:8px;font-family:inherit;font-size:.82rem;font-weight:600;cursor:pointer;background:transparent;color:var(--text2);border:1px solid var(--border)" onclick="document.getElementById('vsfb-overlay').remove()">Cancel</button>
+        <button id="vsfb-submit" style="padding:10px 22px;border-radius:8px;font-family:inherit;font-size:.82rem;font-weight:600;cursor:pointer;background:var(--green);color:#fff;border:1px solid var(--green);opacity:.4" onclick="window._vsFbSubmit('${id}',${isHvac})">Submit Done</button>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click',function(e){if(e.target===overlay)overlay.remove();});
+    setTimeout(()=>document.getElementById('vsfb-text')?.focus(),100);
+  };
+
+  window._vsFbCount=function(){
+    const ta=document.getElementById('vsfb-text');
+    const cc=document.getElementById('vsfb-cc');
+    const btn=document.getElementById('vsfb-submit');
+    if(!ta||!cc)return;
+    const len=ta.value.trim().length;
+    cc.textContent=len+' / 10 minimum';
+    cc.style.color=len>=10?'var(--green)':'var(--text3)';
+    if(btn)btn.style.opacity=len>=10?'1':'.4';
+  };
+
+  window._vsFbPreview=function(type,files){
+    if(!files||!files.length)return;
+    if(type==='photo')_vsFbFiles.push(...Array.from(files));
+    else _vsFbReceiptFiles.push(...Array.from(files));
+    const prev=document.getElementById('vsfb-previews');if(!prev)return;
+    let h='';
+    _vsFbFiles.forEach((f,i)=>{h+=`<div style="position:relative"><img src="${URL.createObjectURL(f)}" style="width:54px;height:54px;object-fit:cover;border-radius:6px;border:1px solid var(--border)"><div style="font-size:.55rem;color:var(--text3);text-align:center">Photo</div></div>`;});
+    _vsFbReceiptFiles.forEach((f,i)=>{h+=`<div style="position:relative"><img src="${URL.createObjectURL(f)}" style="width:54px;height:54px;object-fit:cover;border-radius:6px;border:1px solid var(--gold)"><div style="font-size:.55rem;color:var(--gold);text-align:center">Receipt</div></div>`;});
+    prev.innerHTML=h;
+  };
+
+  window._vsFbSubmit=async function(id,isHvac){
+    const ta=document.getElementById('vsfb-text');
+    const txt=(ta?ta.value:'').trim();
+    if(txt.length<10){
+      if(ta){ta.style.borderColor='var(--red)';ta.style.animation='none';ta.offsetHeight;ta.style.animation='vsShake .4s ease';}
+      return;
+    }
+    if(isHvac&&_vsFbFiles.length===0){alert('HVAC tasks require at least one photo.');return;}
+    // Remove modal
+    document.getElementById('vsfb-overlay')?.remove();
+    // Upload photos first if any
+    const t=vTasks.find(x=>x.id===id);
+    if(t&&(_vsFbFiles.length||_vsFbReceiptFiles.length)){
+      const allFiles=[..._vsFbFiles,..._vsFbReceiptFiles];
+      for(const file of allFiles){
+        try{
+          const compressed=await vsCompressImage(file);
+          const fname=`vendor-${id}-${Date.now()}-${Math.random().toString(36).slice(2,6)}.jpg`;
+          const r=await fetch(VAPI+'?token='+encodeURIComponent(token)+'&taskId='+encodeURIComponent(id)+'&filename='+encodeURIComponent(fname),{
+            method:'POST',headers:{'Content-Type':'image/jpeg'},body:compressed
+          });
+          if(r.ok){const data=await r.json();if(!t.vendorPhotos)t.vendorPhotos=[];t.vendorPhotos.push({url:data.url,uploadedAt:new Date().toISOString(),uploadedBy:vVendor});}
+        }catch(e){}
+      }
+    }
+    // Mark done via API
     try{
       const r=await fetch(VAPI,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,action:'markDone',taskId:id})});
       if(!r.ok){alert('Failed to submit. Please try again.');return;}
       const data=await r.json();
-      const t=vTasks.find(x=>x.id===id);
-      if(t){t.vendorDone=data.vendorDone;if(!t.notes)t.notes=[];t.notes.push({text:'Marked as done by vendor.',type:'vendor',time:data.vendorDone});}
-      vsRender();
-      // Check if this completes a payment group → prompt for Venmo/Cash App
-      checkPaymentPrompt(id);
+      if(t){t.vendorDone=data.vendorDone;if(!t.notes)t.notes=[];t.notes.push({text:txt,type:'vendor',time:data.vendorDone,by:vVendor});}
+      // Completion animation
+      const card=document.getElementById('vsc-'+id);
+      if(card){
+        const check=card.querySelector('.vs-card-check');
+        if(check){check.innerHTML='&#x2713;';check.classList.add('vs-check-pop');}
+        card.classList.add('vs-done');
+        setTimeout(()=>{card.classList.remove('vs-expanded');card.classList.add('vs-collapsing');},600);
+        setTimeout(()=>{vsRender();checkPaymentPrompt(id);},1100);
+      } else {
+        vsRender();checkPaymentPrompt(id);
+      }
     }catch(e){alert('Network error. Please try again.');}
+    _vsFbFiles=[];_vsFbReceiptFiles=[];
   };
 
   window._vsUndoDone=async function(id){
@@ -6121,6 +6528,20 @@ function rpImportFromReview(rv) {
     setTimeout(()=>{const el=document.getElementById('vsc-'+id);if(el)el.classList.add('vs-expanded');},10);
   };
 
+  // Copy-to-clipboard helper for Cash App guided flow
+  window._vsCopyText=function(text,btnId){
+    navigator.clipboard.writeText(text).then(()=>{
+      const btn=document.getElementById(btnId);if(!btn)return;
+      btn.textContent='Copied!';btn.classList.add('copied');
+      setTimeout(()=>{btn.textContent='Copy';btn.classList.remove('copied');},2000);
+    }).catch(()=>{
+      const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
+      const btn=document.getElementById(btnId);if(!btn)return;
+      btn.textContent='Copied!';btn.classList.add('copied');
+      setTimeout(()=>{btn.textContent='Copy';btn.classList.remove('copied');},2000);
+    });
+  };
+
   // ── Payment Prompt Logic ────────────────────────────────
   // Payment groups: properties that share a bank account get grouped
   // PRC (all 6), UMC (all 6), Hillside (both) = shared accounts
@@ -6171,23 +6592,20 @@ function rpImportFromReview(rv) {
     const noteText=`Maintenance ${dateStr} - ${group.label}`;
 
     // Venmo deep link (request/charge)
-    const venmoUrl=`venmo://paycharge?txn=charge&recipients=${encodeURIComponent(VENMO_USER)}&note=${encodeURIComponent(noteText)}`;
-    // Cash App link
-    const cashappUrl=`https://cash.app/$${CASHAPP_TAG}`;
-
+    const venmoUrl=`https://venmo.com/${VENMO_USER}?txn=charge&note=${encodeURIComponent(noteText)}`;
     // Record payment request to API so admin side knows
-    function recordPayment(method){
-      fetch(VAPI,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-        token,action:'paymentRequested',method,groupProps:group.props
-      })}).catch(()=>{});
-      // Also update local task data
-      groupTasks.forEach(t=>t.vendorPaymentRequested={method,time:new Date().toISOString()});
+    function recordPayment(method,amount){
+      const body={token,action:'paymentRequested',method,groupProps:group.props};
+      if(amount)body.amount=amount;
+      fetch(VAPI,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).catch(()=>{});
+      groupTasks.forEach(t=>{t.vendorPaymentRequested={method,time:new Date().toISOString()};if(amount)t.vendorPaymentRequested.amount=amount;});
     }
 
     // Build and show prompt overlay
+    const gid=group.id;
     const overlay=document.createElement('div');
     overlay.className='vp-overlay';
-    overlay.id='vp-overlay-'+group.id;
+    overlay.id='vp-overlay-'+gid;
     overlay.innerHTML=`<div class="vp-prompt">
       <div class="vp-prompt-hdr">
         <div class="vp-prompt-check">&#x2713;</div>
@@ -6197,24 +6615,52 @@ function rpImportFromReview(rv) {
       <div class="vp-prompt-body">
         <div class="vp-prompt-note">Send a payment request for your work at <strong>${propNames.join(', ')}</strong></div>
         <div class="vp-pay-btns">
-          <a href="${venmoUrl}" class="vp-pay-btn venmo" id="vp-venmo-${group.id}" target="_blank">
+          <a href="${venmoUrl}" class="vp-pay-btn venmo" id="vp-venmo-${gid}" target="_blank">
             <span style="font-size:1.1rem">💸</span> Request via Venmo
           </a>
-          <a href="${cashappUrl}" class="vp-pay-btn cashapp" id="vp-cash-${group.id}" target="_blank">
+          <button class="vp-pay-btn cashapp" id="vp-cash-${gid}" onclick="document.getElementById('vp-ca-flow-${gid}').style.display='block';this.style.display='none'">
             <span style="font-size:1.1rem">💵</span> Request via Cash App
+          </button>
+        </div>
+        <div id="vp-ca-flow-${gid}" style="display:none">
+          <div style="margin-bottom:14px">
+            <label style="font-size:.76rem;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">How much are you requesting?</label>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="font-size:1rem;font-weight:600;color:var(--text)">$</span>
+              <input type="number" id="ca-amount-${gid}" placeholder="0.00" min="0" step="0.01" style="flex:1;max-width:140px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);font-family:inherit;font-size:.95rem;font-weight:600;background:var(--white);color:var(--text)" oninput="document.getElementById('ca-amt-d-${gid}').textContent=this.value?'$'+parseFloat(this.value).toFixed(2):'your amount'">
+            </div>
+            <div style="font-size:.64rem;color:var(--text3);margin-top:3px">This amount will be saved to your invoice for Chip's records.</div>
+          </div>
+          <div class="vp-cashapp-steps">
+            <div class="step"><div class="num">1</div><div>Open <strong>Cash App</strong> on your phone</div></div>
+            <div class="step"><div class="num">2</div><div>Tap <strong>Request</strong>, then enter <strong>\$${CASHAPP_TAG}</strong>
+              <button class="vp-copy-btn" id="ca-cp-tag-${gid}" onclick="window._vsCopyText('\$${CASHAPP_TAG}','ca-cp-tag-${gid}')">Copy</button>
+            </div></div>
+            <div class="step"><div class="num">3</div><div>Add note: <strong>${noteText}</strong>
+              <button class="vp-copy-btn" id="ca-cp-note-${gid}" onclick="window._vsCopyText('${noteText}','ca-cp-note-${gid}')">Copy</button>
+            </div></div>
+            <div class="step"><div class="num">4</div><div>Enter <strong><span id="ca-amt-d-${gid}">your amount</span></strong> and tap <strong>Request</strong></div></div>
+          </div>
+          <a href="https://cash.app" class="vp-pay-btn cashapp" target="_blank" id="vp-ca-open-${gid}" style="text-decoration:none;display:flex;align-items:center;justify-content:center">
+            💵 Open Cash App
           </a>
         </div>
         <div class="vp-pay-ids">
           <strong>Venmo:</strong> @${VENMO_USER}<br>
-          <strong>Cash App:</strong> $${CASHAPP_TAG}
+          <strong>Cash App:</strong> \$${CASHAPP_TAG}
         </div>
         <button class="vp-prompt-skip" onclick="this.closest('.vp-overlay').remove()">I'll send a request later</button>
       </div>
     </div>`;
     document.body.appendChild(overlay);
-    // Track which payment method they chose
-    document.getElementById('vp-venmo-'+group.id).addEventListener('click',()=>recordPayment('venmo'));
-    document.getElementById('vp-cash-'+group.id).addEventListener('click',()=>recordPayment('cashapp'));
+    // Track Venmo click
+    document.getElementById('vp-venmo-'+gid).addEventListener('click',()=>recordPayment('venmo'));
+    // Track Cash App open (with amount capture)
+    document.getElementById('vp-ca-open-'+gid)?.addEventListener('click',function(){
+      const inp=document.getElementById('ca-amount-'+gid);
+      const amt=inp?parseFloat(inp.value):0;
+      recordPayment('cashapp',amt>0?amt:undefined);
+    });
     // Close on backdrop click
     overlay.addEventListener('click',function(e){if(e.target===overlay)overlay.remove();});
   }
