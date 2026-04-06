@@ -889,3 +889,12 @@ textarea{resize:vertical;min-height:76px}
 .vp-invoice-actions button{flex:1;padding:9px 14px;border-radius:8px;font-family:inherit;font-size:.76rem;font-weight:600;cursor:pointer;transition:all .15s}
 .vp-invoice-actions .save{background:var(--green);color:#fff;border:1px solid var(--green)}
 .vp-invoice-actions .share{background:var(--white);color:var(--text);border:1px solid var(--border)}
+
+/* Vendor card invoice section */
+.vc-inv-toggle{font-size:.7rem;color:var(--gold);cursor:pointer;margin-top:6px;font-weight:600;letter-spacing:.3px}
+.vc-inv-toggle:hover{text-decoration:underline}
+.vc-inv-list{margin-top:6px;border-top:1px solid var(--border);padding-top:6px}
+.vc-inv-row{display:flex;align-items:center;gap:10px;padding:4px 0;font-size:.72rem}
+.vc-inv-id{color:var(--green);font-weight:600;font-size:.68rem}
+.vc-inv-date{color:var(--text2)}
+.vc-inv-total{font-weight:600;color:var(--text);margin-left:auto}

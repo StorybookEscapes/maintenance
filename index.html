@@ -520,6 +520,13 @@
       <div class="fgr full"><label>Category</label>
         <select id="v-cat"><option value="cleaning">Cleaning</option><option value="handyman">Handyman</option><option value="plumbing">Plumbing</option><option value="hvac">HVAC / Electrical</option><option value="pest">Pest Control</option><option value="landscaping">Landscaping</option><option value="hot_tub">Hot Tub</option><option value="pool">Pool</option><option value="arcade">Arcade / Billiards</option><option value="septic">Septic</option><option value="water">Water Filtration</option><option value="bed_bugs">Bed Bugs</option><option value="other">Other</option></select>
       </div>
+      <div class="fgr full"><label>Payment Methods</label>
+        <div style="display:flex;gap:16px;margin-top:4px">
+          <label style="display:flex;align-items:center;gap:6px;font-size:.82rem;font-weight:400;cursor:pointer"><input type="checkbox" id="v-pay-venmo"> Venmo</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:.82rem;font-weight:400;cursor:pointer"><input type="checkbox" id="v-pay-cashapp"> Cash App</label>
+        </div>
+        <div style="font-size:.64rem;color:var(--text3);margin-top:4px">Controls which payment options appear on the vendor's day sheet.</div>
+      </div>
       <div class="fgr full"><label>Notes</label><textarea id="v-notes" rows="3" placeholder="Notes about this vendor..."></textarea></div>
     </div>
     <div style="display:flex;gap:9px;margin-top:20px;justify-content:space-between;align-items:center">

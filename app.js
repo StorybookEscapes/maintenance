@@ -2578,7 +2578,7 @@ function generateInvoice(vendorName,method,dateStr,taskIds){
         ${totalRows}
       </div>
       <div class="vp-invoice-actions">
-        <button class="save" onclick="showToast('Invoice saved (PDF generation coming soon)')">Save as PDF</button>
+        <button class="save" onclick="downloadInvoiceHtml('${invNum}')">Download Invoice</button>
         <button class="share" onclick="showToast('Share link copied (coming soon)')">Share</button>
       </div>
     </div>
@@ -2586,6 +2586,44 @@ function generateInvoice(vendorName,method,dateStr,taskIds){
   </div>`;
   document.body.appendChild(overlay);
   overlay.addEventListener('click',function(e){if(e.target===overlay)overlay.remove();});
+
+  // ── Store invoice on tasks and vendor record ──
+  const invoiceRecord={id:invNum,vendor:vendorName,method,date:dateStr,total,receiptTotal,laborAmt,taskIds,createdAt:new Date().toISOString()};
+  // Attach to each task
+  invTasks.forEach(t=>{t.invoice=invoiceRecord;});
+  await saveTasks();
+  // Attach to vendor record
+  const vMatch=vendors.find(v=>v.name.toLowerCase()===vendorName.toLowerCase());
+  if(vMatch){
+    if(!vMatch.invoices)vMatch.invoices=[];
+    vMatch.invoices.push(invoiceRecord);
+    await saveVendors();
+  }
+}
+
+function downloadInvoiceHtml(invNum){
+  // Find the invoice overlay currently showing and grab its HTML
+  const invoiceEl=document.querySelector('.vp-invoice');
+  if(!invoiceEl){showToast('No invoice to download.','err');return;}
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Invoice ${invNum}</title>
+<style>body{font-family:'DM Sans',Helvetica,Arial,sans-serif;margin:40px auto;max-width:560px;color:#1a2e22}
+.vp-invoice{border:1px solid #dce5de;border-radius:10px;overflow:hidden}
+.vp-invoice-hdr{background:linear-gradient(135deg,#0d3528,#1a5240);padding:18px 20px;color:#fff}
+.vp-invoice-body{padding:18px 20px}
+.vp-invoice-meta{display:flex;gap:14px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #dce5de}
+.vp-invoice-meta-item{font-size:.78rem;color:#4a6355;line-height:1.4}
+.vp-invoice-meta-item strong{color:#1a2e22;display:block;font-size:.68rem;text-transform:uppercase;letter-spacing:.5px;margin-bottom:1px}
+.vp-invoice-row{display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;font-size:.82rem}
+.vp-invoice-row.total{font-weight:700;border-top:2px solid #0d3528;margin-top:8px;padding-top:10px}
+.vp-invoice-label small{display:block;font-size:.7rem;color:#8aaa95;margin-top:2px}
+.vp-invoice-actions{display:none}
+@media print{body{margin:20px}}
+</style></head><body>${invoiceEl.outerHTML}</body></html>`;
+  const blob=new Blob([html],{type:'text/html'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=`invoice-${invNum}.html`;
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+  showToast('Invoice downloaded.');
 }
 async function markResolvedByGuest(){
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
@@ -2818,6 +2856,7 @@ function renderVendors(){
           <button class="btn" onclick="document.getElementById('ef-${v.id}').style.display='none'">Cancel</button>
         </div>
         ${v.note?`<div class="vc-note">${v.note}</div>`:''}
+        ${v.invoices&&v.invoices.length?`<div class="vc-inv-toggle" onclick="toggleVendorInvoices('${v.id}')">Invoices (${v.invoices.length})</div><div class="vc-inv-list" id="vinv-${v.id}" style="display:none">${v.invoices.slice().reverse().map(inv=>{const d=inv.createdAt?new Date(inv.createdAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'';return`<div class="vc-inv-row"><span class="vc-inv-id">${inv.id}</span><span class="vc-inv-date">${d}</span><span class="vc-inv-total">${inv.total>0?'$'+inv.total.toFixed(2):'—'}</span><button class="btn" style="padding:2px 8px;font-size:.68rem" onclick="regenInvoice('${inv.vendor.replace(/'/g,"\\'")}','${inv.method}','${inv.date}',${JSON.stringify(inv.taskIds).replace(/"/g,'&quot;')})">View</button></div>`;}).join('')}</div>`:''}
       </div><div class="vc-actions">
         <a href="sms:${v.phone.replace(/\D/g,'')}" class="btn">Text</a>
         ${v.email?`<a href="mailto:${v.email}" class="btn">Email</a>`:''}
@@ -2828,6 +2867,13 @@ function renderVendors(){
   });
   document.getElementById('vendor-dir').innerHTML=h||'<div class="empty">No vendors yet.</div>';
 }
+function toggleVendorInvoices(vid){
+  const el=document.getElementById('vinv-'+vid);
+  if(el)el.style.display=el.style.display==='none'?'block':'none';
+}
+function regenInvoice(vendor,method,date,taskIds){
+  generateInvoice(vendor,method,date,taskIds);
+}
 function showEmailForm(id){document.getElementById('ef-'+id).style.display='flex';}
 async function saveEmail(id){
   const inp=document.getElementById('ei-'+id);const email=inp.value.trim();if(!email)return;
@@ -2837,6 +2883,7 @@ function openAddVendor(){
   editVendorId=null;document.getElementById('vendor-modal-title').textContent='Add Vendor';
   ['v-name','v-role','v-phone','v-email','v-notes'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('v-cat').value='handyman';document.getElementById('v-del-btn').style.display='none';
+  document.getElementById('v-pay-venmo').checked=true;document.getElementById('v-pay-cashapp').checked=true;
   document.getElementById('vendor-modal').classList.add('open');
 }
 function openEditVendor(id){
@@ -2845,12 +2892,17 @@ function openEditVendor(id){
   document.getElementById('v-name').value=v.name;document.getElementById('v-role').value=v.role;
   document.getElementById('v-phone').value=v.phone;document.getElementById('v-email').value=v.email||'';
   document.getElementById('v-notes').value=v.note||'';document.getElementById('v-cat').value=v.categories[0]||'other';
+  // Payment methods — default both on for legacy vendors without the field
+  const pm=v.paymentMethods||['venmo','cashapp'];
+  document.getElementById('v-pay-venmo').checked=pm.includes('venmo');
+  document.getElementById('v-pay-cashapp').checked=pm.includes('cashapp');
   document.getElementById('v-del-btn').style.display='';document.getElementById('vendor-modal').classList.add('open');
 }
 async function saveVendor(){
   const name=document.getElementById('v-name').value.trim();if(!name){showToast('Name required.','err');return;}
-  const v={id:editVendorId||'v'+Date.now(),name,role:document.getElementById('v-role').value.trim(),phone:document.getElementById('v-phone').value.trim(),email:document.getElementById('v-email').value.trim(),categories:[document.getElementById('v-cat').value],note:document.getElementById('v-notes').value.trim()};
-  if(editVendorId){const i=vendors.findIndex(x=>x.id===editVendorId);if(i>=0)vendors[i]=v;}else vendors.push(v);
+  const pm=[];if(document.getElementById('v-pay-venmo').checked)pm.push('venmo');if(document.getElementById('v-pay-cashapp').checked)pm.push('cashapp');
+  const v={id:editVendorId||'v'+Date.now(),name,role:document.getElementById('v-role').value.trim(),phone:document.getElementById('v-phone').value.trim(),email:document.getElementById('v-email').value.trim(),categories:[document.getElementById('v-cat').value],note:document.getElementById('v-notes').value.trim(),paymentMethods:pm};
+  if(editVendorId){const i=vendors.findIndex(x=>x.id===editVendorId);if(i>=0){v.invoices=vendors[i].invoices;vendors[i]=v;}}else vendors.push(v);
   await saveVendors();closeModal('vendor-modal');renderVendors();showToast(editVendorId?'Vendor updated.':'Vendor added.');
 }
 async function deleteVendor(){
@@ -4510,6 +4562,7 @@ function rpImportFromReview(rv) {
   let vTasks=[];
   let vVendor='';
   let vDate='';
+  let vPayMethods=['venmo','cashapp']; // vendor's allowed payment methods
   let vGuestAlerts={}; // {propId: [{type:'checkin'|'checkout', guest, time}]}
   const MAX_PHOTOS_PER_TASK=10;
 
@@ -4542,6 +4595,7 @@ function rpImportFromReview(rv) {
       vVendor=data.vendor||'';
       vDate=data.date||'';
       vGuestAlerts=data.guestAlerts||{};
+      vPayMethods=data.paymentMethods||['venmo','cashapp'];
       // Apply logo from API (KV-stored custom logo) if available
       if(data.logo){try{document.getElementById('vs-logo').src=data.logo;}catch(e){}}
       document.getElementById('vs-subtitle').textContent=
@@ -5070,14 +5124,15 @@ function rpImportFromReview(rv) {
       <div class="vp-prompt-body">
         <div class="vp-prompt-note">Send a payment request for your work at <strong>${propNames.join(', ')}</strong></div>
         <div class="vp-pay-btns">
-          <a href="${venmoUrl}" class="vp-pay-btn venmo" id="vp-venmo-${gid}" target="_blank">
+          ${vPayMethods.includes('venmo')?`<a href="${venmoUrl}" class="vp-pay-btn venmo" id="vp-venmo-${gid}" target="_blank">
             <span style="font-size:1.1rem">💸</span> Request via Venmo
-          </a>
-          <button class="vp-pay-btn cashapp" id="vp-cash-${gid}" onclick="document.getElementById('vp-ca-flow-${gid}').style.display='block';this.style.display='none'">
+          </a>`:''}
+          ${vPayMethods.includes('cashapp')?`<button class="vp-pay-btn cashapp" id="vp-cash-${gid}" onclick="document.getElementById('vp-ca-flow-${gid}').style.display='block';this.style.display='none'">
             <span style="font-size:1.1rem">💵</span> Request via Cash App
-          </button>
+          </button>`:''}
+          ${vPayMethods.length===0?'<div style="font-size:.82rem;color:var(--text2);padding:8px 0">Payment method not configured — contact Chip to arrange payment.</div>':''}
         </div>
-        <div id="vp-ca-flow-${gid}" style="display:none">
+        ${vPayMethods.includes('cashapp')?`<div id="vp-ca-flow-${gid}" style="display:none">
           <div style="margin-bottom:14px">
             <label style="font-size:.76rem;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">How much are you requesting?</label>
             <div style="display:flex;align-items:center;gap:6px">
@@ -5099,10 +5154,10 @@ function rpImportFromReview(rv) {
           <a href="https://cash.app" class="vp-pay-btn cashapp" target="_blank" id="vp-ca-open-${gid}" style="text-decoration:none;display:flex;align-items:center;justify-content:center">
             💵 Open Cash App
           </a>
-        </div>
+        </div>`:''}
         <div class="vp-pay-ids">
-          <strong>Venmo:</strong> @${VENMO_USER}<br>
-          <strong>Cash App:</strong> \$${CASHAPP_TAG}
+          ${vPayMethods.includes('venmo')?`<strong>Venmo:</strong> @${VENMO_USER}<br>`:''}
+          ${vPayMethods.includes('cashapp')?`<strong>Cash App:</strong> \\$${CASHAPP_TAG}`:''}
         </div>
         <button class="vp-prompt-skip" onclick="this.closest('.vp-overlay').remove()">I'll send a request later</button>
       </div>
