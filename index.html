@@ -637,6 +637,11 @@ textarea{resize:vertical;min-height:76px}
 .vs-done-btn{padding:10px 20px;border-radius:8px;font-family:inherit;font-size:.85rem;font-weight:600;cursor:pointer;border:none;transition:all .15s}
 .vs-done-btn.vs-btn-undo{background:transparent;color:var(--text2);border:1px solid var(--border)}
 .vs-done-status{font-size:.78rem;color:var(--green);font-weight:500}
+.vs-purchase{background:#fff3e0;border:1.5px solid #ff9800;border-radius:8px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:flex-start;gap:10px}
+.vs-purchase-icon{font-size:1.3rem;flex-shrink:0;line-height:1}
+.vs-purchase-content{flex:1;min-width:0}
+.vs-purchase-label{font-size:.68rem;text-transform:uppercase;letter-spacing:1px;font-weight:700;color:#e65100;margin-bottom:2px}
+.vs-purchase-text{font-size:.88rem;font-weight:600;color:#bf360c;line-height:1.35}
 .vs-card.vs-done .vs-card-prob{text-decoration:line-through;color:var(--text2)}
 .vs-card.vs-expanded .vs-chevron{transform:rotate(180deg)}
 .vs-nb-header{font-family:'Cormorant Garamond',serif;font-size:1.05rem;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;margin:20px 0 6px;padding-bottom:4px;border-bottom:1px solid var(--border)}
@@ -1135,6 +1140,17 @@ textarea{resize:vertical;min-height:76px}
         </div>
       </div>
     </div>
+    <div class="fgr full" id="d-purchase-wrap" style="margin-bottom:14px">
+      <label style="display:flex;align-items:center;gap:6px">
+        <span>Purchase Required</span>
+        <span style="font-size:.64rem;color:var(--text3);font-weight:400">— vendor will see this prominently</span>
+      </label>
+      <div style="display:flex;gap:6px;align-items:flex-start">
+        <input type="text" id="d-purchase" placeholder="e.g. 4x12 vent from Home Depot, wood glue, door knob..." style="flex:1" onkeydown="if(event.key==='Enter')savePurchaseNote()" oninput="clearTimeout(this._debounce);this._debounce=setTimeout(()=>savePurchaseNote(),1200)">
+        <button class="btn btn-g" onclick="savePurchaseNote()" style="padding:6px 12px;font-size:.73rem;white-space:nowrap">Save</button>
+      </div>
+      <div id="d-purchase-saved" style="font-size:.64rem;color:var(--green);margin-top:3px;display:none">Saved — vendor will be notified to purchase this.</div>
+    </div>
     <div class="stitle">Notes</div>
     <div class="notes" id="d-notes"></div>
     <div class="note-row">
@@ -1614,6 +1630,7 @@ function taskCard(t){
         <span class="badge b-${t.status}">${t.status.replace('_',' ')}</span>
         ${t.date?`<span class="tmi">${t.date}</span>${overdueBadge(t)}`:(t.status!=='scheduled'?'<span class="tmi" style="color:var(--text3)">Not scheduled</span>':'')}
         ${t.vendor?`<span class="tmi">${t.vendor}</span>`:''}${t.vendorDone?'<span class="vd-badge">Vendor Done</span>':''}
+        ${t.purchaseNote?'<span style="font-size:.62rem;color:#e65100;font-weight:600;background:#fff3e0;padding:1px 6px;border-radius:10px;border:1px solid #ffcc80">&#x1F6D2; Purchase</span>':''}
         ${t.guest?`<span class="tmi">Reported by ${t.guest}</span>`:''}
       </div>
     </div></div>
@@ -2390,6 +2407,9 @@ async function openDetail(id){
     ${t.category?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${t.category.replace('_',' ')}</span>`:''}
     ${t.guest?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">Reported by ${t.guest}</span>`:''}
     ${t.created?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${fmtReported(t.created)}</span>`:''}`;
+  document.getElementById('d-purchase').value=t.purchaseNote||'';
+  const pSaved=document.getElementById('d-purchase-saved');
+  if(pSaved)pSaved.style.display=t.purchaseNote?'':'none';
   renderUrgentToggle(t);
   showTaskPhoto(t);
   showVendorPhotos(t);
@@ -2440,6 +2460,18 @@ async function taskSaveTitle() {
   await saveTasks();
   renderAll();
   showToast('Description updated.');
+}
+async function savePurchaseNote(){
+  if(!detailId)return;
+  const t=tasks.find(x=>x.id===detailId);if(!t)return;
+  const val=(document.getElementById('d-purchase').value||'').trim();
+  if(t.purchaseNote===val)return;
+  t.purchaseNote=val;
+  await saveTasks();
+  const pSaved=document.getElementById('d-purchase-saved');
+  if(pSaved){pSaved.style.display=val?'':'none';}
+  renderAll();
+  showToast(val?'Purchase note saved.':'Purchase note cleared.');
 }
 async function confirmPropertyChange(newPropId){
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
@@ -2754,7 +2786,7 @@ async function renderDetailVendors(t,p){
       if(nA!==nB)return nA.localeCompare(nB);
       return(a.property||'').localeCompare(b.property||'');
     });
-    const taskSummary=sorted.map(t=>{const p=getProp(t.property);return`<li>${p?p.name.split(' - ').pop():t.property}: ${t.problem}${t.urgent?' <span style="color:var(--red);font-weight:700">URGENT</span>':''}</li>`;}).join('');
+    const taskSummary=sorted.map(t=>{const p=getProp(t.property);return`<li>${p?p.name.split(' - ').pop():t.property}: ${t.problem}${t.urgent?' <span style="color:var(--red);font-weight:700">URGENT</span>':''}${t.purchaseNote?' <span style="color:#e65100;font-weight:600">&#x1F6D2; Buy: '+t.purchaseNote+'</span>':''}</li>`;}).join('');
     return`<div class="combined-sms-banner">
       <div class="combined-sms-hdr"><span class="combined-sms-title">Combined Message for ${v.name}</span><span class="combined-sms-count">${taskList.length} jobs</span></div>
       <ul class="combined-sms-tasks">${taskSummary}</ul>
@@ -3377,7 +3409,7 @@ function combinedVendorCard(v,taskList,sheetUrl){
   });
   const sms=buildMultiSMS(sorted,v,sheetUrl||'');const tel=v.phone.replace(/\D/g,'');
   const smsId='sms-combined-'+v.id;
-  const taskSummary=sorted.map(t=>{const p=getProp(t.property);return`<li>${p?p.name.split(' - ').pop():t.property}: ${t.problem}${t.urgent?' <span style="color:var(--red);font-weight:700">URGENT</span>':''}</li>`;}).join('');
+  const taskSummary=sorted.map(t=>{const p=getProp(t.property);return`<li>${p?p.name.split(' - ').pop():t.property}: ${t.problem}${t.urgent?' <span style="color:var(--red);font-weight:700">URGENT</span>':''}${t.purchaseNote?' <span style="color:#e65100;font-weight:600">&#x1F6D2; Buy: '+t.purchaseNote+'</span>':''}</li>`;}).join('');
   return`<div class="combined-sms-banner">
     <div class="combined-sms-hdr"><span class="combined-sms-title">Combined Message for ${v.name}</span><span class="combined-sms-count">${taskList.length} jobs</span></div>
     <ul class="combined-sms-tasks">${taskSummary}</ul>
@@ -5572,12 +5604,20 @@ function rpImportFromReview(rv) {
           <div class="vs-card-prob">${t.problem}</div>
           <div class="vs-card-badges">
             ${t.urgent?'<span class="vs-urgent">Urgent</span>':''}
+            ${t.purchaseNote?'<span style="font-size:.7rem;color:#e65100;font-weight:600;background:#fff3e0;padding:1px 7px;border-radius:10px;border:1px solid #ffcc80">&#x1F6D2; Purchase needed</span>':''}
             ${done?'<span style="font-size:.7rem;color:var(--green);font-weight:500">Submitted &#x2713;</span>':''}
           </div>
         </div>
         <span class="vs-chevron" style="font-size:.8rem;color:var(--text3);transition:transform .3s ease;display:inline-block">&#x25BE;</span>
       </div>
       <div class="vs-card-detail">
+        ${t.purchaseNote?`<div class="vs-purchase">
+          <div class="vs-purchase-icon">&#x1F6D2;</div>
+          <div class="vs-purchase-content">
+            <div class="vs-purchase-label">Purchase before arriving</div>
+            <div class="vs-purchase-text">${t.purchaseNote.replace(/</g,'&lt;')}</div>
+          </div>
+        </div>`:''}
         ${photos.length?`<div class="vs-photos">${photos.map(p=>`<div><img src="${p.url}" onclick="window.open('${p.url}','_blank')" title="Tap to view full size"><div style="font-size:.65rem;color:var(--text3)">${p.label}</div></div>`).join('')}</div>`:''}
         <div class="vs-photo-upload" onclick="document.getElementById('vpi-${t.id}').click()">
           <span style="font-size:1.1rem">&#x1F4F7;</span>
