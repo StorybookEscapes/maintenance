@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Storybook Escapes — Maintenance</title>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -647,6 +647,26 @@ textarea{resize:vertical;min-height:76px}
 .vs-card.vs-done .vs-card-prob{text-decoration:line-through;color:var(--text2)}
 .vs-card.vs-expanded .vs-chevron{transform:rotate(180deg)}
 .vs-nb-header{font-family:'Cormorant Garamond',serif;font-size:1.05rem;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;margin:20px 0 6px;padding-bottom:4px;border-bottom:1px solid var(--border)}
+/* Mobile zoom prevention — force 16px on all vendor inputs */
+#vendor-sheet input,#vendor-sheet textarea,#vendor-sheet select,#vendor-sheet button{font-size:16px}
+/* ── Vendor Report Button — solid green with icon circle ── */
+.vs-report-btn{display:flex;align-items:center;gap:10px;width:100%;padding:13px 15px;border:1.5px solid var(--green-mid,#2e7d52);border-radius:var(--radius);background:linear-gradient(135deg,rgba(46,125,82,.06) 0%,rgba(13,53,40,.04) 100%);cursor:pointer;transition:all .2s;font-family:inherit;-webkit-tap-highlight-color:transparent}
+.vs-report-btn:hover,.vs-report-btn:active{background:linear-gradient(135deg,rgba(46,125,82,.12) 0%,rgba(13,53,40,.08) 100%);border-color:var(--green)}
+.vs-report-btn .vsrb-icon{font-size:.85rem;width:32px;height:32px;background:var(--green);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.vs-report-btn .vsrb-text{text-align:left;flex:1}
+.vs-report-btn .vsrb-main{font-size:.82rem;font-weight:600;color:var(--green)}
+.vs-report-btn .vsrb-hint{font-size:.66rem;color:var(--text3);margin-top:1px}
+/* ── Vendor Report Photo Step ── */
+.vs-photo-step{display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+.vs-photo-step.open{display:block}
+.vs-photo-step-title{font-size:.76rem;font-weight:600;color:var(--text);margin-bottom:8px}
+.vs-photo-step-hint{font-size:.68rem;color:var(--text3);margin-bottom:10px}
+.vs-photo-upload-rpt{display:flex;align-items:center;gap:8px;padding:12px 14px;border:2px dashed var(--border);border-radius:8px;cursor:pointer;transition:all .15s;background:var(--bg);-webkit-tap-highlight-color:transparent}
+.vs-photo-upload-rpt:hover,.vs-photo-upload-rpt:active{border-color:var(--green-mid,#2e7d52);background:var(--green-light,rgba(13,53,40,.06))}
+.vs-rpt-preview{margin-top:8px;display:flex;gap:8px;flex-wrap:wrap}
+.vs-rpt-preview img{width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--border)}
+.vs-photo-skip{display:inline-block;font-size:.72rem;color:var(--text3);cursor:pointer;margin-top:8px;text-decoration:underline;-webkit-tap-highlight-color:transparent}
+.vs-photo-skip:hover{color:var(--text2)}
 .vs-nb-header:first-child{margin-top:0}
 .vs-prop-group .vs-card:first-child{border-radius:var(--radius) var(--radius) 0 0}
 .vs-prop-group .vs-card:last-child{border-radius:0 0 var(--radius) var(--radius);box-shadow:var(--shadow)}
@@ -703,6 +723,7 @@ textarea{resize:vertical;min-height:76px}
 .vr-btn-ack:hover{color:#e0c040;border-color:#e0c040}
 .vr-btn-dismiss{background:transparent;color:#b8a868;border-color:rgba(224,192,64,.3)}
 .vr-btn-dismiss:hover{color:#e0c040;border-color:#e0c040}
+.vr-photo-thumb{width:48px;height:48px;border-radius:6px;object-fit:cover;border:1px solid rgba(224,192,64,.2);margin-top:6px;cursor:pointer}
 /* Vendor photos in admin detail */
 .vp-section{margin-top:10px}
 .vp-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
@@ -1697,6 +1718,7 @@ function renderVR(){
             <span>${r.vendor}</span>
             <span>${ago}</span>
           </div>
+          ${r.photoUrl?(Array.isArray(r.photoUrl)?r.photoUrl:r.photoUrl?[r.photoUrl]:[]).map(u=>`<img class="vr-photo-thumb" src="${u}" onclick="window.open('${u}','_blank')" title="Click to view full size">`).join(''):''}
         </div>
         <div class="vr-item-btns">
           ${actionBtn}
@@ -1725,7 +1747,7 @@ async function vrImport(id){
     photos:[],
     created:new Date().toISOString()
   };
-  if(r.photoUrl)newTask.photos.push(r.photoUrl);
+  if(r.photoUrl){if(Array.isArray(r.photoUrl))newTask.photos.push(...r.photoUrl);else newTask.photos.push(r.photoUrl);}
   tasks.push(newTask);
   r.status='imported';
   await saveTasks();await saveVendorReports();
@@ -5886,15 +5908,15 @@ function rpImportFromReview(rv) {
 
   // Report Issue button — rendered at property level below last task
   function vsReportBtn(propId,propName){
-    return`<div style="padding:8px 0">
-      <button class="vs-report-btn" onclick="window._vsShowReport('${propId}',this)" style="display:flex;align-items:center;gap:8px;width:100%;padding:12px 14px;border:2px dashed var(--border);border-radius:var(--radius);background:var(--surface);cursor:pointer;font-family:inherit;transition:all .2s">
-        <span style="font-size:1.1rem">&#x1F527;</span>
-        <div style="text-align:left">
-          <div style="font-size:.78rem;font-weight:600;color:var(--green)">Report an Issue at ${propName}</div>
-          <div style="font-size:.65rem;color:var(--text3);margin-top:1px">Found something else? Let Chip know!</div>
+    return`<div style="padding:8px 0" id="vsrw-${propId}">
+      <button class="vs-report-btn" id="vsrb-${propId}" onclick="window._vsShowReport('${propId}')">
+        <div class="vsrb-icon">&#x1F527;</div>
+        <div class="vsrb-text">
+          <div class="vsrb-main">Report an Issue at ${propName}</div>
+          <div class="vsrb-hint">Found something else? Let Chip know!</div>
         </div>
       </button>
-      <div id="vsrf-${propId}" style="display:none;margin-top:8px;padding:14px;background:#f8faf8;border:1px solid var(--border);border-radius:var(--radius)">
+      <div id="vsrf-${propId}" style="display:none;margin-top:8px;padding:14px;background:#f8faf8;border:1.5px solid var(--green-mid,#2e7d52);border-radius:var(--radius);box-shadow:var(--shadow)">
         <div style="font-size:.74rem;text-transform:uppercase;letter-spacing:1px;color:var(--green);margin-bottom:10px;font-weight:700">What did you find at ${propName}?</div>
         <div style="display:flex;gap:8px;margin-bottom:12px">
           <div class="vs-type-btn" id="vsrt-${propId}-needs" onclick="window._vsSelType('${propId}','needs_attention')" style="flex:1;padding:10px 8px;border-radius:8px;border:1.5px solid var(--border);background:var(--white);cursor:pointer;text-align:center;transition:all .15s">
@@ -5908,10 +5930,24 @@ function rpImportFromReview(rv) {
             <div style="font-size:.6rem;color:var(--text3);margin-top:2px;line-height:1.3">Just logging it</div>
           </div>
         </div>
-        <textarea id="vsrd-${propId}" placeholder="Describe what you found..." rows="3" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-family:inherit;font-size:.82rem;resize:vertical;margin-bottom:10px"></textarea>
-        <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button onclick="window._vsHideReport('${propId}')" style="padding:7px 16px;border-radius:7px;font-size:.76rem;font-weight:600;cursor:pointer;font-family:inherit;border:1px solid var(--border);background:var(--white);color:var(--text2)">Cancel</button>
-          <button onclick="window._vsSubmitReport('${propId}')" style="padding:7px 16px;border-radius:7px;font-size:.76rem;font-weight:600;cursor:pointer;font-family:inherit;border:1px solid var(--green);background:var(--green);color:#fff">Submit</button>
+        <textarea id="vsrd-${propId}" placeholder="Describe what you found..." rows="3" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-family:inherit;font-size:16px;resize:vertical;margin-bottom:0" oninput="window._vsCheckDesc('${propId}')"></textarea>
+        <div class="vs-photo-step" id="vsrp-${propId}">
+          <div class="vs-photo-step-title">Got a photo?</div>
+          <div class="vs-photo-step-hint">A photo helps Chip see exactly what's going on.</div>
+          <div class="vs-photo-upload-rpt" onclick="document.getElementById('vsrpi-${propId}').click()">
+            <span style="font-size:1.2rem">&#x1F4F7;</span>
+            <div>
+              <div style="font-size:.76rem;font-weight:500;color:var(--green)">Take or Upload a Photo</div>
+              <div style="font-size:.62rem;color:var(--text3)">Up to 10 photos — auto-compressed</div>
+            </div>
+          </div>
+          <input type="file" id="vsrpi-${propId}" accept="image/*" multiple style="display:none" onchange="window._vsRptPreview('${propId}',this.files)">
+          <div class="vs-rpt-preview" id="vsrpv-${propId}"></div>
+          <span class="vs-photo-skip" onclick="document.getElementById('vsrp-${propId}').classList.remove('open')">Skip — no photo needed</span>
+        </div>
+        <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">
+          <button onclick="window._vsHideReport('${propId}')" style="padding:8px 18px;border-radius:7px;font-weight:600;cursor:pointer;font-family:inherit;border:1px solid var(--border);background:var(--white);color:var(--text2)">Cancel</button>
+          <button onclick="window._vsSubmitReport('${propId}')" style="padding:8px 18px;border-radius:7px;font-weight:600;cursor:pointer;font-family:inherit;border:1px solid var(--green);background:var(--green);color:#fff">Submit</button>
         </div>
       </div>
       <div id="vsrc-${propId}" style="display:none;margin-top:8px;padding:12px 14px;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:var(--radius);font-size:.8rem;color:#2e7d32">
@@ -5923,15 +5959,46 @@ function rpImportFromReview(rv) {
   // Track selected report type per property
   const _vsReportType={};
 
-  window._vsShowReport=function(propId,btn){
-    btn.style.display='none';
+  // Track report photo files per property
+  const _vsReportPhotos={};
+
+  window._vsShowReport=function(propId){
+    const btn=document.getElementById('vsrb-'+propId);
+    if(btn)btn.style.display='none';
     document.getElementById('vsrf-'+propId).style.display='block';
+    _vsReportPhotos[propId]=[];
+    // Check if description already has content (for re-opens)
+    window._vsCheckDesc(propId);
   };
   window._vsHideReport=function(propId){
     document.getElementById('vsrf-'+propId).style.display='none';
-    // Show the button again
-    const form=document.getElementById('vsrf-'+propId);
-    if(form&&form.previousElementSibling)form.previousElementSibling.style.display='flex';
+    const btn=document.getElementById('vsrb-'+propId);
+    if(btn)btn.style.display='flex';
+    _vsReportPhotos[propId]=[];
+    const pv=document.getElementById('vsrpv-'+propId);
+    if(pv)pv.innerHTML='';
+    const ps=document.getElementById('vsrp-'+propId);
+    if(ps)ps.classList.remove('open');
+  };
+  window._vsCheckDesc=function(propId){
+    const desc=document.getElementById('vsrd-'+propId);
+    const photoStep=document.getElementById('vsrp-'+propId);
+    if(desc&&photoStep&&desc.value.trim().length>10){
+      photoStep.classList.add('open');
+    }
+  };
+  window._vsRptPreview=function(propId,files){
+    if(!_vsReportPhotos[propId])_vsReportPhotos[propId]=[];
+    const container=document.getElementById('vsrpv-'+propId);
+    const maxPhotos=10;
+    for(const file of files){
+      if(!file.type.startsWith('image/'))continue;
+      if(_vsReportPhotos[propId].length>=maxPhotos){alert('Maximum '+maxPhotos+' photos per report.');break;}
+      _vsReportPhotos[propId].push(file);
+      const img=document.createElement('img');
+      img.src=URL.createObjectURL(file);
+      container.appendChild(img);
+    }
   };
   window._vsSelType=function(propId,type){
     _vsReportType[propId]=type;
@@ -5947,13 +6014,32 @@ function rpImportFromReview(rv) {
     if(!desc.trim()){alert('Please describe what you found.');return;}
     const reportType=_vsReportType[propId];
     if(!reportType){alert('Please select "Needs Attention" or "Fixed While Here".');return;}
+    // Upload report photos first (compress + sequential upload)
+    let photoUrls=[];
+    const photos=_vsReportPhotos[propId]||[];
+    if(photos.length>0){
+      const submitBtn=document.querySelector('#vsrf-'+propId+' button:last-child');
+      const origText=submitBtn?submitBtn.textContent:'Submit';
+      for(let i=0;i<photos.length;i++){
+        if(submitBtn)submitBtn.textContent=`Uploading ${i+1}/${photos.length}...`;
+        try{
+          const compressed=await vsCompressImage(photos[i]);
+          const fname='report-'+propId+'-'+Date.now()+'-'+(i+1)+'.jpg';
+          const ur=await fetch(VAPI+'?token='+encodeURIComponent(token)+'&taskId=report_'+propId+'&filename='+encodeURIComponent(fname),{method:'POST',headers:{'Content-Type':'image/jpeg'},body:compressed});
+          if(ur.ok){const d=await ur.json();if(d.url)photoUrls.push(d.url);}
+        }catch(e){console.error('Report photo upload error:',e);}
+      }
+      if(submitBtn)submitBtn.textContent=origText;
+    }
     try{
       const r=await fetch(VAPI,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-        token,action:'reportIssue',propertyId:propId,description:desc.trim(),reportType
+        token,action:'reportIssue',propertyId:propId,description:desc.trim(),reportType,
+        photoUrl:photoUrls.length===1?photoUrls[0]:photoUrls.length>1?photoUrls:null
       })});
       if(!r.ok){alert('Failed to submit. Please try again.');return;}
       document.getElementById('vsrf-'+propId).style.display='none';
       document.getElementById('vsrc-'+propId).style.display='block';
+      _vsReportPhotos[propId]=[];
     }catch(e){alert('Network error. Please try again.');}
   };
 
