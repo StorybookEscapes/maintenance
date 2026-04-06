@@ -412,6 +412,20 @@ textarea{resize:vertical;min-height:76px}
 .hb-raw{font-size:.7rem;color:#7a98b0;background:rgba(0,0,0,.2);border-radius:6px;padding:8px 10px;margin-top:7px;font-family:monospace;white-space:pre-wrap;max-height:160px;overflow-y:auto;display:none;border:1px solid rgba(90,150,210,.15)}
 .hb-raw.show{display:block}
 .hb-empty{text-align:center;padding:18px;color:#5a7a90;font-size:.82rem}
+.hb-dismissed-toggle{display:inline-flex;align-items:center;gap:5px;font-size:.68rem;color:#5a7a90;cursor:pointer;padding:4px 0;margin-top:4px;transition:color .15s;background:none;border:none;font-family:inherit}
+.hb-dismissed-toggle:hover{color:#7aa8cc}
+.hb-dismissed-toggle svg{width:12px;height:12px;fill:currentColor;transition:transform .2s}
+.hb-dismissed-toggle.open svg{transform:rotate(180deg)}
+.hb-dismissed-list{display:none;margin-top:6px}
+.hb-dismissed-list.show{display:block}
+.hb-dismissed-item{background:rgba(255,255,255,.03);border:1px solid rgba(90,150,210,.12);border-radius:7px;padding:8px 12px;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;gap:10px;opacity:.7;transition:opacity .15s}
+.hb-dismissed-item:hover{opacity:1}
+.hb-dismissed-item-info{flex:1;min-width:0}
+.hb-dismissed-item-prop{font-size:.64rem;text-transform:uppercase;letter-spacing:1px;color:#5a7a90;font-weight:600}
+.hb-dismissed-item-prob{font-size:.78rem;color:#8ab0cc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hb-dismissed-item-meta{font-size:.62rem;color:#4a6a80;margin-top:2px}
+.hb-btn-restore{background:transparent;color:#5a7a90;border-color:rgba(90,150,210,.25);font-size:.66rem;padding:3px 9px}
+.hb-btn-restore:hover{color:#b8d8f8;border-color:#5ba3e0}
 
 /* ── Guest Feedback (Review Import) ── */
 .rv-banner{background:linear-gradient(135deg,#2a2418 0%,#3a2e1a 100%);border:1px solid #7a6530;border-radius:var(--radius);padding:14px 18px;margin-bottom:16px;box-shadow:var(--shadow-md)}
@@ -3830,6 +3844,7 @@ const HB_CONFIG = {
   pollInterval: 120000,
 };
 let hbItems = [];
+let hbDismissed = []; // dismissed items (persisted to KV)
 let hbPollTimer = null;
 
 async function hbFetch() {
@@ -3845,8 +3860,13 @@ async function hbFetch() {
   } catch (e) { console.warn('HostBuddy fetch failed:', e.message); }
 }
 
-function hbStartPolling() {
+async function hbStartPolling() {
   if (!HB_CONFIG.apiUrl) return;
+  // Load dismissed items from KV
+  try {
+    const raw = await S.get('se_hb_dismissed');
+    if (raw) { const arr = JSON.parse(raw); if (Array.isArray(arr)) hbDismissed = arr; }
+  } catch (e) {}
   hbFetch(); // initial fetch
   hbPollTimer = setInterval(hbFetch, HB_CONFIG.pollInterval);
 }
@@ -3924,7 +3944,32 @@ function hbMatchCategory(cat) {
 
 function renderHB() {
   const el = document.getElementById('hb-wrap');
-  if (!hbItems.length) { el.innerHTML = ''; return; }
+  if (!hbItems.length && !hbDismissed.length) { el.innerHTML = ''; return; }
+  if (!hbItems.length) {
+    // No active items but dismissed items exist — show just the dismissed viewer
+    let dh = `<div style="padding:0 2px">
+      <button class="hb-dismissed-toggle" id="hb-dismissed-toggle" onclick="toggleHbDismissed()">
+        <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
+        ${hbDismissed.length} dismissed HostBuddy item${hbDismissed.length !== 1 ? 's' : ''}
+      </button>
+      <div class="hb-dismissed-list" id="hb-dismissed-list">`;
+    hbDismissed.forEach(item => {
+      const prob = escHtml((item.problem || item.conversationSnippet || 'No description').slice(0, 80));
+      const ago = getTimeAgo(item.dismissedAt || item.receivedAt);
+      dh += `<div class="hb-dismissed-item">
+        <div class="hb-dismissed-item-info">
+          <div class="hb-dismissed-item-prop">${escHtml(item.property || 'Unknown')}</div>
+          <div class="hb-dismissed-item-prob">${prob}</div>
+          <div class="hb-dismissed-item-meta">Dismissed ${ago}</div>
+        </div>
+        <button class="hb-btn hb-btn-restore" onclick="hbRestore('${item.id}')">Import</button>
+      </div>`;
+    });
+    dh += `<button class="hb-dismissed-toggle" onclick="hbClearDismissed()" style="color:#6a4040;margin-top:4px">Clear history</button>`;
+    dh += '</div></div>';
+    el.innerHTML = dh;
+    return;
+  }
   let h = `<div class="hb-banner">
     <div class="hb-hdr">
       <div class="hb-title">
@@ -3933,6 +3978,7 @@ function renderHB() {
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <span class="hb-count">${hbItems.length} new</span>
+        <button class="hb-btn hb-btn-dismiss" onclick="hbDismissAll()">Dismiss All</button>
         <button class="hb-btn hb-btn-import" onclick="hbImportAll()">Import All</button>
       </div>
     </div>`;
@@ -3961,12 +4007,36 @@ function renderHB() {
           ${item.conversationSnippet ? `<div class="hb-item-snippet">${escHtml(item.conversationSnippet)}</div>` : ''}
         </div>
         <div class="hb-item-btns">
+          <button class="hb-btn hb-btn-dismiss" onclick="hbDismiss('${item.id}')">Dismiss</button>
           <button class="hb-btn hb-btn-import" onclick="hbImport('${item.id}')">Import</button>
         </div>
       </div>
     </div>`;
   });
   h += '</div>';
+  // Dismissed items viewer (shown below banner, or standalone if no active items)
+  if (hbDismissed.length) {
+    h += `<div style="padding:0 2px">
+      <button class="hb-dismissed-toggle" id="hb-dismissed-toggle" onclick="toggleHbDismissed()">
+        <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
+        ${hbDismissed.length} dismissed item${hbDismissed.length !== 1 ? 's' : ''}
+      </button>
+      <div class="hb-dismissed-list" id="hb-dismissed-list">`;
+    hbDismissed.forEach(item => {
+      const prob = escHtml((item.problem || item.conversationSnippet || 'No description').slice(0, 80));
+      const ago = getTimeAgo(item.dismissedAt || item.receivedAt);
+      h += `<div class="hb-dismissed-item">
+        <div class="hb-dismissed-item-info">
+          <div class="hb-dismissed-item-prop">${escHtml(item.property || 'Unknown')}</div>
+          <div class="hb-dismissed-item-prob">${prob}</div>
+          <div class="hb-dismissed-item-meta">Dismissed ${ago}</div>
+        </div>
+        <button class="hb-btn hb-btn-restore" onclick="hbRestore('${item.id}')">Import</button>
+      </div>`;
+    });
+    h += `<button class="hb-dismissed-toggle" onclick="hbClearDismissed()" style="color:#6a4040;margin-top:4px">Clear history</button>`;
+    h += '</div></div>';
+  }
   el.innerHTML = h;
 }
 
@@ -4063,6 +4133,13 @@ async function hbImportAll() {
 }
 
 async function hbDismiss(id) {
+  const item = hbItems.find(x => x.id === id);
+  if (item) {
+    hbDismissed.unshift({ ...item, dismissedAt: new Date().toISOString() });
+    // Cap at 50 dismissed items
+    if (hbDismissed.length > 50) hbDismissed = hbDismissed.slice(0, 50);
+    try { await S.set('se_hb_dismissed', JSON.stringify(hbDismissed)); } catch (e) {}
+  }
   await hbRemoveFromServer(id);
   hbItems = hbItems.filter(x => x.id !== id);
   renderHB();
@@ -4070,10 +4147,60 @@ async function hbDismiss(id) {
 }
 
 async function hbDismissAll() {
+  const now = new Date().toISOString();
+  hbItems.forEach(item => hbDismissed.unshift({ ...item, dismissedAt: now }));
+  if (hbDismissed.length > 50) hbDismissed = hbDismissed.slice(0, 50);
+  try { await S.set('se_hb_dismissed', JSON.stringify(hbDismissed)); } catch (e) {}
   await hbRemoveFromServer('all');
   hbItems = [];
   renderHB();
   showToast('All incoming items dismissed.');
+}
+
+async function hbRestore(id) {
+  const item = hbDismissed.find(x => x.id === id);
+  if (!item) return;
+  // Import as task (same as hbImport but from dismissed list)
+  let pid = hbMatchProperty(item.property);
+  if (!pid && item._raw) pid = hbDeepMatchProperty(item._raw);
+  const cat = hbMatchCategory(item.category);
+  const _skip = ['action_items','action_item','maintenance','issue','task','alert','notification'];
+  let problem = (item.problem||'').trim();
+  if (!problem || _skip.includes(problem.toLowerCase())) {
+    problem = item.conversationSnippet || (item._raw ? hbDeepFindProblem(item._raw) : '') || '';
+  }
+  const t = {
+    id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
+    property: pid || '', guest: item.guest || '',
+    problem: problem || 'HostBuddy action item',
+    category: cat || '', status: 'open', date: '', vendor: '',
+    urgent: !!(item.urgent), recurring: false,
+    notes: [{ text: `Imported from HostBuddy AI (restored from dismissed).${item.conversationSnippet ? ' Guest said: "' + item.conversationSnippet.slice(0, 200) + '"' : ''}`, type: 'admin', time: new Date().toISOString() }],
+    vendorNotes: '', created: item.receivedAt || new Date().toISOString(),
+  };
+  tasks.unshift(t);
+  await saveTasks();
+  // Remove from dismissed
+  hbDismissed = hbDismissed.filter(x => x.id !== id);
+  try { await S.set('se_hb_dismissed', JSON.stringify(hbDismissed)); } catch (e) {}
+  renderHB(); renderAll();
+  showToast('Task restored from dismissed.');
+  if (!pid) { detailId = t.id; openDetail(t.id); }
+}
+
+async function hbClearDismissed() {
+  hbDismissed = [];
+  try { await S.set('se_hb_dismissed', JSON.stringify(hbDismissed)); } catch (e) {}
+  renderHB();
+  showToast('Dismissed history cleared.');
+}
+
+function toggleHbDismissed() {
+  const btn = document.getElementById('hb-dismissed-toggle');
+  const list = document.getElementById('hb-dismissed-list');
+  if (!btn || !list) return;
+  btn.classList.toggle('open');
+  list.classList.toggle('show');
 }
 
 async function hbRemoveFromServer(id) {
