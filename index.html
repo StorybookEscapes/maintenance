@@ -623,8 +623,10 @@ textarea{resize:vertical;min-height:76px}
 .vs-detail-row{display:flex;gap:8px;margin-bottom:8px;font-size:.82rem}
 .vs-detail-label{color:var(--text3);min-width:80px;flex-shrink:0;font-weight:500}
 .vs-detail-val{color:var(--text);word-break:break-word}
-.vs-photos{margin:12px 0}
-.vs-photos img{max-width:100%;max-height:250px;border-radius:var(--radius);border:1px solid var(--border);cursor:pointer;margin-bottom:6px}
+.vs-photos{margin:12px 0;display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px}
+.vs-photos>div{flex:0 0 auto;max-width:140px}
+.vs-photos img{width:140px;height:105px;object-fit:cover;border-radius:var(--radius);border:1px solid var(--border);cursor:pointer;display:block}
+.vs-photos .vs-photo-label{font-size:.6rem;color:var(--text3);text-align:center;margin-top:3px}
 .vs-photo-upload{display:flex;align-items:center;gap:10px;padding:12px 16px;border:2px dashed var(--border);border-radius:var(--radius);background:var(--surface2);cursor:pointer;transition:border-color .2s}
 .vs-photo-upload:hover{border-color:var(--green)}
 .vs-notes{margin-top:12px}
@@ -2413,7 +2415,8 @@ async function openDetail(id){
   renderDetailVendors(t,p);renderNotes(t);checkCombine();
   closeVendorDD(); // reset dropdown state when opening a new task
   renderMiniCal(t.property).then(()=>renderDetailVendors(t,p));
-  renderGuestContext(t,p); // show reservation info + message thread
+  // Guest context section removed — not useful for admin workflow
+  document.getElementById('d-guest-context').innerHTML='';
   const isDone=['complete','resolved_by_guest'].includes(t.status);
   document.getElementById('complete-btn').style.display=isDone?'none':'';
   document.getElementById('resolved-guest-btn').style.display=isDone?'none':'';
@@ -5651,7 +5654,7 @@ function rpImportFromReview(rv) {
             <div class="vs-purchase-text">${t.purchaseNote.replace(/</g,'&lt;')}</div>
           </div>
         </div>`:''}
-        ${photos.length?`<div class="vs-photos">${photos.map(p=>`<div><img src="${p.url}" onclick="window.open('${p.url}','_blank')" title="Tap to view full size"><div style="font-size:.65rem;color:var(--text3)">${p.label}</div></div>`).join('')}</div>`:''}
+        ${photos.length?`<div class="vs-photos">${photos.map(p=>`<div><img src="${p.url}" onclick="window.open('${p.url}','_blank')" title="Tap to view full size"><div class="vs-photo-label">${p.label}</div></div>`).join('')}</div>`:''}
         <div class="vs-photo-upload" onclick="document.getElementById('vpi-${t.id}').click()">
           <span style="font-size:1.1rem">&#x1F4F7;</span>
           <div>
