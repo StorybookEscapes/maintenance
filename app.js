@@ -2516,7 +2516,7 @@ function checkAdminPaymentPrompt(justCompleted){
   document.body.appendChild(overlay);
   overlay.addEventListener('click',function(e){if(e.target===overlay)overlay.remove();});
 }
-function generateInvoice(vendorName,method,dateStr,taskIds){
+async function generateInvoice(vendorName,method,dateStr,taskIds){
   const invTasks=taskIds.map(id=>tasks.find(t=>t.id===id)).filter(Boolean);
   if(!invTasks.length)return;
   const firstName=vendorName.split(' ')[0];
