@@ -2883,7 +2883,7 @@ function openAddVendor(){
   editVendorId=null;document.getElementById('vendor-modal-title').textContent='Add Vendor';
   ['v-name','v-role','v-phone','v-email','v-notes'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('v-cat').value='handyman';document.getElementById('v-del-btn').style.display='none';
-  document.getElementById('v-pay-venmo').checked=true;document.getElementById('v-pay-cashapp').checked=true;
+  document.getElementById('v-pay-venmo').checked=false;document.getElementById('v-pay-cashapp').checked=false;
   document.getElementById('vendor-modal').classList.add('open');
 }
 function openEditVendor(id){
@@ -2892,8 +2892,8 @@ function openEditVendor(id){
   document.getElementById('v-name').value=v.name;document.getElementById('v-role').value=v.role;
   document.getElementById('v-phone').value=v.phone;document.getElementById('v-email').value=v.email||'';
   document.getElementById('v-notes').value=v.note||'';document.getElementById('v-cat').value=v.categories[0]||'other';
-  // Payment methods — default both on for legacy vendors without the field
-  const pm=v.paymentMethods||['venmo','cashapp'];
+  // Payment methods — default none for vendors without the field (opt-in)
+  const pm=v.paymentMethods||[];
   document.getElementById('v-pay-venmo').checked=pm.includes('venmo');
   document.getElementById('v-pay-cashapp').checked=pm.includes('cashapp');
   document.getElementById('v-del-btn').style.display='';document.getElementById('vendor-modal').classList.add('open');
@@ -5075,6 +5075,8 @@ function rpImportFromReview(rv) {
   }
 
   function checkPaymentPrompt(justCompletedTaskId){
+    // Skip payment prompt entirely if no payment methods enabled for this vendor
+    if(!vPayMethods||vPayMethods.length===0)return;
     const justDone=vTasks.find(t=>t.id===justCompletedTaskId);
     if(!justDone)return;
     const group=getPayGroup(justDone.property);
@@ -5130,7 +5132,6 @@ function rpImportFromReview(rv) {
           ${vPayMethods.includes('cashapp')?`<button class="vp-pay-btn cashapp" id="vp-cash-${gid}" onclick="document.getElementById('vp-ca-flow-${gid}').style.display='block';this.style.display='none'">
             <span style="font-size:1.1rem">💵</span> Request via Cash App
           </button>`:''}
-          ${vPayMethods.length===0?'<div style="font-size:.82rem;color:var(--text2);padding:8px 0">Payment method not configured — contact Chip to arrange payment.</div>':''}
         </div>
         ${vPayMethods.includes('cashapp')?`<div id="vp-ca-flow-${gid}" style="display:none">
           <div style="margin-bottom:14px">
