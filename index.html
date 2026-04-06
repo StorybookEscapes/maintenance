@@ -661,6 +661,26 @@ textarea{resize:vertical;min-height:76px}
 /* Vendor-done badge for admin task cards */
 .vd-badge{display:inline-flex;align-items:center;gap:3px;background:#e8f5e9;color:#2e7d32;font-size:.62rem;font-weight:600;padding:2px 7px;border-radius:12px;border:1px solid #a5d6a7;text-transform:uppercase;letter-spacing:.5px}
 .vd-badge::before{content:'\\2713';font-size:.7rem}
+/* Vendor-done banner — tasks vendors have marked complete */
+.vdn-banner{border-radius:var(--radius);margin-bottom:16px;overflow:hidden}
+.vdn-banner-title{font-size:.68rem;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;color:var(--green);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.vdn-banner-title::before{content:'\2713';display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--green);color:#fff;font-size:.65rem}
+.vdn-item{display:flex;align-items:center;justify-content:space-between;border-radius:8px;padding:11px 15px;cursor:pointer;margin-bottom:5px;transition:all .15s;border:1px solid transparent}
+.vdn-item:hover{opacity:.92;box-shadow:var(--shadow-md)}
+.vdn-item-prc{background:rgba(45,106,63,.12);border-color:rgba(45,106,63,.25);color:var(--prc)}
+.vdn-item-umc{background:rgba(184,131,10,.12);border-color:rgba(184,131,10,.25);color:var(--umc)}
+.vdn-item-gatlinburg{background:rgba(107,63,160,.12);border-color:rgba(107,63,160,.25);color:var(--gatlinburg)}
+.vdn-item-alpine{background:rgba(192,57,43,.12);border-color:rgba(192,57,43,.25);color:var(--alpine)}
+.vdn-item-sevierville{background:rgba(36,113,163,.12);border-color:rgba(36,113,163,.25);color:var(--sevierville)}
+.vdn-item-hillside{background:rgba(26,58,92,.12);border-color:rgba(26,58,92,.25);color:var(--hillside)}
+.vdn-item-other{background:rgba(0,0,0,.06);border-color:rgba(0,0,0,.12);color:var(--text)}
+.vdn-item-left{flex:1;min-width:0}
+.vdn-item-prop{font-size:.67rem;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:2px}
+.vdn-item-prob{font-size:.86rem;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vdn-item-meta{font-size:.7rem;color:var(--text2);margin-top:3px}
+.vdn-item-actions{display:flex;gap:6px;flex-shrink:0;margin-left:12px}
+.vdn-btn-done{padding:5px 12px;border-radius:7px;font-size:.72rem;font-weight:600;cursor:pointer;border:1px solid var(--green);background:var(--green);color:#fff;transition:all .15s;white-space:nowrap}
+.vdn-btn-done:hover{background:#1e5132}
 /* Vendor photos in admin detail */
 .vp-section{margin-top:10px}
 .vp-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
@@ -780,6 +800,7 @@ textarea{resize:vertical;min-height:76px}
           <div id="rv-detail-ft" style="display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid rgba(180,150,60,.25);padding-top:14px"></div>
         </div>
       </div>
+      <div id="vdn-wrap"></div>
       <div id="ub-wrap"></div>
       <input type="hidden" id="search-input" value="">
       <div id="task-list"></div>
@@ -1577,7 +1598,7 @@ function populatePropMulti(id){
   });
 }
 
-function renderAll(){renderUB();renderTasks();renderCalendar();renderRecurring();renderHistory();renderVendors();}
+function renderAll(){renderVD();renderUB();renderTasks();renderCalendar();renderRecurring();renderHistory();renderVendors();}
 
 // URGENT BANNER
 function renderUB(){
@@ -1585,6 +1606,42 @@ function renderUB(){
   const c=document.getElementById('ub-wrap');
   if(!u.length){c.innerHTML='';return;}
   c.innerHTML=`<div class="ub"><div class="ub-title">Urgent — Immediate Attention Required (${u.length})</div>${u.map(t=>{const p=getProp(t.property);return`<div class="ui" onclick="openDetail('${t.id}')"><div><div class="ui-prop">${p?p.name:t.property}</div><div class="ui-prob">${t.problem}</div></div><span class="upill">Urgent</span></div>`;}).join('')}</div>`;
+}
+
+// VENDOR-DONE BANNER — tasks vendors marked complete, awaiting admin confirmation
+function renderVD(){
+  const vd=tasks.filter(t=>t.vendorDone&&!['complete','resolved_by_guest'].includes(t.status));
+  const c=document.getElementById('vdn-wrap');
+  if(!vd.length){c.innerHTML='';return;}
+  // Sort by vendorDone timestamp (most recent first)
+  vd.sort((a,b)=>(b.vendorDone||'').localeCompare(a.vendorDone||''));
+  const items=vd.map(t=>{
+    const p=getProp(t.property);const nbcls=getNbCls(t.property);
+    const ago=vdTimeAgo(t.vendorDone);
+    return`<div class="vdn-item vdn-item-${nbcls}" onclick="openDetail('${t.id}')">
+      <div class="vdn-item-left">
+        <div class="vdn-item-prop">${p?p.name:t.property}</div>
+        <div class="vdn-item-prob">${t.problem}</div>
+        <div class="vdn-item-meta">${t.vendor?t.vendor+' \u2022 ':''}Marked done ${ago}</div>
+      </div>
+      <div class="vdn-item-actions">
+        <button class="vdn-btn-done" onclick="vdQuickComplete('${t.id}',event)">Mark Complete</button>
+      </div>
+    </div>`;
+  }).join('');
+  c.innerHTML=`<div class="vdn-banner"><div class="vdn-banner-title">Vendor Done — Ready for Review (${vd.length})</div>${items}</div>`;
+}
+
+function vdTimeAgo(iso){
+  if(!iso)return'';
+  const diff=Date.now()-new Date(iso).getTime();
+  const mins=Math.floor(diff/60000);
+  if(mins<1)return'just now';
+  if(mins<60)return mins+'m ago';
+  const hrs=Math.floor(mins/60);
+  if(hrs<24)return hrs+'h ago';
+  const days=Math.floor(hrs/24);
+  return days+'d ago';
 }
 
 // STATS
@@ -3597,6 +3654,15 @@ async function markComplete(){
   document.getElementById('resolved-guest-btn').style.display='none';
   await saveTasks();closeModal('detail-modal');renderAll();showToast('Task marked complete.');
   // Check if this completes a payment group where vendor requested payment
+  checkAdminPaymentPrompt(t);
+}
+
+// Quick-complete from vendor-done banner (no modal needed)
+async function vdQuickComplete(id,e){
+  e.stopPropagation();
+  const t=tasks.find(x=>x.id===id);if(!t)return;
+  t.status='complete';
+  await saveTasks();renderAll();showToast('Task marked complete.');
   checkAdminPaymentPrompt(t);
 }
 
