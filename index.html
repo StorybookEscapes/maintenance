@@ -1072,10 +1072,7 @@ textarea{resize:vertical;min-height:76px}
       <button type="button" class="btn" id="d-urgent-toggle" onclick="toggleDetailUrgent()" style="font-size:.72rem;padding:4px 12px;border-radius:20px"></button>
     </div>
     <div id="d-photo-section" style="margin-bottom:14px">
-      <div id="d-photo-preview" style="display:none;margin-bottom:8px;position:relative;display:inline-block">
-        <img id="d-photo-img" src="" style="max-width:100%;max-height:200px;border-radius:var(--radius);border:1px solid var(--border);cursor:pointer" onclick="window.open(this.src,'_blank')" title="Click to view full size">
-        <button onclick="removeTaskPhoto()" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:.7rem;display:flex;align-items:center;justify-content:center" title="Remove photo">&#x2715;</button>
-      </div>
+      <div id="d-photo-gallery" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px"></div>
       <div id="d-photo-upload">
         <div id="d-photo-dropzone" style="display:flex;align-items:center;gap:10px;padding:12px 16px;border:2px dashed var(--border);border-radius:var(--radius);background:var(--surface2);transition:border-color .2s,background .2s;cursor:pointer" onclick="document.getElementById('d-photo-input').click()">
           <span style="font-size:1.1rem">&#x1F4F7;</span>
@@ -1083,7 +1080,7 @@ textarea{resize:vertical;min-height:76px}
             <div style="font-size:.76rem;font-weight:500;color:var(--green)">Attach Photo</div>
             <div style="font-size:.65rem;color:var(--text3);margin-top:1px">Click to browse, drag &amp; drop, or paste from clipboard</div>
           </div>
-          <input type="file" id="d-photo-input" accept="image/*" style="display:none" onchange="uploadTaskPhoto(this.files[0])">
+          <input type="file" id="d-photo-input" accept="image/*" multiple style="display:none" onchange="uploadTaskPhotos(this.files)">
         </div>
         <span id="d-photo-status" style="font-size:.68rem;color:var(--text3);margin-left:0;display:block;margin-top:4px"></span>
       </div>
@@ -2502,19 +2499,22 @@ async function confirmPropertyChange(newPropId){
   renderAll();
   showToast(`Task moved to ${newName}.`);
 }
-/* ── Task Photo Upload/Remove ── */
+/* ── Task Photo Upload/Remove (multi-photo) ── */
+// Get all admin photos for a task (merges old photoUrl with new photos array)
+function getTaskPhotos(t){
+  const arr=Array.isArray(t.photos)?[...t.photos]:[];
+  // Backward compat: include legacy photoUrl if it's not already in the array
+  if(t.photoUrl&&!arr.includes(t.photoUrl))arr.unshift(t.photoUrl);
+  return arr;
+}
 function showTaskPhoto(t){
-  const preview=document.getElementById('d-photo-preview');
-  const img=document.getElementById('d-photo-img');
-  const upload=document.getElementById('d-photo-upload');
-  if(t.photoUrl){
-    img.src=t.photoUrl;
-    preview.style.display='inline-block';
-    upload.style.display='none';
-  } else {
-    preview.style.display='none';
-    img.src='';
-    upload.style.display='';
+  const gallery=document.getElementById('d-photo-gallery');
+  const photos=getTaskPhotos(t);
+  if(!photos.length){gallery.innerHTML='';} else {
+    gallery.innerHTML=photos.map((url,i)=>`<div style="position:relative;display:inline-block">
+      <img src="${url}" style="max-width:140px;max-height:120px;border-radius:var(--radius);border:1px solid var(--border);cursor:pointer;object-fit:cover" onclick="window.open('${url}','_blank')" title="Click to view full size">
+      <button onclick="removeTaskPhoto('${url}')" style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:.65rem;display:flex;align-items:center;justify-content:center" title="Remove photo">&#x2715;</button>
+    </div>`).join('');
   }
   document.getElementById('d-photo-status').textContent='';
   document.getElementById('d-photo-input').value='';
@@ -2550,8 +2550,8 @@ function showVendorPhotos(t){
     const dz=document.getElementById('d-photo-dropzone');if(!dz||dz.offsetParent===null)return;
     e.preventDefault();
     dz.style.borderColor='var(--border)';dz.style.background='var(--surface2)';
-    const file=e.dataTransfer.files&&e.dataTransfer.files[0];
-    if(file&&file.type.startsWith('image/'))uploadTaskPhoto(file);
+    const files=e.dataTransfer.files;
+    if(files&&files.length){for(let i=0;i<files.length;i++){if(files[i].type.startsWith('image/'))uploadTaskPhoto(files[i]);}}
   });
   // Paste from clipboard — only when detail modal is open
   document.addEventListener('paste',function(e){
@@ -2568,6 +2568,11 @@ function showVendorPhotos(t){
     }
   });
 })();
+// Upload multiple photos at once
+async function uploadTaskPhotos(files){
+  if(!files||!files.length)return;
+  for(let i=0;i<files.length;i++){await uploadTaskPhoto(files[i]);}
+}
 async function uploadTaskPhoto(file){
   if(!file||!detailId)return;
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
@@ -2577,7 +2582,7 @@ async function uploadTaskPhoto(file){
   try{
     const token=sessionStorage.getItem('se_auth_token')||'';
     const ext=file.name.split('.').pop()||'jpg';
-    const fname=`task-${t.id}-${Date.now()}.${ext}`;
+    const fname=`task-${t.id}-${Date.now()}-${Math.random().toString(36).slice(2,5)}.${ext}`;
     const r=await fetch(`${PROXY_BASE}/api/photo?taskId=${t.id}&filename=${fname}`,{
       method:'POST',
       headers:{'Authorization':'Bearer '+token,'Content-Type':file.type},
@@ -2585,15 +2590,14 @@ async function uploadTaskPhoto(file){
     });
     if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error||'Upload failed');}
     const data=await r.json();
-    // If there's an existing photo, delete the old one
-    if(t.photoUrl){
-      fetch(`${PROXY_BASE}/api/photo?url=${encodeURIComponent(t.photoUrl)}`,{
-        method:'DELETE',headers:{'Authorization':'Bearer '+token}
-      }).catch(()=>{});
-    }
-    t.photoUrl=data.url;
+    // Append to photos array (multi-photo support)
+    if(!Array.isArray(t.photos))t.photos=[];
+    // Migrate legacy photoUrl into array if needed
+    if(t.photoUrl&&!t.photos.includes(t.photoUrl)){t.photos.unshift(t.photoUrl);t.photoUrl='';}
+    t.photos.push(data.url);
     await saveTasks();
     showTaskPhoto(t);
+    status.textContent='';
     showToast('Photo attached.');
   }catch(e){
     console.error('[photo] Upload error:',e);
@@ -2601,16 +2605,19 @@ async function uploadTaskPhoto(file){
     showToast('Photo upload failed.','err');
   }
 }
-async function removeTaskPhoto(){
-  const t=tasks.find(x=>x.id===detailId);if(!t||!t.photoUrl)return;
+async function removeTaskPhoto(url){
+  const t=tasks.find(x=>x.id===detailId);if(!t||!url)return;
   if(!confirm('Remove this photo?'))return;
   try{
     const token=sessionStorage.getItem('se_auth_token')||'';
-    fetch(`${PROXY_BASE}/api/photo?url=${encodeURIComponent(t.photoUrl)}`,{
+    fetch(`${PROXY_BASE}/api/photo?url=${encodeURIComponent(url)}`,{
       method:'DELETE',headers:{'Authorization':'Bearer '+token}
     }).catch(()=>{});
   }catch(e){}
-  t.photoUrl=null;
+  // Remove from photos array
+  if(Array.isArray(t.photos))t.photos=t.photos.filter(u=>u!==url);
+  // Also clear legacy photoUrl if it matches
+  if(t.photoUrl===url)t.photoUrl=null;
   await saveTasks();
   showTaskPhoto(t);
   showToast('Photo removed.');
@@ -5610,7 +5617,8 @@ function rpImportFromReview(rv) {
     const done=!!t.vendorDone;
     const nbCls=t.neighborhoodCls||'';
     const photos=[];
-    if(t.photoUrl)photos.push({url:t.photoUrl,label:'Reference photo'});
+    const refPhotos=Array.isArray(t.photos)&&t.photos.length?t.photos:t.photoUrl?[t.photoUrl]:[];
+    refPhotos.forEach((u,i)=>photos.push({url:u,label:refPhotos.length>1?'Reference photo '+(i+1):'Reference photo'}));
     (t.vendorPhotos||[]).forEach(p=>photos.push({url:p.url,label:'Uploaded — '+new Date(p.uploadedAt).toLocaleDateString()}));
     // Filter notes: skip "Combined with" and "Marked as done/unmarked" auto-notes
     const filteredNotes=(t.notes||[]).filter(n=>!/^Combined with existing task/i.test(n.text));
