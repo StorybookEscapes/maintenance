@@ -661,26 +661,48 @@ textarea{resize:vertical;min-height:76px}
 /* Vendor-done badge for admin task cards */
 .vd-badge{display:inline-flex;align-items:center;gap:3px;background:#e8f5e9;color:#2e7d32;font-size:.62rem;font-weight:600;padding:2px 7px;border-radius:12px;border:1px solid #a5d6a7;text-transform:uppercase;letter-spacing:.5px}
 .vd-badge::before{content:'\\2713';font-size:.7rem}
-/* Vendor-done banner — tasks vendors have marked complete */
-.vdn-banner{border-radius:var(--radius);margin-bottom:16px;overflow:hidden}
-.vdn-banner-title{font-size:.68rem;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;color:var(--green);margin-bottom:10px;display:flex;align-items:center;gap:8px}
-.vdn-banner-title::before{content:'\2713';display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--green);color:#fff;font-size:.65rem}
-.vdn-item{display:flex;align-items:center;justify-content:space-between;border-radius:8px;padding:11px 15px;cursor:pointer;margin-bottom:5px;transition:all .15s;border:1px solid transparent}
-.vdn-item:hover{opacity:.92;box-shadow:var(--shadow-md)}
-.vdn-item-prc{background:rgba(45,106,63,.12);border-color:rgba(45,106,63,.25);color:var(--prc)}
-.vdn-item-umc{background:rgba(184,131,10,.12);border-color:rgba(184,131,10,.25);color:var(--umc)}
-.vdn-item-gatlinburg{background:rgba(107,63,160,.12);border-color:rgba(107,63,160,.25);color:var(--gatlinburg)}
-.vdn-item-alpine{background:rgba(192,57,43,.12);border-color:rgba(192,57,43,.25);color:var(--alpine)}
-.vdn-item-sevierville{background:rgba(36,113,163,.12);border-color:rgba(36,113,163,.25);color:var(--sevierville)}
-.vdn-item-hillside{background:rgba(26,58,92,.12);border-color:rgba(26,58,92,.25);color:var(--hillside)}
-.vdn-item-other{background:rgba(0,0,0,.06);border-color:rgba(0,0,0,.12);color:var(--text)}
+/* Vendor-done banner — tasks vendors have marked complete (dark forest gradient) */
+.vdn-banner{background:linear-gradient(135deg,#0f2a1a 0%,#1a3a25 100%);border:1px solid #2a6a40;border-radius:var(--radius);padding:14px 18px;margin-bottom:16px;box-shadow:var(--shadow-md)}
+.vdn-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px}
+.vdn-title{font-size:.72rem;text-transform:uppercase;letter-spacing:1.5px;color:#4caf6a;font-weight:700;display:flex;align-items:center;gap:8px}
+.vdn-title::before{content:'\2713';display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:#4caf6a;color:#0f2a1a;font-size:.6rem;font-weight:700}
+.vdn-count{font-size:.68rem;background:#1a4a2a;color:#6fcf8a;border-radius:20px;padding:2px 9px;font-weight:700}
+.vdn-item{background:rgba(255,255,255,.06);border:1px solid rgba(76,175,106,.2);border-radius:8px;padding:11px 14px;margin-bottom:6px;transition:border-color .15s;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.vdn-item:hover{border-color:#4caf6a}
 .vdn-item-left{flex:1;min-width:0}
-.vdn-item-prop{font-size:.67rem;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:2px}
-.vdn-item-prob{font-size:.86rem;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.vdn-item-meta{font-size:.7rem;color:var(--text2);margin-top:3px}
-.vdn-item-actions{display:flex;gap:6px;flex-shrink:0;margin-left:12px}
-.vdn-btn-done{padding:5px 12px;border-radius:7px;font-size:.72rem;font-weight:600;cursor:pointer;border:1px solid var(--green);background:var(--green);color:#fff;transition:all .15s;white-space:nowrap}
-.vdn-btn-done:hover{background:#1e5132}
+.vdn-item-prop{font-size:.69rem;text-transform:uppercase;letter-spacing:1.2px;font-weight:700;margin-bottom:3px}
+.vdn-prop-prc{color:#5cc878}.vdn-prop-umc{color:#e0ad30}.vdn-prop-gatlinburg{color:#b080e0}.vdn-prop-alpine{color:#e87070}.vdn-prop-sevierville{color:#60b8e8}.vdn-prop-hillside{color:#6898c0}.vdn-prop-other{color:#7aaa90}
+.vdn-item-prob{font-size:.86rem;font-weight:500;color:#c8e0d0;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vdn-item-meta{font-size:.7rem;color:#7aaa90;margin-top:3px}
+.vdn-item-actions{display:flex;gap:6px;flex-shrink:0}
+.vdn-btn-done{padding:5px 12px;border-radius:7px;font-size:.72rem;font-weight:600;cursor:pointer;border:1px solid #4caf6a;background:rgba(76,175,106,.15);color:#4caf6a;transition:all .15s;white-space:nowrap}
+.vdn-btn-done:hover{background:rgba(76,175,106,.3)}
+/* Vendor Reports banner — yellow/amber theme */
+.vr-banner{background:linear-gradient(135deg,#2a2510 0%,#3a3218 100%);border:1px solid #8a7a30;border-radius:var(--radius);padding:14px 18px;margin-bottom:16px;box-shadow:var(--shadow-md)}
+.vr-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px}
+.vr-title{font-size:.72rem;text-transform:uppercase;letter-spacing:1.5px;color:#e0c040;font-weight:700;display:flex;align-items:center;gap:8px}
+.vr-title::before{content:'\\1F527';font-size:.85rem}
+.vr-count{font-size:.68rem;background:#4a4018;color:#f0d860;border-radius:20px;padding:2px 9px;font-weight:700}
+.vr-item{background:rgba(255,255,255,.06);border:1px solid rgba(224,192,64,.2);border-radius:8px;padding:12px 14px;margin-bottom:6px;transition:border-color .15s;cursor:pointer}
+.vr-item:hover{border-color:#e0c040}
+.vr-item-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.vr-item-left{flex:1;min-width:0}
+.vr-item-prop{font-size:.69rem;text-transform:uppercase;letter-spacing:1.2px;font-weight:700;margin-bottom:3px}
+.vr-prop-prc{color:#5cc878}.vr-prop-umc{color:#f0c850}.vr-prop-gatlinburg{color:#b080e0}.vr-prop-alpine{color:#e87070}.vr-prop-sevierville{color:#60b8e8}.vr-prop-hillside{color:#6898c0}
+.vr-item-prob{font-size:.86rem;font-weight:500;color:#e8e0c0;line-height:1.4}
+.vr-item-meta{display:flex;gap:10px;margin-top:5px;flex-wrap:wrap;align-items:center}
+.vr-item-meta span{font-size:.69rem;color:#b8a868}
+.vr-type-badge{font-size:.6rem;padding:2px 8px;border-radius:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+.vr-type-needs{background:rgba(230,160,50,.2);color:#e8a830;border:1px solid rgba(230,160,50,.3)}
+.vr-type-fixed{background:rgba(100,200,100,.15);color:#68c868;border:1px solid rgba(100,200,100,.25)}
+.vr-item-btns{display:flex;gap:6px;flex-shrink:0;align-items:flex-start}
+.vr-btn{padding:5px 11px;border-radius:7px;font-size:.73rem;font-family:inherit;font-weight:600;cursor:pointer;border:1px solid;transition:all .15s;white-space:nowrap}
+.vr-btn-import{background:rgba(224,192,64,.15);color:#e0c040;border-color:#e0c040}
+.vr-btn-import:hover{background:rgba(224,192,64,.3)}
+.vr-btn-ack{background:transparent;color:#b8a868;border-color:rgba(224,192,64,.3)}
+.vr-btn-ack:hover{color:#e0c040;border-color:#e0c040}
+.vr-btn-dismiss{background:transparent;color:#b8a868;border-color:rgba(224,192,64,.3)}
+.vr-btn-dismiss:hover{color:#e0c040;border-color:#e0c040}
 /* Vendor photos in admin detail */
 .vp-section{margin-top:10px}
 .vp-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
@@ -800,6 +822,7 @@ textarea{resize:vertical;min-height:76px}
           <div id="rv-detail-ft" style="display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid rgba(180,150,60,.25);padding-top:14px"></div>
         </div>
       </div>
+      <div id="vr-wrap"></div>
       <div id="vdn-wrap"></div>
       <div id="ub-wrap"></div>
       <input type="hidden" id="search-input" value="">
@@ -1598,7 +1621,7 @@ function populatePropMulti(id){
   });
 }
 
-function renderAll(){renderVD();renderUB();renderTasks();renderCalendar();renderRecurring();renderHistory();renderVendors();}
+function renderAll(){renderVR();renderVD();renderUB();renderTasks();renderCalendar();renderRecurring();renderHistory();renderVendors();}
 
 // URGENT BANNER
 function renderUB(){
@@ -1618,9 +1641,9 @@ function renderVD(){
   const items=vd.map(t=>{
     const p=getProp(t.property);const nbcls=getNbCls(t.property);
     const ago=vdTimeAgo(t.vendorDone);
-    return`<div class="vdn-item vdn-item-${nbcls}" onclick="openDetail('${t.id}')">
+    return`<div class="vdn-item" onclick="openDetail('${t.id}')">
       <div class="vdn-item-left">
-        <div class="vdn-item-prop">${p?p.name:t.property}</div>
+        <div class="vdn-item-prop vdn-prop-${nbcls}">${p?p.name:t.property}</div>
         <div class="vdn-item-prob">${t.problem}</div>
         <div class="vdn-item-meta">${t.vendor?t.vendor+' \u2022 ':''}Marked done ${ago}</div>
       </div>
@@ -1629,7 +1652,7 @@ function renderVD(){
       </div>
     </div>`;
   }).join('');
-  c.innerHTML=`<div class="vdn-banner"><div class="vdn-banner-title">Vendor Done — Ready for Review (${vd.length})</div>${items}</div>`;
+  c.innerHTML=`<div class="vdn-banner"><div class="vdn-hdr"><div class="vdn-title">Vendor Done — Ready for Review</div><span class="vdn-count">${vd.length}</span></div>${items}</div>`;
 }
 
 function vdTimeAgo(iso){
@@ -1642,6 +1665,86 @@ function vdTimeAgo(iso){
   if(hrs<24)return hrs+'h ago';
   const days=Math.floor(hrs/24);
   return days+'d ago';
+}
+
+// VENDOR REPORTS BANNER — field observations from vendors
+let vendorReports=[];
+async function loadVendorReports(){
+  try{const r=await S.get('se_vendor_reports');if(r&&r.value){vendorReports=JSON.parse(r.value)||[];}else{vendorReports=[];}}catch(e){vendorReports=[];}
+}
+async function saveVendorReports(){
+  try{await S.set('se_vendor_reports',JSON.stringify(vendorReports));}catch(e){console.error('[vr] save error',e);}
+}
+function renderVR(){
+  const pending=vendorReports.filter(r=>r.status==='pending');
+  const c=document.getElementById('vr-wrap');
+  if(!pending.length){c.innerHTML='';return;}
+  const items=pending.map(r=>{
+    const p=getProp(r.propertyId);const nbcls=getNbCls(r.propertyId);
+    const ago=vdTimeAgo(r.createdAt);
+    const isNeeds=r.reportType==='needs_attention';
+    const typeBadge=isNeeds?'<span class="vr-type-badge vr-type-needs">Needs Attention</span>':'<span class="vr-type-badge vr-type-fixed">Fixed While Here</span>';
+    const actionBtn=isNeeds
+      ?`<button class="vr-btn vr-btn-import" onclick="event.stopPropagation();vrImport('${r.id}')">Import as Task</button>`
+      :`<button class="vr-btn vr-btn-ack" onclick="event.stopPropagation();vrAck('${r.id}')">Acknowledge</button>`;
+    return`<div class="vr-item">
+      <div class="vr-item-top">
+        <div class="vr-item-left">
+          <div class="vr-item-prop vr-prop-${nbcls}">${p?p.name:r.propertyId}</div>
+          <div class="vr-item-prob">${r.description.replace(/</g,'&lt;')}</div>
+          <div class="vr-item-meta">
+            ${typeBadge}
+            <span>${r.vendor}</span>
+            <span>${ago}</span>
+          </div>
+        </div>
+        <div class="vr-item-btns">
+          ${actionBtn}
+          <button class="vr-btn vr-btn-dismiss" onclick="event.stopPropagation();vrDismiss('${r.id}')">Dismiss</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  c.innerHTML=`<div class="vr-banner"><div class="vr-hdr"><div class="vr-title">Vendor Reports — Field Observations</div><span class="vr-count">${pending.length}</span></div>${items}</div>`;
+}
+
+async function vrImport(id){
+  const r=vendorReports.find(x=>x.id===id);if(!r)return;
+  const p=getProp(r.propertyId);
+  const newTask={
+    id:'t_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),
+    property:r.propertyId,
+    category:'General',
+    problem:r.description,
+    status:'open',
+    vendor:r.vendor||'',
+    date:'',
+    urgent:false,
+    guest:'',
+    notes:[{text:'Imported from vendor field report by '+r.vendor+'.',type:'admin',time:new Date().toISOString()}],
+    photos:[],
+    created:new Date().toISOString()
+  };
+  if(r.photoUrl)newTask.photos.push(r.photoUrl);
+  tasks.push(newTask);
+  r.status='imported';
+  await saveTasks();await saveVendorReports();
+  renderAll();showToast('Imported as task.');
+  openDetail(newTask.id);
+}
+
+async function vrAck(id){
+  const r=vendorReports.find(x=>x.id===id);if(!r)return;
+  r.status='acknowledged';
+  await saveVendorReports();renderVR();
+  showToast('Acknowledged — logged to history.');
+}
+
+async function vrDismiss(id){
+  const r=vendorReports.find(x=>x.id===id);if(!r)return;
+  r.status='dismissed';
+  await saveVendorReports();renderVR();
+  showToast('Dismissed.');
 }
 
 // STATS
@@ -2638,20 +2741,36 @@ async function uploadTaskPhotos(files){
   if(!files||!files.length)return;
   for(let i=0;i<files.length;i++){await uploadTaskPhoto(files[i]);}
 }
+// Client-side image compression for admin uploads
+function compressImage(file){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();const url=URL.createObjectURL(file);
+    img.onload=()=>{
+      URL.revokeObjectURL(url);
+      let w=img.width,h=img.height;
+      if(w>1600||h>1600){const r=Math.min(1600/w,1600/h);w=Math.round(w*r);h=Math.round(h*r);}
+      const c=document.createElement('canvas');c.width=w;c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      c.toBlob(blob=>{if(!blob){reject(new Error('Compression failed'));return;}resolve(blob);},'image/jpeg',0.82);
+    };
+    img.onerror=()=>reject(new Error('Could not load image'));
+    img.src=url;
+  });
+}
 async function uploadTaskPhoto(file){
   if(!file||!detailId)return;
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
-  if(file.size>5*1024*1024){showToast('Photo must be under 5MB.','err');return;}
   const status=document.getElementById('d-photo-status');
-  status.textContent='Uploading...';
+  status.textContent='Compressing...';
   try{
+    const compressed=await compressImage(file);
+    status.textContent='Uploading...';
     const token=sessionStorage.getItem('se_auth_token')||'';
-    const ext=file.name.split('.').pop()||'jpg';
-    const fname=`task-${t.id}-${Date.now()}-${Math.random().toString(36).slice(2,5)}.${ext}`;
+    const fname=`task-${t.id}-${Date.now()}-${Math.random().toString(36).slice(2,5)}.jpg`;
     const r=await fetch(`${PROXY_BASE}/api/photo?taskId=${t.id}&filename=${fname}`,{
       method:'POST',
-      headers:{'Authorization':'Bearer '+token,'Content-Type':file.type},
-      body:file
+      headers:{'Authorization':'Bearer '+token,'Content-Type':'image/jpeg'},
+      body:compressed
     });
     if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error||'Upload failed');}
     const data=await r.json();
@@ -5601,6 +5720,24 @@ function rpImportFromReview(rv) {
   let vVendor='';
   let vDate='';
   let vGuestAlerts={}; // {propId: [{type:'checkin'|'checkout', guest, time}]}
+  const MAX_PHOTOS_PER_TASK=10;
+
+  // Client-side image compression — resize to 1600px max, 82% JPEG quality
+  function vsCompressImage(file){
+    return new Promise((resolve,reject)=>{
+      const img=new Image();const url=URL.createObjectURL(file);
+      img.onload=()=>{
+        URL.revokeObjectURL(url);
+        let w=img.width,h=img.height;
+        if(w>1600||h>1600){const r=Math.min(1600/w,1600/h);w=Math.round(w*r);h=Math.round(h*r);}
+        const c=document.createElement('canvas');c.width=w;c.height=h;
+        c.getContext('2d').drawImage(img,0,0,w,h);
+        c.toBlob(blob=>{if(!blob){reject(new Error('Compression failed'));return;}resolve(blob);},'image/jpeg',0.82);
+      };
+      img.onerror=()=>reject(new Error('Could not load image'));
+      img.src=url;
+    });
+  }
 
   // Set default logo initially (will be overridden by KV logo from API if available)
   try{document.getElementById('vs-logo').src=DEFAULT_LOGO;}catch(e){}
@@ -5646,6 +5783,8 @@ function rpImportFromReview(rv) {
     let html='';
     let lastNb='';
     let lastProp='';
+    let lastPropId='';
+    let lastPropShort='';
     let propGroupOpen=false;
     vTasks.forEach(t=>{
       const nb=t.neighborhood||'Other';
@@ -5656,7 +5795,7 @@ function rpImportFromReview(rv) {
         lastNb=nb;lastProp='';
       }
       if(t.propertyName!==lastProp){
-        if(propGroupOpen){html+='</div>';}
+        if(propGroupOpen){html+=vsReportBtn(lastPropId,lastPropShort);html+='</div>';}
         const shortName=t.propertyName.replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
         // Guest alerts for this property
         const propAlerts=vGuestAlerts[t.property]||[];
@@ -5680,10 +5819,12 @@ function rpImportFromReview(rv) {
         html+='<div class="vs-prop-group">';
         propGroupOpen=true;
         lastProp=t.propertyName;
+        lastPropId=t.property;
+        lastPropShort=shortName;
       }
       html+=vsCard(t);
     });
-    if(propGroupOpen)html+='</div>';
+    if(propGroupOpen){html+=vsReportBtn(lastPropId,lastPropShort);html+='</div>';}
     wrap.innerHTML=html;
   }
 
@@ -5727,8 +5868,9 @@ function rpImportFromReview(rv) {
             <div style="font-size:.76rem;font-weight:500;color:var(--green)">Upload Photo</div>
             <div style="font-size:.65rem;color:var(--text3)">Tap to take or upload a photo</div>
           </div>
-          <input type="file" id="vpi-${t.id}" accept="image/*" style="display:none" onchange="window._vsUploadPhoto('${t.id}',this.files[0])">
+          <input type="file" id="vpi-${t.id}" accept="image/*" multiple style="display:none" onchange="window._vsUploadPhotos('${t.id}',this.files)">
         </div>
+        <div id="vps-${t.id}" style="font-size:.72rem;color:var(--text3);margin:4px 0"></div>
         <div class="vs-notes">${notes}
           <div class="vs-note-input">
             <textarea id="vsn-${t.id}" placeholder="Leave a note..." rows="1"></textarea>
@@ -5741,6 +5883,79 @@ function rpImportFromReview(rv) {
       </div>
     </div>`;
   }
+
+  // Report Issue button — rendered at property level below last task
+  function vsReportBtn(propId,propName){
+    return`<div style="padding:8px 0">
+      <button class="vs-report-btn" onclick="window._vsShowReport('${propId}',this)" style="display:flex;align-items:center;gap:8px;width:100%;padding:12px 14px;border:2px dashed var(--border);border-radius:var(--radius);background:var(--surface);cursor:pointer;font-family:inherit;transition:all .2s">
+        <span style="font-size:1.1rem">&#x1F527;</span>
+        <div style="text-align:left">
+          <div style="font-size:.78rem;font-weight:600;color:var(--green)">Report an Issue at ${propName}</div>
+          <div style="font-size:.65rem;color:var(--text3);margin-top:1px">Found something else? Let Chip know!</div>
+        </div>
+      </button>
+      <div id="vsrf-${propId}" style="display:none;margin-top:8px;padding:14px;background:#f8faf8;border:1px solid var(--border);border-radius:var(--radius)">
+        <div style="font-size:.74rem;text-transform:uppercase;letter-spacing:1px;color:var(--green);margin-bottom:10px;font-weight:700">What did you find at ${propName}?</div>
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <div class="vs-type-btn" id="vsrt-${propId}-needs" onclick="window._vsSelType('${propId}','needs_attention')" style="flex:1;padding:10px 8px;border-radius:8px;border:1.5px solid var(--border);background:var(--white);cursor:pointer;text-align:center;transition:all .15s">
+            <div style="font-size:1.2rem">&#x26A0;&#xFE0F;</div>
+            <div style="font-size:.72rem;font-weight:600">Needs Attention</div>
+            <div style="font-size:.6rem;color:var(--text3);margin-top:2px;line-height:1.3">Can't fix now</div>
+          </div>
+          <div class="vs-type-btn" id="vsrt-${propId}-fixed" onclick="window._vsSelType('${propId}','fixed_while_here')" style="flex:1;padding:10px 8px;border-radius:8px;border:1.5px solid var(--border);background:var(--white);cursor:pointer;text-align:center;transition:all .15s">
+            <div style="font-size:1.2rem">&#x2705;</div>
+            <div style="font-size:.72rem;font-weight:600">Fixed While Here</div>
+            <div style="font-size:.6rem;color:var(--text3);margin-top:2px;line-height:1.3">Just logging it</div>
+          </div>
+        </div>
+        <textarea id="vsrd-${propId}" placeholder="Describe what you found..." rows="3" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-family:inherit;font-size:.82rem;resize:vertical;margin-bottom:10px"></textarea>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button onclick="window._vsHideReport('${propId}')" style="padding:7px 16px;border-radius:7px;font-size:.76rem;font-weight:600;cursor:pointer;font-family:inherit;border:1px solid var(--border);background:var(--white);color:var(--text2)">Cancel</button>
+          <button onclick="window._vsSubmitReport('${propId}')" style="padding:7px 16px;border-radius:7px;font-size:.76rem;font-weight:600;cursor:pointer;font-family:inherit;border:1px solid var(--green);background:var(--green);color:#fff">Submit</button>
+        </div>
+      </div>
+      <div id="vsrc-${propId}" style="display:none;margin-top:8px;padding:12px 14px;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:var(--radius);font-size:.8rem;color:#2e7d32">
+        &#x2713; Reported — Chip will review this. Thanks!
+      </div>
+    </div>`;
+  }
+
+  // Track selected report type per property
+  const _vsReportType={};
+
+  window._vsShowReport=function(propId,btn){
+    btn.style.display='none';
+    document.getElementById('vsrf-'+propId).style.display='block';
+  };
+  window._vsHideReport=function(propId){
+    document.getElementById('vsrf-'+propId).style.display='none';
+    // Show the button again
+    const form=document.getElementById('vsrf-'+propId);
+    if(form&&form.previousElementSibling)form.previousElementSibling.style.display='flex';
+  };
+  window._vsSelType=function(propId,type){
+    _vsReportType[propId]=type;
+    const needs=document.getElementById('vsrt-'+propId+'-needs');
+    const fixed=document.getElementById('vsrt-'+propId+'-fixed');
+    if(needs)needs.style.borderColor=type==='needs_attention'?'var(--green)':'var(--border)';
+    if(needs)needs.style.background=type==='needs_attention'?'var(--green-light)':'var(--white)';
+    if(fixed)fixed.style.borderColor=type==='fixed_while_here'?'var(--green)':'var(--border)';
+    if(fixed)fixed.style.background=type==='fixed_while_here'?'var(--green-light)':'var(--white)';
+  };
+  window._vsSubmitReport=async function(propId){
+    const desc=(document.getElementById('vsrd-'+propId)||{}).value||'';
+    if(!desc.trim()){alert('Please describe what you found.');return;}
+    const reportType=_vsReportType[propId];
+    if(!reportType){alert('Please select "Needs Attention" or "Fixed While Here".');return;}
+    try{
+      const r=await fetch(VAPI,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        token,action:'reportIssue',propertyId:propId,description:desc.trim(),reportType
+      })});
+      if(!r.ok){alert('Failed to submit. Please try again.');return;}
+      document.getElementById('vsrf-'+propId).style.display='none';
+      document.getElementById('vsrc-'+propId).style.display='block';
+    }catch(e){alert('Network error. Please try again.');}
+  };
 
   window._vsToggle=function(id){
     const el=document.getElementById('vsc-'+id);
@@ -5790,22 +6005,34 @@ function rpImportFromReview(rv) {
     }catch(e){alert('Network error.');}
   };
 
-  window._vsUploadPhoto=async function(id,file){
-    if(!file)return;
-    if(file.size>5*1024*1024){alert('Photo must be under 5MB.');return;}
-    const ext=file.name.split('.').pop()||'jpg';
-    const fname=`vendor-${id}-${Date.now()}.${ext}`;
-    try{
-      const r=await fetch(VAPI+'?token='+encodeURIComponent(token)+'&taskId='+encodeURIComponent(id)+'&filename='+encodeURIComponent(fname),{
-        method:'POST',headers:{'Content-Type':file.type},body:file
-      });
-      if(!r.ok){alert('Upload failed. Please try again.');return;}
-      const data=await r.json();
-      const t=vTasks.find(x=>x.id===id);
-      if(t){if(!t.vendorPhotos)t.vendorPhotos=[];t.vendorPhotos.push({url:data.url,uploadedAt:new Date().toISOString(),uploadedBy:vVendor});}
-      vsRender();
-      setTimeout(()=>{const el=document.getElementById('vsc-'+id);if(el)el.classList.add('vs-expanded');},10);
-    }catch(e){alert('Upload failed. Please try again.');}
+  window._vsUploadPhotos=async function(id,files){
+    if(!files||!files.length)return;
+    const t=vTasks.find(x=>x.id===id);if(!t)return;
+    const existing=(t.vendorPhotos||[]).length;
+    const remaining=MAX_PHOTOS_PER_TASK-existing;
+    if(remaining<=0){alert('This task already has '+MAX_PHOTOS_PER_TASK+' photos (max limit).');return;}
+    const batch=Array.from(files).slice(0,remaining);
+    if(batch.length<files.length){alert('Only uploading '+batch.length+' of '+files.length+' photos (limit is '+MAX_PHOTOS_PER_TASK+' per task).');}
+    const statusEl=document.getElementById('vps-'+id);
+    let uploaded=0;
+    for(const file of batch){
+      uploaded++;
+      if(statusEl)statusEl.textContent='Uploading '+uploaded+' of '+batch.length+'...';
+      try{
+        const compressed=await vsCompressImage(file);
+        const fname=`vendor-${id}-${Date.now()}-${uploaded}.jpg`;
+        const r=await fetch(VAPI+'?token='+encodeURIComponent(token)+'&taskId='+encodeURIComponent(id)+'&filename='+encodeURIComponent(fname),{
+          method:'POST',headers:{'Content-Type':'image/jpeg'},body:compressed
+        });
+        if(!r.ok){if(statusEl)statusEl.textContent='Failed to upload photo '+uploaded+'. Tap to retry.';continue;}
+        const data=await r.json();
+        if(!t.vendorPhotos)t.vendorPhotos=[];
+        t.vendorPhotos.push({url:data.url,uploadedAt:new Date().toISOString(),uploadedBy:vVendor});
+      }catch(e){if(statusEl)statusEl.textContent='Upload error on photo '+uploaded+'.';continue;}
+    }
+    if(statusEl)statusEl.textContent='';
+    vsRender();
+    setTimeout(()=>{const el=document.getElementById('vsc-'+id);if(el)el.classList.add('vs-expanded');},10);
   };
 
   // ── Payment Prompt Logic ────────────────────────────────
@@ -6155,6 +6382,7 @@ async function initApp(){
   populatePropFilter();
   renderAll();
   hbStartPolling();
+  await loadVendorReports(); // load vendor field reports
   await loadDismissed(); // load dismissed IDs from KV before fetching reviews
   rvFetch(); // fetch guest feedback reviews
   clFetch(); // pre-load cleaning log in background
