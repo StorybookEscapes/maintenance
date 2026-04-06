@@ -2891,6 +2891,8 @@ function resetSmsTemplate(){
 }
 const DEFAULT_COMBINED_SMS_TEMPLATE=`Hey {vendor_first_name}! I've got {task_count} tasks for you on {date}.
 
+{purchase_items}
+
 {link_text}
 
 {signoff}`;
@@ -3376,6 +3378,7 @@ function buildSMS(t,p,v){
     .replace(/\{urgent_notice\}/g, urg);
   // Photo link removed — job sheet handles this now
   if(/hvac\s*filter/i.test(t.problem)||t.category==='hvac'&&/filter/i.test(t.problem))msg+=`\n\nPlease write today's date on the new filter and send us a photo when it's installed.`;
+  if(t.purchaseNote)msg+=`\n\n🛒 You'll need to pick up: ${t.purchaseNote}`;
   if(t._vendorSheetUrl)msg+='\n\nClick this link for all the details!\n'+t._vendorSheetUrl;
   return msg;
 }
@@ -3391,12 +3394,29 @@ function buildMultiSMS(taskList,v,sheetUrlParam){
   const dateFmt=date?new Date(date+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}):'today';
   const resolvedUrl=sheetUrlParam||(taskList[0]&&taskList[0]._vendorSheetUrl)||'';
   const linkText=resolvedUrl?'Click this link for all the details!\n'+resolvedUrl:'';
-  return combinedSmsTemplate
+  // Build purchase items text if any tasks need materials bought
+  const purchaseTasks=taskList.filter(t=>t.purchaseNote);
+  let purchaseText='';
+  if(purchaseTasks.length){
+    const items=purchaseTasks.map(t=>{
+      const p=getProp(t.property);const pName=p?p.name.split(' - ').pop().trim():t.property;
+      return `• ${pName}: ${t.purchaseNote}`;
+    }).join('\n');
+    purchaseText=`🛒 You'll need to pick up some materials before heading out:\n${items}`;
+  }
+  let sms = combinedSmsTemplate
     .replace(/\{vendor_first_name\}/g, firstName)
     .replace(/\{task_count\}/g, String(taskList.length))
     .replace(/\{date\}/g, dateFmt)
+    .replace(/\{purchase_items\}/g, purchaseText)
     .replace(/\{link_text\}/g, linkText)
-    .replace(/\{signoff\}/g, '— Chip Burns, Storybook Escapes');
+    .replace(/\{signoff\}/g, '— Chip Burns, Storybook Escapes')
+    .replace(/\n{3,}/g, '\n\n'); // clean up extra blank lines when no purchase items
+  // If user has a custom template without {purchase_items}, append purchase info after first line
+  if (purchaseText && !combinedSmsTemplate.includes('{purchase_items}')) {
+    sms = sms.replace(/\n/, '\n\n' + purchaseText + '\n');
+  }
+  return sms;
 }
 /* Render combined SMS card for a vendor with multiple same-day tasks */
 function combinedVendorCard(v,taskList,sheetUrl){
