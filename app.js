@@ -3672,11 +3672,13 @@ function renderCleaningLog() {
 function clDrillDown(pid) {
   clDetailPid = pid;
   renderCleaningLog();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function clBackToOverview() {
   clDetailPid = null;
   renderCleaningLog();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function clShowPropDetail(pid, allPropStats) {
