@@ -605,9 +605,6 @@ async function fetchIcal(pid){
     if(r.ok){
       const json=await r.json();
       if(json.data&&Array.isArray(json.data)&&json.data.length>0){
-        // Debug: log first reservation to see guest data structure
-        console.log('[hospitable] Sample reservation:', JSON.stringify(json.data[0], null, 2));
-        if(json.included)console.log('[hospitable] Included data (first 2):', JSON.stringify(json.included.slice(0,2), null, 2));
         // Build a lookup map from included guest data (Hospitable uses JSON:API includes)
         const guestMap={};
         if(json.included&&Array.isArray(json.included)){
@@ -621,7 +618,9 @@ async function fetchIcal(pid){
             // Try multiple paths for guest phone: inline guest object, included data, or top-level fields
             const guestRel=rv.relationships?.guest?.data;
             const inclGuest=guestRel?guestMap[guestRel.id]:null;
-            const gPhone=rv.guest?.phone||rv.guest?.phone_number||rv.guest_phone||inclGuest?.phone||null;
+            // phone_numbers is an array in Hospitable API v2
+            const phoneArr=rv.guest?.phone_numbers||[];
+            const gPhone=phoneArr[0]||rv.guest?.phone||rv.guest_phone||inclGuest?.phone||null;
             const gEmail=rv.guest?.email||rv.guest_email||inclGuest?.email||null;
             const gName=rv.guest_name||rv.guest?.name||(rv.guest?.first_name?rv.guest.first_name+' '+rv.guest.last_name:null)||inclGuest?.name||'Guest';
             return{
