@@ -581,12 +581,17 @@ textarea{resize:vertical;min-height:76px}
 .cl-trend.improving{background:rgba(90,176,90,.15);color:#6ab06a}
 .cl-trend.declining{background:rgba(224,96,80,.15);color:#e06050}
 .cl-trend.stable{background:rgba(200,180,60,.15);color:#c0a830}
-.cl-section{margin-bottom:22px}
+.cl-section{margin-bottom:22px;opacity:0;transform:translateY(8px)}
+.cl-section.animate{animation:clSectionIn .4s cubic-bezier(.4,0,.2,1) forwards}
+@keyframes clSectionIn{to{opacity:1;transform:translateY(0)}}
 .cl-section-hdr{font-family:'Cormorant Garamond',serif;font-size:1.1rem;font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:8px}
 .cl-section-hdr .icon{font-size:1rem}
 .cl-section-hdr.losers{color:var(--red)}
 .cl-section-hdr.winners{color:var(--green)}
 .cl-section-hdr.all-props{color:var(--green)}
+.cl-section-hdr.critical{color:var(--red);font-weight:700}
+.cl-section-hdr.high-priority{color:#d97c3a;font-weight:700}
+.cl-section-hdr.medium-priority{color:var(--gold);font-weight:700}
 .cl-winner-card{background:var(--white);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:8px;padding:13px 16px;cursor:pointer;transition:border-color .15s;box-shadow:var(--shadow)}
 .cl-winner-card:hover{border-color:var(--green)}
 .cl-winner-stat{font-size:.72rem;color:var(--text2)}
@@ -735,7 +740,7 @@ textarea{resize:vertical;min-height:76px}
 .cv-nearly-card:hover{box-shadow:var(--shadow-md);transform:translateY(-2px)}
 
 /* Needs-attention card */
-.cv-attention-card{background:var(--white);border:1px solid var(--border);border-left:3px solid var(--border);border-radius:8px;padding:14px 16px;box-shadow:var(--shadow);transition:box-shadow .2s;opacity:0}
+.cv-attention-card{background:var(--white);border:1px solid var(--border);border-left:3px solid var(--red);border-radius:8px;padding:14px 16px;box-shadow:var(--shadow);transition:box-shadow .2s;opacity:0}
 .cv-attention-card.animate{animation:cvCardIn .35s cubic-bezier(.4,0,.2,1) forwards}
 @keyframes cvCardIn{to{opacity:1}}
 

@@ -3667,7 +3667,7 @@ function renderCleaningLog() {
     }
     logEl.innerHTML = h;
   } else {
-    // All properties view: show only flagged issues
+    // All properties view: show flagged issues organized by severity
     const filtered = clData;
     if (!filtered.length) {
       logEl.innerHTML = '<div class="cl-empty">No cleaning flags found across any properties.</div>';
@@ -3676,19 +3676,61 @@ function renderCleaningLog() {
     const recent = filtered.filter(e => new Date(e.reviewedAt).getTime() > sixtyAgo);
     const older = filtered.filter(e => new Date(e.reviewedAt).getTime() <= sixtyAgo);
 
+    // Organize recent flags by severity
+    const critical = recent.filter(e => e.cleanlinessRating <= 2);
+    const highPriority = recent.filter(e => e.cleanlinessRating > 2 && e.cleanlinessRating <= 3);
+    const medium = recent.filter(e => e.cleanlinessRating > 3 && e.cleanlinessRating < 4.8);
+
     let h = '';
-    if (recent.length) {
-      h += recent.map(e => clEntryHtml(e, true)).join('');
-    } else {
+    let sectionIdx = 0;
+
+    // Critical section
+    if (critical.length) {
+      h += `<div class="cl-section" data-section="${sectionIdx++}"><div class="cl-section-hdr critical"><span class="icon">🔴</span> Critical Issues</div>`;
+      h += critical.map(e => clEntryHtml(e, true)).join('');
+      h += '</div>';
+    }
+
+    // High Priority section
+    if (highPriority.length) {
+      h += `<div class="cl-section" data-section="${sectionIdx++}"><div class="cl-section-hdr high-priority"><span class="icon">🟠</span> High Priority</div>`;
+      h += highPriority.map(e => clEntryHtml(e, true)).join('');
+      h += '</div>';
+    }
+
+    // Medium Priority section
+    if (medium.length) {
+      h += `<div class="cl-section" data-section="${sectionIdx++}"><div class="cl-section-hdr medium-priority"><span class="icon">🟡</span> Medium Priority</div>`;
+      h += medium.map(e => clEntryHtml(e, true)).join('');
+      h += '</div>';
+    }
+
+    if (!critical.length && !highPriority.length && !medium.length) {
       h += '<div style="color:var(--text2);font-size:.82rem;padding:12px 0;font-style:italic">No cleaning flags in the last 60 days.</div>';
     }
+
     if (older.length) {
       h += `<div style="margin-top:16px">
         <button class="btn" id="cl-older-btn" style="width:100%;text-align:center;font-size:.8rem;padding:10px" onclick="document.getElementById('cl-older-entries').style.display='';this.style.display='none'">Older Flags (${older.length})</button>
-        <div id="cl-older-entries" style="display:none;margin-top:8px">${older.map(e => clEntryHtml(e, true)).join('')}</div>
-      </div>`;
+        <div id="cl-older-entries" style="display:none;margin-top:8px;display:none">`;
+      // Organize older by severity too
+      const oldCritical = older.filter(e => e.cleanlinessRating <= 2);
+      const oldHigh = older.filter(e => e.cleanlinessRating > 2 && e.cleanlinessRating <= 3);
+      const oldMedium = older.filter(e => e.cleanlinessRating > 3 && e.cleanlinessRating < 4.8);
+      if (oldCritical.length) h += `<div style="margin-bottom:12px"><div style="font-weight:600;color:var(--red);margin-bottom:6px">Critical</div>${oldCritical.map(e => clEntryHtml(e, true)).join('')}</div>`;
+      if (oldHigh.length) h += `<div style="margin-bottom:12px"><div style="font-weight:600;color:#d97c3a;margin-bottom:6px">High Priority</div>${oldHigh.map(e => clEntryHtml(e, true)).join('')}</div>`;
+      if (oldMedium.length) h += `<div style="margin-bottom:12px"><div style="font-weight:600;color:var(--gold);margin-bottom:6px">Medium Priority</div>${oldMedium.map(e => clEntryHtml(e, true)).join('')}</div>`;
+      h += `</div></div>`;
     }
     logEl.innerHTML = h;
+
+    // Animate severity sections sequentially
+    setTimeout(() => {
+      const sections = logEl.querySelectorAll('.cl-section');
+      sections.forEach((sec, i) => {
+        setTimeout(() => sec.classList.add('animate'), i * 200);
+      });
+    }, 50);
   }
 }
 
@@ -5844,13 +5886,6 @@ function cvRender(cvName, cvProps, cvAllRatings, cvFlaggedData, allPropStats, el
       trendH = `<div class="cv-trend flat">— not enough 6-month data</div>`;
     }
 
-    // Progress bar for nearly-made-it
-    let progressH = '';
-    if (cardClass === 'cv-nearly-card' && s.recentAvg !== null) {
-      const pct = Math.min(100, Math.round((s.recentAvg / 4.8) * 100));
-      progressH = `<div class="cv-progress-wrap"><div class="cv-progress-label"><span>Progress to elite (4.8)</span><span>${pct}% there</span></div><div class="cv-progress-track"><div class="cv-progress-fill" data-width="${pct}%"></div></div></div>`;
-    }
-
     // Flags for nearly-made-it and needs-attention
     let flagsH = '';
     if ((cardClass === 'cv-nearly-card' || cardClass === 'cv-attention-card') && cvFlaggedData.length > 0) {
@@ -5866,7 +5901,7 @@ function cvRender(cvName, cvProps, cvAllRatings, cvFlaggedData, allPropStats, el
       <div class="cv-card-name">${escHtml(p.name)}</div>
       <div class="cv-card-rating-row"><span class="cv-card-rating-label">60-day cleaning avg</span><span class="cv-card-rating-value">${recentAvg} / 5</span></div>
       <div class="cv-card-sub">${perfect}/${s.recentReviews} Perfect Cleaning Reviews</div>
-      ${trendH}${progressH}${flagsH}
+      ${trendH}${flagsH}
       <div class="cv-comp-row"><div class="cv-comp-col"><span class="cv-comp-val">${recentAvg}</span><span class="cv-comp-lbl">Last 60 days</span></div><div class="cv-comp-divider"></div><div class="cv-comp-col"><span class="cv-comp-val muted">${sixMoAvg}</span><span class="cv-comp-lbl">6-month avg</span></div></div>
     </div>`;
   }
@@ -5911,23 +5946,8 @@ function cvRender(cvName, cvProps, cvAllRatings, cvFlaggedData, allPropStats, el
   summaryEl.innerHTML = sumH;
   window._cvData = { cvName, cvProps, cvAllRatings, cvFlaggedData, allPropStats, eliteCount };
 
-  // Flagged issues log
-  const recentFlags = cvFlaggedData.filter(e => new Date(e.reviewedAt).getTime() > sixtyDaysAgo).sort((a, b) => new Date(b.reviewedAt) - new Date(a.reviewedAt));
-  const olderFlags = cvFlaggedData.filter(e => new Date(e.reviewedAt).getTime() <= sixtyDaysAgo).sort((a, b) => new Date(b.reviewedAt) - new Date(a.reviewedAt));
-  let logH = '';
-  if (recentFlags.length) {
-    logH += `<div class="cv-section" data-section="5"><div class="cv-section-hdr" style="color:var(--red)"><span class="icon">⚑</span> Recent Cleaning Flags (60 days)</div>`;
-    logH += recentFlags.map(e => cvEntryHtml(e, true)).join('');
-    logH += '</div>';
-  }
-  if (olderFlags.length) {
-    logH += `<div style="margin-top:12px"><button class="btn" style="width:100%;text-align:center;font-size:.8rem;padding:10px" onclick="document.getElementById('cv-older-entries').style.display='';this.style.display='none'">Older Flags (${olderFlags.length})</button>`;
-    logH += `<div id="cv-older-entries" style="display:none;margin-top:8px">${olderFlags.map(e => cvEntryHtml(e, true)).join('')}</div></div>`;
-  }
-  if (!cvFlaggedData.length) {
-    logH += '<div class="cl-empty" style="margin-top:14px">No cleaning flags found — great work!</div>';
-  }
-  logEl.innerHTML = logH;
+  // Flags and reviews shown only in property detail view, not on main overview
+  logEl.innerHTML = '';
 
   // Animate sections sequentially
   const SECTION_DELAYS = [0.05, 0.6, 1.15, 1.6, 2.0];
@@ -6014,10 +6034,14 @@ function cvShowPropDetail(pid) {
   if (propFlags.length > 0) {
     h += `<div style="background:rgba(192,57,43,.08);border:1px solid rgba(192,57,43,.2);border-radius:8px;padding:12px 14px;margin-bottom:16px">
       <div style="font-size:.85rem;font-weight:600;color:var(--red);margin-bottom:8px">⚠ Flags (${propFlags.length})</div>
-      ${propFlags.map(f => `<div style="font-size:.75rem;margin-bottom:8px;padding:8px;background:var(--white);border-radius:4px;border-left:3px solid var(--red)">
-        <div style="font-weight:600;color:var(--text)">${escHtml(f.guest)}</div>
-        <div style="color:var(--text2);margin-top:2px">${escHtml(f.text)}</div>
-      </div>`).join('')}
+      ${propFlags.map(f => {
+        const dateStr = new Date(f.reviewedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        return `<div style="font-size:.75rem;margin-bottom:8px;padding:8px;background:var(--white);border-radius:4px;border-left:3px solid var(--red)">
+          <div style="font-weight:600;color:var(--text)">${escHtml(f.guest)}</div>
+          <div style="font-size:.7rem;color:var(--text3);margin-top:2px">${dateStr} · Cleaning: ${f.cleanlinessRating}/5 · ${f.source}</div>
+          <div style="color:var(--text2);margin-top:4px">${escHtml(f.text)}</div>
+        </div>`;
+      }).join('')}
     </div>`;
   }
 
