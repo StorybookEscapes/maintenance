@@ -1260,13 +1260,15 @@ async function openDetail(id){
   document.getElementById('d-date').value=dv;
   if(dv){document.getElementById('d-dp-display').textContent=fmtDate(dv);document.getElementById('d-dp-display').className='';document.getElementById('d-dp-btn').classList.add('has-val');}
   else{document.getElementById('d-dp-display').textContent='Select a date...';document.getElementById('d-dp-display').className='dp-ph';document.getElementById('d-dp-btn').classList.remove('has-val');}
+  // Badges — compact: status + combined reporter/date
+  const guestFirst=t.guest?t.guest.split(' ')[0]:'';
+  const createdShort=t.created?new Date(t.created).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'';
+  const reporterBadge=(guestFirst||createdShort)?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${guestFirst}${guestFirst&&createdShort?' \u00B7 ':''}${createdShort}</span>`:'';
   document.getElementById('d-badges').innerHTML=`
     ${t.urgent?'<span class="badge b-urgent">Urgent</span>':''}
     ${t.recurring?'<span class="badge b-rec">Recurring</span>':''}
     <span class="badge b-${t.status}">${t.status.replace('_',' ')}</span>
-    ${t.category?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${t.category.replace('_',' ')}</span>`:''}
-    ${t.guest?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">Reported by ${t.guest}</span>`:''}
-    ${t.created?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${fmtReported(t.created)}</span>`:''}`;
+    ${reporterBadge}`;
   document.getElementById('d-purchase').value=t.purchaseNote||'';
   const pSaved=document.getElementById('d-purchase-saved');
   if(pSaved)pSaved.style.display=t.purchaseNote?'':'none';
@@ -1282,8 +1284,6 @@ async function openDetail(id){
   renderGuestComm(t);
   const isDone=['complete','resolved_by_guest'].includes(t.status);
   document.getElementById('complete-btn').style.display=isDone?'none':'';
-  document.getElementById('resolved-guest-btn').style.display=isDone?'none':'';
-  document.getElementById('assign-guest-btn').style.display=(isDone||t.assignedToGuest)?'none':'';
   // Vendor-done approval notice
   const vdNotice=document.getElementById('d-vendor-done-notice');
   if(vdNotice){
@@ -1378,8 +1378,8 @@ function showTaskPhoto(t){
   const photos=getTaskPhotos(t);
   if(!photos.length){gallery.innerHTML='';} else {
     gallery.innerHTML=photos.map((url,i)=>`<div style="position:relative;display:inline-block">
-      <img src="${url}" style="max-width:140px;max-height:120px;border-radius:var(--radius);border:1px solid var(--border);cursor:pointer;object-fit:cover" onclick="window.open('${url}','_blank')" title="Click to view full size">
-      <button onclick="removeTaskPhoto('${url}')" style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:.65rem;display:flex;align-items:center;justify-content:center" title="Remove photo">&#x2715;</button>
+      <img src="${url}" style="width:72px;height:72px;border-radius:6px;border:1px solid var(--border);cursor:pointer;object-fit:cover" onclick="window.open('${url}','_blank')" title="Click to view full size">
+      <button onclick="removeTaskPhoto('${url}')" style="position:absolute;top:-4px;right:-4px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:.6rem;display:flex;align-items:center;justify-content:center;line-height:1" title="Remove photo">&#x2715;</button>
     </div>`).join('');
   }
   document.getElementById('d-photo-status').textContent='';
@@ -1646,19 +1646,35 @@ async function renderGuestComm(t){
   // Strip country code: +1, 1, or leading 1 for US numbers (11 digits)
   const phone=rawPhone.replace(/\D/g,'').replace(/^1(\d{10})$/,'$1');
   const phoneFmt=phone?phone.replace(/^(\d{3})(\d{3})(\d{4})$/,'($1) $2-$3'):rawPhone;
-  const phoneLinks=phone?`<div class="vc-action-row">
-    <a href="sms:${phone}" class="vc-action-btn vc-text"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg> Text ${phoneFmt}</a>
-    <a href="tel:${phone}" class="vc-action-btn vc-call"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg> Call</a>
-  </div>`:`<div class="vc-action-row">
-    <span class="vc-action-btn vc-disabled"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg> Text</span>
-    <span class="vc-action-btn vc-disabled"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg> Call</span>
+  const phoneLinks=phone?`<div class="vc-action-row" style="flex-shrink:0">
+    <a href="sms:${phone}" class="vc-action-btn vc-text"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg> Text ${phoneFmt}</a>
+    <a href="tel:${phone}" class="vc-action-btn vc-call"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg> Call</a>
+  </div>`:`<div class="vc-action-row" style="flex-shrink:0">
+    <span class="vc-action-btn vc-disabled"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg> Text</span>
+    <span class="vc-action-btn vc-disabled"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg> Call</span>
     <span class="vc-no-phone">No phone on file</span>
   </div>`;
+  // Determine if guest action buttons should show
+  const tRef=tasks.find(x=>x.id===detailId);
+  const gcIsDone=tRef&&['complete','resolved_by_guest'].includes(tRef.status);
+  const showAssignGuest=tRef&&!gcIsDone&&!tRef.assignedToGuest;
+  const showResolved=tRef&&!gcIsDone;
+  const gcActions=`<div class="gc-hosp-actions">
+    ${showAssignGuest?`<button class="btn" onclick="assignToGuest()" style="border-color:var(--gold);color:var(--gold);font-size:.68rem;padding:2px 9px;box-shadow:none">Assign to Guest</button>`:''}
+    ${showResolved?`<button class="btn" onclick="markResolvedByGuest()" style="border-color:var(--green);color:var(--green);font-size:.68rem;padding:2px 9px;box-shadow:none">Resolved by Guest</button>`:''}
+  </div>`;
   el.innerHTML=`<div class="guest-comm">
-    <div class="guest-comm-header"><span style="font-size:.72rem;font-weight:600;color:var(--text2)">Guest at this property</span><span class="gc-hosp-badge">Hospitable</span></div>
-    <div class="gc-guest-name">${guestName}</div>
-    <div class="gc-guest-dates">${checkin} – ${checkout}${activeRes.platform?' · '+activeRes.platform:''}</div>
-    ${phoneLinks}
+    <div class="guest-comm-header">
+      <div class="gc-hosp-left"><span style="font-size:.7rem;font-weight:600;color:var(--text2)">Guest at this property</span><span class="gc-hosp-badge">Hospitable</span></div>
+      ${gcActions}
+    </div>
+    <div class="gc-top-row">
+      <div class="gc-top-left">
+        <div class="gc-guest-name">${guestName}</div>
+        <div class="gc-guest-dates">${checkin} – ${checkout}${activeRes.platform?' · '+activeRes.platform:''}</div>
+      </div>
+      ${phoneLinks}
+    </div>
     <div class="gc-msg-box">
       <textarea id="gc-msg-input" placeholder="Send a message to ${guestFirst} via Hospitable..."></textarea>
       <button class="gc-send-btn" onclick="sendGuestCommMsg('${activeRes.reservationId}','${guestFirst}')">Send</button>
@@ -1717,22 +1733,28 @@ async function renderDetailVendors(t,p){
     const smsId='sms-'+v.id+'-'+t.id;
     const phoneFmt=v.phone;
     const isAssigned=!showAssign;
-    const contactBtns=tel?`<div class="vc-action-row">
-      <a href="sms:${tel}" class="vc-action-btn vc-text"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg> Text ${isAssigned?phoneFmt:''}</a>
-      <a href="tel:${tel}" class="vc-action-btn vc-call"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg> Call</a>
+    const contactBtns=tel?`<div class="vc-action-row" style="flex-shrink:0">
+      <a href="sms:${tel}" class="vc-action-btn vc-text"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg> Text ${isAssigned?phoneFmt:''}</a>
+      <a href="tel:${tel}" class="vc-action-btn vc-call"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg> Call</a>
     </div>`:'';
     return`<div class="vsc">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start">
-        <div><div class="vsn">${v.name}</div><div class="vsr">${v.role}</div>${isAssigned?'':`<div class="vsp">${v.phone}${v.email?' | '+v.email:''}</div>`}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+        <div style="flex:1;min-width:0"><div class="vsn">${v.name}</div><div class="vsr">${v.role}</div>${isAssigned?'':`<div class="vsp">${v.phone}${v.email?' | '+v.email:''}</div>`}</div>
+        ${isAssigned?contactBtns:''}
         ${showAssign?`<button class="btn btn-g" onclick="assignVendor('${v.name.replace(/'/g,"\\'")}')">Assign</button>`:''}
       </div>
-      ${isAssigned?contactBtns:''}
-      <div style="font-size:.73rem;color:var(--text2);margin:5px 0 8px">${v.note}</div>
-      <div class="sms-box"><div class="sms-lbl">Ready-to-Send Text Message</div>
-        <textarea class="sms-edit" id="${smsId}">${sms.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
-        <div class="sms-acts">
-          <a id="${smsId}-link" href="sms:${tel}?body=${encodeURIComponent(sms)}" class="sms-btn sms-send" onclick="updateSmsLink('${smsId}','${tel}')">Open in Messages</a>
-          <button class="sms-btn sms-copy" onclick="copySms('${smsId}')">Copy Text</button>
+      <div style="font-size:.72rem;color:var(--text2);margin:4px 0 6px">${v.note}</div>
+      <button class="sms-toggle" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
+        <span class="sms-toggle-label">Ready-to-Send Text Message</span>
+        <span class="sms-toggle-arrow">&#x25BC;</span>
+      </button>
+      <div class="sms-collapsible">
+        <div class="sms-box">
+          <textarea class="sms-edit" id="${smsId}">${sms.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+          <div class="sms-acts">
+            <a id="${smsId}-link" href="sms:${tel}?body=${encodeURIComponent(sms)}" class="sms-btn sms-send" onclick="updateSmsLink('${smsId}','${tel}')">Open in Messages</a>
+            <button class="sms-btn sms-copy" onclick="copySms('${smsId}')">Copy Text</button>
+          </div>
         </div>
       </div>
     </div>`;
@@ -2558,7 +2580,6 @@ async function markComplete(){
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
   t.status='complete';document.getElementById('d-status').value='complete';
   document.getElementById('complete-btn').style.display='none';
-  document.getElementById('resolved-guest-btn').style.display='none';
   await saveTasks();closeModal('detail-modal');renderAll();showToast('Task marked complete.');
   // Check if this completes a payment group where vendor requested payment
   checkAdminPaymentPrompt(t);

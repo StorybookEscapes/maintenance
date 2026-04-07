@@ -335,29 +335,30 @@
 <!-- DETAIL MODAL -->
 <div class="mo" id="detail-modal">
   <div class="modal">
+    <div class="modal-body">
     <div class="mhdr">
       <div>
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-          <span id="d-prop" style="font-size:.67rem;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;cursor:pointer" title="Click to change property" onclick="document.getElementById('d-prop-select').style.display='';this.style.display='none'"></span>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+          <span id="d-prop" style="font-size:.64rem;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;cursor:pointer" title="Click to change property" onclick="document.getElementById('d-prop-select').style.display='';this.style.display='none'"></span>
           <select id="d-prop-select" style="display:none;font-size:.72rem;font-family:inherit;padding:2px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);max-width:280px" onchange="confirmPropertyChange(this.value)"></select>
         </div>
         <div class="mtitle" id="d-title" style="cursor:pointer" title="Click to edit description" onclick="taskStartEditTitle()"></div>
-        <textarea id="d-title-input" rows="3" style="display:none;font-family:'Cormorant Garamond',serif;font-size:1.25rem;font-weight:600;color:var(--green);border:1px solid var(--gold);border-radius:var(--radius);padding:6px 10px;width:100%;background:var(--surface2);outline:none;resize:vertical;line-height:1.35" onblur="taskSaveTitle()" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();this.blur();}if(event.key==='Escape'){taskCancelEditTitle();}"></textarea>
+        <textarea id="d-title-input" rows="3" style="display:none;font-family:'DM Sans',sans-serif;font-size:1.15rem;font-weight:600;color:var(--green);border:1px solid var(--gold);border-radius:var(--radius);padding:6px 10px;width:100%;background:var(--surface2);outline:none;resize:vertical;line-height:1.35" onblur="taskSaveTitle()" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();this.blur();}if(event.key==='Escape'){taskCancelEditTitle();}"></textarea>
       </div>
       <button class="mclose" onclick="closeModal('detail-modal')">&#x2715;</button>
     </div>
-    <div id="d-badges" style="display:flex;gap:7px;margin-bottom:16px;flex-wrap:wrap;align-items:center"></div>
-    <div style="margin-bottom:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <div id="d-badges" style="display:flex;gap:5px;flex-wrap:wrap;align-items:center"></div>
       <button type="button" class="btn" id="d-urgent-toggle" onclick="toggleDetailUrgent()" style="font-size:.72rem;padding:4px 12px;border-radius:20px"></button>
     </div>
     <div id="d-photo-section" style="margin-bottom:14px">
-      <div id="d-photo-gallery" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px"></div>
+      <div id="d-photo-gallery" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px"></div>
       <div id="d-photo-upload">
-        <div id="d-photo-dropzone" style="display:flex;align-items:center;gap:10px;padding:12px 16px;border:2px dashed var(--border);border-radius:var(--radius);background:var(--surface2);transition:border-color .2s,background .2s;cursor:pointer" onclick="document.getElementById('d-photo-input').click()">
-          <span style="font-size:1.1rem">&#x1F4F7;</span>
+        <div id="d-photo-dropzone" style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px dashed var(--border);border-radius:var(--radius);background:var(--surface2);transition:border-color .2s,background .2s;cursor:pointer" onclick="document.getElementById('d-photo-input').click()">
+          <span style="font-size:.9rem">&#x1F4F7;</span>
           <div style="flex:1;min-width:0">
-            <div style="font-size:.76rem;font-weight:500;color:var(--green)">Attach Photo</div>
-            <div style="font-size:.65rem;color:var(--text3);margin-top:1px">Click to browse, drag &amp; drop, or paste from clipboard</div>
+            <div style="font-size:.72rem;font-weight:500;color:var(--green)">Attach Photo</div>
+            <div style="font-size:.6rem;color:var(--text3)">Click, drag &amp; drop, or paste</div>
           </div>
           <input type="file" id="d-photo-input" accept="image/*" multiple style="display:none" onchange="uploadTaskPhotos(this.files)">
         </div>
@@ -416,42 +417,39 @@
         </div>
       </div>
     </div>
-    <div class="fgr full" id="d-purchase-wrap" style="margin-bottom:14px">
+    <div class="fgr full" id="d-purchase-wrap" style="margin-bottom:12px">
       <label style="display:flex;align-items:center;gap:6px">
         <span>Purchase Required</span>
-        <span style="font-size:.64rem;color:var(--text3);font-weight:400">— vendor will see this prominently</span>
+        <span style="font-size:.6rem;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0">— vendor will see this prominently</span>
       </label>
-      <div style="display:flex;gap:6px;align-items:flex-start">
+      <div style="display:flex;gap:6px;align-items:center">
         <input type="text" id="d-purchase" placeholder="e.g. 4x12 vent from Home Depot, wood glue, door knob..." style="flex:1" onkeydown="if(event.key==='Enter')savePurchaseNote()" oninput="clearTimeout(this._debounce);this._debounce=setTimeout(()=>savePurchaseNote(),1200)">
-        <button class="btn btn-g" onclick="savePurchaseNote()" style="padding:6px 12px;font-size:.73rem;white-space:nowrap">Save</button>
+        <button class="btn btn-g" onclick="savePurchaseNote()" style="padding:5px 11px;font-size:.72rem;white-space:nowrap">Save</button>
       </div>
-      <div id="d-purchase-saved" style="font-size:.64rem;color:var(--green);margin-top:3px;display:none">Saved — vendor will be notified to purchase this.</div>
+      <div id="d-purchase-saved" style="font-size:.62rem;color:var(--green-mid);margin-top:2px;display:none">Saved — vendor will be notified to purchase this.</div>
     </div>
-    <div id="d-guest-comm-section"></div>
     <div class="stitle">Notes</div>
     <div class="notes" id="d-notes"></div>
     <div class="note-row">
       <input type="text" id="d-note-input" placeholder="Add an internal note..." onkeydown="if(event.key==='Enter')addNote('admin')">
       <button class="btn btn-g" onclick="addNote('admin')">Add</button>
     </div>
-    <div id="d-next-co" style="font-size:.72rem;color:var(--text2);margin:4px 0 8px"></div>
+    <div id="d-next-co" style="font-size:.7rem;color:var(--text2);margin:2px 0 6px"></div>
     <div id="d-guest-context"></div>
-    <div style="display:flex;align-items:center;justify-content:space-between">
-      <div class="stitle" id="d-vendors-title" style="margin-bottom:0">Suggested Vendors</div>
-      <button class="btn" onclick="assignToGuest()" id="assign-guest-btn" style="border-color:var(--gold);color:var(--gold);font-size:.72rem;padding:4px 11px">Assign to Guest</button>
-    </div>
+    <div class="stitle" id="d-vendors-title">Assigned Vendor</div>
     <div id="d-vendors"></div>
     <div id="d-vnotes-section" style="display:none"><div class="stitle">Vendor Completion Notes</div>
     <textarea id="d-vnotes" rows="3" placeholder="Vendor fills this out after completing work..." onchange="updateField('vendorNotes',this.value)" oninput="clearTimeout(this._debounce);this._debounce=setTimeout(()=>updateField('vendorNotes',this.value),800)"></textarea></div>
-    <div id="d-vendor-done-notice" style="display:none;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:var(--radius);padding:12px 16px;margin-bottom:10px">
-      <div style="font-size:.78rem;font-weight:600;color:#2e7d32;margin-bottom:3px">✓ Vendor marked this complete</div>
-      <div style="font-size:.72rem;color:#4a6355">Submitted at <span class="vd-time"></span>. Review photos and notes before approving.</div>
+    <div id="d-vendor-done-notice" style="display:none;background:var(--green-light);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;margin-bottom:8px">
+      <div style="font-size:.76rem;font-weight:600;color:var(--green-mid);margin-bottom:2px">&#x2713; Vendor marked this complete</div>
+      <div style="font-size:.7rem;color:var(--text2)">Submitted at <span class="vd-time"></span>. Review photos and notes before approving.</div>
     </div>
-    <div style="display:flex;gap:9px;margin-top:20px;justify-content:space-between;align-items:center;flex-wrap:wrap">
+    <div id="d-guest-comm-section"></div>
+    </div>
+    <div class="modal-footer">
       <button class="btn btn-red" onclick="deleteTask()">Delete Task</button>
       <div style="display:flex;gap:7px">
         <button class="btn" onclick="closeModal('detail-modal')">Close</button>
-        <button class="btn" onclick="markResolvedByGuest()" id="resolved-guest-btn" style="border-color:var(--green);color:var(--green)">Resolved by Guest</button>
         <button class="btn btn-g" onclick="markComplete()" id="complete-btn">Mark Complete</button>
       </div>
     </div>
