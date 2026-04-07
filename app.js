@@ -3677,9 +3677,9 @@ function renderCleaningLog() {
     const older = filtered.filter(e => new Date(e.reviewedAt).getTime() <= sixtyAgo);
 
     // Organize recent flags by severity
-    const critical = recent.filter(e => e.cleanlinessRating <= 2);
-    const highPriority = recent.filter(e => e.cleanlinessRating > 2 && e.cleanlinessRating <= 3);
-    const medium = recent.filter(e => e.cleanlinessRating > 3 && e.cleanlinessRating < 4.8);
+    const critical = recent.filter(e => e.cleanlinessRating && e.cleanlinessRating <= 2);
+    const highPriority = recent.filter(e => e.cleanlinessRating && e.cleanlinessRating > 2 && e.cleanlinessRating <= 3);
+    const medium = recent.filter(e => !e.cleanlinessRating || (e.cleanlinessRating > 3 && e.cleanlinessRating < 4.8));
 
     let h = '';
     let sectionIdx = 0;
@@ -3712,11 +3712,11 @@ function renderCleaningLog() {
     if (older.length) {
       h += `<div style="margin-top:16px">
         <button class="btn" id="cl-older-btn" style="width:100%;text-align:center;font-size:.8rem;padding:10px" onclick="document.getElementById('cl-older-entries').style.display='';this.style.display='none'">Older Flags (${older.length})</button>
-        <div id="cl-older-entries" style="display:none;margin-top:8px;display:none">`;
+        <div id="cl-older-entries" style="display:none;margin-top:8px">`;
       // Organize older by severity too
-      const oldCritical = older.filter(e => e.cleanlinessRating <= 2);
-      const oldHigh = older.filter(e => e.cleanlinessRating > 2 && e.cleanlinessRating <= 3);
-      const oldMedium = older.filter(e => e.cleanlinessRating > 3 && e.cleanlinessRating < 4.8);
+      const oldCritical = older.filter(e => e.cleanlinessRating && e.cleanlinessRating <= 2);
+      const oldHigh = older.filter(e => e.cleanlinessRating && e.cleanlinessRating > 2 && e.cleanlinessRating <= 3);
+      const oldMedium = older.filter(e => !e.cleanlinessRating || (e.cleanlinessRating > 3 && e.cleanlinessRating < 4.8));
       if (oldCritical.length) h += `<div style="margin-bottom:12px"><div style="font-weight:600;color:var(--red);margin-bottom:6px">Critical</div>${oldCritical.map(e => clEntryHtml(e, true)).join('')}</div>`;
       if (oldHigh.length) h += `<div style="margin-bottom:12px"><div style="font-weight:600;color:#d97c3a;margin-bottom:6px">High Priority</div>${oldHigh.map(e => clEntryHtml(e, true)).join('')}</div>`;
       if (oldMedium.length) h += `<div style="margin-bottom:12px"><div style="font-weight:600;color:var(--gold);margin-bottom:6px">Medium Priority</div>${oldMedium.map(e => clEntryHtml(e, true)).join('')}</div>`;
@@ -6029,11 +6029,11 @@ function cvShowPropDetail(pid) {
   </div>`;
 
   // Show flags for this property
-  const propFlags = (cvFlaggedData || []).filter(f => f.pid === pid);
+  const propFlags = (cvFlaggedData || []).filter(f => f.pid === pid && new Date(f.reviewedAt).getTime() > sixtyDaysAgo);
   let h = '';
   if (propFlags.length > 0) {
     h += `<div style="background:rgba(192,57,43,.08);border:1px solid rgba(192,57,43,.2);border-radius:8px;padding:12px 14px;margin-bottom:16px">
-      <div style="font-size:.85rem;font-weight:600;color:var(--red);margin-bottom:8px">⚠ Flags (${propFlags.length})</div>
+      <div style="font-size:.85rem;font-weight:600;color:var(--red);margin-bottom:8px">⚠ Recent Flags (${propFlags.length})</div>
       ${propFlags.map(f => {
         const dateStr = new Date(f.reviewedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
         return `<div style="font-size:.75rem;margin-bottom:8px;padding:8px;background:var(--white);border-radius:4px;border-left:3px solid var(--red)">
