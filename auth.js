@@ -73,7 +73,7 @@
         alert('Access denied. This account is not authorized.');
         return;
       }
-      sessionStorage.setItem('se_auth_token',token);
+      localStorage.setItem('se_auth_token',token);
       window.storage=makeStorage(token);
       document.getElementById('login-screen').style.display='none';
       document.getElementById('app').classList.add('authed');
@@ -82,8 +82,8 @@
     }catch(e){alert('Sign-in failed. Please try again.');}
   }
 
-  // Check for existing session
-  const existing=sessionStorage.getItem('se_auth_token');
+  // Check for existing session (localStorage persists across tabs/restarts)
+  const existing=localStorage.getItem('se_auth_token');
   if(existing){
     try{
       const payload=JSON.parse(atob(existing.split('.')[1]));
@@ -94,7 +94,7 @@
         return;
       }
     }catch(e){}
-    sessionStorage.removeItem('se_auth_token');
+    localStorage.removeItem('se_auth_token');
   }
 
   // Initialize Google Sign-In when the library loads

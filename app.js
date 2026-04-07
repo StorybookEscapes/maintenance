@@ -1,7 +1,7 @@
 // ── User Name Mapping (for note attribution) ─────────────────
 const USER_NAME_MAP={'cb@chipburns.com':'Chip','properties@chipburns.com':'Chip'};
 function getCurrentUserName(){
-  try{const t=sessionStorage.getItem('se_auth_token');if(t){const p=JSON.parse(atob(t.split('.')[1]));return USER_NAME_MAP[(p.email||'').toLowerCase()]||p.name||'Admin';}}catch(e){}
+  try{const t=localStorage.getItem('se_auth_token');if(t){const p=JSON.parse(atob(t.split('.')[1]));return USER_NAME_MAP[(p.email||'').toLowerCase()]||p.name||'Admin';}}catch(e){}
   return 'Chip'; // fallback for dev
 }
 
@@ -128,38 +128,105 @@ function toggleShowDone(){showDone=!showDone;document.getElementById('toggle-don
 // STORAGE
 const STORAGE_API = 'https://storybook-webhook.vercel.app/api/storage';
 function getAuthToken(){
-  try{const a=sessionStorage.getItem('se_auth_token');return a||null;}catch(e){return null;}
+  try{const a=localStorage.getItem('se_auth_token');return a||null;}catch(e){return null;}
 }
+// ── Auth health helpers ──
+function isTokenExpired(){
+  const t=getAuthToken();if(!t)return true;
+  try{const p=JSON.parse(atob(t.split('.')[1]));return p.exp&&p.exp*1000<Date.now();}catch(e){return true;}
+}
+function tokenExpiresIn(){
+  const t=getAuthToken();if(!t)return 0;
+  try{const p=JSON.parse(atob(t.split('.')[1]));return Math.max(0,(p.exp*1000)-Date.now());}catch(e){return 0;}
+}
+let _authWarnShown=false;
+function showReAuthPrompt(){
+  if(_authWarnShown)return;_authWarnShown=true;
+  // Update sync status to disconnected
+  updateSyncStatus('disconnected');
+  const d=document.createElement('div');d.id='reauth-overlay';
+  d.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;';
+  d.innerHTML=`<div style="background:#1a2a1a;border:2px solid #c0392b;border-radius:16px;padding:32px 28px;max-width:420px;width:90%;text-align:center;color:#e8dcc8;font-family:DM Sans,sans-serif;">
+    <div style="font-size:36px;margin-bottom:12px;">\u26a0\ufe0f</div>
+    <h2 style="margin:0 0 8px;font-size:20px;color:#e74c3c;">Session Expired</h2>
+    <p style="margin:0 0 20px;font-size:15px;line-height:1.5;color:#b8a88a;">Your sign-in has expired. Any unsaved changes may be lost.<br>Please sign in again to continue.</p>
+    <button onclick="location.reload()" style="background:#2d6a3f;color:#fff;border:none;padding:12px 32px;border-radius:8px;font-size:16px;cursor:pointer;font-family:inherit;">Sign In Again</button>
+  </div>`;
+  document.body.appendChild(d);
+}
+
+// ── Proactive token expiry watcher ──
+// Checks every 30s; warns 5 min before expiry, forces re-auth on actual expiry
+let _expiryTimer=null;
+function startExpiryWatcher(){
+  if(_expiryTimer)clearInterval(_expiryTimer);
+  _expiryTimer=setInterval(()=>{
+    const ms=tokenExpiresIn();
+    if(ms<=0){showReAuthPrompt();clearInterval(_expiryTimer);}
+    else if(ms<300000&&!_authWarnShown){
+      // Under 5 min left — show a soft warning toast
+      showToast('\u23f3 Session expiring soon — save your work','',null,8000);
+    }
+  },30000);
+}
+
 const S = {
   get: async (k) => {
+    if(isTokenExpired()){showReAuthPrompt();return null;}
     const token = getAuthToken();
-    if (token) {
-      try {
-        const r = await fetch(STORAGE_API + '?key=' + encodeURIComponent(k), {
-          headers: { 'Authorization': 'Bearer ' + token },
-          signal: AbortSignal.timeout(8000)
-        });
-        if (r.ok) { const d = await r.json(); return d.value ? { value: d.value } : null; }
-      } catch(e) { console.warn('[storage] Server get failed:', e.message); }
+    if (!token) { showReAuthPrompt(); return null; }
+    try {
+      const r = await fetch(STORAGE_API + '?key=' + encodeURIComponent(k), {
+        headers: { 'Authorization': 'Bearer ' + token },
+        signal: AbortSignal.timeout(8000)
+      });
+      if (r.status === 401) { showReAuthPrompt(); return null; }
+      if (r.ok) { const d = await r.json(); return d.value ? { value: d.value } : null; }
+      console.warn('[storage] GET returned', r.status);
+      return null;
+    } catch(e) {
+      console.warn('[storage] Server get failed:', e.message);
+      updateSyncStatus('error');
+      return null;
     }
-    // No localStorage fallback — KV is the single source of truth
-    return null;
   },
   set: async (k, v) => {
-    // Write to KV only — no localStorage (prevents cross-device drift)
+    // Check auth BEFORE attempting save
+    if(isTokenExpired()){showReAuthPrompt();return false;}
     const token = getAuthToken();
-    if (token) {
-      try {
-        await fetch(STORAGE_API, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-          body: JSON.stringify({ key: k, value: v }),
-          signal: AbortSignal.timeout(8000)
-        });
-      } catch(e) { console.warn('[storage] Server set failed:', e.message); }
+    if (!token) { showReAuthPrompt(); return false; }
+    try {
+      const r = await fetch(STORAGE_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ key: k, value: v }),
+        signal: AbortSignal.timeout(8000)
+      });
+      if (r.status === 401) { showReAuthPrompt(); return false; }
+      if (!r.ok) {
+        console.error('[storage] SET failed:', r.status);
+        updateSyncStatus('error');
+        showToast('\u274c Save failed — please try again','','',5000);
+        return false;
+      }
+      updateSyncStatus('ok');
+      return true;
+    } catch(e) {
+      console.warn('[storage] Server set failed:', e.message);
+      updateSyncStatus('error');
+      showToast('\u274c Save failed — check your connection','','',5000);
+      return false;
     }
   }
 };
+// ── Sync status indicator ──
+function updateSyncStatus(state){
+  const dot=document.getElementById('sync-status');if(!dot)return;
+  dot.className='sync-dot sync-'+state;
+  const titles={ok:'Connected — saves are working',error:'Save failed — retrying may help',disconnected:'Session expired — please sign in again'};
+  dot.title=titles[state]||'';
+}
+
 async function load() {
   try{const r=await S.get('se_t');if(r)tasks=JSON.parse(r.value);}catch(e){tasks=[];}
   try{const r=await S.get('se_v');if(r)vendors=JSON.parse(r.value);else{vendors=JSON.parse(JSON.stringify(DEF_VENDORS));await save('se_v',vendors);}}catch(e){vendors=JSON.parse(JSON.stringify(DEF_VENDORS));}
@@ -1371,7 +1438,7 @@ async function uploadTaskPhoto(file){
   try{
     const compressed=await compressImage(file);
     status.textContent='Uploading...';
-    const token=sessionStorage.getItem('se_auth_token')||'';
+    const token=localStorage.getItem('se_auth_token')||'';
     const fname=`task-${t.id}-${Date.now()}-${Math.random().toString(36).slice(2,5)}.jpg`;
     const r=await fetch(`${PROXY_BASE}/api/photo?taskId=${t.id}&filename=${fname}`,{
       method:'POST',
@@ -1399,7 +1466,7 @@ async function removeTaskPhoto(url){
   const t=tasks.find(x=>x.id===detailId);if(!t||!url)return;
   if(!confirm('Remove this photo?'))return;
   try{
-    const token=sessionStorage.getItem('se_auth_token')||'';
+    const token=localStorage.getItem('se_auth_token')||'';
     fetch(`${PROXY_BASE}/api/photo?url=${encodeURIComponent(url)}`,{
       method:'DELETE',headers:{'Authorization':'Bearer '+token}
     }).catch(()=>{});
@@ -1415,7 +1482,7 @@ async function removeTaskPhoto(url){
 /* Auto-cleanup: delete photos from tasks resolved more than 30 days ago */
 async function cleanupOldPhotos(){
   const cutoff=Date.now()-30*24*60*60*1000;
-  const token=sessionStorage.getItem('se_auth_token')||'';
+  const token=localStorage.getItem('se_auth_token')||'';
   let changed=false;
   for(const t of tasks){
     if(!['complete','resolved_by_guest'].includes(t.status))continue;
@@ -2916,14 +2983,14 @@ function closeModal(id){document.getElementById(id).classList.remove('open');}
 // Disabled backdrop-click-to-close — modals only close via X button or Close button
 // This prevents accidental closure when selecting text and dragging outside the modal
 let _toastTimer=null;
-function showToast(msg,cls='',undoFn=null){
+function showToast(msg,cls='',undoFn=null,duration=0){
   clearTimeout(_toastTimer);
   const t=document.getElementById('toast');
   t.innerHTML='';t.className=`toast show ${cls}`;
   const span=document.createElement('span');span.textContent=msg;t.appendChild(span);
   if(undoFn){const btn=document.createElement('button');btn.className='toast-undo';btn.textContent='Undo';btn.onclick=()=>{clearTimeout(_toastTimer);undoFn();t.classList.remove('show');};t.appendChild(btn);
-    _toastTimer=setTimeout(()=>t.classList.remove('show'),6000);
-  } else {_toastTimer=setTimeout(()=>t.classList.remove('show'),3000);}
+    _toastTimer=setTimeout(()=>t.classList.remove('show'),duration||6000);
+  } else {_toastTimer=setTimeout(()=>t.classList.remove('show'),duration||3000);}
 }
 
 // SEED removed — tasks are loaded from server storage
@@ -5831,6 +5898,7 @@ async function renderGuestContext(t,p){
 
 // START
 async function initApp(){
+  startExpiryWatcher();
   await load();
   await loadReplacements();
   await loadSmsTemplate();
