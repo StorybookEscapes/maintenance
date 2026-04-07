@@ -723,7 +723,7 @@ textarea{resize:vertical;min-height:76px}
 .cv-loader-title{font-family:'Cormorant Garamond',serif;font-size:2rem;color:var(--gold-light);font-weight:600;text-transform:uppercase;letter-spacing:3px;opacity:0;transform:translateY(8px);animation:cvLoaderIn .7s ease .2s forwards}
 .cv-loader-sub{font-family:'Cormorant Garamond',serif;font-size:1.1rem;color:rgba(232,213,163,.55);letter-spacing:2px;margin-top:8px;opacity:0;transform:translateY(8px);animation:cvLoaderIn .7s ease .5s forwards}
 .cv-loader-bar-wrap{margin-top:36px;width:120px;height:2px;background:rgba(255,255,255,.12);border-radius:2px;overflow:hidden;opacity:0;animation:cvLoaderIn .4s ease .7s forwards}
-.cv-loader-bar{height:100%;width:0;background:var(--gold);border-radius:2px;transition:width 1.4s cubic-bezier(.4,0,.2,1)}
+.cv-loader-bar{height:100%;width:0;background:var(--gold);border-radius:2px;transition:width .7s cubic-bezier(.4,0,.2,1)}
 .cv-loader-badge{margin-top:44px;display:inline-flex;align-items:center;gap:12px;background:var(--gold-pale);border:1px solid rgba(201,168,76,.4);border-radius:12px;padding:14px 22px;transition:opacity .6s ease,transform .6s cubic-bezier(.34,1.3,.64,1)}
 .cv-loader-badge-star{color:var(--gold);font-size:1.3rem;line-height:1;flex-shrink:0}
 .cv-loader-badge-text{font-family:'Cormorant Garamond',serif;font-size:1.1rem;color:#7a5a1a;font-weight:600;letter-spacing:.3px;line-height:1.3}
@@ -748,7 +748,7 @@ textarea{resize:vertical;min-height:76px}
 .cv-section-hdr{font-family:'Cormorant Garamond',serif;font-size:1rem;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:8px}
 .cv-section-hdr.cv-winners{color:var(--green)}
 .cv-section-hdr.cv-nearly{color:#b8830a}
-.cv-section-hdr.cv-attention{color:var(--text2)}
+.cv-section-hdr.cv-attention{color:var(--red)}
 .cv-section-count{margin-left:auto;font-family:'DM Sans',sans-serif;font-size:.66rem;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)}
 
 /* Card grid */

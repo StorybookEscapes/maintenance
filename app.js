@@ -3751,9 +3751,9 @@ function renderCleaningLog() {
     sumH += '</div></div>';
   }
 
-  // Section 2: Nearly Made It (4.7–4.79)
+  // Section 2: Good Performers (4.7–4.79)
   if (nearlyPids.length) {
-    sumH += `<div class="cv-section" data-section="2"><div class="cv-section-hdr cv-nearly"><span class="icon">◎</span> Nearly Made It <span class="cv-section-count">4.7 – 4.79 · just below elite</span></div><div class="cv-card-grid">`;
+    sumH += `<div class="cv-section" data-section="2"><div class="cv-section-hdr cv-nearly"><span class="icon">◎</span> Good Performers <span class="cv-section-count">4.7 – 4.79 · just below elite</span></div><div class="cv-card-grid">`;
     nearlyPids.forEach(pid => { sumH += clCard(pid, 'cv-nearly-card'); });
     sumH += '</div></div>';
   }
@@ -3785,15 +3785,15 @@ function renderCleaningLog() {
   logEl.innerHTML = '';
 
   // ── Staggered card animations (matching cleaner view) ──
-  const SECTION_DELAYS = [0.05, 0.6, 1.15, 1.6, 2.0];
+  const SECTION_DELAYS = [0.05, 0.25, 0.45, 0.65, 0.85];
   const sections = summaryEl.querySelectorAll('.cv-section');
   sections.forEach((sec, i) => {
-    const delay = SECTION_DELAYS[i] || (i * 0.5);
+    const delay = SECTION_DELAYS[i] || (i * 0.2);
     setTimeout(() => {
       sec.classList.add('animate');
       const cards = sec.querySelectorAll('.cv-winner-card, .cv-nearly-card, .cv-attention-card');
       cards.forEach((card, j) => {
-        setTimeout(() => card.classList.add('animate'), j * 100);
+        setTimeout(() => card.classList.add('animate'), j * 50);
       });
     }, delay * 1000);
   });
@@ -6095,7 +6095,7 @@ if (window._cleanerViewMode) {
         loaderBadge.style.transform = 'translateY(0)';
       }
 
-      await new Promise(r => setTimeout(r, 1500));
+      await new Promise(r => setTimeout(r, 600));
 
       // Fade out loader, fade in content
       if (loaderEl) loaderEl.classList.add('hidden');
@@ -6210,9 +6210,9 @@ function cvRender(cvName, cvProps, cvAllRatings, cvFlaggedData, allPropStats, el
     sumH += '</div></div>';
   }
 
-  // Section 2: Nearly Made It
+  // Section 2: Good Performers
   if (nearlyPids.length) {
-    sumH += `<div class="cv-section" data-section="2"><div class="cv-section-hdr cv-nearly"><span class="icon">◎</span> Nearly Made It <span class="cv-section-count">4.7 – 4.79 · just below elite</span></div><div class="cv-card-grid">`;
+    sumH += `<div class="cv-section" data-section="2"><div class="cv-section-hdr cv-nearly"><span class="icon">◎</span> Good Performers <span class="cv-section-count">4.7 – 4.79 · just below elite</span></div><div class="cv-card-grid">`;
     nearlyPids.forEach((pid, i) => { sumH += cvCard(pid, 'cv-nearly-card', 2, i); });
     sumH += '</div></div>';
   }
@@ -6246,11 +6246,11 @@ function cvRender(cvName, cvProps, cvAllRatings, cvFlaggedData, allPropStats, el
   // Flags and reviews shown only in property detail view, not on main overview
   logEl.innerHTML = '';
 
-  // Animate sections sequentially
-  const SECTION_DELAYS = [0.05, 0.6, 1.15, 1.6, 2.0];
+  // Animate sections sequentially (fast)
+  const SECTION_DELAYS = [0.05, 0.25, 0.45, 0.65, 0.85];
   const sections = summaryEl.querySelectorAll('.cv-section');
   sections.forEach((sec, i) => {
-    const delay = SECTION_DELAYS[i] || (i * 0.5);
+    const delay = SECTION_DELAYS[i] || (i * 0.2);
     setTimeout(() => {
       sec.classList.add('animate');
       // Stagger cards within this section
@@ -6261,14 +6261,14 @@ function cvRender(cvName, cvProps, cvAllRatings, cvFlaggedData, allPropStats, el
           // Trigger progress bar fills
           const fill = card.querySelector('.cv-progress-fill');
           if (fill) fill.style.width = fill.dataset.width;
-        }, j * 100);
+        }, j * 50);
       });
     }, delay * 1000);
   });
   // Animate log section
   const logSections = logEl.querySelectorAll('.cv-section');
   logSections.forEach((sec, i) => {
-    setTimeout(() => sec.classList.add('animate'), (SECTION_DELAYS[sections.length + i] || 2.5) * 1000);
+    setTimeout(() => sec.classList.add('animate'), (SECTION_DELAYS[sections.length + i] || 1.0) * 1000);
   });
 }
 
