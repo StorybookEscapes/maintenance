@@ -5678,7 +5678,9 @@ if (window._cleanerViewMode) {
 
         const results = await Promise.allSettled(
           batch.map(async ([pid, hospId]) => {
-            const url = `${API}/api/hospitable?action=reviews&propertyId=${hospId}`;
+            const rvStart = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
+            const rvEnd = new Date().toISOString().slice(0, 10);
+            const url = `${API}/api/hospitable?action=reviews&pid=${hospId}&start=${rvStart}&end=${rvEnd}`;
             const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
             if (!r.ok) return [];
             const d = await r.json();
