@@ -5650,7 +5650,12 @@ if (window._cleanerViewMode) {
   (async function initCleanerView() {
     const API = 'https://storybook-webhook.vercel.app';
     const token = window._cleanerViewToken;
-    const loadingEl = document.getElementById('cv-loading');
+    const loaderEl = document.getElementById('cv-loader');
+    const loaderSub = document.getElementById('cv-loader-sub');
+    const loaderBar = document.getElementById('cv-loader-bar');
+    const loaderBadge = document.getElementById('cv-loader-badge');
+    const loaderBadgeText = document.getElementById('cv-loader-badge-text');
+    const contentWrap = document.getElementById('cv-content-wrap');
     const errorEl = document.getElementById('cv-error');
     const contentEl = document.getElementById('cv-content');
     const subtitleEl = document.getElementById('cv-subtitle');
@@ -5661,38 +5666,38 @@ if (window._cleanerViewMode) {
       if (!res.ok) throw new Error('Invalid link');
       const tokenData = await res.json();
       const cvName = tokenData.name;
-      const cvProps = tokenData.properties; // array of property IDs
+      const cvProps = tokenData.properties;
 
+      if (loaderSub) loaderSub.textContent = `${cvName}'s Cabins`;
       if (subtitleEl) subtitleEl.textContent = `Cleaning Performance — ${cvName}`;
       document.title = `${cvName} — Cleaning Performance`;
 
-      // 2. Fetch cleaning reviews from Hospitable (same endpoint the admin uses)
+      // Start the loader bar
+      setTimeout(() => { if (loaderBar) loaderBar.style.width = '100%'; }, 800);
+
+      // 2. Fetch cleaning reviews — 6 months of data for comparison
       const hospEntries = Object.entries(HOSPITABLE_IDS).filter(([pid]) => cvProps.includes(pid));
-      const cvAllRatings = {}; // { pid: [{rating, reviewedAt, guest, text, ...}] }
-      const cvFlaggedData = []; // flagged cleaning issues
+      const cvAllRatings = {};
+      const cvFlaggedData = [];
       const batchSize = 4;
+      const sixMonthStart = new Date(Date.now() - 180 * 86400000).toISOString().slice(0, 10);
+      const today = new Date().toISOString().slice(0, 10);
 
       for (let i = 0; i < hospEntries.length; i += batchSize) {
         const batch = hospEntries.slice(i, i + batchSize);
-        if (loadingEl) loadingEl.textContent = `Loading reviews... (${Math.min(i + batchSize, hospEntries.length)}/${hospEntries.length} properties)`;
-
         const results = await Promise.allSettled(
           batch.map(async ([pid, hospId]) => {
-            const rvStart = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
-            const rvEnd = new Date().toISOString().slice(0, 10);
-            const url = `${API}/api/hospitable?action=reviews&pid=${hospId}&start=${rvStart}&end=${rvEnd}`;
+            const url = `${API}/api/hospitable?action=reviews&pid=${hospId}&start=${sixMonthStart}&end=${today}`;
             const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
             if (!r.ok) return [];
             const d = await r.json();
             return (d.data || []).map(rv => ({ ...rv, _pid: pid }));
           })
         );
-
         for (const result of results) {
           if (result.status !== 'fulfilled') continue;
           for (const rv of result.value) {
             const pid = rv._pid;
-            // Extract cleanliness rating
             const cleanRating = (rv.private?.detailed_ratings || []).find(r => r.type === 'cleanliness');
             if (cleanRating && cleanRating.rating > 0) {
               if (!cvAllRatings[pid]) cvAllRatings[pid] = [];
@@ -5703,22 +5708,17 @@ if (window._cleanerViewMode) {
               cvAllRatings[pid].push({
                 rating: cleanRating.rating,
                 reviewedAt: rv.reviewed_at,
-                guest: guest,
-                checkIn: rv.reservation?.check_in || '',
-                checkOut: rv.reservation?.check_out || '',
+                guest, checkIn: rv.reservation?.check_in || '', checkOut: rv.reservation?.check_out || '',
                 overallRating: rv.public?.rating || 0,
                 text: feedback || publicReview || ratingComments || '',
                 source: feedback ? 'private feedback' : 'public review',
                 isFlagged: false,
               });
             }
-
-            // Check if this is a flagged cleaning issue
             if (typeof clIsCleaningRelevant === 'function' && clIsCleaningRelevant(rv)) {
               const entry = clBuildEntry(rv);
               entry.isFlagged = true;
               cvFlaggedData.push(entry);
-              // Also mark in allRatings
               if (cvAllRatings[pid]) {
                 const match = cvAllRatings[pid].find(r => r.reviewedAt === rv.reviewed_at);
                 if (match) match.isFlagged = true;
@@ -5728,22 +5728,54 @@ if (window._cleanerViewMode) {
         }
       }
 
-      // 3. Render the dashboard
-      if (loadingEl) loadingEl.style.display = 'none';
-      contentEl.style.display = 'block';
+      // 3. Compute stats (needed for badge)
+      const now = Date.now();
+      const sixtyDaysAgo = now - 60 * 86400000;
+      const allPropStats = {};
+      for (const pid of cvProps) {
+        const ratings = cvAllRatings[pid] || [];
+        const recent = ratings.filter(r => new Date(r.reviewedAt).getTime() > sixtyDaysAgo);
+        const sixMo = ratings.filter(r => new Date(r.reviewedAt).getTime() <= sixtyDaysAgo);
+        const recentAvg = recent.length ? recent.reduce((s, r) => s + r.rating, 0) / recent.length : null;
+        const sixMoAvg = sixMo.length ? sixMo.reduce((s, r) => s + r.rating, 0) / sixMo.length : null;
+        const perfect = recent.filter(r => r.rating === 5).length;
+        const flags = cvFlaggedData.filter(e => e.pid === pid);
+        const recentFlags = flags.filter(e => new Date(e.reviewedAt).getTime() > sixtyDaysAgo);
+        allPropStats[pid] = { recentReviews: recent.length, recentAvg, sixMoAvg, perfect, totalReviews: ratings.length, totalFlags: flags.length, recentFlags: recentFlags.length };
+      }
 
-      cvRender(cvName, cvProps, cvAllRatings, cvFlaggedData);
+      const eliteCount = cvProps.filter(pid => {
+        const s = allPropStats[pid];
+        return s && s.recentReviews >= 3 && s.recentAvg !== null && Math.round(s.recentAvg * 10) / 10 >= 4.8;
+      }).length;
+
+      // 4. Show badge on loader, wait, then reveal content
+      if (loaderBadgeText) loaderBadgeText.textContent = `${eliteCount} of ${cvProps.length} properties at elite level this period`;
+      if (loaderBadge) {
+        loaderBadge.style.opacity = '1';
+        loaderBadge.style.transform = 'translateY(0)';
+      }
+
+      await new Promise(r => setTimeout(r, 2500));
+
+      // Fade out loader, fade in content
+      if (loaderEl) loaderEl.classList.add('hidden');
+      contentEl.style.display = 'block';
+      contentWrap.style.opacity = '1';
+
+      cvRender(cvName, cvProps, cvAllRatings, cvFlaggedData, allPropStats, eliteCount);
 
     } catch (e) {
       console.error('[cleaner-view] Init error:', e.message);
-      if (loadingEl) loadingEl.style.display = 'none';
+      if (loaderEl) loaderEl.classList.add('hidden');
+      if (contentWrap) contentWrap.style.opacity = '1';
       if (errorEl) errorEl.style.display = 'block';
     }
   })();
 }
 
-// Render function for cleaner view
-function cvRender(cvName, cvProps, cvAllRatings, cvFlaggedData) {
+// ── Gamified render for cleaner view ──────────────────────────
+function cvRender(cvName, cvProps, cvAllRatings, cvFlaggedData, allPropStats, eliteCount) {
   const summaryEl = document.getElementById('cv-summary');
   const logEl = document.getElementById('cv-log');
   if (!summaryEl || !logEl) return;
@@ -5751,133 +5783,160 @@ function cvRender(cvName, cvProps, cvAllRatings, cvFlaggedData) {
   const now = Date.now();
   const sixtyDaysAgo = now - 60 * 86400000;
 
-  // Build per-property stats
-  const allPropStats = {};
-  for (const pid of cvProps) {
-    const ratings = cvAllRatings[pid] || [];
-    const recent = ratings.filter(r => new Date(r.reviewedAt) > new Date(sixtyDaysAgo));
-    const recentAvg = recent.length ? recent.reduce((s, r) => s + r.rating, 0) / recent.length : null;
-    const totalAvg = ratings.length ? ratings.reduce((s, r) => s + r.rating, 0) / ratings.length : null;
-    const flags = cvFlaggedData.filter(e => e.pid === pid);
-    const recentFlags = flags.filter(e => new Date(e.reviewedAt) > new Date(sixtyDaysAgo));
-    allPropStats[pid] = { totalReviews: ratings.length, recentReviews: recent.length, recentAvg, totalAvg, totalFlags: flags.length, recentFlags: recentFlags.length };
-  }
-
-  // Winners & Losers
+  // Categorize properties
   const winnerPids = cvProps.filter(pid => {
     const s = allPropStats[pid];
     return s && s.recentReviews >= 3 && s.recentAvg !== null && Math.round(s.recentAvg * 10) / 10 >= 4.8;
   }).sort((a, b) => (allPropStats[b].recentAvg || 0) - (allPropStats[a].recentAvg || 0));
 
-  const loserPids = cvProps.filter(pid => {
+  const nearlyPids = cvProps.filter(pid => {
     const s = allPropStats[pid];
-    return s && s.recentReviews >= 3 && s.recentAvg !== null && Math.round(s.recentAvg * 10) / 10 < 4.8;
+    const avg = s && s.recentAvg !== null ? Math.round(s.recentAvg * 100) / 100 : null;
+    return s && s.recentReviews >= 3 && avg !== null && avg >= 4.7 && Math.round(s.recentAvg * 10) / 10 < 4.8;
+  }).sort((a, b) => (allPropStats[b].recentAvg || 0) - (allPropStats[a].recentAvg || 0));
+
+  const attentionPids = cvProps.filter(pid => {
+    const s = allPropStats[pid];
+    const avg = s && s.recentAvg !== null ? Math.round(s.recentAvg * 100) / 100 : null;
+    return s && s.recentReviews >= 3 && avg !== null && avg < 4.7;
   }).sort((a, b) => (allPropStats[a].recentAvg || 5) - (allPropStats[b].recentAvg || 5));
+
+  const noDataPids = cvProps.filter(pid => { const s = allPropStats[pid]; return !s || s.recentReviews < 3; });
+
+  // Overall stats
+  const totalReviews = Object.values(allPropStats).reduce((s, p) => s + p.recentReviews, 0);
+  const allRecentRatings = cvProps.flatMap(pid => (cvAllRatings[pid] || []).filter(r => new Date(r.reviewedAt).getTime() > sixtyDaysAgo));
+  const overallAvg = allRecentRatings.length ? (allRecentRatings.reduce((s, r) => s + r.rating, 0) / allRecentRatings.length).toFixed(1) : '—';
 
   let sumH = '';
 
-  // Overall stats bar
-  const totalReviews = Object.values(allPropStats).reduce((s, p) => s + p.recentReviews, 0);
-  const allRecentRatings = cvProps.flatMap(pid => (cvAllRatings[pid] || []).filter(r => new Date(r.reviewedAt) > new Date(sixtyDaysAgo)));
-  const overallAvg = allRecentRatings.length ? (allRecentRatings.reduce((s, r) => s + r.rating, 0) / allRecentRatings.length).toFixed(1) : '—';
-
-  sumH += `<div style="background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:18px;box-shadow:var(--shadow)">
-    <div style="font-family:'Cormorant Garamond',serif;font-size:1.3rem;font-weight:600;color:var(--green);margin-bottom:4px">${escHtml(cvName)}'s Properties</div>
-    <div style="font-size:.82rem;color:var(--text2)">${cvProps.length} propert${cvProps.length !== 1 ? 'ies' : 'y'} · ${totalReviews} reviews in last 60 days · ${overallAvg}/5 avg cleanliness</div>
+  // Hero bar
+  sumH += `<div class="cv-hero">
+    <div>
+      <div class="cv-hero-name">${escHtml(cvName)}'s Properties</div>
+      <div class="cv-hero-meta">${cvProps.length} properties · ${totalReviews} reviews in last 60 days · ${overallAvg}/5 avg cleanliness</div>
+    </div>
+    <div class="cv-hero-badge"><span class="star">★</span> ${eliteCount} of ${cvProps.length} properties at elite level this period</div>
   </div>`;
 
-  // Top Performers
-  if (winnerPids.length) {
-    sumH += `<div class="cl-section"><div class="cl-section-hdr winners"><span class="icon">★</span> Top Performers</div>`;
-    sumH += '<div class="cl-summary-grid">';
-    for (const pid of winnerPids) {
-      const p = getProp(pid);
-      if (!p) continue;
-      const s = allPropStats[pid];
-      const recentStr = s.recentAvg !== null ? s.recentAvg.toFixed(1) : '—';
-      const overallStr = s.totalAvg !== null ? s.totalAvg.toFixed(1) : '—';
-      const perfectCount = (cvAllRatings[pid] || []).filter(r => new Date(r.reviewedAt) > new Date(sixtyDaysAgo) && r.rating === 5).length;
-      sumH += `<div class="cl-winner-card" onclick="cvShowPropDetail('${pid}')">
-        <div class="cl-prop-name">${escHtml(p.name)}</div>
-        <div class="cl-winner-stat"><span class="good">${recentStr}/5</span> 60-day cleaning<br>${overallStr}/5 overall cleaning<br>${s.recentReviews} reviews${perfectCount ? ` · ${perfectCount} perfect` : ''}</div>
-      </div>`;
-    }
-    sumH += '</div></div>';
-  }
-
-  // Needs Attention
-  if (loserPids.length) {
-    sumH += `<div class="cl-section"><div class="cl-section-hdr losers"><span class="icon">⚠</span> Needs Attention</div>`;
-    sumH += '<div class="cl-summary-grid">';
-    for (const pid of loserPids) {
-      const p = getProp(pid);
-      if (!p) continue;
-      const s = allPropStats[pid];
-      const recentStr = s.recentAvg !== null ? s.recentAvg.toFixed(1) : '—';
-      const overallStr = s.totalAvg !== null ? s.totalAvg.toFixed(1) : '—';
-      // Trend
-      const prior60 = (cvAllRatings[pid] || []).filter(r => { const d = new Date(r.reviewedAt).getTime(); return d > now - 120 * 86400000 && d <= now - 60 * 86400000; });
-      const priorAvg = prior60.length ? prior60.reduce((s, r) => s + r.rating, 0) / prior60.length : null;
-      let trend = '';
-      if (priorAvg !== null && s.recentAvg !== null) {
-        if (s.recentAvg > priorAvg + 0.3) trend = '<span class="cl-trend improving">↑ improving</span>';
-        else if (s.recentAvg < priorAvg - 0.3) trend = '<span class="cl-trend declining">↓ declining</span>';
-      }
-      sumH += `<div class="cl-prop-card has-issues" onclick="cvShowPropDetail('${pid}')">
-        <div class="cl-prop-name">${escHtml(p.name)}</div>
-        <div class="cl-prop-stat"><span class="bad">${recentStr}/5</span> 60-day cleaning<br>${overallStr}/5 overall cleaning<br>${s.recentReviews} reviews${s.recentFlags > 0 ? ` · <span class="bad">${s.recentFlags} flag${s.recentFlags !== 1 ? 's' : ''}</span>` : ''}${trend ? '<br>' + trend : ''}</div>
-      </div>`;
-    }
-    sumH += '</div></div>';
-  }
-
-  // Properties with < 3 reviews
-  const noDataPids = cvProps.filter(pid => {
+  // Helper: build a card
+  function cvCard(pid, cardClass, sectionIdx, cardIdx) {
+    const p = getProp(pid);
+    if (!p) return '';
     const s = allPropStats[pid];
-    return !s || s.recentReviews < 3;
-  });
+    const recentAvg = s.recentAvg !== null ? s.recentAvg.toFixed(1) : '—';
+    const sixMoAvg = s.sixMoAvg !== null ? s.sixMoAvg.toFixed(1) : '—';
+    const perfect = s.perfect || 0;
+
+    // Trend pill
+    let trendH = '';
+    if (s.recentAvg !== null && s.sixMoAvg !== null) {
+      const diff = s.recentAvg - s.sixMoAvg;
+      if (diff > 0.05) trendH = `<div class="cv-trend up">↑ up from ${sixMoAvg} · 6-month avg</div>`;
+      else if (diff < -0.05) trendH = `<div class="cv-trend down">↓ down from ${sixMoAvg} · 6-month avg</div>`;
+      else trendH = `<div class="cv-trend flat">→ holding at ${recentAvg}</div>`;
+    } else if (s.sixMoAvg === null) {
+      trendH = `<div class="cv-trend flat">— not enough 6-month data</div>`;
+    }
+
+    // Progress bar for nearly-made-it
+    let progressH = '';
+    if (cardClass === 'cv-nearly-card' && s.recentAvg !== null) {
+      const pct = Math.min(100, Math.round((s.recentAvg / 4.8) * 100));
+      progressH = `<div class="cv-progress-wrap"><div class="cv-progress-label"><span>Progress to elite (4.8)</span><span>${pct}% there</span></div><div class="cv-progress-track"><div class="cv-progress-fill" data-width="${pct}%"></div></div></div>`;
+    }
+
+    return `<div class="${cardClass}" onclick="cvShowPropDetail('${pid}')">
+      <div class="cv-card-name">${escHtml(p.name)}</div>
+      <div class="cv-card-rating-row"><span class="cv-card-rating-label">60-day cleaning avg</span><span class="cv-card-rating-value">${recentAvg} / 5</span></div>
+      <div class="cv-card-sub">${perfect}/${s.recentReviews} Perfect Cleaning Reviews</div>
+      ${trendH}${progressH}
+      <div class="cv-comp-row"><div class="cv-comp-col"><span class="cv-comp-val">${recentAvg}</span><span class="cv-comp-lbl">Last 60 days</span></div><div class="cv-comp-divider"></div><div class="cv-comp-col"><span class="cv-comp-val muted">${sixMoAvg}</span><span class="cv-comp-lbl">6-month avg</span></div></div>
+    </div>`;
+  }
+
+  // Section 1: Top Performers
+  if (winnerPids.length) {
+    sumH += `<div class="cv-section" data-section="1"><div class="cv-section-hdr cv-winners"><span class="icon">★</span> Top Performers <span class="cv-section-count">4.8 or above · last 60 days</span></div><div class="cv-card-grid">`;
+    winnerPids.forEach((pid, i) => { sumH += cvCard(pid, 'cv-winner-card', 1, i); });
+    sumH += '</div></div>';
+  }
+
+  // Section 2: Nearly Made It
+  if (nearlyPids.length) {
+    sumH += `<div class="cv-section" data-section="2"><div class="cv-section-hdr cv-nearly"><span class="icon">◎</span> Nearly Made It <span class="cv-section-count">4.7 – 4.79 · just below elite</span></div><div class="cv-card-grid">`;
+    nearlyPids.forEach((pid, i) => { sumH += cvCard(pid, 'cv-nearly-card', 2, i); });
+    sumH += '</div></div>';
+  }
+
+  // Section 3: Needs Attention
+  if (attentionPids.length) {
+    sumH += `<div class="cv-section" data-section="3"><div class="cv-section-hdr cv-attention"><span class="icon">△</span> Needs Attention <span class="cv-section-count">${attentionPids.length} propert${attentionPids.length !== 1 ? 'ies' : 'y'}</span></div><div class="cv-card-grid">`;
+    attentionPids.forEach((pid, i) => { sumH += cvCard(pid, 'cv-attention-card', 3, i); });
+    sumH += '</div></div>';
+  }
+
+  // Not enough data
   if (noDataPids.length) {
-    sumH += `<div class="cl-section"><div class="cl-section-hdr all-props" style="color:var(--text2)"><span class="icon">○</span> Not Enough Data</div>`;
-    sumH += '<div class="cl-summary-grid">';
+    sumH += `<div class="cv-section" data-section="4"><div class="cv-section-hdr" style="color:var(--text2)"><span class="icon">○</span> Not Enough Data <span class="cv-section-count">${noDataPids.length} propert${noDataPids.length !== 1 ? 'ies' : 'y'} · need 3+ reviews</span></div><div class="cv-card-grid">`;
     for (const pid of noDataPids) {
       const p = getProp(pid);
       if (!p) continue;
       const s = allPropStats[pid] || {};
-      sumH += `<div class="cl-prop-card" onclick="cvShowPropDetail('${pid}')" style="opacity:.6">
-        <div class="cl-prop-name">${escHtml(p.name)}</div>
-        <div class="cl-prop-stat">${s.recentReviews || 0} reviews in last 60 days (need 3+)</div>
-      </div>`;
+      sumH += `<div class="cv-attention-card" onclick="cvShowPropDetail('${pid}')" style="opacity:.6"><div class="cv-card-name">${escHtml(p.name)}</div><div class="cv-card-sub">${s.recentReviews || 0} reviews in last 60 days (need 3+)</div></div>`;
     }
     sumH += '</div></div>';
   }
 
-  if (!winnerPids.length && !loserPids.length && !noDataPids.length) {
-    sumH += '<div class="cl-no-data">No review data available for these properties.</div>';
+  if (!winnerPids.length && !nearlyPids.length && !attentionPids.length && !noDataPids.length) {
+    sumH += '<div class="cl-empty">No review data available for these properties.</div>';
   }
 
   summaryEl.innerHTML = sumH;
+  window._cvData = { cvName, cvProps, cvAllRatings, cvFlaggedData, allPropStats, eliteCount };
 
-  // Store data in window for drill-down
-  window._cvData = { cvName, cvProps, cvAllRatings, cvFlaggedData, allPropStats };
-
-  // Show flagged issues log
-  const recent = cvFlaggedData.filter(e => new Date(e.reviewedAt).getTime() > sixtyDaysAgo).sort((a, b) => new Date(b.reviewedAt) - new Date(a.reviewedAt));
-  const older = cvFlaggedData.filter(e => new Date(e.reviewedAt).getTime() <= sixtyDaysAgo).sort((a, b) => new Date(b.reviewedAt) - new Date(a.reviewedAt));
-
+  // Flagged issues log
+  const recentFlags = cvFlaggedData.filter(e => new Date(e.reviewedAt).getTime() > sixtyDaysAgo).sort((a, b) => new Date(b.reviewedAt) - new Date(a.reviewedAt));
+  const olderFlags = cvFlaggedData.filter(e => new Date(e.reviewedAt).getTime() <= sixtyDaysAgo).sort((a, b) => new Date(b.reviewedAt) - new Date(a.reviewedAt));
   let logH = '';
-  if (recent.length) {
-    logH += `<div class="cl-section"><div class="cl-section-hdr losers" style="color:var(--red)"><span class="icon">⚑</span> Recent Cleaning Flags (60 days)</div>`;
-    logH += recent.map(e => cvEntryHtml(e, true)).join('');
+  if (recentFlags.length) {
+    logH += `<div class="cv-section" data-section="5"><div class="cv-section-hdr" style="color:var(--red)"><span class="icon">⚑</span> Recent Cleaning Flags (60 days)</div>`;
+    logH += recentFlags.map(e => cvEntryHtml(e, true)).join('');
     logH += '</div>';
   }
-  if (older.length) {
-    logH += `<div style="margin-top:12px"><button class="btn" id="cv-older-btn" style="width:100%;text-align:center;font-size:.8rem;padding:10px" onclick="document.getElementById('cv-older-entries').style.display='';this.style.display='none'">Older Flags (${older.length})</button>`;
-    logH += `<div id="cv-older-entries" style="display:none;margin-top:8px">${older.map(e => cvEntryHtml(e, true)).join('')}</div></div>`;
+  if (olderFlags.length) {
+    logH += `<div style="margin-top:12px"><button class="btn" style="width:100%;text-align:center;font-size:.8rem;padding:10px" onclick="document.getElementById('cv-older-entries').style.display='';this.style.display='none'">Older Flags (${olderFlags.length})</button>`;
+    logH += `<div id="cv-older-entries" style="display:none;margin-top:8px">${olderFlags.map(e => cvEntryHtml(e, true)).join('')}</div></div>`;
   }
   if (!cvFlaggedData.length) {
     logH += '<div class="cl-empty" style="margin-top:14px">No cleaning flags found — great work!</div>';
   }
   logEl.innerHTML = logH;
+
+  // Animate sections sequentially
+  const SECTION_DELAYS = [0.05, 0.6, 1.15, 1.6, 2.0];
+  const sections = summaryEl.querySelectorAll('.cv-section');
+  sections.forEach((sec, i) => {
+    const delay = SECTION_DELAYS[i] || (i * 0.5);
+    setTimeout(() => {
+      sec.classList.add('animate');
+      // Stagger cards within this section
+      const cards = sec.querySelectorAll('.cv-winner-card, .cv-nearly-card, .cv-attention-card');
+      cards.forEach((card, j) => {
+        setTimeout(() => {
+          card.classList.add('animate');
+          // Trigger progress bar fills
+          const fill = card.querySelector('.cv-progress-fill');
+          if (fill) fill.style.width = fill.dataset.width;
+        }, j * 100);
+      });
+    }, delay * 1000);
+  });
+  // Animate log section
+  const logSections = logEl.querySelectorAll('.cv-section');
+  logSections.forEach((sec, i) => {
+    setTimeout(() => sec.classList.add('animate'), (SECTION_DELAYS[sections.length + i] || 2.5) * 1000);
+  });
 }
 
 function cvEntryHtml(e, showPropName) {

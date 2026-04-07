@@ -566,21 +566,35 @@
 
 <!-- ── Cleaner View (public, read-only) ── -->
 <div id="cleaner-view" style="display:none">
-  <div class="cv-header">
-    <div class="cv-header-text">
-      <h1 class="cv-title">STORYBOOK ESCAPES</h1>
-      <p class="cv-subtitle" id="cv-subtitle">Cleaning Performance</p>
+  <!-- Loading screen -->
+  <div id="cv-loader">
+    <div class="cv-loader-title">Storybook Escapes</div>
+    <div class="cv-loader-sub" id="cv-loader-sub">Loading...</div>
+    <div class="cv-loader-bar-wrap">
+      <div class="cv-loader-bar" id="cv-loader-bar"></div>
+    </div>
+    <div class="cv-loader-badge" id="cv-loader-badge" style="opacity:0">
+      <span class="cv-loader-badge-star">★</span>
+      <span class="cv-loader-badge-text" id="cv-loader-badge-text"></span>
     </div>
   </div>
-  <div class="cv-body">
-    <div id="cv-loading" style="text-align:center;padding:40px;color:var(--text2)">Loading cleaning data...</div>
-    <div id="cv-error" style="display:none;text-align:center;padding:40px">
-      <div style="font-size:1.1rem;font-weight:600;color:var(--red);margin-bottom:8px">Invalid Link</div>
-      <div style="color:var(--text2);font-size:.88rem">This cleaning dashboard link is not valid. Please contact Storybook Escapes if you need access.</div>
+  <!-- Main content (hidden until loader lifts) -->
+  <div id="cv-content-wrap" style="opacity:0">
+    <div class="cv-header">
+      <div class="cv-header-text">
+        <h1 class="cv-title">STORYBOOK ESCAPES</h1>
+        <p class="cv-subtitle" id="cv-subtitle">Cleaning Performance</p>
+      </div>
     </div>
-    <div id="cv-content" style="display:none">
-      <div id="cv-summary"></div>
-      <div id="cv-log"></div>
+    <div class="cv-body">
+      <div id="cv-error" style="display:none;text-align:center;padding:40px">
+        <div style="font-size:1.1rem;font-weight:600;color:var(--red);margin-bottom:8px">Invalid Link</div>
+        <div style="color:var(--text2);font-size:.88rem">This cleaning dashboard link is not valid. Please contact Storybook Escapes if you need access.</div>
+      </div>
+      <div id="cv-content" style="display:none">
+        <div id="cv-summary"></div>
+        <div id="cv-log"></div>
+      </div>
     </div>
   </div>
 </div>
