@@ -5828,13 +5828,13 @@ function cvRender(cvName, cvProps, cvAllRatings, cvFlaggedData, allPropStats, el
     const sixMoAvg = s.sixMoAvg !== null ? s.sixMoAvg.toFixed(1) : '—';
     const perfect = s.perfect || 0;
 
-    // Trend pill
+    // Trend pill (suppress downtrend for top performers to preserve positive energy)
     let trendH = '';
     if (s.recentAvg !== null && s.sixMoAvg !== null) {
       const diff = s.recentAvg - s.sixMoAvg;
       if (diff > 0.05) trendH = `<div class="cv-trend up">↑ up from ${sixMoAvg} · 6-month avg</div>`;
-      else if (diff < -0.05) trendH = `<div class="cv-trend down">↓ down from ${sixMoAvg} · 6-month avg</div>`;
-      else trendH = `<div class="cv-trend flat">→ holding at ${recentAvg}</div>`;
+      else if (diff < -0.05 && cardClass !== 'cv-winner-card') trendH = `<div class="cv-trend down">↓ down from ${sixMoAvg} · 6-month avg</div>`;
+      else if (diff >= -0.05) trendH = `<div class="cv-trend flat">→ holding at ${recentAvg}</div>`;
     } else if (s.sixMoAvg === null) {
       trendH = `<div class="cv-trend flat">— not enough 6-month data</div>`;
     }
@@ -6016,6 +6016,6 @@ function cvShowPropDetail(pid) {
 
 function cvBackToOverview() {
   if (!window._cvData) return;
-  const { cvName, cvProps, cvAllRatings, cvFlaggedData } = window._cvData;
-  cvRender(cvName, cvProps, cvAllRatings, cvFlaggedData);
+  const { cvName, cvProps, cvAllRatings, cvFlaggedData, allPropStats, eliteCount } = window._cvData;
+  cvRender(cvName, cvProps, cvAllRatings, cvFlaggedData, allPropStats, eliteCount);
 }
