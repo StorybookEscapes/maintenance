@@ -3586,6 +3586,14 @@ function renderCleaningLog() {
     }
 
     summaryEl.innerHTML = sumH;
+
+    // Animate summary sections sequentially
+    setTimeout(() => {
+      const sections = summaryEl.querySelectorAll('.cl-section');
+      sections.forEach((sec, i) => {
+        setTimeout(() => sec.classList.add('animate'), i * 200);
+      });
+    }, 50);
   } else {
     // Show stats header for selected property
     const p = getProp(filter);
