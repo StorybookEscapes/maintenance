@@ -676,6 +676,14 @@ textarea{resize:vertical;min-height:76px}
   .vg-week-task{padding:3px 5px;font-size:.6rem}
   .vg-week-task-prop{font-size:.5rem}
 }
+/* ── Cleaner View (public, read-only) ── */
+#cleaner-view{min-height:100vh;background:var(--bg);font-family:'DM Sans',sans-serif}
+.cv-header{background:var(--green);padding:20px 24px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.cv-header-text{flex:1}
+.cv-title{font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--gold-light);margin:0;font-weight:600;text-transform:uppercase;letter-spacing:2px}
+.cv-subtitle{font-size:.82rem;color:rgba(255,255,255,.65);margin:2px 0 0}
+.cv-body{max-width:960px;margin:0 auto;padding:22px}
+
 /* ── Vendor Day Sheet ── */
 #vendor-sheet{min-height:100vh;background:var(--bg);font-family:'DM Sans',sans-serif}
 .vs-header{background:var(--green);padding:20px 24px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 8px rgba(0,0,0,.2)}

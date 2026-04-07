@@ -19,6 +19,20 @@
     }
   }
 
+  // ── Cleaner View mode ──
+  // URL: #cv/{token} — skip auth, show read-only cleaning performance view
+  if (_hash.startsWith('#cv/')) {
+    const _cvtoken = _hash.slice(4);
+    if (_cvtoken.length >= 6) {
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('app').style.display = 'none';
+      document.getElementById('cleaner-view').style.display = 'block';
+      window._cleanerViewToken = _cvtoken;
+      window._cleanerViewMode = true;
+      return; // Skip all auth — cleaner-view.js endpoint handles access control
+    }
+  }
+
   // Dev bypass: skip auth on non-production hosts
   if(window.location.hostname!=='storybookescapes.github.io'){
     document.getElementById('login-screen').style.display='none';

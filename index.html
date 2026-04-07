@@ -100,7 +100,10 @@
             <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--green);font-weight:600;margin:0">Cleaning</h2>
             <span id="cl-status" style="font-size:.7rem;color:var(--text2)"></span>
           </div>
-          <select id="cl-prop-filter" onchange="renderCleaningLog()" style="padding:6px 10px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.82rem;font-family:inherit"></select>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="cl-prop-filter" onchange="renderCleaningLog()" style="padding:6px 10px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.82rem;font-family:inherit"></select>
+            <button class="btn" onclick="openCleanerLinkModal()" style="font-size:.74rem;white-space:nowrap">Share Cleaner Link</button>
+          </div>
         </div>
         <div id="cl-picker"></div>
         <div id="cl-summary"></div>
@@ -536,6 +539,48 @@
         <button class="btn" onclick="closeModal('vendor-modal')">Cancel</button>
         <button class="btn btn-g" onclick="saveVendor()">Save Vendor</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Generate Cleaner Link Modal ── -->
+<div class="mo" id="cv-modal">
+  <div class="modal" style="max-width:560px">
+    <div class="mhdr">
+      <div class="mtitle">Share Cleaner Link</div>
+      <button class="mclose" onclick="closeCleanerLinkModal()">&#x2715;</button>
+    </div>
+    <p style="font-size:.82rem;color:var(--text2);margin-bottom:14px;line-height:1.5">Generate a permanent link that shows a read-only cleaning performance dashboard for a specific cleaner. They'll see Top Performers, properties that need attention, guest reviews, and ratings — but no admin tools or tasks.</p>
+    <label class="fl" style="margin-bottom:12px">Cleaner Name
+      <input type="text" id="cv-name" placeholder="e.g., Natasha" style="width:100%;padding:8px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit;margin-top:4px">
+    </label>
+    <label class="fl" style="margin-bottom:8px">Select Properties</label>
+    <div id="cv-prop-picker" style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);padding:12px;background:var(--surface2);margin-bottom:14px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn" onclick="closeCleanerLinkModal()">Cancel</button>
+      <button class="btn btn-g" id="cv-generate-btn" onclick="cvGenerateLink()" disabled>Generate Link</button>
+    </div>
+    <div id="cv-result" style="display:none"></div>
+  </div>
+</div>
+
+<!-- ── Cleaner View (public, read-only) ── -->
+<div id="cleaner-view" style="display:none">
+  <div class="cv-header">
+    <div class="cv-header-text">
+      <h1 class="cv-title">STORYBOOK ESCAPES</h1>
+      <p class="cv-subtitle" id="cv-subtitle">Cleaning Performance</p>
+    </div>
+  </div>
+  <div class="cv-body">
+    <div id="cv-loading" style="text-align:center;padding:40px;color:var(--text2)">Loading cleaning data...</div>
+    <div id="cv-error" style="display:none;text-align:center;padding:40px">
+      <div style="font-size:1.1rem;font-weight:600;color:var(--red);margin-bottom:8px">Invalid Link</div>
+      <div style="color:var(--text2);font-size:.88rem">This cleaning dashboard link is not valid. Please contact Storybook Escapes if you need access.</div>
+    </div>
+    <div id="cv-content" style="display:none">
+      <div id="cv-summary"></div>
+      <div id="cv-log"></div>
     </div>
   </div>
 </div>
