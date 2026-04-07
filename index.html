@@ -95,13 +95,13 @@
 
     <div class="view" id="view-cleaning">
       <div class="cl-wrap">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+        <div id="cl-hero"></div>
+        <div id="cl-toolbar" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
           <div>
-            <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--green);font-weight:600;margin:0">Cleaning</h2>
             <span id="cl-status" style="font-size:.7rem;color:var(--text2)"></span>
           </div>
           <div style="display:flex;gap:8px;align-items:center">
-            <select id="cl-prop-filter" onchange="renderCleaningLog()" style="padding:6px 10px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.82rem;font-family:inherit"></select>
+            <select id="cl-prop-filter" onchange="renderCleaningLog()" style="display:none"></select>
             <button class="btn" onclick="openCleanerLinkModal()" style="font-size:.74rem;white-space:nowrap">Share Cleaner Link</button>
           </div>
         </div>

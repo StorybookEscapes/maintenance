@@ -3476,278 +3476,295 @@ function populateClPropFilter() {
   });
 }
 
+// Track whether we're in property detail view (null = overview, string = pid)
+let clDetailPid = null;
+
 function renderCleaningLog() {
-  const filter = document.getElementById('cl-prop-filter')?.value || 'all';
+  const heroEl = document.getElementById('cl-hero');
   const summaryEl = document.getElementById('cl-summary');
   const logEl = document.getElementById('cl-log');
-
-  // Show picker only on the "all properties" overview; hide it on per-property drill-down
+  const toolbarEl = document.getElementById('cl-toolbar');
   const pickerEl = document.getElementById('cl-picker');
-  if (pickerEl) {
-    if (filter === 'all') { pickerEl.style.display = ''; renderClPicker(); }
-    else pickerEl.style.display = 'none';
-  }
 
   if (!clLoaded) {
+    if (heroEl) heroEl.innerHTML = '';
     logEl.innerHTML = '<div class="cl-empty">Loading cleaning data from Hospitable...</div>';
     summaryEl.innerHTML = '';
     return;
   }
 
-  if (!clData.length) {
-    logEl.innerHTML = '<div class="cl-empty">No cleaning issues found across any properties. Your cleaning team is doing great!</div>';
-    summaryEl.innerHTML = '';
+  // ── Build per-property stats (used by both overview and detail) ──
+  const now = Date.now();
+  const sixtyDaysAgo = now - 60 * 86400000;
+  const allPropStats = {};
+  for (const [pid, ratings] of Object.entries(clAllRatings)) {
+    const recent = ratings.filter(r => new Date(r.reviewedAt).getTime() > sixtyDaysAgo);
+    const sixMo = ratings.filter(r => new Date(r.reviewedAt).getTime() <= sixtyDaysAgo);
+    const recentAvg = recent.length ? recent.reduce((s, r) => s + r.rating, 0) / recent.length : null;
+    const sixMoAvg = sixMo.length ? sixMo.reduce((s, r) => s + r.rating, 0) / sixMo.length : null;
+    const perfect = recent.filter(r => r.rating === 5).length;
+    const flags = clData.filter(e => e.pid === pid);
+    const recentFlags = flags.filter(e => new Date(e.reviewedAt).getTime() > sixtyDaysAgo);
+    allPropStats[pid] = { totalReviews: ratings.length, recentReviews: recent.length, recentAvg, sixMoAvg, perfect, totalFlags: flags.length, recentFlags: recentFlags.length };
+  }
+  for (const [pid] of Object.entries(HOSPITABLE_IDS)) {
+    if (!allPropStats[pid]) allPropStats[pid] = { totalReviews: 0, recentReviews: 0, recentAvg: null, sixMoAvg: null, perfect: 0, totalFlags: 0, recentFlags: 0 };
+  }
+
+  // ── Property detail drill-down ──
+  if (clDetailPid) {
+    if (heroEl) heroEl.innerHTML = '';
+    if (pickerEl) pickerEl.style.display = 'none';
+    if (toolbarEl) toolbarEl.style.display = 'none';
+    clShowPropDetail(clDetailPid, allPropStats);
     return;
   }
 
-  // Summary: Problem Properties, Winners, and All Properties (only when viewing all)
-  if (filter === 'all') {
-    const now = Date.now();
-    const sixtyDaysAgo = now - 60 * 86400000;
+  // ── Overview mode ──
+  if (pickerEl) { pickerEl.style.display = ''; renderClPicker(); }
+  if (toolbarEl) toolbarEl.style.display = '';
 
-    // Build per-property stats using ALL ratings (not just flagged issues)
-    const allPropStats = {};
-    for (const [pid, ratings] of Object.entries(clAllRatings)) {
-      const recent = ratings.filter(r => new Date(r.reviewedAt) > new Date(sixtyDaysAgo));
-      const recentAvg = recent.length ? recent.reduce((s, r) => s + r.rating, 0) / recent.length : null;
-      const totalAvg = ratings.reduce((s, r) => s + r.rating, 0) / ratings.length;
-      const flags = clData.filter(e => e.pid === pid);
-      const recentFlags = flags.filter(e => new Date(e.reviewedAt) > new Date(sixtyDaysAgo));
-      allPropStats[pid] = { totalReviews: ratings.length, recentReviews: recent.length, recentAvg, totalAvg, totalFlags: flags.length, recentFlags: recentFlags.length };
-    }
-    // Also include properties with NO ratings data
-    for (const [pid] of Object.entries(HOSPITABLE_IDS)) {
-      if (!allPropStats[pid]) allPropStats[pid] = { totalReviews: 0, recentReviews: 0, recentAvg: null, totalAvg: null, totalFlags: 0, recentFlags: 0 };
-    }
+  // Count properties relevant to current picker filter
+  const filteredPids = Object.keys(allPropStats).filter(pid => !clSelectedProps || clSelectedProps.has(pid));
+  const totalReviews = filteredPids.reduce((s, pid) => s + (allPropStats[pid]?.recentReviews || 0), 0);
+  const allRecentRatings = filteredPids.flatMap(pid => (clAllRatings[pid] || []).filter(r => new Date(r.reviewedAt).getTime() > sixtyDaysAgo));
+  const overallAvg = allRecentRatings.length ? (allRecentRatings.reduce((s, r) => s + r.rating, 0) / allRecentRatings.length).toFixed(1) : '—';
 
-    // ── Top Performers: 60-day cleaning avg ≥ 4.8 (rounded to 1 decimal) with at least 3 reviews ──
-    const winnerPids = Object.keys(allPropStats).filter(pid => {
-      if (clSelectedProps && !clSelectedProps.has(pid)) return false;
-      const s = allPropStats[pid];
-      return s.recentReviews >= 3 && s.recentAvg !== null && Math.round(s.recentAvg * 10) / 10 >= 4.8;
-    }).sort((a, b) => (allPropStats[b].recentAvg || 0) - (allPropStats[a].recentAvg || 0));
+  // Categorize properties into 3 tiers (matching cleaner view)
+  const winnerPids = filteredPids.filter(pid => {
+    const s = allPropStats[pid];
+    return s.recentReviews >= 3 && s.recentAvg !== null && Math.round(s.recentAvg * 10) / 10 >= 4.8;
+  }).sort((a, b) => (allPropStats[b].recentAvg || 0) - (allPropStats[a].recentAvg || 0));
 
-    // ── Needs Attention: 60-day cleaning avg < 4.8 (rounded to 1 decimal) with at least 3 reviews ──
-    const loserPids = Object.keys(allPropStats).filter(pid => {
-      if (clSelectedProps && !clSelectedProps.has(pid)) return false;
-      const s = allPropStats[pid];
-      return s.recentReviews >= 3 && s.recentAvg !== null && Math.round(s.recentAvg * 10) / 10 < 4.8;
-    }).sort((a, b) => (allPropStats[a].recentAvg || 5) - (allPropStats[b].recentAvg || 5));
+  const nearlyPids = filteredPids.filter(pid => {
+    const s = allPropStats[pid];
+    const avg = s.recentAvg !== null ? Math.round(s.recentAvg * 100) / 100 : null;
+    return s.recentReviews >= 3 && avg !== null && avg >= 4.7 && Math.round(s.recentAvg * 10) / 10 < 4.8;
+  }).sort((a, b) => (allPropStats[b].recentAvg || 0) - (allPropStats[a].recentAvg || 0));
 
-    let sumH = '';
+  const attentionPids = filteredPids.filter(pid => {
+    const s = allPropStats[pid];
+    const avg = s.recentAvg !== null ? Math.round(s.recentAvg * 100) / 100 : null;
+    return s.recentReviews >= 3 && avg !== null && avg < 4.7;
+  }).sort((a, b) => (allPropStats[a].recentAvg || 5) - (allPropStats[b].recentAvg || 5));
 
-    // ── Top Performers Section (shown first) ──
-    if (winnerPids.length) {
-      sumH += `<div class="cv-section" data-section="0"><div class="cv-section-hdr cv-winners"><span class="icon">★</span> Top Performers <span class="cv-section-count">4.8 or above · last 60 days</span></div><div class="cv-card-grid">`;
-      for (const pid of winnerPids) {
-        const p = getProp(pid);
-        if (!p) continue;
-        const s = allPropStats[pid];
-        const recentStr = s.recentAvg !== null ? s.recentAvg.toFixed(1) : '—';
-        const sixMoStr = s.totalAvg !== null ? s.totalAvg.toFixed(1) : '—';
-        const perfect = (clAllRatings[pid] || []).filter(r => new Date(r.reviewedAt) > new Date(sixtyDaysAgo) && r.rating === 5).length;
-        sumH += `<div class="cv-winner-card" onclick="document.getElementById('cl-prop-filter').value='${pid}';renderCleaningLog()">
-          <div class="cv-card-name">${escHtml(p.name)}</div>
-          <div class="cv-card-rating-row"><span class="cv-card-rating-label">60-day cleaning avg</span><span class="cv-card-rating-value">${recentStr} / 5</span></div>
-          <div class="cv-card-sub">${perfect}/${s.recentReviews} Perfect Cleaning Reviews</div>
-          <div class="cv-comp-row"><div class="cv-comp-col"><span class="cv-comp-val">${recentStr}</span><span class="cv-comp-lbl">Last 60 days</span></div><div class="cv-comp-divider"></div><div class="cv-comp-col"><span class="cv-comp-val muted">${sixMoStr}</span><span class="cv-comp-lbl">6-month avg</span></div></div>
-        </div>`;
-      }
-      sumH += '</div></div>';
-    }
+  const noDataPids = filteredPids.filter(pid => { const s = allPropStats[pid]; return !s || s.recentReviews < 3; });
 
-    // ── Needs Attention Section ──
-    if (loserPids.length) {
-      sumH += `<div class="cv-section" data-section="1"><div class="cv-section-hdr cv-attention"><span class="icon">△</span> Needs Attention <span class="cv-section-count">${loserPids.length} propert${loserPids.length !== 1 ? 'ies' : 'y'}</span></div><div class="cv-card-grid">`;
-      for (const pid of loserPids) {
-        const p = getProp(pid);
-        if (!p) continue;
-        const s = allPropStats[pid];
-        const recentStr = s.recentAvg !== null ? s.recentAvg.toFixed(1) : '—';
-        const sixMoStr = s.totalAvg !== null ? s.totalAvg.toFixed(1) : '—';
-        const perfect = (clAllRatings[pid] || []).filter(r => new Date(r.reviewedAt) > new Date(sixtyDaysAgo) && r.rating === 5).length;
+  const eliteCount = winnerPids.length;
 
-        // Trend vs 6-month
-        let trendH = '';
-        if (s.recentAvg !== null && s.totalAvg !== null) {
-          const diff = s.recentAvg - s.totalAvg;
-          if (diff > 0.05) trendH = `<div class="cv-trend up">↑ up from ${sixMoStr} · 6-month avg</div>`;
-          else if (diff < -0.05) trendH = `<div class="cv-trend down">↓ down from ${sixMoStr} · 6-month avg</div>`;
-          else trendH = `<div class="cv-trend flat">→ holding at ${recentStr}</div>`;
-        } else if (s.totalAvg === null) {
-          trendH = `<div class="cv-trend flat">— not enough 6-month data</div>`;
+  // ── Hero bar (matching cleaner view cv-hero) ──
+  if (heroEl) {
+    heroEl.innerHTML = `<div class="cv-hero">
+      <div>
+        <div class="cv-hero-name">Cleaning Performance</div>
+        <div class="cv-hero-meta">${filteredPids.length} properties · ${totalReviews} reviews in last 60 days · ${overallAvg}/5 avg cleanliness</div>
+      </div>
+      <div class="cv-hero-badge"><span class="star">★</span> ${eliteCount} of ${filteredPids.length} properties at elite level this period</div>
+    </div>`;
+  }
+
+  // ── Card builder (matches cleaner view exactly) ──
+  function clCard(pid, cardClass) {
+    const p = getProp(pid);
+    if (!p) return '';
+    const s = allPropStats[pid];
+    const recentAvg = s.recentAvg !== null ? s.recentAvg.toFixed(1) : '—';
+    const sixMoAvg = s.sixMoAvg !== null ? s.sixMoAvg.toFixed(1) : '—';
+    const perfect = s.perfect || 0;
+
+    // Trend pill (suppress downtrend for top performers — show "elite" instead)
+    let trendH = '';
+    if (s.recentAvg !== null && s.sixMoAvg !== null) {
+      const diff = s.recentAvg - s.sixMoAvg;
+      if (diff > 0.05) trendH = `<div class="cv-trend up">↑ up from ${sixMoAvg} · 6-month avg</div>`;
+      else if (diff < -0.05) {
+        if (cardClass === 'cv-winner-card') {
+          trendH = `<div class="cv-trend elite">✓ Holding at elite level</div>`;
+        } else {
+          trendH = `<div class="cv-trend down">↓ down from ${sixMoAvg} · 6-month avg</div>`;
         }
+      } else trendH = `<div class="cv-trend flat">→ holding at ${recentAvg}</div>`;
+    } else if (s.sixMoAvg === null) {
+      trendH = `<div class="cv-trend flat">— not enough 6-month data</div>`;
+    }
 
-        sumH += `<div class="cv-attention-card" onclick="document.getElementById('cl-prop-filter').value='${pid}';renderCleaningLog()">
-          <div class="cv-card-name">${escHtml(p.name)}</div>
-          <div class="cv-card-rating-row"><span class="cv-card-rating-label">60-day cleaning avg</span><span class="cv-card-rating-value">${recentStr} / 5</span></div>
-          <div class="cv-card-sub">${perfect}/${s.recentReviews} Perfect Cleaning Reviews</div>
-          ${trendH}
-          <div class="cv-comp-row"><div class="cv-comp-col"><span class="cv-comp-val">${recentStr}</span><span class="cv-comp-lbl">Last 60 days</span></div><div class="cv-comp-divider"></div><div class="cv-comp-col"><span class="cv-comp-val muted">${sixMoStr}</span><span class="cv-comp-lbl">6-month avg</span></div></div>
-        </div>`;
+    // Flag snippets for nearly/attention cards
+    let flagsH = '';
+    if ((cardClass === 'cv-nearly-card' || cardClass === 'cv-attention-card') && clData.length > 0) {
+      const propFlags = clData.filter(f => f.pid === pid && new Date(f.reviewedAt).getTime() > sixtyDaysAgo);
+      if (propFlags.length > 0) {
+        flagsH = propFlags.slice(0, 2).map(f => `<div class="cv-flag-item"><span class="cv-flag-guest">${escHtml(f.guest)}</span><span class="cv-flag-text">${escHtml((f.text || '').substring(0, 60))}</span></div>`).join('');
+        if (propFlags.length > 2) flagsH += `<div class="cv-flag-more">+${propFlags.length - 2} more flag${propFlags.length > 3 ? 's' : ''}</div>`;
+        flagsH = `<div class="cv-flags">${flagsH}</div>`;
       }
-      sumH += '</div></div>';
     }
 
-    if (!winnerPids.length && !loserPids.length) {
-      sumH += '<div class="cl-no-data">Not enough review data in the last 60 days to identify trends yet (need at least 3 reviews per property).</div>';
-    }
-
-    summaryEl.innerHTML = sumH;
-
-    // Animate summary sections sequentially
-    setTimeout(() => {
-      const sections = summaryEl.querySelectorAll('.cl-section');
-      sections.forEach((sec, i) => {
-        setTimeout(() => sec.classList.add('animate'), i * 200);
-      });
-    }, 50);
-  } else {
-    // Show stats header for selected property
-    const p = getProp(filter);
-    const entries = clData.filter(e => e.pid === filter);
-    const propRatings = clAllRatings[filter] || [];
-    const allAvg = propRatings.length ? (propRatings.reduce((s, r) => s + r.rating, 0) / propRatings.length).toFixed(1) : '—';
-    const sixtyDayRatings = propRatings.filter(r => new Date(r.reviewedAt) > new Date(Date.now() - 60 * 86400000));
-    const recentAvg = sixtyDayRatings.length ? (sixtyDayRatings.reduce((s, r) => s + r.rating, 0) / sixtyDayRatings.length).toFixed(1) : '—';
-    const perfect = sixtyDayRatings.filter(r => r.rating === 5).length;
-    const recentFlags = entries.filter(e => new Date(e.reviewedAt) > new Date(Date.now() - 60 * 86400000)).length;
-    summaryEl.innerHTML = `<div style="background:var(--white);border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:16px;box-shadow:var(--shadow)">
-      <div style="font-family:'Cormorant Garamond',serif;font-size:1.15rem;font-weight:600;color:var(--green)">${escHtml(p?.name || filter)}</div>
-      <div style="font-size:.78rem;color:var(--text);margin-top:6px;font-weight:600">60-Day Cleaning Rating: <span style="color:${parseFloat(recentAvg) >= 4.8 ? 'var(--green)' : 'var(--red)'}">${recentAvg}/5</span> · ${sixtyDayRatings.length} reviews · ${perfect} perfect · ${recentFlags} flag${recentFlags !== 1 ? 's' : ''}</div>
-      <div style="font-size:.74rem;color:var(--text2);margin-top:2px">Overall Cleaning Rating: ${allAvg}/5 · ${propRatings.length} total reviews · ${entries.length} flag${entries.length !== 1 ? 's' : ''} all-time</div>
-      <div style="margin-top:8px"><button class="btn" style="font-size:.72rem;padding:4px 12px" onclick="document.getElementById('cl-prop-filter').value='all';renderCleaningLog()">← Back to all properties</button></div>
+    return `<div class="${cardClass}" onclick="clDrillDown('${pid}')">
+      <div class="cv-card-name">${escHtml(p.name)}</div>
+      <div class="cv-card-rating-row"><span class="cv-card-rating-label">60-day cleaning avg</span><span class="cv-card-rating-value">${recentAvg} / 5</span></div>
+      <div class="cv-card-sub">${perfect}/${s.recentReviews} Perfect Cleaning Reviews</div>
+      ${trendH}${flagsH}
+      <div class="cv-comp-row"><div class="cv-comp-col"><span class="cv-comp-val">${recentAvg}</span><span class="cv-comp-lbl">Last 60 days</span></div><div class="cv-comp-divider"></div><div class="cv-comp-col"><span class="cv-comp-val muted">${sixMoAvg}</span><span class="cv-comp-lbl">6-month avg</span></div></div>
     </div>`;
   }
 
-  // ── Entry rendering helper ──
-  function clEntryHtml(e, showPropName) {
-    const prop = getProp(e.pid);
-    const dateStr = new Date(e.reviewedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-    const checkIn = e.checkIn || e.check_in;
-    const checkOut = e.checkOut || e.check_out;
-    const stayStr = checkIn ? `${new Date(checkIn).toLocaleDateString('en-US', {month:'short',day:'numeric'})} – ${new Date(checkOut).toLocaleDateString('en-US', {month:'short',day:'numeric'})}` : '';
-    const cleanRating = e.cleanlinessRating ?? e.rating ?? null;
-    let ratingClass = 'good';
-    if (cleanRating !== null) {
-      if (cleanRating <= 2) ratingClass = 'bad';
-      else if (cleanRating <= 3) ratingClass = 'ok';
+  let sumH = '';
+
+  // Section 1: Top Performers (≥4.8)
+  if (winnerPids.length) {
+    sumH += `<div class="cv-section" data-section="1"><div class="cv-section-hdr cv-winners"><span class="icon">★</span> Top Performers <span class="cv-section-count">4.8 or above · last 60 days</span></div><div class="cv-card-grid">`;
+    winnerPids.forEach(pid => { sumH += clCard(pid, 'cv-winner-card'); });
+    sumH += '</div></div>';
+  }
+
+  // Section 2: Nearly Made It (4.7–4.79)
+  if (nearlyPids.length) {
+    sumH += `<div class="cv-section" data-section="2"><div class="cv-section-hdr cv-nearly"><span class="icon">◎</span> Nearly Made It <span class="cv-section-count">4.7 – 4.79 · just below elite</span></div><div class="cv-card-grid">`;
+    nearlyPids.forEach(pid => { sumH += clCard(pid, 'cv-nearly-card'); });
+    sumH += '</div></div>';
+  }
+
+  // Section 3: Needs Attention (<4.7)
+  if (attentionPids.length) {
+    sumH += `<div class="cv-section" data-section="3"><div class="cv-section-hdr cv-attention"><span class="icon">△</span> Needs Attention <span class="cv-section-count">${attentionPids.length} propert${attentionPids.length !== 1 ? 'ies' : 'y'}</span></div><div class="cv-card-grid">`;
+    attentionPids.forEach(pid => { sumH += clCard(pid, 'cv-attention-card'); });
+    sumH += '</div></div>';
+  }
+
+  // Not enough data
+  if (noDataPids.length) {
+    sumH += `<div class="cv-section" data-section="4"><div class="cv-section-hdr" style="color:var(--text2)"><span class="icon">○</span> Not Enough Data <span class="cv-section-count">${noDataPids.length} propert${noDataPids.length !== 1 ? 'ies' : 'y'} · need 3+ reviews</span></div><div class="cv-card-grid">`;
+    for (const pid of noDataPids) {
+      const p = getProp(pid);
+      if (!p) continue;
+      const s = allPropStats[pid] || {};
+      sumH += `<div class="cv-attention-card" onclick="clDrillDown('${pid}')" style="opacity:.6"><div class="cv-card-name">${escHtml(p.name)}</div><div class="cv-card-sub">${s.recentReviews || 0} reviews in last 60 days (need 3+)</div></div>`;
     }
-    const guestName = e.guest || 'Anonymous';
-    const text = e.text || '';
-    const source = e.source || '';
-    const flagged = e.isFlagged ? ' style="border-left:3px solid var(--red)"' : '';
-    return `<div class="cl-entry"${flagged}>
-      <div class="cl-entry-hdr">
-        <div>
-          <span class="cl-entry-date">${dateStr}</span>
-          ${showPropName ? `<span style="font-size:.74rem;color:var(--green);margin-left:8px;font-weight:600">${escHtml(prop?.name || e.pid)}</span>` : ''}
-        </div>
-        <div style="display:flex;gap:6px;align-items:center">
-          ${cleanRating !== null ? `<span class="cl-entry-rating ${ratingClass}">Cleaning: ${cleanRating}/5</span>` : ''}
-          ${e.overallRating ? `<span style="font-size:.7rem;color:var(--text2)">Overall: ${'★'.repeat(e.overallRating)}${'☆'.repeat(5 - e.overallRating)}</span>` : ''}
-        </div>
-      </div>
-      ${text ? `<div class="cl-entry-text">${escHtml(text.length > 500 ? text.slice(0, 500) + '...' : text)}</div>` : ''}
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
-        <span class="cl-entry-guest">Guest: ${escHtml(guestName)}${stayStr ? ' · Stay: ' + stayStr : ''}</span>
-        ${source ? `<span class="cl-entry-source">Source: ${source}</span>` : ''}
-      </div>
+    sumH += '</div></div>';
+  }
+
+  if (!winnerPids.length && !nearlyPids.length && !attentionPids.length && !noDataPids.length) {
+    sumH += '<div class="cl-no-data">Not enough review data in the last 60 days to identify trends yet (need at least 3 reviews per property).</div>';
+  }
+
+  summaryEl.innerHTML = sumH;
+  logEl.innerHTML = '';
+
+  // ── Staggered card animations (matching cleaner view) ──
+  const SECTION_DELAYS = [0.05, 0.6, 1.15, 1.6, 2.0];
+  const sections = summaryEl.querySelectorAll('.cv-section');
+  sections.forEach((sec, i) => {
+    const delay = SECTION_DELAYS[i] || (i * 0.5);
+    setTimeout(() => {
+      sec.classList.add('animate');
+      const cards = sec.querySelectorAll('.cv-winner-card, .cv-nearly-card, .cv-attention-card');
+      cards.forEach((card, j) => {
+        setTimeout(() => card.classList.add('animate'), j * 100);
+      });
+    }, delay * 1000);
+  });
+}
+
+// ── Drill down into property detail (inline, with back button) ──
+function clDrillDown(pid) {
+  clDetailPid = pid;
+  renderCleaningLog();
+}
+
+function clBackToOverview() {
+  clDetailPid = null;
+  renderCleaningLog();
+}
+
+function clShowPropDetail(pid, allPropStats) {
+  const summaryEl = document.getElementById('cl-summary');
+  const logEl = document.getElementById('cl-log');
+  if (!summaryEl || !logEl) return;
+
+  const p = getProp(pid);
+  const propRatings = (clAllRatings[pid] || []).slice().sort((a, b) => new Date(b.reviewedAt) - new Date(a.reviewedAt));
+  const s = allPropStats[pid] || {};
+  const sixtyDaysAgo = Date.now() - 60 * 86400000;
+  const sixtyDayRatings = propRatings.filter(r => new Date(r.reviewedAt).getTime() > sixtyDaysAgo);
+  const recentAvg = sixtyDayRatings.length ? (sixtyDayRatings.reduce((s, r) => s + r.rating, 0) / sixtyDayRatings.length).toFixed(1) : '—';
+  const allAvg = propRatings.length ? (propRatings.reduce((s, r) => s + r.rating, 0) / propRatings.length).toFixed(1) : '—';
+  const perfect = sixtyDayRatings.filter(r => r.rating === 5).length;
+  const recentFlags = clData.filter(e => e.pid === pid && new Date(e.reviewedAt).getTime() > sixtyDaysAgo);
+
+  summaryEl.innerHTML = `<div style="background:var(--white);border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:16px;box-shadow:var(--shadow)">
+    <div style="font-family:'Cormorant Garamond',serif;font-size:1.15rem;font-weight:600;color:var(--green)">${escHtml(p?.name || pid)}</div>
+    <div style="font-size:.78rem;color:var(--text);margin-top:6px;font-weight:600">60-Day Cleaning Rating: <span style="color:${parseFloat(recentAvg) >= 4.8 ? 'var(--green)' : 'var(--red)'}">${recentAvg}/5</span> · ${sixtyDayRatings.length} reviews · ${perfect} perfect · ${recentFlags.length} flag${recentFlags.length !== 1 ? 's' : ''}</div>
+    <div style="font-size:.74rem;color:var(--text2);margin-top:2px">Overall Cleaning Rating: ${allAvg}/5 · ${propRatings.length} total reviews · ${clData.filter(e => e.pid === pid).length} flags all-time</div>
+    <div style="margin-top:8px"><button class="btn" style="font-size:.72rem;padding:4px 12px" onclick="clBackToOverview()">← Back to overview</button></div>
+  </div>`;
+
+  // Show flags for this property
+  let h = '';
+  if (recentFlags.length > 0) {
+    h += `<div style="background:rgba(192,57,43,.08);border:1px solid rgba(192,57,43,.2);border-radius:8px;padding:12px 14px;margin-bottom:16px">
+      <div style="font-size:.85rem;font-weight:600;color:var(--red);margin-bottom:8px">⚠ Recent Flags (${recentFlags.length})</div>
+      ${recentFlags.map(f => {
+        const dateStr = new Date(f.reviewedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        return `<div style="font-size:.75rem;margin-bottom:8px;padding:8px;background:var(--white);border-radius:4px;border-left:3px solid var(--red)">
+          <div style="font-weight:600;color:var(--text)">${escHtml(f.guest)}</div>
+          <div style="font-size:.7rem;color:var(--text3);margin-top:2px">${dateStr} · Cleaning: ${f.cleanlinessRating}/5 · ${f.source}</div>
+          <div style="color:var(--text2);margin-top:4px">${escHtml(f.text)}</div>
+        </div>`;
+      }).join('')}
     </div>`;
   }
 
-  // ── Log entries ──
-  const sixtyAgo = Date.now() - 60 * 86400000;
-
-  if (filter !== 'all') {
-    // Property detail: show ALL cleaning-rated reviews (not just flagged), chronologically
-    const propReviews = (clAllRatings[filter] || []).slice().sort((a, b) => new Date(b.reviewedAt) - new Date(a.reviewedAt));
-    if (!propReviews.length) {
-      logEl.innerHTML = '<div class="cl-empty">No cleaning ratings for this property.</div>';
-      return;
-    }
-    const recent = propReviews.filter(e => new Date(e.reviewedAt).getTime() > sixtyAgo);
-    const older = propReviews.filter(e => new Date(e.reviewedAt).getTime() <= sixtyAgo);
-
-    let h = '';
-    if (recent.length) {
-      h += recent.map(e => clEntryHtml({ ...e, pid: filter }, false)).join('');
-    } else {
-      h += '<div style="color:var(--text2);font-size:.82rem;padding:12px 0;font-style:italic">No cleaning reviews in the last 60 days.</div>';
-    }
-    if (older.length) {
-      h += `<div style="margin-top:16px">
-        <button class="btn" id="cl-older-btn" style="width:100%;text-align:center;font-size:.8rem;padding:10px" onclick="document.getElementById('cl-older-entries').style.display='';this.style.display='none'">Older Reviews (${older.length})</button>
-        <div id="cl-older-entries" style="display:none;margin-top:8px">${older.map(e => clEntryHtml({ ...e, pid: filter }, false)).join('')}</div>
-      </div>`;
-    }
-    logEl.innerHTML = h;
+  // Show all reviews
+  const recent = propRatings.filter(r => new Date(r.reviewedAt).getTime() > sixtyDaysAgo);
+  const older = propRatings.filter(r => new Date(r.reviewedAt).getTime() <= sixtyDaysAgo);
+  if (recent.length) {
+    h += recent.map(e => clDetailEntryHtml({ ...e, pid }, false)).join('');
   } else {
-    // All properties view: show flagged issues organized by severity
-    const filtered = clData;
-    if (!filtered.length) {
-      logEl.innerHTML = '<div class="cl-empty">No cleaning flags found across any properties.</div>';
-      return;
-    }
-    const recent = filtered.filter(e => new Date(e.reviewedAt).getTime() > sixtyAgo);
-    const older = filtered.filter(e => new Date(e.reviewedAt).getTime() <= sixtyAgo);
-
-    // Organize recent flags by severity
-    const critical = recent.filter(e => e.cleanlinessRating && e.cleanlinessRating <= 2);
-    const highPriority = recent.filter(e => e.cleanlinessRating && e.cleanlinessRating > 2 && e.cleanlinessRating <= 3);
-    const medium = recent.filter(e => !e.cleanlinessRating || (e.cleanlinessRating > 3 && e.cleanlinessRating < 4.8));
-
-    let h = '';
-    let sectionIdx = 0;
-
-    // Critical section
-    if (critical.length) {
-      h += `<div class="cl-section" data-section="${sectionIdx++}"><div class="cl-section-hdr critical"><span class="icon">🔴</span> Critical Issues</div>`;
-      h += critical.map(e => clEntryHtml(e, true)).join('');
-      h += '</div>';
-    }
-
-    // High Priority section
-    if (highPriority.length) {
-      h += `<div class="cl-section" data-section="${sectionIdx++}"><div class="cl-section-hdr high-priority"><span class="icon">🟠</span> High Priority</div>`;
-      h += highPriority.map(e => clEntryHtml(e, true)).join('');
-      h += '</div>';
-    }
-
-    // Medium Priority section
-    if (medium.length) {
-      h += `<div class="cl-section" data-section="${sectionIdx++}"><div class="cl-section-hdr medium-priority"><span class="icon">🟡</span> Medium Priority</div>`;
-      h += medium.map(e => clEntryHtml(e, true)).join('');
-      h += '</div>';
-    }
-
-    if (!critical.length && !highPriority.length && !medium.length) {
-      h += '<div style="color:var(--text2);font-size:.82rem;padding:12px 0;font-style:italic">No cleaning flags in the last 60 days.</div>';
-    }
-
-    if (older.length) {
-      h += `<div style="margin-top:16px">
-        <button class="btn" id="cl-older-btn" style="width:100%;text-align:center;font-size:.8rem;padding:10px" onclick="document.getElementById('cl-older-entries').style.display='';this.style.display='none'">Older Flags (${older.length})</button>
-        <div id="cl-older-entries" style="display:none;margin-top:8px">`;
-      // Organize older by severity too
-      const oldCritical = older.filter(e => e.cleanlinessRating && e.cleanlinessRating <= 2);
-      const oldHigh = older.filter(e => e.cleanlinessRating && e.cleanlinessRating > 2 && e.cleanlinessRating <= 3);
-      const oldMedium = older.filter(e => !e.cleanlinessRating || (e.cleanlinessRating > 3 && e.cleanlinessRating < 4.8));
-      if (oldCritical.length) h += `<div style="margin-bottom:12px"><div style="font-weight:600;color:var(--red);margin-bottom:6px">Critical</div>${oldCritical.map(e => clEntryHtml(e, true)).join('')}</div>`;
-      if (oldHigh.length) h += `<div style="margin-bottom:12px"><div style="font-weight:600;color:#d97c3a;margin-bottom:6px">High Priority</div>${oldHigh.map(e => clEntryHtml(e, true)).join('')}</div>`;
-      if (oldMedium.length) h += `<div style="margin-bottom:12px"><div style="font-weight:600;color:var(--gold);margin-bottom:6px">Medium Priority</div>${oldMedium.map(e => clEntryHtml(e, true)).join('')}</div>`;
-      h += `</div></div>`;
-    }
-    logEl.innerHTML = h;
-
-    // Animate severity sections sequentially
-    setTimeout(() => {
-      const sections = logEl.querySelectorAll('.cl-section');
-      sections.forEach((sec, i) => {
-        setTimeout(() => sec.classList.add('animate'), i * 200);
-      });
-    }, 50);
+    h += '<div style="color:var(--text2);font-size:.82rem;padding:12px 0;font-style:italic">No cleaning reviews in the last 60 days.</div>';
   }
+  if (older.length) {
+    h += `<div style="margin-top:16px"><button class="btn" id="cl-older-btn" style="width:100%;text-align:center;font-size:.8rem;padding:10px" onclick="document.getElementById('cl-older-entries').style.display='';this.style.display='none'">Older Reviews (${older.length})</button>`;
+    h += `<div id="cl-older-entries" style="display:none;margin-top:8px">${older.map(e => clDetailEntryHtml({ ...e, pid }, false)).join('')}</div></div>`;
+  }
+  if (!propRatings.length) {
+    h += '<div class="cl-empty">No cleaning ratings for this property.</div>';
+  }
+  logEl.innerHTML = h;
+}
+
+// ── Entry rendering helper for detail view ──
+function clDetailEntryHtml(e, showPropName) {
+  const prop = getProp(e.pid);
+  const dateStr = new Date(e.reviewedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  const checkIn = e.checkIn || e.check_in || '';
+  const checkOut = e.checkOut || e.check_out || '';
+  const stayStr = checkIn ? `${new Date(checkIn).toLocaleDateString('en-US', {month:'short',day:'numeric'})} – ${new Date(checkOut).toLocaleDateString('en-US', {month:'short',day:'numeric'})}` : '';
+  const cleanRating = e.cleanlinessRating ?? e.rating ?? null;
+  let ratingClass = 'good';
+  if (cleanRating !== null) {
+    if (cleanRating <= 2) ratingClass = 'bad';
+    else if (cleanRating <= 3) ratingClass = 'ok';
+  }
+  const guestName = e.guest || 'Anonymous';
+  const text = e.text || '';
+  const source = e.source || '';
+  return `<div class="cl-entry"${e.isFlagged ? ' style="border-left:3px solid var(--red)"' : ''}>
+    <div class="cl-entry-hdr">
+      <div>
+        <span class="cl-entry-date">${dateStr}</span>
+        ${showPropName ? `<span style="font-size:.74rem;color:var(--green);margin-left:8px;font-weight:600">${escHtml(prop?.name || e.pid)}</span>` : ''}
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        ${cleanRating !== null ? `<span class="cl-entry-rating ${ratingClass}">Cleaning: ${cleanRating}/5</span>` : ''}
+        ${e.overallRating ? `<span style="font-size:.7rem;color:var(--text2)">Overall: ${'★'.repeat(e.overallRating)}${'☆'.repeat(5 - e.overallRating)}</span>` : ''}
+      </div>
+    </div>
+    ${text ? `<div class="cl-entry-text">${escHtml(text.length > 500 ? text.slice(0, 500) + '...' : text)}</div>` : ''}
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+      <span class="cl-entry-guest">Guest: ${escHtml(guestName)}${stayStr ? ' · Stay: ' + stayStr : ''}</span>
+      ${source ? `<span class="cl-entry-source">Source: ${source}</span>` : ''}
+    </div>
+  </div>`;
 }
 
 // ── Cleaning Picker ────────────────────────────────────────────
