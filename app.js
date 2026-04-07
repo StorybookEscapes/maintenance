@@ -3538,18 +3538,19 @@ function renderCleaningLog() {
 
     // ── Top Performers Section (shown first) ──
     if (winnerPids.length) {
-      sumH += `<div class="cl-section"><div class="cl-section-hdr winners"><span class="icon">★</span> Top Performers</div>`;
-      sumH += '<div class="cl-summary-grid">';
+      sumH += `<div class="cv-section" data-section="0"><div class="cv-section-hdr cv-winners"><span class="icon">★</span> Top Performers <span class="cv-section-count">4.8 or above · last 60 days</span></div><div class="cv-card-grid">`;
       for (const pid of winnerPids) {
         const p = getProp(pid);
         if (!p) continue;
         const s = allPropStats[pid];
         const recentStr = s.recentAvg !== null ? s.recentAvg.toFixed(1) : '—';
-        const overallStr = s.totalAvg !== null ? s.totalAvg.toFixed(1) : '—';
-        const perfectCount = (clAllRatings[pid] || []).filter(r => new Date(r.reviewedAt) > new Date(sixtyDaysAgo) && r.rating === 5).length;
-        sumH += `<div class="cl-winner-card" onclick="document.getElementById('cl-prop-filter').value='${pid}';renderCleaningLog()">
-          <div class="cl-prop-name">${escHtml(p.name)}</div>
-          <div class="cl-winner-stat"><span class="good">${recentStr}/5</span> 60-day cleaning<br>${overallStr}/5 overall cleaning<br>${s.recentReviews} reviews</div>
+        const sixMoStr = s.totalAvg !== null ? s.totalAvg.toFixed(1) : '—';
+        const perfect = (clAllRatings[pid] || []).filter(r => new Date(r.reviewedAt) > new Date(sixtyDaysAgo) && r.rating === 5).length;
+        sumH += `<div class="cv-winner-card" onclick="document.getElementById('cl-prop-filter').value='${pid}';renderCleaningLog()">
+          <div class="cv-card-name">${escHtml(p.name)}</div>
+          <div class="cv-card-rating-row"><span class="cv-card-rating-label">60-day cleaning avg</span><span class="cv-card-rating-value">${recentStr} / 5</span></div>
+          <div class="cv-card-sub">${perfect}/${s.recentReviews} Perfect Cleaning Reviews</div>
+          <div class="cv-comp-row"><div class="cv-comp-col"><span class="cv-comp-val">${recentStr}</span><span class="cv-comp-lbl">Last 60 days</span></div><div class="cv-comp-divider"></div><div class="cv-comp-col"><span class="cv-comp-val muted">${sixMoStr}</span><span class="cv-comp-lbl">6-month avg</span></div></div>
         </div>`;
       }
       sumH += '</div></div>';
@@ -3557,25 +3558,32 @@ function renderCleaningLog() {
 
     // ── Needs Attention Section ──
     if (loserPids.length) {
-      sumH += `<div class="cl-section"><div class="cl-section-hdr losers"><span class="icon">⚠</span> Needs Attention</div>`;
-      sumH += '<div class="cl-summary-grid">';
+      sumH += `<div class="cv-section" data-section="1"><div class="cv-section-hdr cv-attention"><span class="icon">△</span> Needs Attention <span class="cv-section-count">${loserPids.length} propert${loserPids.length !== 1 ? 'ies' : 'y'}</span></div><div class="cv-card-grid">`;
       for (const pid of loserPids) {
         const p = getProp(pid);
         if (!p) continue;
         const s = allPropStats[pid];
         const recentStr = s.recentAvg !== null ? s.recentAvg.toFixed(1) : '—';
-        const overallStr = s.totalAvg !== null ? s.totalAvg.toFixed(1) : '—';
-        // Trend vs prior 60 days
-        const prior60 = (clAllRatings[pid] || []).filter(r => { const d = new Date(r.reviewedAt).getTime(); return d > now - 120 * 86400000 && d <= now - 60 * 86400000; });
-        const priorAvg = prior60.length ? prior60.reduce((s, r) => s + r.rating, 0) / prior60.length : null;
-        let trend = '';
-        if (priorAvg !== null && s.recentAvg !== null) {
-          if (s.recentAvg > priorAvg + 0.3) trend = '<span class="cl-trend improving">↑ improving</span>';
-          else if (s.recentAvg < priorAvg - 0.3) trend = '<span class="cl-trend declining">↓ declining</span>';
+        const sixMoStr = s.totalAvg !== null ? s.totalAvg.toFixed(1) : '—';
+        const perfect = (clAllRatings[pid] || []).filter(r => new Date(r.reviewedAt) > new Date(sixtyDaysAgo) && r.rating === 5).length;
+
+        // Trend vs 6-month
+        let trendH = '';
+        if (s.recentAvg !== null && s.totalAvg !== null) {
+          const diff = s.recentAvg - s.totalAvg;
+          if (diff > 0.05) trendH = `<div class="cv-trend up">↑ up from ${sixMoStr} · 6-month avg</div>`;
+          else if (diff < -0.05) trendH = `<div class="cv-trend down">↓ down from ${sixMoStr} · 6-month avg</div>`;
+          else trendH = `<div class="cv-trend flat">→ holding at ${recentStr}</div>`;
+        } else if (s.totalAvg === null) {
+          trendH = `<div class="cv-trend flat">— not enough 6-month data</div>`;
         }
-        sumH += `<div class="cl-prop-card has-issues" onclick="document.getElementById('cl-prop-filter').value='${pid}';renderCleaningLog()">
-          <div class="cl-prop-name">${escHtml(p.name)}</div>
-          <div class="cl-prop-stat"><span class="bad">${recentStr}/5</span> 60-day cleaning<br>${overallStr}/5 overall cleaning<br>${s.recentReviews} reviews${s.recentFlags > 0 ? ` · <span class="bad">${s.recentFlags} flag${s.recentFlags !== 1 ? 's' : ''}</span>` : ''}${trend ? '<br>' + trend : ''}</div>
+
+        sumH += `<div class="cv-attention-card" onclick="document.getElementById('cl-prop-filter').value='${pid}';renderCleaningLog()">
+          <div class="cv-card-name">${escHtml(p.name)}</div>
+          <div class="cv-card-rating-row"><span class="cv-card-rating-label">60-day cleaning avg</span><span class="cv-card-rating-value">${recentStr} / 5</span></div>
+          <div class="cv-card-sub">${perfect}/${s.recentReviews} Perfect Cleaning Reviews</div>
+          ${trendH}
+          <div class="cv-comp-row"><div class="cv-comp-col"><span class="cv-comp-val">${recentStr}</span><span class="cv-comp-lbl">Last 60 days</span></div><div class="cv-comp-divider"></div><div class="cv-comp-col"><span class="cv-comp-val muted">${sixMoStr}</span><span class="cv-comp-lbl">6-month avg</span></div></div>
         </div>`;
       }
       sumH += '</div></div>';
