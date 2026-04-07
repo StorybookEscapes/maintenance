@@ -163,18 +163,25 @@ function startExpiryWatcher(){
   _expiryTimer=setInterval(()=>{
     const ms=tokenExpiresIn();
     if(ms<=0){showReAuthPrompt();clearInterval(_expiryTimer);}
-    else if(ms<300000&&!_authWarnShown){
+    else if(ms<300000&&!_authWarnShown&&isAppAuthed()){
       // Under 5 min left — show a soft warning toast
       showToast('\u23f3 Session expiring soon — save your work','',null,8000);
     }
   },30000);
 }
 
+// Only show the re-auth overlay when the app was already authenticated this session
+// and the token expired mid-use. Don't block the login screen itself.
+function isAppAuthed(){return document.getElementById('app')?.classList.contains('authed');}
+
 const S = {
   get: async (k) => {
-    if(isTokenExpired()){showReAuthPrompt();return null;}
     const token = getAuthToken();
-    if (!token) { showReAuthPrompt(); return null; }
+    if (!token) {
+      if (isAppAuthed()) showReAuthPrompt();
+      return null;
+    }
+    if (isTokenExpired()) { showReAuthPrompt(); return null; }
     try {
       const r = await fetch(STORAGE_API + '?key=' + encodeURIComponent(k), {
         headers: { 'Authorization': 'Bearer ' + token },
@@ -186,15 +193,17 @@ const S = {
       return null;
     } catch(e) {
       console.warn('[storage] Server get failed:', e.message);
-      updateSyncStatus('error');
+      if (isAppAuthed()) updateSyncStatus('error');
       return null;
     }
   },
   set: async (k, v) => {
-    // Check auth BEFORE attempting save
-    if(isTokenExpired()){showReAuthPrompt();return false;}
     const token = getAuthToken();
-    if (!token) { showReAuthPrompt(); return false; }
+    if (!token) {
+      if (isAppAuthed()) showReAuthPrompt();
+      return false;
+    }
+    if (isTokenExpired()) { showReAuthPrompt(); return false; }
     try {
       const r = await fetch(STORAGE_API, {
         method: 'POST',
@@ -6294,10 +6303,17 @@ function cvShowPropDetail(pid) {
     h += '<div class="cl-empty">No cleaning ratings for this property.</div>';
   }
   logEl.innerHTML = h;
+
+  // Scroll to top of the property detail on mobile — flags are at the top
+  const topEl = document.getElementById('cv-summary');
+  if (topEl) topEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function cvBackToOverview() {
   if (!window._cvData) return;
   const { cvName, cvProps, cvAllRatings, cvFlaggedData, allPropStats, eliteCount } = window._cvData;
   cvRender(cvName, cvProps, cvAllRatings, cvFlaggedData, allPropStats, eliteCount);
+  // Scroll back to top of overview
+  const topEl = document.getElementById('cv-summary');
+  if (topEl) topEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
