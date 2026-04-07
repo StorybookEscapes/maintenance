@@ -96,14 +96,9 @@
     <div class="view" id="view-cleaning">
       <div class="cl-wrap">
         <div id="cl-hero"></div>
-        <div id="cl-toolbar" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
-          <div>
-            <span id="cl-status" style="font-size:.7rem;color:var(--text2)"></span>
-          </div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <select id="cl-prop-filter" onchange="renderCleaningLog()" style="display:none"></select>
-            <button class="btn" onclick="openCleanerLinkModal()" style="font-size:.74rem;white-space:nowrap">Share Cleaner Link</button>
-          </div>
+        <div id="cl-toolbar" style="margin-bottom:10px">
+          <span id="cl-status" style="font-size:.7rem;color:var(--text2)"></span>
+          <select id="cl-prop-filter" onchange="renderCleaningLog()" style="display:none"></select>
         </div>
         <div id="cl-picker"></div>
         <div id="cl-summary"></div>
@@ -550,17 +545,30 @@
       <div class="mtitle">Share Cleaner Link</div>
       <button class="mclose" onclick="closeCleanerLinkModal()">&#x2715;</button>
     </div>
-    <p style="font-size:.82rem;color:var(--text2);margin-bottom:14px;line-height:1.5">Generate a permanent link that shows a read-only cleaning performance dashboard for a specific cleaner. They'll see Top Performers, properties that need attention, guest reviews, and ratings — but no admin tools or tasks.</p>
-    <label class="fl" style="margin-bottom:12px">Cleaner Name
-      <input type="text" id="cv-name" placeholder="e.g., Natasha" style="width:100%;padding:8px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit;margin-top:4px">
-    </label>
-    <label class="fl" style="margin-bottom:8px">Select Properties</label>
-    <div id="cv-prop-picker" style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);padding:12px;background:var(--surface2);margin-bottom:14px"></div>
-    <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button class="btn" onclick="closeCleanerLinkModal()">Cancel</button>
-      <button class="btn btn-g" id="cv-generate-btn" onclick="cvGenerateLink()" disabled>Generate Link</button>
+
+    <!-- Saved links panel (populated dynamically) -->
+    <div id="cv-saved-links"></div>
+
+    <!-- Create new section -->
+    <div id="cv-new-section">
+      <div id="cv-new-toggle" style="display:none;margin-bottom:14px">
+        <button class="btn" onclick="cvToggleNewForm()" id="cv-new-toggle-btn" style="font-size:.8rem;width:100%;text-align:center">＋ Create Link for a New Cleaner</button>
+      </div>
+      <div id="cv-new-form">
+        <p style="font-size:.82rem;color:var(--text2);margin-bottom:14px;line-height:1.5">Generate a permanent link that shows a read-only cleaning performance dashboard for a specific cleaner. They'll see Top Performers, properties that need attention, guest reviews, and ratings — but no admin tools or tasks.</p>
+        <label class="fl" style="margin-bottom:12px">Cleaner Name
+          <input type="text" id="cv-name" placeholder="e.g., Natasha" style="width:100%;padding:8px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit;margin-top:4px" oninput="cvCheckGenerateBtn()">
+        </label>
+        <label class="fl" style="margin-bottom:8px">Select Properties</label>
+        <div id="cv-prop-picker" style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);padding:12px;background:var(--surface2);margin-bottom:14px"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn" id="cv-cancel-new-btn" onclick="cvToggleNewForm()" style="display:none">Cancel</button>
+          <button class="btn" onclick="closeCleanerLinkModal()">Close</button>
+          <button class="btn btn-g" id="cv-generate-btn" onclick="cvGenerateLink()" disabled>Generate Link</button>
+        </div>
+        <div id="cv-result" style="display:none"></div>
+      </div>
     </div>
-    <div id="cv-result" style="display:none"></div>
   </div>
 </div>
 

@@ -3559,7 +3559,10 @@ function renderCleaningLog() {
         <div class="cv-hero-name">Cleaning Performance</div>
         <div class="cv-hero-meta">${filteredPids.length} properties · ${totalReviews} reviews in last 60 days · ${overallAvg}/5 avg cleanliness</div>
       </div>
-      <div class="cv-hero-badge"><span class="star">★</span> ${eliteCount} of ${filteredPids.length} properties at elite level this period</div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+        <div class="cv-hero-badge"><span class="star">★</span> ${eliteCount} of ${filteredPids.length} properties at elite level this period</div>
+        <button class="btn" onclick="openCleanerLinkModal()" style="font-size:.72rem;padding:5px 12px;white-space:nowrap">Share Cleaner Link</button>
+      </div>
     </div>`;
   }
 
@@ -3602,7 +3605,7 @@ function renderCleaningLog() {
     return `<div class="${cardClass}" onclick="clDrillDown('${pid}')">
       <div class="cv-card-name">${escHtml(p.name)}</div>
       <div class="cv-card-rating-row"><span class="cv-card-rating-label">60-day cleaning avg</span><span class="cv-card-rating-value">${recentAvg} / 5</span></div>
-      <div class="cv-card-sub">${perfect}/${s.recentReviews} Perfect Cleaning Reviews</div>
+      <div class="cv-card-sub">${perfect}/${s.recentReviews} Excellent Cleaning Reviews</div>
       ${trendH}${flagsH}
       <div class="cv-comp-row"><div class="cv-comp-col"><span class="cv-comp-val">${recentAvg}</span><span class="cv-comp-lbl">Last 60 days</span></div><div class="cv-comp-divider"></div><div class="cv-comp-col"><span class="cv-comp-val muted">${sixMoAvg}</span><span class="cv-comp-lbl">6-month avg</span></div></div>
     </div>`;
@@ -3852,21 +3855,138 @@ function clPickerToggleProp(pid) {
 
 // ── Cleaner View Link Generator (Admin) ───────────────────────
 let cvSelectedProps = new Set();
+let cvSavedLinks = []; // in-memory cache of index
 
-function openCleanerLinkModal() {
+async function openCleanerLinkModal() {
   cvSelectedProps = new Set();
   const el = document.getElementById('cv-modal');
   if (!el) return;
   el.classList.add('open');
-  renderCvPropPicker();
+
+  // Reset form
   document.getElementById('cv-name').value = '';
   document.getElementById('cv-result').style.display = 'none';
   document.getElementById('cv-result').innerHTML = '';
+  renderCvPropPicker();
+
+  // Load saved links index
+  const savedLinksEl = document.getElementById('cv-saved-links');
+  if (savedLinksEl) savedLinksEl.innerHTML = '<div style="font-size:.78rem;color:var(--text2);padding:6px 0">Loading saved links...</div>';
+
+  try {
+    const raw = await S.get('se_cv_index');
+    cvSavedLinks = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : [];
+  } catch (e) {
+    cvSavedLinks = [];
+  }
+
+  cvRenderSavedLinks();
 }
 
 function closeCleanerLinkModal() {
   const el = document.getElementById('cv-modal');
   if (el) el.classList.remove('open');
+}
+
+function cvRenderSavedLinks() {
+  const el = document.getElementById('cv-saved-links');
+  const newToggle = document.getElementById('cv-new-toggle');
+  const newForm = document.getElementById('cv-new-form');
+  const cancelBtn = document.getElementById('cv-cancel-new-btn');
+  if (!el) return;
+
+  if (!cvSavedLinks.length) {
+    // No saved links — show form directly, hide toggle
+    el.innerHTML = '';
+    if (newToggle) newToggle.style.display = 'none';
+    if (newForm) newForm.style.display = '';
+    if (cancelBtn) cancelBtn.style.display = 'none';
+    return;
+  }
+
+  // Show saved links, collapse the new-form behind a toggle
+  if (newToggle) newToggle.style.display = '';
+  if (newForm) newForm.style.display = 'none';
+  if (cancelBtn) cancelBtn.style.display = '';
+
+  let h = `<div style="margin-bottom:14px">
+    <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:8px">Saved Cleaner Links</div>`;
+
+  for (const link of cvSavedLinks) {
+    const shareUrl = 'https://storybook-webhook.vercel.app/api/cleaner-page?token=' + link.token;
+    const propNames = (link.properties || []).map(pid => { const p = getProp(pid); return p ? p.name.replace(/^(PRC|UMC)\s*-\s*\d+\s*-?\s*/i, '') : pid; });
+    const propSummary = link.properties.length <= 3
+      ? propNames.join(', ')
+      : propNames.slice(0, 2).join(', ') + ` +${link.properties.length - 2} more`;
+
+    h += `<div class="cv-saved-row" id="cv-saved-${link.token}">
+      <div class="cv-saved-info">
+        <div class="cv-saved-name">${escHtml(link.name)}</div>
+        <div class="cv-saved-meta">${link.properties.length} propert${link.properties.length !== 1 ? 'ies' : 'y'} · ${escHtml(propSummary)}</div>
+        <div class="cv-saved-url" id="cv-url-${link.token}" style="display:none">
+          <input type="text" value="${shareUrl}" readonly onclick="this.select()" style="flex:1;padding:5px 8px;font-size:.72rem;border:1px solid var(--border);border-radius:5px;background:#fff;color:var(--text);font-family:inherit;min-width:0">
+          <button class="btn btn-g" onclick="cvCopySavedLink('${link.token}')" style="font-size:.7rem;padding:4px 10px;white-space:nowrap" id="cv-copy-btn-${link.token}">Copy</button>
+        </div>
+      </div>
+      <div class="cv-saved-actions">
+        <button class="btn btn-g" onclick="cvToggleSavedUrl('${link.token}')" style="font-size:.72rem;padding:4px 12px" id="cv-show-btn-${link.token}">Get Link</button>
+        <button onclick="cvRemoveSavedLink('${link.token}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:1rem;padding:4px;line-height:1" title="Remove">×</button>
+      </div>
+    </div>`;
+  }
+
+  h += '</div><div style="border-top:1px solid var(--border);margin-bottom:14px"></div>';
+  el.innerHTML = h;
+}
+
+function cvToggleSavedUrl(token) {
+  const urlRow = document.getElementById('cv-url-' + token);
+  const showBtn = document.getElementById('cv-show-btn-' + token);
+  if (!urlRow) return;
+  const isVisible = urlRow.style.display !== 'none';
+  urlRow.style.display = isVisible ? 'none' : 'flex';
+  if (showBtn) showBtn.textContent = isVisible ? 'Get Link' : 'Hide';
+  if (!isVisible) {
+    // Auto-select the URL input
+    const input = urlRow.querySelector('input');
+    if (input) setTimeout(() => input.select(), 50);
+  }
+}
+
+function cvCopySavedLink(token) {
+  const urlRow = document.getElementById('cv-url-' + token);
+  const btn = document.getElementById('cv-copy-btn-' + token);
+  if (!urlRow) return;
+  const input = urlRow.querySelector('input');
+  if (!input) return;
+  input.select();
+  navigator.clipboard.writeText(input.value).then(() => {
+    if (btn) { btn.textContent = 'Copied!'; setTimeout(() => { btn.textContent = 'Copy'; }, 2000); }
+  }).catch(() => { document.execCommand('copy'); });
+}
+
+async function cvRemoveSavedLink(token) {
+  if (!confirm('Remove this cleaner link from the saved list? The link itself will still work if they have it bookmarked.')) return;
+  cvSavedLinks = cvSavedLinks.filter(l => l.token !== token);
+  try { await S.set('se_cv_index', JSON.stringify(cvSavedLinks)); } catch (e) {}
+  cvRenderSavedLinks();
+}
+
+function cvToggleNewForm() {
+  const form = document.getElementById('cv-new-form');
+  const toggleBtn = document.getElementById('cv-new-toggle-btn');
+  const cancelBtn = document.getElementById('cv-cancel-new-btn');
+  if (!form) return;
+  const isHidden = form.style.display === 'none';
+  form.style.display = isHidden ? '' : 'none';
+  if (toggleBtn) toggleBtn.textContent = isHidden ? '− Hide' : '＋ Create Link for a New Cleaner';
+  if (cancelBtn) cancelBtn.style.display = isHidden ? '' : 'none';
+}
+
+function cvCheckGenerateBtn() {
+  const name = (document.getElementById('cv-name')?.value || '').trim();
+  const btn = document.getElementById('cv-generate-btn');
+  if (btn) btn.disabled = !name || cvSelectedProps.size === 0;
 }
 
 function renderCvPropPicker() {
@@ -3889,9 +4009,7 @@ function renderCvPropPicker() {
     h += `</div></div>`;
   }
   el.innerHTML = h;
-  // Update generate button state
-  const btn = document.getElementById('cv-generate-btn');
-  if (btn) btn.disabled = cvSelectedProps.size === 0;
+  cvCheckGenerateBtn();
 }
 
 function cvToggleGroup(nbId) {
@@ -3923,32 +4041,44 @@ async function cvGenerateLink() {
   try {
     // Deterministic token based on name + sorted property list
     const props = [...cvSelectedProps].sort();
-    const raw = name.toLowerCase().replace(/\s+/g, '') + ':' + props.join(',');
+    const rawKey = name.toLowerCase().replace(/\s+/g, '') + ':' + props.join(',');
     let hash = 0;
-    for (let i = 0; i < raw.length; i++) { hash = ((hash << 5) - hash) + raw.charCodeAt(i); hash |= 0; }
+    for (let i = 0; i < rawKey.length; i++) { hash = ((hash << 5) - hash) + rawKey.charCodeAt(i); hash |= 0; }
     const token = 'cv' + Math.abs(hash).toString(36) + Date.now().toString(36).slice(-4);
 
-    // Save to KV
-    const key = 'se_cv_' + token;
-    const data = { name: name, properties: props, created: new Date().toISOString() };
-    await S.set(key, JSON.stringify(data));
+    // Save link data to KV
+    const created = new Date().toISOString();
+    const data = { name, properties: props, created };
+    await S.set('se_cv_' + token, JSON.stringify(data));
 
-    // Build shareable link (uses cleaner-page.js for OG preview + redirect)
+    // Update saved index — replace existing entry for this name or add new
+    cvSavedLinks = cvSavedLinks.filter(l => l.name.toLowerCase() !== name.toLowerCase());
+    cvSavedLinks.unshift({ name, token, properties: props, created });
+    await S.set('se_cv_index', JSON.stringify(cvSavedLinks));
+
+    // Build shareable link
     const shareUrl = 'https://storybook-webhook.vercel.app/api/cleaner-page?token=' + token;
-    const directUrl = 'https://storybookescapes.github.io/maintenance/#cv/' + token;
 
+    // Show result inline in the form
     const resultEl = document.getElementById('cv-result');
     resultEl.style.display = 'block';
     resultEl.innerHTML = `
       <div style="background:var(--green-light);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-top:12px">
         <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:1px;color:var(--green);font-weight:700;margin-bottom:6px">Link Generated</div>
-        <div style="font-size:.76rem;color:var(--text2);margin-bottom:8px">Send this link to <strong>${escHtml(name)}</strong>. It shows cleaning performance for ${props.length} propert${props.length !== 1 ? 'ies' : 'y'}.</div>
+        <div style="font-size:.76rem;color:var(--text2);margin-bottom:8px">Saved for <strong>${escHtml(name)}</strong> · ${props.length} propert${props.length !== 1 ? 'ies' : 'y'}. It'll appear at the top next time you open this modal.</div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           <input type="text" id="cv-link-input" value="${shareUrl}" readonly style="flex:1;padding:7px 10px;font-size:.78rem;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--text);font-family:inherit;min-width:200px" onclick="this.select()">
           <button class="btn btn-g" onclick="cvCopyLink()" style="font-size:.74rem;padding:5px 12px">Copy Link</button>
         </div>
         <div style="font-size:.68rem;color:var(--text3);margin-top:6px">This link never expires and can be bookmarked.</div>
       </div>`;
+
+    // Refresh saved links panel to include the new entry
+    cvRenderSavedLinks();
+    // Keep form visible so user can copy the newly generated link
+    const form = document.getElementById('cv-new-form');
+    if (form) form.style.display = '';
+
   } catch (e) {
     console.error('[cleaner-view] Generate link error:', e.message);
     alert('Failed to generate link. Please try again.');
@@ -5933,7 +6063,7 @@ function cvRender(cvName, cvProps, cvAllRatings, cvFlaggedData, allPropStats, el
     return `<div class="${cardClass}" onclick="cvShowPropDetail('${pid}')">
       <div class="cv-card-name">${escHtml(p.name)}</div>
       <div class="cv-card-rating-row"><span class="cv-card-rating-label">60-day cleaning avg</span><span class="cv-card-rating-value">${recentAvg} / 5</span></div>
-      <div class="cv-card-sub">${perfect}/${s.recentReviews} Perfect Cleaning Reviews</div>
+      <div class="cv-card-sub">${perfect}/${s.recentReviews} Excellent Cleaning Reviews</div>
       ${trendH}${flagsH}
       <div class="cv-comp-row"><div class="cv-comp-col"><span class="cv-comp-val">${recentAvg}</span><span class="cv-comp-lbl">Last 60 days</span></div><div class="cv-comp-divider"></div><div class="cv-comp-col"><span class="cv-comp-val muted">${sixMoAvg}</span><span class="cv-comp-lbl">6-month avg</span></div></div>
     </div>`;
