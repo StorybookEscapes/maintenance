@@ -5833,8 +5833,13 @@ function cvRender(cvName, cvProps, cvAllRatings, cvFlaggedData, allPropStats, el
     if (s.recentAvg !== null && s.sixMoAvg !== null) {
       const diff = s.recentAvg - s.sixMoAvg;
       if (diff > 0.05) trendH = `<div class="cv-trend up">↑ up from ${sixMoAvg} · 6-month avg</div>`;
-      else if (diff < -0.05 && cardClass !== 'cv-winner-card') trendH = `<div class="cv-trend down">↓ down from ${sixMoAvg} · 6-month avg</div>`;
-      else if (diff >= -0.05) trendH = `<div class="cv-trend flat">→ holding at ${recentAvg}</div>`;
+      else if (diff < -0.05) {
+        if (cardClass === 'cv-winner-card') {
+          trendH = `<div class="cv-trend elite">✓ Holding at elite level</div>`;
+        } else {
+          trendH = `<div class="cv-trend down">↓ down from ${sixMoAvg} · 6-month avg</div>`;
+        }
+      } else if (diff >= -0.05) trendH = `<div class="cv-trend flat">→ holding at ${recentAvg}</div>`;
     } else if (s.sixMoAvg === null) {
       trendH = `<div class="cv-trend flat">— not enough 6-month data</div>`;
     }
@@ -5846,11 +5851,22 @@ function cvRender(cvName, cvProps, cvAllRatings, cvFlaggedData, allPropStats, el
       progressH = `<div class="cv-progress-wrap"><div class="cv-progress-label"><span>Progress to elite (4.8)</span><span>${pct}% there</span></div><div class="cv-progress-track"><div class="cv-progress-fill" data-width="${pct}%"></div></div></div>`;
     }
 
+    // Flags for nearly-made-it and needs-attention
+    let flagsH = '';
+    if ((cardClass === 'cv-nearly-card' || cardClass === 'cv-attention-card') && cvFlaggedData.length > 0) {
+      const propFlags = cvFlaggedData.filter(f => f.pid === pid);
+      if (propFlags.length > 0) {
+        flagsH = propFlags.slice(0, 2).map(f => `<div class="cv-flag-item"><span class="cv-flag-guest">${escHtml(f.guest)}</span><span class="cv-flag-text">${escHtml(f.text.substring(0, 60))}</span></div>`).join('');
+        if (propFlags.length > 2) flagsH += `<div class="cv-flag-more">+${propFlags.length - 2} more flag${propFlags.length > 3 ? 's' : ''}</div>`;
+        flagsH = `<div class="cv-flags">${flagsH}</div>`;
+      }
+    }
+
     return `<div class="${cardClass}" onclick="cvShowPropDetail('${pid}')">
       <div class="cv-card-name">${escHtml(p.name)}</div>
       <div class="cv-card-rating-row"><span class="cv-card-rating-label">60-day cleaning avg</span><span class="cv-card-rating-value">${recentAvg} / 5</span></div>
       <div class="cv-card-sub">${perfect}/${s.recentReviews} Perfect Cleaning Reviews</div>
-      ${trendH}${progressH}
+      ${trendH}${progressH}${flagsH}
       <div class="cv-comp-row"><div class="cv-comp-col"><span class="cv-comp-val">${recentAvg}</span><span class="cv-comp-lbl">Last 60 days</span></div><div class="cv-comp-divider"></div><div class="cv-comp-col"><span class="cv-comp-val muted">${sixMoAvg}</span><span class="cv-comp-lbl">6-month avg</span></div></div>
     </div>`;
   }
@@ -5990,7 +6006,6 @@ function cvShowPropDetail(pid) {
   summaryEl.innerHTML = `<div style="background:var(--white);border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:16px;box-shadow:var(--shadow)">
     <div style="font-family:'Cormorant Garamond',serif;font-size:1.15rem;font-weight:600;color:var(--green)">${escHtml(p?.name || pid)}</div>
     <div style="font-size:.78rem;color:var(--text);margin-top:6px;font-weight:600">60-Day Cleaning Rating: <span style="color:${parseFloat(recentAvg) >= 4.8 ? 'var(--green)' : 'var(--red)'}">${recentAvg}/5</span> · ${sixtyDayRatings.length} reviews · ${perfect} perfect</div>
-    <div style="font-size:.74rem;color:var(--text2);margin-top:2px">Overall Cleaning Rating: ${allAvg}/5 · ${propRatings.length} total reviews</div>
     <div style="margin-top:8px"><button class="btn" style="font-size:.72rem;padding:4px 12px" onclick="cvBackToOverview()">← Back to overview</button></div>
   </div>`;
 

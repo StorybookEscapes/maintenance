@@ -751,14 +751,22 @@ textarea{resize:vertical;min-height:76px}
 /* Trend pill */
 .cv-trend{display:inline-flex;align-items:center;gap:4px;font-size:.68rem;font-weight:600;padding:2px 8px;border-radius:10px;margin-top:4px}
 .cv-trend.up{background:rgba(14,85,50,.1);color:var(--green-mid)}
-.cv-trend.down{background:rgba(192,57,43,.1);color:var(--red)}
+.cv-trend.down{background:rgba(201,168,76,.1);color:var(--gold)}
 .cv-trend.flat{background:var(--green-light);color:var(--text2)}
+.cv-trend.elite{background:rgba(14,85,50,.12);color:var(--green);font-weight:700}
 
 /* Progress bar (nearly-made-it) */
 .cv-progress-wrap{margin-top:10px}
 .cv-progress-label{display:flex;justify-content:space-between;font-size:.68rem;color:var(--text3);margin-bottom:4px}
 .cv-progress-track{background:var(--border);border-radius:4px;height:5px;overflow:hidden}
 .cv-progress-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--gold) 0%,#e8d060 100%);width:0;transition:width 1.2s cubic-bezier(.4,0,.2,1)}
+
+/* Flags display */
+.cv-flags{margin-top:8px;padding-top:8px;border-top:1px solid rgba(192,57,43,.1);font-size:.65rem;color:var(--red)}
+.cv-flag-item{display:block;margin-bottom:4px;line-height:1.3}
+.cv-flag-guest{font-weight:600;display:block;margin-bottom:2px;color:var(--text)}
+.cv-flag-text{display:block;color:var(--text2);font-style:italic}
+.cv-flag-more{margin-top:4px;color:var(--text3);font-style:italic}
 
 /* Comparison row */
 .cv-comp-row{display:flex;gap:12px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
