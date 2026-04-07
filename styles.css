@@ -261,6 +261,12 @@ textarea{resize:vertical;min-height:76px}
 .vsn{font-weight:600;font-size:.86rem;margin-bottom:2px}
 .vsr{font-size:.68rem;color:var(--gold);text-transform:uppercase;letter-spacing:.4px;font-weight:600;margin-bottom:5px}
 .vsp{font-size:.75rem;color:var(--text2);margin-bottom:7px}
+.vc-action-row{display:flex;gap:8px;margin:8px 0 4px;flex-wrap:wrap}
+.vc-action-btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:10px;font-size:.8rem;font-weight:600;font-family:inherit;cursor:pointer;text-decoration:none;transition:all .15s;border:none}
+.vc-text{background:var(--green);color:#fff}
+.vc-text:hover{background:var(--green-mid)}
+.vc-call{background:var(--surface2);color:var(--green);border:1.5px solid var(--green)}
+.vc-call:hover{background:var(--green);color:#fff}
 
 /* DATE PICKER */
 .dp-wrap{position:relative}

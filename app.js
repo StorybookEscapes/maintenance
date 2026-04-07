@@ -1627,9 +1627,9 @@ async function renderGuestComm(t){
   const checkout=activeRes.end.toLocaleDateString('en-US',{month:'short',day:'numeric'});
   const phone=activeRes.guestPhone||'';
   const phoneFmt=phone?phone.replace(/(\d{3})(\d{3})(\d{4})/,'($1) $2-$3'):phone;
-  const phoneLinks=phone?`<div class="gc-contact-row">
-    <a href="sms:${phone}" class="gc-contact-btn"><svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg> Text ${phoneFmt}</a>
-    <a href="tel:${phone}" class="gc-contact-btn"><svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:currentColor"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg> Call ${phoneFmt}</a>
+  const phoneLinks=phone?`<div class="vc-action-row">
+    <a href="sms:${phone}" class="vc-action-btn vc-text"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg> Text ${phoneFmt}</a>
+    <a href="tel:${phone}" class="vc-action-btn vc-call"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg> Call</a>
   </div>`:'';
   el.innerHTML=`<div class="guest-comm">
     <div class="guest-comm-header"><span style="font-size:.72rem;font-weight:600;color:var(--text2)">Guest at this property</span><span class="gc-hosp-badge">Hospitable</span></div>
@@ -1692,11 +1692,18 @@ async function renderDetailVendors(t,p){
     if(sheetUrl&&!sms.includes('link for all the details'))sms+='\n\nClick this link for all the details!\n'+sheetUrl;
     const tel=v.phone.replace(/\D/g,'');
     const smsId='sms-'+v.id+'-'+t.id;
+    const phoneFmt=v.phone;
+    const isAssigned=!showAssign;
+    const contactBtns=tel?`<div class="vc-action-row">
+      <a href="sms:${tel}" class="vc-action-btn vc-text"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg> Text ${isAssigned?phoneFmt:''}</a>
+      <a href="tel:${tel}" class="vc-action-btn vc-call"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg> Call</a>
+    </div>`:'';
     return`<div class="vsc">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
-        <div><div class="vsn">${v.name}</div><div class="vsr">${v.role}</div><div class="vsp">${v.phone}${v.email?' | '+v.email:''}</div></div>
+        <div><div class="vsn">${v.name}</div><div class="vsr">${v.role}</div>${isAssigned?'':`<div class="vsp">${v.phone}${v.email?' | '+v.email:''}</div>`}</div>
         ${showAssign?`<button class="btn btn-g" onclick="assignVendor('${v.name.replace(/'/g,"\\'")}')">Assign</button>`:''}
       </div>
+      ${isAssigned?contactBtns:''}
       <div style="font-size:.73rem;color:var(--text2);margin:5px 0 8px">${v.note}</div>
       <div class="sms-box"><div class="sms-lbl">Ready-to-Send Text Message</div>
         <textarea class="sms-edit" id="${smsId}">${sms.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
