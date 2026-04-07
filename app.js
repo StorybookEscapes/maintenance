@@ -141,7 +141,10 @@ function tokenExpiresIn(){
 }
 let _authWarnShown=false;
 function showReAuthPrompt(){
-  if(_authWarnShown)return;_authWarnShown=true;
+  if(_authWarnShown)return;
+  // Only show if the user was already signed in — don't block the login screen
+  if(!isAppAuthed())return;
+  _authWarnShown=true;
   // Update sync status to disconnected
   updateSyncStatus('disconnected');
   const d=document.createElement('div');d.id='reauth-overlay';
@@ -150,7 +153,7 @@ function showReAuthPrompt(){
     <div style="font-size:36px;margin-bottom:12px;">\u26a0\ufe0f</div>
     <h2 style="margin:0 0 8px;font-size:20px;color:#e74c3c;">Session Expired</h2>
     <p style="margin:0 0 20px;font-size:15px;line-height:1.5;color:#b8a88a;">Your sign-in has expired. Any unsaved changes may be lost.<br>Please sign in again to continue.</p>
-    <button onclick="location.reload()" style="background:#2d6a3f;color:#fff;border:none;padding:12px 32px;border-radius:8px;font-size:16px;cursor:pointer;font-family:inherit;">Sign In Again</button>
+    <button onclick="localStorage.removeItem('se_auth_token');location.reload()" style="background:#2d6a3f;color:#fff;border:none;padding:12px 32px;border-radius:8px;font-size:16px;cursor:pointer;font-family:inherit;">Sign In Again</button>
   </div>`;
   document.body.appendChild(d);
 }
@@ -161,6 +164,7 @@ let _expiryTimer=null;
 function startExpiryWatcher(){
   if(_expiryTimer)clearInterval(_expiryTimer);
   _expiryTimer=setInterval(()=>{
+    if(!isAppAuthed())return; // not signed in yet — nothing to watch
     const ms=tokenExpiresIn();
     if(ms<=0){showReAuthPrompt();clearInterval(_expiryTimer);}
     else if(ms<300000&&!_authWarnShown&&isAppAuthed()){
