@@ -3324,6 +3324,7 @@ let clData = []; // all cleaning-relevant review entries (flagged issues)
 let clAllRatings = {}; // ALL cleanliness ratings per property (for winners/trends): { pid: [{rating, reviewedAt}] }
 let clLoaded = false;
 let clFetching = false;
+let clSelectedProps = null; // null = all properties; Set of pids when picker is filtering
 
 // Keywords that indicate cleaning issues specifically
 const CL_KEYWORDS = /\b(dirty|filthy|grime|grimy|stain|stained|smell|odor|smelly|mold|mildew|cobweb|cobwebs|dust|dusty|hair|hairs|trash|garbage|gross|disgusting|unsanitary|unclean|not clean|wasn.t clean|wasn.t cleaned|mouse feces|droppings|feces|poop|urine|sewage)\b/i;
@@ -3480,6 +3481,13 @@ function renderCleaningLog() {
   const summaryEl = document.getElementById('cl-summary');
   const logEl = document.getElementById('cl-log');
 
+  // Show picker only on the "all properties" overview; hide it on per-property drill-down
+  const pickerEl = document.getElementById('cl-picker');
+  if (pickerEl) {
+    if (filter === 'all') { pickerEl.style.display = ''; renderClPicker(); }
+    else pickerEl.style.display = 'none';
+  }
+
   if (!clLoaded) {
     logEl.innerHTML = '<div class="cl-empty">Loading cleaning data from Hospitable...</div>';
     summaryEl.innerHTML = '';
@@ -3514,12 +3522,14 @@ function renderCleaningLog() {
 
     // ── Winners: 60-day cleaning avg ≥ 4.8 (rounded to 1 decimal) with at least 3 reviews ──
     const winnerPids = Object.keys(allPropStats).filter(pid => {
+      if (clSelectedProps && !clSelectedProps.has(pid)) return false;
       const s = allPropStats[pid];
       return s.recentReviews >= 3 && s.recentAvg !== null && Math.round(s.recentAvg * 10) / 10 >= 4.8;
     }).sort((a, b) => (allPropStats[b].recentAvg || 0) - (allPropStats[a].recentAvg || 0));
 
     // ── Losers: 60-day cleaning avg < 4.8 (rounded to 1 decimal) with at least 3 reviews ──
     const loserPids = Object.keys(allPropStats).filter(pid => {
+      if (clSelectedProps && !clSelectedProps.has(pid)) return false;
       const s = allPropStats[pid];
       return s.recentReviews >= 3 && s.recentAvg !== null && Math.round(s.recentAvg * 10) / 10 < 4.8;
     }).sort((a, b) => (allPropStats[a].recentAvg || 5) - (allPropStats[b].recentAvg || 5));
@@ -3680,6 +3690,89 @@ function renderCleaningLog() {
     }
     logEl.innerHTML = h;
   }
+}
+
+// ── Cleaning Picker ────────────────────────────────────────────
+function clChipLabel(p) {
+  if (!p) return '?';
+  const n = p.name;
+  const match = n.match(/^(PRC|UMC)\s*-\s*(\d+)/);
+  if (match) return match[1] + '\u2011' + match[2]; // PRC‑1, UMC‑10
+  const hillside = n.match(/Hillside Haven:\s*(.+)/);
+  if (hillside) return hillside[1];
+  return n;
+}
+
+function renderClPicker() {
+  const el = document.getElementById('cl-picker');
+  if (!el) return;
+  const isFiltered = clSelectedProps !== null;
+
+  function groupActive(nb) { return isFiltered && nb.props.every(p => clSelectedProps.has(p)); }
+  function groupPartial(nb) { return isFiltered && !groupActive(nb) && nb.props.some(p => clSelectedProps.has(p)); }
+
+  let h = '<div class="cl-picker-wrap">';
+  h += '<div class="cl-picker-label">Filter by Properties</div>';
+  h += '<div class="cl-picker-bar">';
+  h += `<button class="cl-picker-btn${!isFiltered ? ' active' : ''}" onclick="clPickerSelectAll()">All Properties</button>`;
+  for (const nb of NBS) {
+    const cls = groupActive(nb) ? ' active' : groupPartial(nb) ? ' partial' : '';
+    h += `<button class="cl-picker-btn${cls}" onclick="clPickerToggleGroup('${nb.id}')">${nb.name} <span style="opacity:.65;font-size:.75em">(${nb.props.length})</span></button>`;
+  }
+  h += '</div>';
+
+  // Individual chips — show for any neighborhood that has at least 1 prop selected
+  if (isFiltered) {
+    const activeNbs = NBS.filter(nb => nb.props.some(p => clSelectedProps.has(p)));
+    if (activeNbs.length) {
+      h += '<div class="cl-picker-chips">';
+      for (const nb of activeNbs) {
+        for (const pid of nb.props) {
+          const p = getProp(pid);
+          const sel = clSelectedProps.has(pid);
+          h += `<span class="cl-chip${sel ? ' selected' : ''}" onclick="clPickerToggleProp('${pid}')" title="${escHtml(p ? p.name : pid)}">${escHtml(clChipLabel(p))}</span>`;
+        }
+      }
+      h += '</div>';
+    }
+  }
+
+  h += '</div>';
+  el.innerHTML = h;
+}
+
+function clPickerSelectAll() {
+  clSelectedProps = null;
+  renderCleaningLog();
+}
+
+function clPickerToggleGroup(nbId) {
+  const nb = NBS.find(n => n.id === nbId);
+  if (!nb) return;
+  if (!clSelectedProps) {
+    clSelectedProps = new Set(nb.props);
+  } else {
+    const allIn = nb.props.every(p => clSelectedProps.has(p));
+    if (allIn) {
+      nb.props.forEach(p => clSelectedProps.delete(p));
+      if (clSelectedProps.size === 0) clSelectedProps = null;
+    } else {
+      nb.props.forEach(p => clSelectedProps.add(p));
+    }
+  }
+  renderCleaningLog();
+}
+
+function clPickerToggleProp(pid) {
+  if (!clSelectedProps) {
+    clSelectedProps = new Set([pid]);
+  } else if (clSelectedProps.has(pid)) {
+    clSelectedProps.delete(pid);
+    if (clSelectedProps.size === 0) clSelectedProps = null;
+  } else {
+    clSelectedProps.add(pid);
+  }
+  renderCleaningLog();
 }
 
 // ── Guest Feedback (Review Import) ─────────────────────────────
