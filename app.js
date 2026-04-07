@@ -5756,7 +5756,7 @@ if (window._cleanerViewMode) {
         loaderBadge.style.transform = 'translateY(0)';
       }
 
-      await new Promise(r => setTimeout(r, 2500));
+      await new Promise(r => setTimeout(r, 1500));
 
       // Fade out loader, fade in content
       if (loaderEl) loaderEl.classList.add('hidden');
@@ -5975,7 +5975,6 @@ function cvEntryHtml(e, showPropName) {
       </div>
       <div style="display:flex;gap:6px;align-items:center">
         ${cleanRating !== null ? `<span class="cl-entry-rating ${ratingClass}">Cleaning: ${cleanRating}/5</span>` : ''}
-        ${e.overallRating ? `<span style="font-size:.7rem;color:var(--text2)">Overall: ${'★'.repeat(e.overallRating)}${'☆'.repeat(5 - e.overallRating)}</span>` : ''}
       </div>
     </div>
     ${e.text ? `<div class="cl-entry-text">${escHtml((e.text || '').length > 500 ? e.text.slice(0, 500) + '...' : e.text)}</div>` : ''}
@@ -5989,7 +5988,7 @@ function cvEntryHtml(e, showPropName) {
 // Drill into a specific property in cleaner view
 function cvShowPropDetail(pid) {
   if (!window._cvData) return;
-  const { cvAllRatings, allPropStats } = window._cvData;
+  const { cvAllRatings, allPropStats, cvFlaggedData } = window._cvData;
   const summaryEl = document.getElementById('cv-summary');
   const logEl = document.getElementById('cv-log');
   if (!summaryEl || !logEl) return;
@@ -6009,11 +6008,22 @@ function cvShowPropDetail(pid) {
     <div style="margin-top:8px"><button class="btn" style="font-size:.72rem;padding:4px 12px" onclick="cvBackToOverview()">← Back to overview</button></div>
   </div>`;
 
+  // Show flags for this property
+  const propFlags = (cvFlaggedData || []).filter(f => f.pid === pid);
+  let h = '';
+  if (propFlags.length > 0) {
+    h += `<div style="background:rgba(192,57,43,.08);border:1px solid rgba(192,57,43,.2);border-radius:8px;padding:12px 14px;margin-bottom:16px">
+      <div style="font-size:.85rem;font-weight:600;color:var(--red);margin-bottom:8px">⚠ Flags (${propFlags.length})</div>
+      ${propFlags.map(f => `<div style="font-size:.75rem;margin-bottom:8px;padding:8px;background:var(--white);border-radius:4px;border-left:3px solid var(--red)">
+        <div style="font-weight:600;color:var(--text)">${escHtml(f.guest)}</div>
+        <div style="color:var(--text2);margin-top:2px">${escHtml(f.text)}</div>
+      </div>`).join('')}
+    </div>`;
+  }
+
   // Show all reviews for this property
   const recent = propRatings.filter(r => new Date(r.reviewedAt).getTime() > sixtyDaysAgo);
   const older = propRatings.filter(r => new Date(r.reviewedAt).getTime() <= sixtyDaysAgo);
-
-  let h = '';
   if (recent.length) {
     h += recent.map(e => cvEntryHtml({ ...e, pid: pid }, false)).join('');
   } else {
