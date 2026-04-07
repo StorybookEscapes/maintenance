@@ -605,17 +605,35 @@ async function fetchIcal(pid){
     if(r.ok){
       const json=await r.json();
       if(json.data&&Array.isArray(json.data)&&json.data.length>0){
+        // Debug: log first reservation to see guest data structure
+        console.log('[hospitable] Sample reservation:', JSON.stringify(json.data[0], null, 2));
+        if(json.included)console.log('[hospitable] Included data (first 2):', JSON.stringify(json.included.slice(0,2), null, 2));
+        // Build a lookup map from included guest data (Hospitable uses JSON:API includes)
+        const guestMap={};
+        if(json.included&&Array.isArray(json.included)){
+          json.included.filter(inc=>inc.type==='guests'||inc.type==='guest').forEach(g=>{
+            guestMap[g.id]={phone:g.attributes?.phone||g.attributes?.phone_number||null,email:g.attributes?.email||null,name:g.attributes?.name||[g.attributes?.first_name,g.attributes?.last_name].filter(Boolean).join(' ')||null};
+          });
+        }
         const evs=json.data
           .filter(rv=>rv.arrival_date&&rv.departure_date&&rv.status!=='cancelled')
-          .map(rv=>({
+          .map(rv=>{
+            // Try multiple paths for guest phone: inline guest object, included data, or top-level fields
+            const guestRel=rv.relationships?.guest?.data;
+            const inclGuest=guestRel?guestMap[guestRel.id]:null;
+            const gPhone=rv.guest?.phone||rv.guest?.phone_number||rv.guest_phone||inclGuest?.phone||null;
+            const gEmail=rv.guest?.email||rv.guest_email||inclGuest?.email||null;
+            const gName=rv.guest_name||rv.guest?.name||(rv.guest?.first_name?rv.guest.first_name+' '+rv.guest.last_name:null)||inclGuest?.name||'Guest';
+            return{
             start:pd(rv.arrival_date),
             end:pd(rv.departure_date),
-            summary:rv.guest_name||rv.guest?.name||(rv.guest?.first_name?rv.guest.first_name+' '+rv.guest.last_name:'Guest'),
+            summary:gName,
             reservationId:rv.id||null,
-            guestPhone:rv.guest?.phone||null,
-            guestEmail:rv.guest?.email||null,
+            guestPhone:gPhone,
+            guestEmail:gEmail,
             platform:rv.platform||rv.source||null
-          }))
+          };})
+          .filter(ev=>ev.start&&ev.end)
           .filter(ev=>ev.start&&ev.end);
         console.log(`Loaded ${pid}: ${evs.length} individual reservations via API`);
         icalCache[pid]=evs;return evs;
