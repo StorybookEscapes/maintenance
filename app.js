@@ -42,8 +42,8 @@ const PROPS = [
   {id:'prc3',name:'PRC - 3 - The Rustic Rose',address:'1627 Paradise Ridge Dr. Unit 3',door:'1473'},
   {id:'prc4',name:'PRC - 4 - Snuggle Shack',address:'1627 Paradise Ridge Dr. Unit 4',door:'1474'},
   {id:'prc5',name:'PRC - 5 - Pink Paradise',address:'1627 Paradise Ridge Dr. Unit 5',door:'1475'},
-  {id:'prc6',name:"PRC - 6 - The Ringbearer's Roost",address:'1627 Paradise Ridge Dr. Unit 6',door:'1476'},
-  {id:'umc10',name:'UMC - 10 - The Whispering Wand',address:'1181 Upper Middle Creek Rd., Cabin 10',door:'5582'},
+  {id:'prc6',name:"PRC - 6 - Ringbearer's Roost",address:'1627 Paradise Ridge Dr. Unit 6',door:'1476'},
+  {id:'umc10',name:'UMC - 10: The Whispering Wand',address:'1181 Upper Middle Creek Rd., Cabin 10',door:'5582'},
   {id:'umc20',name:'UMC - 20 - Honey Haven',address:'1181 Upper Middle Creek Rd., Cabin 20',door:'5583'},
   {id:'umc30',name:'UMC - 30 - Rebel Refuge',address:'1181 Upper Middle Creek Rd., Cabin 30',door:'5584'},
   {id:'umc40',name:'UMC - 40 - Lookout on the Roadside',address:'1181 Upper Middle Creek Rd., Cabin 40',door:'5581'},
@@ -54,8 +54,8 @@ const PROPS = [
   {id:'hibernation',name:'Hibernation Station',address:'335 Alpine Mountain Way, Pigeon Forge, TN',door:'4558'},
   {id:'hero',name:'Hero Hideout',address:'2382 Alpine Village Way, Pigeon Forge, TN',door:'4558'},
   {id:'magic',name:'Magic Mountain',address:'1775 Bluff Ridge Rd. Sevierville, TN',door:'4558'},
-  {id:'hillside_big',name:'Hillside Haven: The Big House',address:'226 Oak Hill, Jacksons Gap, AL',door:'4425'},
-  {id:'hillside_cottage',name:'Hillside Haven: The Cottage',address:'218 Oak Hill, Jacksons Gap, AL',door:'O812'},
+  {id:'hillside_big',name:'Hillside Haven - The Big House',address:'226 Oak Hill, Jacksons Gap, AL',door:'4425'},
+  {id:'hillside_cottage',name:'Hillside Haven - The Cottage',address:'218 Oak Hill, Jacksons Gap, AL',door:'O812'},
 ];
 const DEF_VENDORS = [
   {id:'v1',name:'Lisa Hawthorne',phone:'(936) 648-3940',email:'',role:'Head Cleaner',categories:['cleaning'],note:'Primary cleaner for all Smokies properties. Provides linens, soaps, paper products.'},
@@ -3308,46 +3308,24 @@ async function hbStartPolling() {
   hbPollTimer = setInterval(hbFetch, HB_CONFIG.pollInterval);
 }
 
-// Match HostBuddy property name to our internal property ID
+// Match HostBuddy / Hospitable property name to our internal property ID
+// Exact match only (case-insensitive) — PROPS names must match HostBuddy exactly.
+// If no match, returns '' so the user can assign manually (better than a wrong match).
 function hbMatchProperty(name) {
   if (!name || typeof name !== 'string') return '';
   const n = name.toLowerCase().trim();
   if (!n) return '';
-  // Try exact match first
   const exact = PROPS.find(p => p.name.toLowerCase() === n);
   if (exact) return exact.id;
-  // Try partial match — does any property name contain this string, or vice versa?
-  const partial = PROPS.find(p => p.name.toLowerCase().includes(n) || n.includes(p.name.toLowerCase()));
-  if (partial) return partial.id;
-  // Try matching on keywords (e.g. "bearadise" in "Bearadise Lodge")
-  const words = n.split(/[\s\-:,]+/).filter(w => w.length > 2);
-  const kwMatch = PROPS.find(p => {
-    const pn = p.name.toLowerCase();
-    return words.some(w => pn.includes(w));
-  });
-  if (kwMatch) return kwMatch.id;
+  // Also try matching by property ID directly (e.g. 'prc5', 'umc40')
+  const byId = PROPS.find(p => p.id === n);
+  if (byId) return byId.id;
+  console.warn(`hbMatchProperty: no exact match for "${name}"`);
   return '';
 }
 
-// Deep-scan a raw payload object for any string that matches a property name
-// Used as fallback when extractFields couldn't identify the property field
-function hbDeepMatchProperty(raw) {
-  if (!raw || typeof raw !== 'object') return '';
-  const allStrings = [];
-  function collect(obj) {
-    if (!obj) return;
-    if (typeof obj === 'string' && obj.length > 2 && obj.length < 200) allStrings.push(obj);
-    else if (Array.isArray(obj)) obj.forEach(collect);
-    else if (typeof obj === 'object') Object.values(obj).forEach(collect);
-  }
-  collect(raw);
-  // Try each string against property matching (most specific first)
-  for (const s of allStrings) {
-    const pid = hbMatchProperty(s);
-    if (pid) { console.log(`Deep-matched property "${s}" → ${pid}`); return pid; }
-  }
-  return '';
-}
+// Deep-scan disabled — was causing false matches (e.g. "Pigeon Forge" → "Forge in the Forest")
+function hbDeepMatchProperty(raw) { return ''; }
 
 // Deep-scan raw payload for the longest meaningful string (likely the problem description)
 function hbDeepFindProblem(raw) {
