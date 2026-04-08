@@ -26,7 +26,6 @@
     </div>
     <div class="hnav">
       <button class="nav-btn active" onclick="switchView('tasks',this)">Tasks</button>
-      <button class="nav-btn" onclick="switchView('calendar',this)">Calendar</button>
       <button class="nav-btn" onclick="switchView('recurring',this)">Recurring</button>
       <button class="nav-btn" onclick="switchView('history',this)">Service History</button>
       <button class="nav-btn" onclick="switchView('vendors',this)">Vendors</button>
@@ -40,6 +39,7 @@
   </header>
   <main>
     <div class="view active" id="view-tasks">
+      <!-- Alerts -->
       <div id="hb-wrap"></div>
       <div id="rv-wrap"></div>
       <div id="ga-wrap"></div>
@@ -55,32 +55,35 @@
       <div id="vr-wrap"></div>
       <div id="vdn-wrap"></div>
       <div id="ub-wrap"></div>
+
+      <!-- 3-Week Calendar -->
+      <div id="three-week-cal" style="margin-bottom:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+          <div class="cal-legend" id="cal-legend" style="margin-bottom:0"></div>
+          <div class="cal-toggle">
+            <label onclick="toggleShowDone()" style="font-size:.74rem;color:var(--text2);cursor:pointer;user-select:none">Show completed</label>
+            <div class="toggle-track" id="toggle-done" onclick="toggleShowDone()"><div class="toggle-thumb"></div></div>
+          </div>
+        </div>
+        <div id="cal-container"></div>
+      </div>
+
+      <!-- Day Detail Panel (shows when a day is clicked) -->
+      <div id="day-detail-panel" style="display:none;margin-bottom:20px;background:var(--surface);border:1px solid var(--gold);border-radius:var(--radius);padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.2)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div id="day-detail-title" style="font-family:'Cormorant Garamond',serif;font-size:1.15rem;color:var(--gold);font-weight:600"></div>
+          <button onclick="closeDayDetail()" style="background:none;border:none;color:var(--text2);font-size:1.2rem;cursor:pointer;padding:2px 6px">&times;</button>
+        </div>
+        <div id="day-detail-tasks"></div>
+      </div>
+
+      <!-- Task Lists -->
       <input type="hidden" id="search-input" value="">
       <div id="task-list"></div>
     </div>
 
-    <div class="view" id="view-calendar">
-      <div class="cal-hdr">
-        <div class="cal-title" id="cal-title"></div>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <div class="cal-nav">
-            <button onclick="calPrev()">&larr;</button>
-            <button onclick="calToday()" style="font-weight:600">Today</button>
-            <button onclick="calNext()">&rarr;</button>
-          </div>
-          <div class="cal-modes">
-            <button class="cal-mode active" onclick="setCalMode('month',this)">Month</button>
-            <button class="cal-mode" onclick="setCalMode('week',this)">Week</button>
-          </div>
-          <div class="cal-toggle">
-            <label onclick="toggleShowDone()">Show completed</label>
-            <div class="toggle-track" id="toggle-done" onclick="toggleShowDone()"><div class="toggle-thumb"></div></div>
-          </div>
-        </div>
-      </div>
-      <div class="cal-legend" id="cal-legend"></div>
-      <div id="cal-container"></div>
-    </div>
+    <!-- Hidden: keep cal-title for compatibility but it's no longer shown -->
+    <div id="cal-title" style="display:none"></div>
 
     <div class="view" id="view-recurring">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">

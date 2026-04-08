@@ -175,6 +175,15 @@ main{flex:1;padding:22px;max-width:1440px;margin:0 auto;width:100%}
 .wk-sug{grid-column:1/-1;background:var(--surface2);border-top:1px solid var(--border);padding:9px 12px}
 .wk-sug-t{font-size:.64rem;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3);font-weight:700;margin-bottom:6px}
 .wk-sug-items{display:flex;gap:7px;flex-wrap:wrap}
+/* 3-week calendar */
+.tw-week-hdr{display:flex;align-items:baseline;gap:8px;margin-bottom:6px}
+.tw-week-label{font-size:.68rem;text-transform:uppercase;letter-spacing:1.5px;color:var(--green);font-weight:700}
+.tw-week-range{font-size:.72rem;color:var(--text2)}
+.tw-current .tw-week-label{color:var(--gold)}
+.tw-current .wk-grid{border-color:var(--gold);box-shadow:0 0 0 1px rgba(192,160,96,.15)}
+.wk-day.tw-today{background:var(--gold-pale)}
+.wk-day.tw-sel{outline:2px solid var(--gold);outline-offset:-2px;background:rgba(192,160,96,.06)}
+.wk-day.tw-past{opacity:.7}
 .de{border-radius:5px;padding:6px 8px;font-size:.71rem;margin-bottom:5px;cursor:pointer;color:#fff;border-left:3px solid rgba(0,0,0,.2)}
 .de.urg{outline:2px solid var(--red)}
 .de.rec{border-left-style:dashed}
@@ -708,6 +717,11 @@ textarea{resize:vertical;min-height:76px}
   .vg-week-count{font-size:.52rem}
   .vg-week-task{padding:3px 5px;font-size:.6rem}
   .vg-week-task-prop{font-size:.5rem}
+  /* 3-week mobile */
+  .tw-week-hdr{margin-bottom:4px}
+  .tw-week-label{font-size:.6rem;letter-spacing:1px}
+  .tw-week-range{font-size:.6rem}
+  .wk-day{min-height:50px}
 }
 /* ── Cleaner View (public, read-only) ── */
 #cleaner-view{min-height:100vh;background:var(--bg);font-family:'DM Sans',sans-serif}

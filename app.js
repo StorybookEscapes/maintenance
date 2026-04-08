@@ -902,21 +902,125 @@ function buildVgMonth(vg,ds){
   });
   return h+'</div>';
 }
+let selectedDay=null; // currently selected day in the 3-week calendar (YYYY-MM-DD string)
 function renderCalendar(){
   const MN=['January','February','March','April','May','June','July','August','September','October','November','December'];
-  if(calMode==='month'){
-    document.getElementById('cal-title').textContent=`${MN[calDate.getMonth()]} ${calDate.getFullYear()}`;
-    document.getElementById('cal-container').innerHTML=buildMonth();
-  } else {
-    const ws=wkStart(calDate);const we=new Date(ws);we.setDate(we.getDate()+6);
-    const wTitle=ws.getMonth()===we.getMonth()?`${MN[ws.getMonth()]} ${ws.getDate()} – ${we.getDate()}, ${ws.getFullYear()}`:`${MN[ws.getMonth()]} ${ws.getDate()} – ${MN[we.getMonth()]} ${we.getDate()}, ${we.getFullYear()}`;
-    document.getElementById('cal-title').textContent=wTitle;
-    document.getElementById('cal-container').innerHTML=buildWeek(ws);
+  const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const MNS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const today=new Date();
+  const ws=wkStart(today); // Start from THIS week's Sunday
+
+  let h='';
+  for(let wk=0;wk<3;wk++){
+    const weekStart=new Date(ws);weekStart.setDate(ws.getDate()+wk*7);
+    const weekEnd=new Date(weekStart);weekEnd.setDate(weekStart.getDate()+6);
+    const wLabel=wk===0?'This Week':wk===1?'Next Week':'Week After';
+    const wRange=weekStart.getMonth()===weekEnd.getMonth()
+      ?`${MN[weekStart.getMonth()]} ${weekStart.getDate()} – ${weekEnd.getDate()}`
+      :`${MNS[weekStart.getMonth()]} ${weekStart.getDate()} – ${MNS[weekEnd.getMonth()]} ${weekEnd.getDate()}`;
+
+    h+=`<div class="tw-week ${wk===0?'tw-current':''}" style="margin-bottom:${wk<2?'12px':'0'}">`;
+    h+=`<div class="tw-week-hdr"><span class="tw-week-label">${wLabel}</span><span class="tw-week-range">${wRange}</span></div>`;
+    h+=`<div class="wk-grid"><div class="wk-hrow"><div class="wk-corner"></div>`;
+    for(let i=0;i<7;i++){
+      const d=new Date(weekStart);d.setDate(weekStart.getDate()+i);
+      const isT=d.toDateString()===today.toDateString();
+      h+=`<div class="wk-hcell ${isT?'tdc':''}"><div class="wd">${DOW[d.getDay()]}</div><div class="wdt">${MNS[d.getMonth()]} ${d.getDate()}</div></div>`;
+    }
+    h+=`</div><div class="wk-brow"><div class="wk-lbl"></div>`;
+    for(let i=0;i<7;i++){
+      const d=new Date(weekStart);d.setDate(weekStart.getDate()+i);
+      const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      const isT=d.toDateString()===today.toDateString();
+      const isSel=ds===selectedDay;
+      const isPast=d<today&&!isT;
+      h+=`<div class="wk-day ${isT?'tw-today':''} ${isSel?'tw-sel':''} ${isPast?'tw-past':''}" onclick="selectDay('${ds}')" style="cursor:pointer">`;
+      const wkDayTasks=tasks.filter(t=>t.date===ds&&!['complete','resolved_by_guest'].includes(t.status));
+      const wkVendorGroups={};const wkUngrouped=[];
+      wkDayTasks.forEach(t=>{
+        if(t.vendor){const vk=t.vendor.toLowerCase();if(!wkVendorGroups[vk])wkVendorGroups[vk]={name:t.vendor,tasks:[]};wkVendorGroups[vk].tasks.push(t);}
+        else wkUngrouped.push(t);
+      });
+      Object.values(wkVendorGroups).forEach(vg=>{
+        if(vg.tasks.length>=2){ h+=buildVgWeek(vg,ds); }
+        else { vg.tasks.forEach(t=>{const nc=getNbCls(t.property);const p=getProp(t.property);h+=`<div class="de de-${nc} ${t.urgent?'urg':''} ${t.recurring?'rec':''}" onclick="event.stopPropagation();openDetail('${t.id}')"><div class="de-prop">${p?p.name.split(' - ').pop():''}</div><div class="de-title">${t.problem}</div>${t.vendor?`<div class="de-cat">${t.vendor}</div>`:''}</div>`;}); }
+      });
+      wkUngrouped.forEach(t=>{const nc=getNbCls(t.property);const p=getProp(t.property);
+        h+=`<div class="de de-${nc} ${t.urgent?'urg':''} ${t.recurring?'rec':''}" onclick="event.stopPropagation();openDetail('${t.id}')"><div class="de-prop">${p?p.name.split(' - ').pop():''}</div><div class="de-title">${t.problem}</div>${t.vendor?`<div class="de-cat">${t.vendor}</div>`:''}</div>`;
+      });
+      if(showDone){
+        tasks.filter(t=>t.date===ds&&['complete','resolved_by_guest'].includes(t.status)).forEach(t=>{
+          const nc=getNbCls(t.property);const p=getProp(t.property);
+          h+=`<div class="de de-${nc} done" onclick="event.stopPropagation();openDetail('${t.id}')"><div class="de-prop">${p?p.name.split(' - ').pop():''}</div><div class="de-title" style="text-decoration:line-through;opacity:.6"><span style="color:var(--green);margin-right:3px">&#x2713;</span>${t.problem}</div></div>`;
+        });
+      }
+      recurring.filter(r=>r.nextDue===ds).forEach(r=>{
+        const pids=r.properties.includes('all')?PROPS.map(p=>p.id):r.properties;
+        const alreadyScheduled=tasks.some(x=>x.recurring&&x.problem===r.name&&x.date===ds&&pids.some(pid=>x.property===pid));
+        if(alreadyScheduled)return;
+        const nc=pids.length===1?getNbCls(pids[0]):'other';
+        h+=`<div class="de de-${nc} rec sug"><div class="de-prop">Recurring</div><div class="de-title">${r.name}</div></div>`;
+      });
+      h+=`</div>`;
+    }
+    h+=`</div></div></div>`;
   }
+  document.getElementById('cal-container').innerHTML=h;
+
   const leg=NBS.map(nb=>`<div class="cli"><div class="cld" style="background:var(--${nb.cls})"></div>${nb.name}</div>`).join('');
   document.getElementById('cal-legend').innerHTML=leg
     +'<div class="cli"><div class="cld" style="background:var(--border);border:1px dashed var(--border-dark)"></div>Suggested</div>'
     +'<div class="cli"><div class="cld" style="background:var(--red);outline:2px solid var(--red)"></div>Urgent</div>';
+
+  // Refresh day detail panel if a day is selected
+  if(selectedDay)renderDayDetail(selectedDay);
+}
+
+function selectDay(ds){
+  selectedDay=selectedDay===ds?null:ds;
+  renderCalendar();
+  if(selectedDay)renderDayDetail(ds);
+  else closeDayDetail();
+}
+
+function renderDayDetail(ds){
+  const panel=document.getElementById('day-detail-panel');
+  const d=new Date(ds+'T12:00:00');
+  const DOW=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const MN=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  document.getElementById('day-detail-title').textContent=`${DOW[d.getDay()]}, ${MN[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+  const dayTasks=tasks.filter(t=>t.date===ds&&(showDone||!['complete','resolved_by_guest'].includes(t.status)));
+  if(!dayTasks.length){
+    document.getElementById('day-detail-tasks').innerHTML='<div style="font-size:.84rem;color:var(--text2);padding:8px 0">No tasks scheduled for this day.</div>';
+  } else {
+    let h='<div style="display:flex;flex-direction:column;gap:8px">';
+    dayTasks.forEach(t=>{
+      const p=getProp(t.property);const nb=getNb(t.property);
+      const plcls=nb?'pl-'+nb.cls:'';const nbcls=nb?'nb-'+nb.cls:'';
+      const isDone=['complete','resolved_by_guest'].includes(t.status);
+      h+=`<div class="tc ${nbcls} ${isDone?'done':''}" onclick="openDetail('${t.id}')" style="cursor:pointer">
+        <div class="tc-top"><div class="${t.urgent?'udot':'tdot dot-'+t.status}"></div><div class="tmain">
+          <div class="tprop ${plcls}">${p?p.name:t.property}</div>
+          <div class="tprob">${t.problem}</div>
+          <div class="tmeta">
+            ${t.urgent?'<span class="badge b-urgent">Urgent</span>':''}
+            <span class="badge b-${t.status}">${t.status.replace('_',' ')}</span>
+            ${t.vendor?`<span class="tmi">${t.vendor}</span>`:''}
+            ${t.purchaseNote?`<span style="font-size:.62rem;color:#e65100;font-weight:600;background:#fff3e0;padding:1px 6px;border-radius:10px;border:1px solid #ffcc80">&#x1F6D2; ${t.purchaseStatus==='delivered'?'Delivered':t.purchaseStatus==='purchased'?'Purchased — deliver':'Buy'}${t.purchaser==='vendor'?' (vendor)':''}</span>`:''}
+          </div>
+        </div></div></div>`;
+    });
+    h+='</div>';
+    document.getElementById('day-detail-tasks').innerHTML=h;
+  }
+  panel.style.display='';
+}
+
+function closeDayDetail(){
+  selectedDay=null;
+  document.getElementById('day-detail-panel').style.display='none';
+  // Remove selection highlight from calendar
+  document.querySelectorAll('.tw-sel').forEach(el=>el.classList.remove('tw-sel'));
 }
 function buildMonth(){
   const y=calDate.getFullYear(),m=calDate.getMonth();
@@ -1024,10 +1128,11 @@ function buildWeek(ws){
   }
   return h+'</div>';
 }
-function calPrev(){if(calMode==='month')calDate.setMonth(calDate.getMonth()-1);else calDate.setDate(calDate.getDate()-7);renderCalendar();}
-function calNext(){if(calMode==='month')calDate.setMonth(calDate.getMonth()+1);else calDate.setDate(calDate.getDate()+7);renderCalendar();}
-function calToday(){calDate=new Date();renderCalendar();}
-function setCalMode(m,btn){calMode=m;document.querySelectorAll('.cal-mode').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderCalendar();}
+// Legacy calendar nav — kept for compatibility (month/week views removed, now 3-week rolling)
+function calPrev(){renderCalendar();}
+function calNext(){renderCalendar();}
+function calToday(){renderCalendar();}
+function setCalMode(){renderCalendar();}
 
 // RECURRING
 function renderRecurring(){
