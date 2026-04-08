@@ -3492,7 +3492,18 @@ async function hbTest() {
 }
 
 // One-time import: historical HostBuddy cleaning alerts (call from console: clImportHistorical())
+// Cleans out any previous historical imports first, then imports fresh.
 async function clImportHistorical() {
+  // Remove any previously imported historical cleaning alerts
+  const before = tasks.length;
+  tasks = tasks.filter(t => !(
+    t.category === 'cleaning' &&
+    t.notes && t.notes.some(n => n.text && n.text.includes('Imported from HostBuddy AI')) &&
+    (t._historicalImport || t.status === 'complete')
+  ));
+  const removed = before - tasks.length;
+  if (removed > 0) console.log(`Removed ${removed} previous historical import(s).`);
+
   const historical = [
     { date: '2026-04-03T08:57:00', property: 'prc5', guest: 'Jessie Jirles', problem: 'The guest reported that the dishes on the shelf were found dirty and gross upon arrival.' },
     { date: '2026-04-01T23:43:00', property: 'umc40', guest: 'Victoria Groll', problem: 'The guest reported a strong smell of urine in the living room and the host team needs to investigate the cleanliness with their team.' },
