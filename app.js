@@ -433,7 +433,7 @@ function renderStats(){
 }
 
 // TASKS
-const CAT_LABELS={handyman:'Handyman',plumbing:'Plumbing',hvac:'HVAC',electrical:'Electrical',hot_tub:'Hot Tub',pool:'Pool',pest:'Pest Control',cleaning:'Cleaning',landscaping:'Landscaping',arcade:'Arcade / Billiards',septic:'Septic',water:'Water Filtration',bed_bugs:'Bed Bugs',other:'Other','':`Uncategorized`};
+const CAT_LABELS={replacement:'Replacement',handyman:'Handyman',plumbing:'Plumbing',hvac:'HVAC',electrical:'Electrical',hot_tub:'Hot Tub',pool:'Pool',pest:'Pest Control',cleaning:'Cleaning',landscaping:'Landscaping',arcade:'Arcade / Billiards',septic:'Septic',water:'Water Filtration',bed_bugs:'Bed Bugs',other:'Other','':`Uncategorized`};
 let catFilter='all';
 let propFilter='all';
 let dateSort=false;
@@ -459,7 +459,7 @@ function taskCard(t){
         <span class="badge b-${t.status}">${t.status.replace('_',' ')}</span>
         ${t.date?`<span class="tmi">${t.date}</span>${overdueBadge(t)}`:(t.status!=='scheduled'?'<span class="tmi" style="color:var(--text3)">Not scheduled</span>':'')}
         ${t.vendor?`<span class="tmi">${t.vendor}</span>`:''}${t.vendorDone?'<span class="vd-badge">Vendor Done</span>':''}
-        ${t.purchaseNote?'<span style="font-size:.62rem;color:#e65100;font-weight:600;background:#fff3e0;padding:1px 6px;border-radius:10px;border:1px solid #ffcc80">&#x1F6D2; Purchase</span>':''}
+        ${t.purchaseNote?`<span style="font-size:.62rem;color:#e65100;font-weight:600;background:#fff3e0;padding:1px 6px;border-radius:10px;border:1px solid #ffcc80">&#x1F6D2; ${t.purchaseStatus==='delivered'?'Delivered':t.purchaseStatus==='purchased'?'Purchased — deliver':'Buy'}${t.purchaser==='vendor'?' (vendor)':''}</span>`:''}
         ${t.guest?`<span class="tmi">Reported by ${t.guest}</span>`:''}
       </div>
     </div></div>
@@ -1236,8 +1236,11 @@ async function saveTask(){
   let fStatus=document.getElementById('f-status').value;
   // Auto-advance: if a date is set and status is still open, mark as scheduled
   if(fDate&&fStatus==='open')fStatus='scheduled';
-  const t={id:Date.now().toString(),property:pid,guest:document.getElementById('f-guest').value.trim(),problem:prob,category:document.getElementById('f-category').value,status:fStatus,date:fDate,vendor:document.getElementById('f-vendor').value.trim(),urgent:document.getElementById('f-urgent').checked,recurring:false,notes:nt?[{text:nt,type:'admin',time:new Date().toISOString()}]:[],vendorNotes:'',created:new Date().toISOString()};
-  tasks.unshift(t);await saveTasks();closeModal('task-modal');renderAll();showToast('Task created.');
+  const fCat=document.getElementById('f-category').value;
+  const t={id:Date.now().toString(),property:pid,guest:document.getElementById('f-guest').value.trim(),problem:prob,category:fCat,status:fStatus,date:fDate,vendor:document.getElementById('f-vendor').value.trim(),urgent:document.getElementById('f-urgent').checked,recurring:false,notes:nt?[{text:nt,type:'admin',time:new Date().toISOString()}]:[],vendorNotes:'',created:new Date().toISOString()};
+  // Auto-init purchase tracking for replacement tasks
+  if(fCat==='replacement'){t.purchaseNote=prob;t.purchaseStatus='needed';t.purchaser='owner';}
+  tasks.unshift(t);await saveTasks();closeModal('task-modal');renderAll();renderReplacements();showToast('Task created.');
 }
 
 // DETAIL
@@ -1272,6 +1275,7 @@ async function openDetail(id){
   document.getElementById('d-purchase').value=t.purchaseNote||'';
   const pSaved=document.getElementById('d-purchase-saved');
   if(pSaved)pSaved.style.display=t.purchaseNote?'':'none';
+  renderPurchaseWorkflow(t);
   renderUrgentToggle(t);
   showTaskPhoto(t);
   showVendorPhotos(t);
@@ -1330,11 +1334,57 @@ async function savePurchaseNote(){
   const val=(document.getElementById('d-purchase').value||'').trim();
   if(t.purchaseNote===val)return;
   t.purchaseNote=val;
+  // Auto-set purchase tracking defaults when a purchase note is first entered
+  if(val&&!t.purchaseStatus){t.purchaseStatus='needed';t.purchaser=t.purchaser||'owner';}
+  if(!val){t.purchaseStatus='';t.purchaser='';}
   await saveTasks();
   const pSaved=document.getElementById('d-purchase-saved');
   if(pSaved){pSaved.style.display=val?'':'none';}
+  renderPurchaseWorkflow(t);
   renderAll();
   showToast(val?'Purchase note saved.':'Purchase note cleared.');
+}
+// ── Purchase workflow helpers ──
+function renderPurchaseWorkflow(t){
+  const wrap=document.getElementById('d-purchase-workflow');if(!wrap)return;
+  const show=t.category==='replacement'||!!t.purchaseNote;
+  wrap.style.display=show?'':'none';
+  if(!show)return;
+  // Status buttons
+  const st=t.purchaseStatus||'needed';
+  ['needed','purchased','delivered'].forEach(s=>{
+    const btn=document.getElementById('d-purch-status-'+s);if(!btn)return;
+    if(s===st){btn.style.background='#e65100';btn.style.color='#fff';btn.style.borderColor='#e65100';}
+    else{btn.style.background='';btn.style.color='';btn.style.borderColor='';}
+  });
+  // Purchaser buttons
+  const who=t.purchaser||'owner';
+  ['owner','vendor'].forEach(s=>{
+    const btn=document.getElementById('d-purchaser-'+s);if(!btn)return;
+    if(s===who){btn.style.background='var(--green)';btn.style.color='#fff';btn.style.borderColor='var(--green)';}
+    else{btn.style.background='';btn.style.color='';btn.style.borderColor='';}
+  });
+}
+async function setPurchaseStatus(status){
+  const t=tasks.find(x=>x.id===detailId);if(!t)return;
+  t.purchaseStatus=status;
+  if(status==='purchased')t.purchasedAt=new Date().toISOString();
+  if(status==='delivered'&&!t.purchasedAt)t.purchasedAt=new Date().toISOString();
+  await saveTasks();renderPurchaseWorkflow(t);renderAll();
+  const labels={needed:'Needs buying',purchased:'Marked as purchased',delivered:'Marked as delivered'};
+  showToast(labels[status]||'Updated.');
+}
+async function setPurchaser(who){
+  const t=tasks.find(x=>x.id===detailId);if(!t)return;
+  t.purchaser=who;
+  await saveTasks();renderPurchaseWorkflow(t);renderAll();
+  showToast(who==='owner'?'You\'ll buy this.':'Vendor will buy this.');
+}
+function onDetailCatChange(val){
+  const t=tasks.find(x=>x.id===detailId);if(!t)return;
+  // When switching to replacement category, auto-show purchase workflow
+  if(val==='replacement'&&!t.purchaseStatus){t.purchaseStatus='needed';t.purchaser='owner';}
+  renderPurchaseWorkflow(t);
 }
 async function confirmPropertyChange(newPropId){
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
@@ -2362,7 +2412,11 @@ function buildSMS(t,p,v){
     .replace(/\{urgent_notice\}/g, urg);
   // Photo link removed — job sheet handles this now
   if(/hvac\s*filter/i.test(t.problem)||t.category==='hvac'&&/filter/i.test(t.problem))msg+=`\n\nPlease write today's date on the new filter and send us a photo when it's installed.`;
-  if(t.purchaseNote)msg+=`\n\n🛒 You'll need to pick up: ${t.purchaseNote}`;
+  if(t.purchaseNote){
+    if(t.purchaser==='vendor')msg+=`\n\n🛒 You'll need to pick up: ${t.purchaseNote}`;
+    else if(t.purchaseStatus==='purchased')msg+=`\n\n📦 We've purchased: ${t.purchaseNote} — please deliver/install it at the property.`;
+    else msg+=`\n\n🛒 Item needed: ${t.purchaseNote} (we'll handle purchasing — just deliver when ready)`;
+  }
   if(t._vendorSheetUrl)msg+='\n\nClick this link for all the details!\n'+t._vendorSheetUrl;
   return msg;
 }
@@ -2382,11 +2436,20 @@ function buildMultiSMS(taskList,v,sheetUrlParam){
   const purchaseTasks=taskList.filter(t=>t.purchaseNote);
   let purchaseText='';
   if(purchaseTasks.length){
-    const items=purchaseTasks.map(t=>{
-      const p=getProp(t.property);const pName=p?p.name.split(' - ').pop().trim():t.property;
-      return `• ${pName}: ${t.purchaseNote}`;
-    }).join('\n');
-    purchaseText=`🛒 You'll need to pick up some materials before heading out:\n${items}`;
+    const vendorBuys=purchaseTasks.filter(t=>t.purchaser==='vendor');
+    const ownerBuys=purchaseTasks.filter(t=>t.purchaser!=='vendor');
+    const lines=[];
+    if(vendorBuys.length){
+      lines.push(`🛒 You'll need to pick up before heading out:`);
+      vendorBuys.forEach(t=>{const p=getProp(t.property);const pName=p?p.name.split(' - ').pop().trim():t.property;lines.push(`• ${pName}: ${t.purchaseNote}`);});
+    }
+    if(ownerBuys.length){
+      const delivered=ownerBuys.filter(t=>t.purchaseStatus==='purchased');
+      const pending=ownerBuys.filter(t=>t.purchaseStatus!=='purchased');
+      if(delivered.length){lines.push(`📦 We've purchased — please deliver/install:`);delivered.forEach(t=>{const p=getProp(t.property);const pName=p?p.name.split(' - ').pop().trim():t.property;lines.push(`• ${pName}: ${t.purchaseNote}`);});}
+      if(pending.length){lines.push(`🛒 Items needed (we'll purchase — deliver when ready):`);pending.forEach(t=>{const p=getProp(t.property);const pName=p?p.name.split(' - ').pop().trim():t.property;lines.push(`• ${pName}: ${t.purchaseNote}`);});}
+    }
+    purchaseText=lines.join('\n');
   }
   let sms = combinedSmsTemplate
     .replace(/\{vendor_first_name\}/g, firstName)
@@ -4482,7 +4545,7 @@ function rvGuessCategory(text) {
   if (/clean|dirty|stain|mold|mildew|cobweb|smell|odor/i.test(t)) return 'cleaning';
   if (/deck|railing|porch|door|window|screen|lock|roof|gutter/i.test(t)) return 'handyman';
   if (/landscap|yard|tree|bush/i.test(t)) return 'landscaping';
-  if (/pot|pan|cookware|dish|appliance|stove|oven|microwave|fridge|refrigerator|washer|dryer|dishwasher|towel|linen|sheet|mattress|pillow/i.test(t)) return 'other';
+  if (/pot|pan|cookware|dish|appliance|stove|oven|microwave|fridge|refrigerator|washer|dryer|dishwasher|towel|linen|sheet|mattress|pillow|coffee maker|keurig|toaster|blender/i.test(t)) return 'replacement';
   return '';
 }
 
@@ -4529,7 +4592,7 @@ async function rvFetch() {
     if (new Date(rv.reviewed_at).getTime() < cutoff) continue;
     if (!rvIsMaintRelevant(rv)) continue;
 
-    // Auto-route purchase items directly to Replacements (skip the Tasks bar)
+    // Auto-route purchase items as Replacement tasks
     const problem = rvBuildProblem(rv);
     if (rvIsPurchaseItem(problem)) {
       await rpImportFromReviewSilent(rv);
@@ -4584,7 +4647,7 @@ function renderRV() {
           <div class="rv-item-prop">${escHtml(propName)}</div>
           <div class="rv-item-btns">
             <button class="rv-btn rv-btn-import" onclick="event.stopPropagation();rvImport('${rv.id}')">Import</button>
-            <button class="rv-btn rv-btn-replacement" onclick="event.stopPropagation();rvConvertToReplacement('${rv.id}')" style="background:rgba(180,150,60,.15);color:#b8830a;border-color:rgba(180,150,60,.3)">To Replacements</button>
+            <button class="rv-btn rv-btn-replacement" onclick="event.stopPropagation();rvConvertToReplacement('${rv.id}')" style="background:rgba(180,150,60,.15);color:#b8830a;border-color:rgba(180,150,60,.3)">Replacement Task</button>
             <button class="rv-btn rv-btn-dismiss" onclick="event.stopPropagation();rvDismiss('${rv.id}')">Dismiss</button>
           </div>
         </div>
@@ -4655,7 +4718,7 @@ function openRvDetail(id) {
   document.getElementById('rv-detail-body').innerHTML = h;
   document.getElementById('rv-detail-ft').innerHTML = `
     <button class="rv-btn rv-btn-import" style="flex:1 1 100%;text-align:center" onclick="rvImport('${rv.id}');closeModal('rv-detail-modal')">Import as Task</button>
-    <button class="rv-btn rv-btn-replacement" onclick="rvConvertToReplacement('${rv.id}')" style="background:rgba(180,150,60,.15);color:#b8830a;border-color:rgba(180,150,60,.3);flex:1">To Replacements</button>
+    <button class="rv-btn rv-btn-replacement" onclick="rvConvertToReplacement('${rv.id}')" style="background:rgba(180,150,60,.15);color:#b8830a;border-color:rgba(180,150,60,.3);flex:1">Replacement Task</button>
     <button class="rv-btn rv-btn-dismiss" style="flex:1" onclick="rvDismiss('${rv.id}');closeModal('rv-detail-modal')">Dismiss</button>
     <button class="rv-btn rv-btn-dismiss" style="flex:1" onclick="closeModal('rv-detail-modal')">Close</button>`;
   document.getElementById('rv-detail-modal').classList.add('open');
@@ -4674,7 +4737,8 @@ async function rvConvertToReplacement(id) {
   // Also mark in detail modal if open
   const ftBtns = document.querySelectorAll('#rv-detail-ft .rv-btn-replacement');
   ftBtns.forEach(btn => { btn.textContent = 'Converted ✓'; btn.disabled = true; btn.style.opacity = '.6'; });
-  showToast('Replacement item created — you can still import as a task too.');
+  renderReplacements(); renderAll();
+  showToast('Replacement task created.');
 }
 
 async function rvImport(id) {
@@ -4682,9 +4746,9 @@ async function rvImport(id) {
   if (!rv) return;
   const problem = rvBuildProblem(rv);
 
-  // Route purchase/replacement items to the Replacements tab (interactive — opens editable modal)
+  // Route purchase/replacement items as replacement tasks (opens task detail)
   if (rvIsPurchaseItem(problem)) {
-    rpImportFromReview(rv);
+    await rpImportFromReview(rv);
     rvDismissed.push(id);
     saveDismissed();
     rvItems = rvItems.filter(x => x.id !== id);
@@ -4726,7 +4790,7 @@ async function rvImportAll() {
   for (const rv of [...rvItems]) {
     const problem = rvBuildProblem(rv);
 
-    // Route purchase items to Replacements (silent for bulk import)
+    // Route purchase items as replacement tasks (silent for bulk import)
     if (rvIsPurchaseItem(problem)) {
       await rpImportFromReviewSilent(rv);
       rvDismissed.push(rv.id);
@@ -4774,31 +4838,24 @@ function rvDismissAll() {
   showToast('All feedback dismissed.');
 }
 
-// ── REPLACEMENTS & PURCHASES ──────────────────────────────────────
-let rpData = []; // { id, property, item, notes, status:'needed'|'purchased', created, purchasedAt? }
-let rpHistProp = null; // selected property filter for Purchase History
+// ── REPLACEMENTS & PURCHASES (now powered by Tasks with category=replacement) ──
+let rpData = []; // Legacy — kept for migration only
+let rpPhaseFilter = 'needed'; // 'needed'|'purchased'|'delivered'|'all'
 
 const RP_PURCHASE_KEYWORDS = /\b(pots?|pans?|cookware|dishes?|plates?|cups?|glasses?|mugs?|utensils?|silverware|flatware|knife|knives|cutting boards?|bakeware|towels?|linens?|sheets?|bedding|comforters?|blankets?|pillows?|mattress(?:es)?|supplies|toiletries|soap|dish soap|shampoo|conditioner|toilet paper|paper towels?|coffee makers?|keurig|toasters?|blenders?|can openers?|corkscrews?|irons?|ironing boards?|hangers?|curtains?|blinds?|rugs?|mats?|brooms?|mops?|vacuums?|trash cans?|light bulbs?|batteries|remotes?|games?|board games?|puzzles?|toys?|dvds?|books?|decor|decorations?|furniture|chairs?|tables?|shelves?|shelf|mirrors?|pictures?|artwork|signs?|sponges?|dish rack|drying rack|wash cloths?|washcloths?|dish towels?|oven mitts?|pot holders?|shower curtains?|bath mats?|plungers?|fly swatters?|wine opener|bottle opener|colander|strainer|spatulas?|whisks?|tongs?|ladles?|peelers?|graters?|mixing bowls?|baking sheets?|cookie sheets?|tupperware|containers?|storage bins?|trash bags?|ziplock|ziploc|baggies|cleaning supplies|detergent|cleaner|windex|lysol|disinfectant|air freshener|candles?|night lights?|extension cords?|power strips?|surge protectors?|welcome mats?|door mats?|coat hooks?|key hooks?|drawer liners?|placemats?|coasters?|wine glasses|champagne glasses|shot glasses|measuring cups?|measuring spoons?|thermometers?|fire extinguishers?|smoke detectors?|carbon monoxide detectors?|first aid|band.?aids?|medicine)\b/i;
 
-// Extract just the item name from review text (e.g. "Coffee maker" not the whole paragraph)
 function rpExtractItemName(text) {
   if (!text) return '';
-  // Match all purchasable items mentioned in the text
   const matches = [];
   const re = /\b(pots?\s*(?:and|&)?\s*pans?|cookware|dishes?|plates?|cups?|glasses?|wine glasses|champagne glasses|shot glasses|mugs?|utensils?|silverware|flatware|knives?|cutting boards?|bakeware|towels?|dish towels?|linens?|sheets?|bedding|comforters?|blankets?|pillows?|mattress(?:es)?|toiletries|soap|dish soap|shampoo|conditioner|toilet paper|paper towels?|coffee makers?|keurig|toasters?|blenders?|can openers?|corkscrews?|wine openers?|bottle openers?|irons?|ironing boards?|hangers?|curtains?|shower curtains?|blinds?|rugs?|bath mats?|mats?|brooms?|mops?|vacuums?|trash cans?|light bulbs?|batteries|remotes?|board games?|puzzles?|toys?|dvds?|books?|decor|decorations?|furniture|chairs?|tables?|shelves?|shelf|mirrors?|pictures?|artwork|signs?|sponges?|dish racks?|drying racks?|wash cloths?|washcloths?|oven mitts?|pot holders?|plungers?|fly swatters?|colanders?|strainers?|spatulas?|whisks?|tongs?|ladles?|peelers?|graters?|mixing bowls?|baking sheets?|cookie sheets?|tupperware|containers?|storage bins?|trash bags?|cleaning supplies|detergent|cleaner|air fresheners?|candles?|night lights?|extension cords?|power strips?|surge protectors?|welcome mats?|door mats?|coat hooks?|key hooks?|placemats?|coasters?|measuring cups?|measuring spoons?|thermometers?|fire extinguishers?|first aid)\b/gi;
   let m;
-  while ((m = re.exec(text)) !== null) {
-    matches.push(m[1]);
-  }
+  while ((m = re.exec(text)) !== null) { matches.push(m[1]); }
   if (!matches.length) return text.slice(0, 60);
-  // Capitalize first letter, deduplicate
   const unique = [...new Set(matches.map(s => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()))];
-  // Try to grab context: look for adjective/qualifier before the item (e.g. "new pots and pans", "better towels")
   const enhanced = unique.map(item => {
     const itemLower = item.toLowerCase();
     const idx = text.toLowerCase().indexOf(itemLower);
     if (idx > 0) {
-      // Grab up to 3 words before the item for context
       const before = text.slice(Math.max(0, idx - 30), idx).trim();
       const words = before.split(/\s+/);
       const qualifiers = /^(new|better|more|extra|additional|replacement|larger|bigger|smaller|nicer|good|real|proper|decent|quality|clean|fresh|matching|stainless\s*steel|nonstick|non-stick)$/i;
@@ -4815,43 +4872,78 @@ function rpExtractItemName(text) {
   return enhanced.join(', ');
 }
 
+// ── Migration: convert old rpData items into tasks ──
 async function loadReplacements() {
   try {
     const r = await S.get('se_purchases');
     if (r) rpData = JSON.parse(r.value);
   } catch (e) { rpData = []; }
-  // One-time migration: re-extract item names for review-imported items that have long text
-  let migrated = false;
-  rpData.forEach(item => {
-    if (item.item && item.item.length > 40) {
-      // Use full review feedback if available, otherwise try the stored item text itself
-      const sourceText = item.review?.feedback || item.item;
-      const extracted = rpExtractItemName(sourceText);
-      if (extracted && extracted.length < item.item.length) {
-        item.item = extracted;
-        migrated = true;
-      }
+  if (rpData.length) {
+    let migrated = 0;
+    for (const item of rpData) {
+      // Check for duplicate (already migrated)
+      if (tasks.find(t => t._migratedFromRp === item.id)) continue;
+      const rv = item.review;
+      const guest = rv?.guest || '';
+      const t = {
+        id: Date.now().toString() + Math.random().toString(36).slice(2, 6) + migrated,
+        _migratedFromRp: item.id,
+        property: item.property || '',
+        guest: guest,
+        problem: item.item || 'Replacement item',
+        category: 'replacement',
+        status: item.status === 'purchased' ? 'complete' : 'open',
+        date: '',
+        vendor: '',
+        urgent: false,
+        recurring: false,
+        purchaseNote: item.item || '',
+        purchaseStatus: item.status === 'purchased' ? 'purchased' : 'needed',
+        purchaser: 'owner',
+        purchasedAt: item.purchasedAt || '',
+        notes: [{
+          text: `Migrated from old Replacements list.${rv?.feedback ? ' Guest feedback: ' + rv.feedback.slice(0,150) : ''}${rv?.resCode ? ' Res: ' + rv.resCode : ''}`,
+          type: 'admin',
+          time: item.created || new Date().toISOString()
+        }],
+        vendorNotes: '',
+        created: item.created || new Date().toISOString(),
+      };
+      tasks.unshift(t);
+      migrated++;
     }
-  });
-  if (migrated) await saveReplacementData();
+    if (migrated) {
+      await saveTasks();
+      // Clear legacy data after successful migration
+      rpData = [];
+      await save('se_purchases', []);
+      showToast(`Migrated ${migrated} replacement items into tasks.`);
+    }
+  }
 }
 
-async function saveReplacementData() {
-  await save('se_purchases', rpData);
+// ── Helpers: get replacement tasks from the main tasks array ──
+function getReplacementTasks() {
+  return tasks.filter(t => t.category === 'replacement' || (t.purchaseNote && t.purchaseStatus));
 }
 
-function rpSelHistProp(id) { rpHistProp = id || null; renderReplacements(); }
+function rpSetPhase(phase) {
+  rpPhaseFilter = phase;
+  renderReplacements();
+}
+
 function populateRpPropFilter() {
   const sel = document.getElementById('rp-prop-filter');
   if (!sel) return;
+  const current = sel.value;
   sel.innerHTML = '<option value="all">All Properties</option>';
+  const repTasks = getReplacementTasks();
   NBS.forEach(nb => {
     const og = document.createElement('optgroup');
     og.label = nb.name;
     nb.props.forEach(pid => {
-      const p = getProp(pid);
-      if (!p) return;
-      const count = rpData.filter(e => e.property === pid && e.status === 'needed').length;
+      const p = getProp(pid); if (!p) return;
+      const count = repTasks.filter(t => t.property === pid && (t.purchaseStatus === 'needed' || !t.purchaseStatus)).length;
       const o = document.createElement('option');
       o.value = pid;
       o.textContent = p.name + (count ? ` (${count})` : '');
@@ -4859,363 +4951,144 @@ function populateRpPropFilter() {
     });
     sel.appendChild(og);
   });
+  sel.value = current || 'all';
 }
 
-function populateRpPropertySelect() {
-  const sel = document.getElementById('rp-property');
-  if (!sel) return;
-  sel.innerHTML = '<option value="">Select property...</option>';
-  NBS.forEach(nb => {
-    const og = document.createElement('optgroup');
-    og.label = nb.name;
-    nb.props.forEach(pid => {
-      const p = getProp(pid);
-      if (!p) return;
-      const o = document.createElement('option');
-      o.value = pid;
-      o.textContent = p.name;
-      og.appendChild(o);
-    });
-    sel.appendChild(og);
-  });
-}
-
-// Pending review data for the import-confirm flow
-let rpPendingReview = null;
-
-function openAddReplacement(prefill) {
-  rpPendingReview = prefill?._reviewData || null;
-  populateRpPropertySelect();
-  document.getElementById('rp-property').value = prefill?.property || '';
-  document.getElementById('rp-item').value = prefill?.item || '';
-  document.getElementById('rp-notes').value = prefill?.notes || '';
-  // Show/hide the review context preview
-  const previewEl = document.getElementById('rp-import-preview');
-  if (previewEl) {
-    if (rpPendingReview?.feedback) {
-      const truncated = rpPendingReview.feedback.length > 200 ? rpPendingReview.feedback.slice(0, 200) + '...' : rpPendingReview.feedback;
-      previewEl.innerHTML = `<div style="font-size:.72rem;text-transform:uppercase;letter-spacing:1px;color:var(--gold);font-weight:700;margin-bottom:5px">Guest Feedback</div><div style="font-size:.82rem;color:var(--text2);line-height:1.5;font-style:italic;border-left:3px solid var(--gold);padding:6px 10px;background:var(--surface2);border-radius:0 var(--radius) var(--radius) 0">${escHtml(truncated)}</div>`;
-      previewEl.style.display = '';
-    } else {
-      previewEl.innerHTML = '';
-      previewEl.style.display = 'none';
-    }
-  }
-  document.getElementById('replacement-modal').classList.add('open');
-}
-
-async function saveReplacement() {
-  const property = document.getElementById('rp-property').value;
-  const item = document.getElementById('rp-item').value.trim();
-  const notes = document.getElementById('rp-notes').value.trim();
-  if (!property || !item) { showToast('Please select a property and enter an item description.'); return; }
-  const entry = {
-    id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
-    property,
-    item,
-    notes,
-    status: 'needed',
-    created: new Date().toISOString(),
-  };
-  // Attach review context if this came from an import
-  if (rpPendingReview) {
-    entry.review = rpPendingReview;
-    entry.created = rpPendingReview._created || entry.created;
-    rpPendingReview = null;
-  }
-  rpData.unshift(entry);
-  await saveReplacementData();
-  closeModal('replacement-modal');
-  renderReplacements();
-  showToast('Replacement item added.');
-}
-
-async function markPurchased(id) {
-  const item = rpData.find(x => x.id === id);
-  if (!item) return;
-  item.status = 'purchased';
-  item.purchasedAt = new Date().toISOString();
-  await saveReplacementData();
-  renderReplacements();
-  showToast('Marked as purchased.');
-}
-
-async function deleteReplacement(id) {
-  rpData = rpData.filter(x => x.id !== id);
-  await saveReplacementData();
-  renderReplacements();
-  showToast('Item removed.');
-}
-
-async function rpConvertToTask(id) {
-  const item = rpData.find(x => x.id === id);
-  if (!item) return;
-  const rv = item.review;
-  const guest = rv?.guest || '';
-  const feedback = rv?.feedback || item.item;
-  const cat = rvGuessCategory(feedback);
-  const t = {
-    id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
-    property: item.property || '',
-    guest: guest,
-    problem: item.item + (rv?.feedback && rv.feedback !== item.item ? '\n\n' + rv.feedback : ''),
-    category: cat,
-    status: 'open',
-    date: '',
-    vendor: '',
-    urgent: false,
-    recurring: false,
-    notes: [{
-      text: `Converted from replacement buy list.${rv?.resCode ? ' Reservation: ' + rv.resCode : ''}${guest ? ' Guest: ' + guest + '.' : ''}`,
-      type: 'admin',
-      time: new Date().toISOString()
-    }],
-    vendorNotes: '',
-    created: item.created || new Date().toISOString(),
-  };
-  tasks.unshift(t);
-  await saveTasks();
-  // Remove from replacements
-  rpData = rpData.filter(x => x.id !== id);
-  await saveReplacementData();
-  closeModal('rp-detail-modal');
-  renderReplacements();
-  renderAll();
-  showToast('Converted to maintenance task.');
-  // Open the new task detail
-  detailId = t.id;
-  openDetail(t.id);
-}
-
-function openRpDetail(id) {
-  const item = rpData.find(x => x.id === id);
-  if (!item) return;
-  const p = getProp(item.property);
-  const nb = getNb(item.property);
-  const propName = p ? p.name : item.property;
-  const rv = item.review;
-
-  // Header: property + item name
-  document.getElementById('rp-detail-prop').textContent = propName;
-  document.getElementById('rp-detail-prop').style.color = nb ? `var(--${nb.cls})` : 'var(--gold)';
-  document.getElementById('rp-detail-title').textContent = item.item;
-
-  // Badges
-  const statusBadge = item.status === 'purchased'
-    ? '<span class="badge b-complete">Purchased</span>'
-    : '<span class="badge b-open">Needed</span>';
-  const dateBadge = `<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${fmtReported(item.created)}</span>`;
-  const guestBadge = rv?.guest ? `<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">From ${escHtml(rv.guest)}</span>` : '';
-  const resBadge = rv?.resCode ? `<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">Res: ${rv.resCode}</span>` : '';
-  document.getElementById('rp-detail-badges').innerHTML = statusBadge + dateBadge + guestBadge + resBadge;
-
-  // Body
-  let h = '';
-
-  // Guest feedback section (if imported from review with full data)
-  if (rv && (rv.feedback || rv.publicReview || rv.ratings?.length)) {
-    // Stay info line
-    if (rv.stayDates || rv.reviewDate) {
-      h += `<div style="font-size:.74rem;color:var(--text2);margin-bottom:14px">Reviewed: ${rv.reviewDate || ''}${rv.stayDates ? ' · Stay: ' + rv.stayDates : ''}${rv.publicRating ? ' · Rating: ' + '★'.repeat(rv.publicRating) + '☆'.repeat(5 - rv.publicRating) : ''}</div>`;
-    }
-
-    // Private feedback — full, no truncation
-    if (rv.feedback) {
-      h += `<div class="stitle">Guest Feedback</div>`;
-      h += `<div class="notes"><div class="note-item" style="background:var(--surface2);border-radius:var(--radius);padding:12px 14px;font-size:.86rem;line-height:1.65;white-space:pre-wrap;word-break:break-word">${escHtml(rv.feedback)}</div></div>`;
-    }
-
-    // Rating breakdown
-    const filteredRatings = (rv.ratings || []).filter(r => !RV_SKIP_RATINGS.has(r.type?.toLowerCase()));
-    if (filteredRatings.length) {
-      h += `<div class="stitle">Rating Breakdown</div>`;
-      h += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">';
-      filteredRatings.forEach(r => {
-        const rColor = r.rating <= 2 ? '#cc6644' : r.rating <= 3 ? '#c0a830' : 'var(--green)';
-        h += `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;font-size:.76rem">
-          <span style="color:var(--text2)">${escHtml(r.type)}:</span> <span style="color:${rColor};font-weight:700">${r.rating}/5</span>
-          ${r.comment ? `<div style="font-size:.74rem;color:var(--text2);margin-top:3px;font-style:italic;line-height:1.4">${escHtml(r.comment)}</div>` : ''}
-        </div>`;
-      });
-      h += '</div>';
-    }
-
-    // Public review
-    if (rv.publicReview) {
-      h += `<div class="stitle">Public Review</div>`;
-      h += `<div style="font-size:.82rem;color:var(--text2);line-height:1.5;font-style:italic;border-left:3px solid var(--gold);padding:8px 12px;background:var(--surface2);border-radius:0 var(--radius) var(--radius) 0;margin-bottom:8px">${escHtml(rv.publicReview)}</div>`;
-    }
-  } else {
-    // Manual item or legacy import without full review data
-    if (item.notes) {
-      h += `<div style="font-size:.82rem;color:var(--text2);line-height:1.5;padding:4px 0;margin-bottom:8px">${escHtml(item.notes)}</div>`;
-    }
-  }
-
-  // Source line
-  if (item.notes && rv) {
-    h += `<div style="font-size:.72rem;color:var(--text3);margin-top:12px;font-style:italic">${escHtml(item.notes)}</div>`;
-  }
-
-  document.getElementById('rp-detail-body').innerHTML = h;
-
-  // Footer buttons
-  const purchBtn = document.getElementById('rp-detail-purchase-btn');
-  const delBtn = document.getElementById('rp-detail-delete-btn');
-  const convertBtn = document.getElementById('rp-detail-convert-btn');
-  if (item.status === 'needed') {
-    purchBtn.style.display = '';
-    purchBtn.onclick = async () => { await markPurchased(id); closeModal('rp-detail-modal'); };
-    convertBtn.style.display = '';
-    convertBtn.onclick = async () => { await rpConvertToTask(id); };
-    delBtn.textContent = 'Skip — Don\u2019t Buy';
-  } else {
-    purchBtn.style.display = 'none';
-    convertBtn.style.display = 'none';
-    delBtn.textContent = 'Remove from History';
-  }
-  delBtn.style.display = '';
-  delBtn.onclick = async () => { await deleteReplacement(id); closeModal('rp-detail-modal'); };
-
-  rpDetailCurrentId = id;
-  document.getElementById('rp-detail-modal').classList.add('open');
-}
-
-let rpDetailCurrentId = null;
-
-function rpStartEditTitle() {
-  const titleEl = document.getElementById('rp-detail-title');
-  const inputEl = document.getElementById('rp-detail-title-input');
-  inputEl.value = titleEl.textContent;
-  titleEl.style.display = 'none';
-  inputEl.style.display = '';
-  inputEl.focus();
-  inputEl.select();
-}
-
-function rpCancelEditTitle() {
-  document.getElementById('rp-detail-title').style.display = '';
-  document.getElementById('rp-detail-title-input').style.display = 'none';
-}
-
-async function rpSaveTitle() {
-  const inputEl = document.getElementById('rp-detail-title-input');
-  const titleEl = document.getElementById('rp-detail-title');
-  const newName = inputEl.value.trim();
-  inputEl.style.display = 'none';
-  titleEl.style.display = '';
-  if (!newName || !rpDetailCurrentId) return;
-  const item = rpData.find(x => x.id === rpDetailCurrentId);
-  if (!item || item.item === newName) return;
-  item.item = newName;
-  titleEl.textContent = newName;
-  await saveReplacementData();
-  renderReplacements();
-  showToast('Item name updated.');
+// ── Open the new-task modal pre-filled for a replacement ──
+function openNewReplacementTask() {
+  openAddTask();
+  // After modal opens, pre-set category to replacement
+  setTimeout(() => {
+    const catSel = document.getElementById('f-category');
+    if (catSel) catSel.value = 'replacement';
+  }, 50);
 }
 
 function renderReplacements() {
-  const filter = document.getElementById('rp-prop-filter')?.value || 'all';
+  const propFilter = document.getElementById('rp-prop-filter')?.value || 'all';
+  const buyerFilter = document.getElementById('rp-purchaser-filter')?.value || 'all';
   const listEl = document.getElementById('rp-list');
   const purchasedEl = document.getElementById('rp-purchased');
 
-  const needed = rpData.filter(x => x.status === 'needed' && (filter === 'all' || x.property === filter));
-  const purchased = rpData.filter(x => x.status === 'purchased' && (filter === 'all' || x.property === filter));
+  // Highlight active phase tab
+  ['needed','purchased','delivered','all'].forEach(p => {
+    const btn = document.getElementById('rp-tab-' + p);
+    if (!btn) return;
+    if (p === rpPhaseFilter) { btn.style.background = '#e65100'; btn.style.color = '#fff'; btn.style.borderColor = '#e65100'; }
+    else { btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = ''; }
+  });
 
-  // ── Buy List (Needed) ──
-  if (!needed.length) {
-    listEl.innerHTML = '<div class="rp-empty">Nothing on the buy list. Use "Add Item" or items will auto-import from guest reviews.</div>';
+  // Get all replacement-type tasks
+  let repTasks = getReplacementTasks();
+
+  // Apply property filter
+  if (propFilter !== 'all') repTasks = repTasks.filter(t => t.property === propFilter);
+  // Apply buyer filter
+  if (buyerFilter !== 'all') repTasks = repTasks.filter(t => (t.purchaser || 'owner') === buyerFilter);
+
+  // Apply phase filter
+  let filtered;
+  if (rpPhaseFilter === 'all') {
+    filtered = repTasks;
+  } else if (rpPhaseFilter === 'needed') {
+    filtered = repTasks.filter(t => !t.purchaseStatus || t.purchaseStatus === 'needed');
+  } else if (rpPhaseFilter === 'purchased') {
+    filtered = repTasks.filter(t => t.purchaseStatus === 'purchased');
   } else {
-    // Group by property
-    const grouped = {};
-    needed.forEach(item => {
-      if (!grouped[item.property]) grouped[item.property] = [];
-      grouped[item.property].push(item);
-    });
-    let h = `<div class="rp-section-hdr"><span>Buy List</span><span class="rp-count">${needed.length} item${needed.length !== 1 ? 's' : ''}</span></div>`;
-    for (const [pid, items] of Object.entries(grouped)) {
-      const p = getProp(pid);
-      const nb = getNb(pid);
-      const propName = p ? p.name : pid;
-      const propColor = nb ? `var(--${nb.cls})` : 'var(--gold)';
-      h += `<div style="margin-bottom:18px">
-        <div style="font-weight:700;font-size:.82rem;color:${propColor};margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">${escHtml(propName)} <span style="font-weight:400;font-size:.72rem;color:var(--text2);text-transform:none;letter-spacing:0">(${items.length})</span></div>`;
-      items.forEach(item => {
-        const source = item.review ? `From ${escHtml(item.review.guest || 'guest')}` : (item.notes || '');
-        h += `<div class="rp-card" style="cursor:pointer;display:flex;align-items:center;gap:10px" onclick="openRpDetail('${item.id}')">
-          <div style="display:flex;gap:4px;flex-shrink:0">
-            <button class="btn rp-btn-done" onclick="event.stopPropagation();markPurchased('${item.id}')" title="Bought it — moves to Purchase History">&#10003;</button>
-            <button class="btn rp-btn-del" onclick="event.stopPropagation();deleteReplacement('${item.id}')" title="Skip — remove without buying" style="opacity:.5">&times;</button>
-          </div>
-          <div style="flex:1;min-width:0">
-            <div style="font-weight:600;font-size:.92rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(item.item)}</div>
-            ${source ? `<div style="font-size:.74rem;color:var(--text2);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${source}</div>` : ''}
-          </div>
-        </div>`;
-      });
-      h += '</div>';
-    }
-    listEl.innerHTML = h;
+    filtered = repTasks.filter(t => t.purchaseStatus === 'delivered' || ['complete','resolved_by_guest'].includes(t.status));
   }
 
-  // ── Purchase History (styled like Service History completed tasks) ──
-  if (!purchased.length) {
+  // Count badges on tabs
+  const cNeeded = repTasks.filter(t => !t.purchaseStatus || t.purchaseStatus === 'needed').length;
+  const cPurchased = repTasks.filter(t => t.purchaseStatus === 'purchased').length;
+  const cDelivered = repTasks.filter(t => t.purchaseStatus === 'delivered' || ['complete','resolved_by_guest'].includes(t.status)).length;
+  const tabN = document.getElementById('rp-tab-needed');
+  const tabP = document.getElementById('rp-tab-purchased');
+  const tabD = document.getElementById('rp-tab-delivered');
+  if (tabN) tabN.textContent = `Needs Buying (${cNeeded})`;
+  if (tabP) tabP.textContent = `Purchased \u2014 Deliver (${cPurchased})`;
+  if (tabD) tabD.textContent = `Delivered (${cDelivered})`;
+
+  if (!filtered.length) {
+    const emptyMsg = {
+      needed: 'No items need buying. Create a replacement task or they\'ll auto-import from guest reviews.',
+      purchased: 'No items waiting for delivery.',
+      delivered: 'No delivered items yet.',
+      all: 'No replacement tasks. Use "+ New Replacement" to create one.'
+    };
+    listEl.innerHTML = `<div class="rp-empty">${emptyMsg[rpPhaseFilter]}</div>`;
     purchasedEl.innerHTML = '';
-  } else {
-    // Property grid grouped by neighborhood (like Service History)
-    let gridHtml = '';
-    NBS.forEach(nb => {
-      const cards = nb.props.map(pid => {
-        const p = getProp(pid); if (!p) return '';
-        const ct = purchased.filter(i => i.property === pid).length;
-        if (!ct) return '';
-        return `<div class="pc nb-${nb.cls} ${rpHistProp===pid?'sel':''}" onclick="rpSelHistProp('${pid}')" style="cursor:pointer">
-          <div class="pc-name">${p.name.split(' - ').pop()}</div>
-          <div class="pcs"><strong>${ct}</strong> purchased</div>
-        </div>`;
-      }).join('');
-      if (cards.replace(/\s/g, '')) {
-        gridHtml += `<div class="nb-section"><div class="nb-hdr nb-${nb.cls}-h"><h3>${nb.name}</h3><span class="nb-sub">${nb.sub}</span></div><div class="prop-grid">${cards}</div></div>`;
-      }
-    });
+    populateRpPropFilter();
+    return;
+  }
 
-    let filtered = rpHistProp ? purchased.filter(i => i.property === rpHistProp) : purchased;
-    filtered.sort((a, b) => new Date(b.purchasedAt || b.created) - new Date(a.purchasedAt || a.created));
-    const filterLabel = rpHistProp ? `<span style="font-size:.76rem;color:var(--text2);margin-left:8px">Showing: <strong>${getProp(rpHistProp)?.name.split(' - ').pop()}</strong> <button onclick="rpSelHistProp(null)" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:.72rem;font-family:inherit;padding:0 4px">✕ Clear</button></span>` : '';
+  // Sort: urgent first, then by created date (newest first)
+  filtered.sort((a, b) => {
+    if (a.urgent && !b.urgent) return -1;
+    if (!a.urgent && b.urgent) return 1;
+    return new Date(b.created) - new Date(a.created);
+  });
 
-    let h = `${gridHtml}<div style="margin-top:20px;padding-top:18px;border-top:2px solid var(--border)">
-      <div style="display:flex;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:6px">
-        <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.3rem;color:var(--green);font-weight:600;margin:0">Purchase History</h2>
-        ${filterLabel}
-      </div>
-      <div style="display:flex;flex-direction:column;gap:8px">`;
-    filtered.forEach(item => {
-      const p = getProp(item.property);
-      const nb = getNb(item.property);
-      const nbc = nb ? 'nb-' + nb.cls : '';
-      const plc = nb ? 'pl-' + nb.cls : '';
-      const propShort = p ? p.name.split(' - ').pop() : item.property;
-      const doneDate = item.purchasedAt ? new Date(item.purchasedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-      const source = item.review?.guest ? `From ${item.review.guest}` : (item.notes || '');
-      h += `<div class="hi ${nbc}" onclick="openRpDetail('${item.id}')" style="border-left-width:3px">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
-          <div style="flex:1;min-width:0">
-            <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:4px">
-              <span style="font-size:.82rem;font-weight:700;color:var(--text)">${doneDate}</span>
-              <span style="font-size:.72rem;font-weight:600" class="${plc}">${escHtml(propShort)}</span>
-            </div>
-            <div style="font-size:.8rem;color:var(--text);line-height:1.4;margin-bottom:4px">${escHtml(item.item)}</div>
-            ${source ? `<div style="font-size:.7rem;color:var(--text2)">${escHtml(source)}</div>` : ''}
-          </div>
-          <span class="badge b-complete" style="flex-shrink:0">Purchased</span>
+  // Group by property
+  const grouped = {};
+  filtered.forEach(t => {
+    if (!grouped[t.property]) grouped[t.property] = [];
+    grouped[t.property].push(t);
+  });
+
+  let h = '';
+  for (const [pid, items] of Object.entries(grouped)) {
+    const p = getProp(pid);
+    const nb = getNb(pid);
+    const propName = p ? p.name : pid;
+    const propColor = nb ? `var(--${nb.cls})` : 'var(--gold)';
+    h += `<div style="margin-bottom:20px">
+      <div style="font-weight:700;font-size:.82rem;color:${propColor};margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">${escHtml(propName)} <span style="font-weight:400;font-size:.72rem;color:var(--text2);text-transform:none;letter-spacing:0">(${items.length})</span></div>`;
+    items.forEach(t => {
+      const ps = t.purchaseStatus || 'needed';
+      const statusColor = ps === 'needed' ? '#e65100' : ps === 'purchased' ? '#1565c0' : 'var(--green)';
+      const statusLabel = ps === 'needed' ? 'Buy' : ps === 'purchased' ? 'Deliver' : 'Done';
+      const buyerLabel = t.purchaser === 'vendor' ? 'Vendor buys' : 'You buy';
+      const vendorLine = t.vendor ? `<span class="tmi">${t.vendor}</span>` : '';
+      const dateLine = t.date ? `<span class="tmi">${fmtDate(t.date)}</span>` : '';
+      h += `<div class="rp-card" style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 12px" onclick="openDetail('${t.id}')">
+        <div style="flex-shrink:0;width:52px;text-align:center">
+          <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:${statusColor};border:1.5px solid ${statusColor};border-radius:var(--radius);padding:3px 6px">${statusLabel}</div>
         </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:.88rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(t.purchaseNote || t.problem)}</div>
+          <div style="font-size:.72rem;color:var(--text2);margin-top:2px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <span style="color:${statusColor};font-weight:600">${buyerLabel}</span>
+            ${vendorLine}${dateLine}
+            ${t.urgent?'<span style="color:var(--red);font-weight:700">URGENT</span>':''}
+            ${t.guest?`<span>From ${t.guest.split(' ')[0]}</span>`:''}
+          </div>
+        </div>
+        ${ps==='needed'?`<button class="btn rp-btn-done" onclick="event.stopPropagation();rpQuickPurchased('${t.id}')" title="Mark as purchased" style="flex-shrink:0">&#10003;</button>`:''}
+        ${ps==='purchased'?`<button class="btn rp-btn-done" onclick="event.stopPropagation();rpQuickDelivered('${t.id}')" title="Mark as delivered" style="flex-shrink:0;background:var(--green);color:#fff;border-color:var(--green)">&#10003;</button>`:''}
       </div>`;
     });
-    h += '</div></div>';
-    purchasedEl.innerHTML = h;
+    h += '</div>';
   }
-
+  listEl.innerHTML = h;
+  purchasedEl.innerHTML = '';
   populateRpPropFilter();
+}
+
+// Quick-action buttons on the Replacements tab cards
+async function rpQuickPurchased(id) {
+  const t = tasks.find(x => x.id === id); if (!t) return;
+  t.purchaseStatus = 'purchased';
+  t.purchasedAt = new Date().toISOString();
+  await saveTasks(); renderReplacements(); renderAll();
+  showToast('Marked as purchased \u2014 ready for delivery.');
+}
+async function rpQuickDelivered(id) {
+  const t = tasks.find(x => x.id === id); if (!t) return;
+  t.purchaseStatus = 'delivered';
+  t.status = 'complete';
+  await saveTasks(); renderReplacements(); renderAll();
+  showToast('Delivered \u2014 task complete.');
 }
 
 // ── Route purchase-related review items to Replacements ──────────
@@ -5234,52 +5107,40 @@ async function rpImportFromReviewSilent(rv) {
   const itemName = rpExtractItemName(problem);
   const guest = [rv.guest?.first_name, rv.guest?.last_name].filter(Boolean).join(' ') || 'Guest';
   const reviewDate = new Date(rv.reviewed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  const stayDates = rv.reservation ? `${new Date(rv.reservation.check_in).toLocaleDateString('en-US',{month:'short',day:'numeric'})} – ${new Date(rv.reservation.check_out).toLocaleDateString('en-US',{month:'short',day:'numeric'})}` : '';
-  rpData.unshift({
+  // Create a replacement task instead of an rpData entry
+  const t = {
     id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
     property: rv._pid || '',
-    item: itemName,
-    notes: `From ${guest} (${reviewDate})`,
-    status: 'needed',
+    guest: guest,
+    problem: itemName || problem.slice(0, 80),
+    category: 'replacement',
+    status: 'open',
+    date: '',
+    vendor: '',
+    urgent: false,
+    recurring: false,
+    purchaseNote: itemName,
+    purchaseStatus: 'needed',
+    purchaser: 'owner',
+    notes: [{
+      text: `From guest review (${reviewDate}).${rv.private?.feedback ? ' Feedback: ' + rv.private.feedback.slice(0, 200) : ''}${rv.reservation?.code ? ' Res: ' + rv.reservation.code : ''}`,
+      type: 'admin',
+      time: rv.reviewed_at || new Date().toISOString()
+    }],
+    vendorNotes: '',
     created: rv.reviewed_at || new Date().toISOString(),
-    review: {
-      feedback: rv.private?.feedback || '',
-      ratings: rv.private?.detailed_ratings || [],
-      publicReview: rv.public?.review || '',
-      publicRating: rv.public?.rating || null,
-      guest,
-      reviewDate,
-      stayDates,
-      resCode: rv.reservation?.code || '',
-      _created: rv.reviewed_at || new Date().toISOString(),
-    }
-  });
-  await saveReplacementData();
+  };
+  tasks.unshift(t);
+  await saveTasks();
 }
 
-// Interactive import (opens editable modal for user confirmation)
-function rpImportFromReview(rv) {
-  const problem = rvBuildProblem(rv);
-  const itemName = rpExtractItemName(problem);
-  const guest = [rv.guest?.first_name, rv.guest?.last_name].filter(Boolean).join(' ') || 'Guest';
-  const reviewDate = new Date(rv.reviewed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  const stayDates = rv.reservation ? `${new Date(rv.reservation.check_in).toLocaleDateString('en-US',{month:'short',day:'numeric'})} – ${new Date(rv.reservation.check_out).toLocaleDateString('en-US',{month:'short',day:'numeric'})}` : '';
-  openAddReplacement({
-    property: rv._pid || '',
-    item: itemName,
-    notes: `From ${guest} (${reviewDate})`,
-    _reviewData: {
-      feedback: rv.private?.feedback || '',
-      ratings: rv.private?.detailed_ratings || [],
-      publicReview: rv.public?.review || '',
-      publicRating: rv.public?.rating || null,
-      guest,
-      reviewDate,
-      stayDates,
-      resCode: rv.reservation?.code || '',
-      _created: rv.reviewed_at || new Date().toISOString(),
-    }
-  });
+// Interactive import — now creates a replacement task and opens its detail
+async function rpImportFromReview(rv) {
+  await rpImportFromReviewSilent(rv);
+  // Open the newly created task's detail
+  const newest = tasks[0];
+  if (newest) { detailId = newest.id; openDetail(newest.id); }
+  renderReplacements(); renderAll();
 }
 
 // ── Vendor Day Sheet Logic ──────────────────────────────

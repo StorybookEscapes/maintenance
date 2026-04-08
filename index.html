@@ -114,60 +114,23 @@
           <select id="rp-prop-filter" onchange="renderReplacements()" style="padding:6px 10px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.82rem;font-family:inherit">
             <option value="all">All Properties</option>
           </select>
-          <button class="btn btn-g" onclick="openAddReplacement()">+ Add Item</button>
+          <select id="rp-purchaser-filter" onchange="renderReplacements()" style="padding:6px 10px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.82rem;font-family:inherit">
+            <option value="all">All Buyers</option>
+            <option value="owner">I'm Buying</option>
+            <option value="vendor">Vendor Buys</option>
+          </select>
+          <button class="btn btn-g" onclick="openNewReplacementTask()">+ New Replacement</button>
         </div>
+      </div>
+      <!-- Phase filter tabs -->
+      <div id="rp-phase-tabs" style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap">
+        <button class="btn rp-phase-btn" onclick="rpSetPhase('needed')" id="rp-tab-needed" style="font-size:.76rem;padding:5px 14px">Needs Buying</button>
+        <button class="btn rp-phase-btn" onclick="rpSetPhase('purchased')" id="rp-tab-purchased" style="font-size:.76rem;padding:5px 14px">Purchased — Deliver</button>
+        <button class="btn rp-phase-btn" onclick="rpSetPhase('delivered')" id="rp-tab-delivered" style="font-size:.76rem;padding:5px 14px">Delivered</button>
+        <button class="btn rp-phase-btn" onclick="rpSetPhase('all')" id="rp-tab-all" style="font-size:.76rem;padding:5px 14px">All</button>
       </div>
       <div id="rp-list"></div>
       <div id="rp-purchased" style="margin-top:24px"></div>
-
-      <!-- Add Replacement Modal -->
-      <div class="mo" id="replacement-modal">
-        <div class="mo-content" style="max-width:480px">
-          <div class="mo-hd"><h3>Add Replacement Item</h3><button class="mo-x" onclick="closeModal('replacement-modal')">&times;</button></div>
-          <div class="mo-bd">
-            <div id="rp-import-preview" style="display:none;margin-bottom:14px"></div>
-            <label class="fl">Property
-              <select id="rp-property" style="width:100%;padding:8px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit"></select>
-            </label>
-            <label class="fl">Item to Buy
-              <input type="text" id="rp-item" placeholder="e.g., Coffee maker, Bath towels" style="width:100%;padding:8px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit">
-            </label>
-            <label class="fl">Source / Notes <span style="font-size:.7rem;color:var(--text2)">(optional)</span>
-              <input type="text" id="rp-notes" placeholder="e.g., Guest feedback, Amazon link, etc." style="width:100%;padding:8px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit">
-            </label>
-          </div>
-          <div class="mo-ft">
-            <button class="btn" onclick="closeModal('replacement-modal')">Cancel</button>
-            <button class="btn btn-g" onclick="saveReplacement()">Add to Buy List</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Replacement Detail Modal -->
-      <div class="mo" id="rp-detail-modal">
-        <div class="modal" style="max-width:640px">
-          <div class="mhdr">
-            <div>
-              <div id="rp-detail-prop" style="font-size:.67rem;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:4px;color:var(--gold)"></div>
-              <div class="mtitle" id="rp-detail-title" style="cursor:pointer" title="Click to edit item name" onclick="rpStartEditTitle()"></div>
-              <input type="text" id="rp-detail-title-input" style="display:none;font-family:'Cormorant Garamond',serif;font-size:1.25rem;font-weight:600;color:var(--green);border:1px solid var(--gold);border-radius:var(--radius);padding:4px 8px;width:100%;background:var(--surface2);outline:none" onblur="rpSaveTitle()" onkeydown="if(event.key==='Enter'){this.blur();}if(event.key==='Escape'){rpCancelEditTitle();}">
-            </div>
-            <button class="mclose" onclick="closeModal('rp-detail-modal')">&#x2715;</button>
-          </div>
-          <div id="rp-detail-badges" style="display:flex;gap:7px;margin-bottom:16px;flex-wrap:wrap;align-items:center"></div>
-          <div id="rp-detail-body"></div>
-          <div style="display:flex;gap:9px;margin-top:20px;justify-content:space-between;align-items:center;flex-wrap:wrap">
-            <div style="display:flex;gap:7px">
-              <button class="btn" id="rp-detail-delete-btn" style="color:var(--text2);border-color:var(--border)">Skip — Don't Buy</button>
-              <button class="btn" id="rp-detail-convert-btn" style="border-color:var(--gold);color:var(--gold)">Convert to Task</button>
-            </div>
-            <div style="display:flex;gap:7px">
-              <button class="btn" onclick="closeModal('rp-detail-modal')">Close</button>
-              <button class="btn btn-g" id="rp-detail-purchase-btn">Bought It &#10003;</button>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
 
     <div class="view" id="view-vendors">
@@ -278,6 +241,7 @@
         <label>Category</label>
         <select id="f-category" onchange="onCatChange()">
           <option value="">Select category</option>
+          <option value="replacement">Replacement</option>
           <option value="cleaning">Cleaning</option>
           <option value="handyman">Handyman</option>
           <option value="plumbing">Plumbing</option>
@@ -379,8 +343,9 @@
       </div>
       <div class="fgr">
         <label>Category</label>
-        <select id="d-category" onchange="updateField('category',this.value)">
+        <select id="d-category" onchange="updateField('category',this.value);onDetailCatChange(this.value)">
           <option value="">No category</option>
+          <option value="replacement">Replacement</option>
           <option value="cleaning">Cleaning</option>
           <option value="handyman">Handyman</option>
           <option value="plumbing">Plumbing</option>
@@ -423,10 +388,28 @@
         <span style="font-size:.6rem;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0">— vendor will see this prominently</span>
       </label>
       <div style="display:flex;gap:6px;align-items:center">
-        <input type="text" id="d-purchase" placeholder="e.g. 4x12 vent from Home Depot, wood glue, door knob..." style="flex:1" onkeydown="if(event.key==='Enter')savePurchaseNote()" oninput="clearTimeout(this._debounce);this._debounce=setTimeout(()=>savePurchaseNote(),1200)">
+        <input type="text" id="d-purchase" placeholder="e.g. Coffee maker, bath towels, 4x12 vent..." style="flex:1" onkeydown="if(event.key==='Enter')savePurchaseNote()" oninput="clearTimeout(this._debounce);this._debounce=setTimeout(()=>savePurchaseNote(),1200)">
         <button class="btn btn-g" onclick="savePurchaseNote()" style="padding:5px 11px;font-size:.72rem;white-space:nowrap">Save</button>
       </div>
       <div id="d-purchase-saved" style="font-size:.62rem;color:var(--green-mid);margin-top:2px;display:none">Saved — vendor will be notified to purchase this.</div>
+      <!-- Purchase workflow (visible when category=replacement OR purchaseNote is set) -->
+      <div id="d-purchase-workflow" style="display:none;margin-top:10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+          <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:1px;font-weight:700;color:#e65100">Purchase Tracking</div>
+          <div style="display:flex;gap:4px;margin-left:auto">
+            <button class="btn" id="d-purch-status-needed" onclick="setPurchaseStatus('needed')" style="padding:3px 10px;font-size:.68rem">Needs Buying</button>
+            <button class="btn" id="d-purch-status-purchased" onclick="setPurchaseStatus('purchased')" style="padding:3px 10px;font-size:.68rem">Purchased</button>
+            <button class="btn" id="d-purch-status-delivered" onclick="setPurchaseStatus('delivered')" style="padding:3px 10px;font-size:.68rem">Delivered</button>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <div style="font-size:.72rem;color:var(--text2)">Who's buying?</div>
+          <div style="display:flex;gap:4px">
+            <button class="btn" id="d-purchaser-owner" onclick="setPurchaser('owner')" style="padding:3px 10px;font-size:.68rem">I'll buy it</button>
+            <button class="btn" id="d-purchaser-vendor" onclick="setPurchaser('vendor')" style="padding:3px 10px;font-size:.68rem">Vendor buys</button>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="stitle">Notes</div>
     <div class="notes" id="d-notes"></div>
