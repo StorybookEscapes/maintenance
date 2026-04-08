@@ -3073,6 +3073,47 @@ let hbItems = [];
 let hbDismissed = []; // dismissed items (persisted to KV)
 let hbPollTimer = null;
 
+// ── Cleaning Alerts helpers (filter HostBuddy items for cleaning page) ──
+function clGetActiveAlerts() {
+  return hbItems.filter(item => hbMatchCategory(item.category) === 'cleaning');
+}
+function clGetActiveAlertsForProp(pid) {
+  return clGetActiveAlerts().filter(item => {
+    let matchedPid = hbMatchProperty(item.property);
+    if (!matchedPid && item._raw) matchedPid = hbDeepMatchProperty(item._raw);
+    return matchedPid === pid;
+  });
+}
+function clGetReportedDuringStay(pid) {
+  return tasks.filter(t => t.property === pid && t.category === 'cleaning' && t.notes && t.notes.some(n => n.text && n.text.includes('Imported from HostBuddy AI')));
+}
+async function clDismissAlert(id) {
+  await hbDismiss(id);
+  renderCleaningLog();
+}
+async function clImportAlert(id) {
+  await hbImport(id);
+  renderCleaningLog();
+}
+async function clDismissAllAlerts() {
+  const cleaningIds = clGetActiveAlerts().map(a => a.id);
+  for (const cid of cleaningIds) {
+    await hbDismiss(cid);
+  }
+  renderCleaningLog();
+}
+async function clImportAllAlerts() {
+  const cleaningItems = clGetActiveAlerts();
+  for (const item of cleaningItems) {
+    await hbImport(item.id);
+  }
+  renderCleaningLog();
+}
+function clOpenTaskFromCleaning(taskId) {
+  switchView('main', document.querySelector('.nav-btn'));
+  setTimeout(() => openDetail(taskId), 100);
+}
+
 async function hbFetch() {
   if (!HB_CONFIG.apiUrl) return;
   try {
@@ -3697,6 +3738,30 @@ function renderCleaningLog() {
     </div>`;
   }
 
+  // ── Cleaning Alerts Banner ──
+  const clAlerts = clGetActiveAlerts();
+  if (clAlerts.length > 0) {
+    let bannerH = `<div class="cl-alerts-banner"><div class="cl-alerts-hdr"><span class="cl-alerts-pulse"></span><span class="cl-alerts-title">Guest Cleaning Alerts</span><span class="cl-alerts-count">${clAlerts.length}</span><div class="cl-alerts-actions"><button class="btn cl-alerts-btn" onclick="clDismissAllAlerts()">Dismiss All</button><button class="btn cl-alerts-btn cl-alerts-btn-primary" onclick="clImportAllAlerts()">Create Tasks for All</button></div></div>`;
+    clAlerts.forEach(item => {
+      let matchedPid = hbMatchProperty(item.property);
+      if (!matchedPid && item._raw) matchedPid = hbDeepMatchProperty(item._raw);
+      const matchedProp = matchedPid ? getProp(matchedPid) : null;
+      const propName = matchedProp ? matchedProp.name : (item.property || 'Unknown property');
+      const skipProblems = ['action_items','action_item','maintenance','issue','task','alert','notification','cleaning','clean'];
+      let problem = (item.problem || '').trim();
+      if (!problem || skipProblems.includes(problem.toLowerCase())) {
+        problem = item.conversationSnippet || '';
+      }
+      const guest = item.guest || '';
+      const timeAgo = item.receivedAt ? (() => { const m = Math.floor((Date.now() - new Date(item.receivedAt).getTime()) / 60000); if (m < 1) return 'Just now'; if (m < 60) return m + 'm ago'; if (m < 1440) return Math.floor(m / 60) + 'h ago'; return Math.floor(m / 1440) + 'd ago'; })() : '';
+      bannerH += `<div class="cl-alert-item" id="cl-alert-${item.id}"><div class="cl-alert-body"><div class="cl-alert-prop">${escHtml(propName)}</div>`;
+      if (problem) bannerH += `<div class="cl-alert-text">"${escHtml(problem.substring(0, 150))}"</div>`;
+      bannerH += `<div class="cl-alert-meta">${guest ? '<span>' + escHtml(guest) + '</span> · ' : ''}<span>${timeAgo}</span>${item.urgent ? ' <span class="cl-alert-tag" style="background:rgba(192,57,43,.1);color:var(--red)">URGENT</span>' : ''} <span class="cl-alert-tag">cleaning</span></div></div><div class="cl-alert-actions"><button class="cl-alert-dismiss" onclick="clDismissAlert('${item.id}')">Dismiss</button><button class="cl-alert-task" onclick="clImportAlert('${item.id}')">Create Task</button></div></div>`;
+    });
+    bannerH += '</div>';
+    sumH += bannerH;
+  }
+
   // ── Card builder (matches cleaner view exactly) ──
   function clCard(pid, cardClass) {
     const p = getProp(pid);
@@ -3733,11 +3798,18 @@ function renderCleaningLog() {
       }
     }
 
+    // HostBuddy cleaning alert badge
+    const propAlerts = clGetActiveAlertsForProp(pid);
+    let alertBadgeH = '';
+    if (propAlerts.length > 0) {
+      alertBadgeH = `<div class="cl-card-alert-badge"><span class="cl-alerts-pulse"></span> ${propAlerts.length} guest alert${propAlerts.length !== 1 ? 's' : ''}</div>`;
+    }
+
     return `<div class="${cardClass}" onclick="clDrillDown('${pid}')">
       <div class="cv-card-name">${escHtml(p.name)}</div>
       <div class="cv-card-rating-row"><span class="cv-card-rating-label">60-day cleaning avg</span><span class="cv-card-rating-value">${recentAvg} / 5</span></div>
       <div class="cv-card-sub">${perfect}/${s.recentReviews} Excellent Cleaning Reviews</div>
-      ${trendH}${flagsH}
+      ${trendH}${flagsH}${alertBadgeH}
       <div class="cv-comp-row"><div class="cv-comp-col"><span class="cv-comp-val">${recentAvg}</span><span class="cv-comp-lbl">Last 60 days</span></div><div class="cv-comp-divider"></div><div class="cv-comp-col"><span class="cv-comp-val muted">${sixMoAvg}</span><span class="cv-comp-lbl">6-month avg</span></div></div>
     </div>`;
   }
@@ -3834,11 +3906,47 @@ function clShowPropDetail(pid, allPropStats) {
     <div style="margin-top:8px"><button class="btn" style="font-size:.72rem;padding:4px 12px" onclick="clBackToOverview()">← Back to overview</button></div>
   </div>`;
 
-  // Show flags for this property
+  // ── Active Guest Cleaning Alerts (orange) ──
   let h = '';
+  const propAlerts = clGetActiveAlertsForProp(pid);
+  if (propAlerts.length > 0) {
+    h += `<div class="cl-detail-alerts"><div class="cl-detail-alerts-title"><span style="font-size:1rem">💬</span> Guest Cleaning Alerts <span style="font-size:.65rem;color:var(--text3);font-weight:400;margin-left:4px">from Hostbuddy AI · not reflected in ratings</span></div>`;
+    propAlerts.forEach(item => {
+      const skipProblems = ['action_items','action_item','maintenance','issue','task','alert','notification','cleaning','clean'];
+      let problem = (item.problem || '').trim();
+      if (!problem || skipProblems.includes(problem.toLowerCase())) {
+        problem = item.conversationSnippet || '';
+      }
+      const guest = item.guest || 'Guest';
+      const timeAgo = item.receivedAt ? (() => { const m = Math.floor((Date.now() - new Date(item.receivedAt).getTime()) / 60000); if (m < 1) return 'Just now'; if (m < 60) return m + 'm ago'; if (m < 1440) return Math.floor(m / 60) + 'h ago'; return Math.floor(m / 1440) + 'd ago'; })() : '';
+      h += `<div class="cl-detail-alert-entry"><div style="font-weight:600;color:var(--text)">${escHtml(guest)}</div><div style="font-size:.7rem;color:var(--text3);margin-top:2px">${timeAgo} · During stay · Detected by Hostbuddy AI</div>`;
+      if (problem) h += `<div style="color:var(--text2);margin-top:4px;line-height:1.45">"${escHtml(problem.substring(0, 200))}"</div>`;
+      h += `<div class="cl-detail-alert-actions"><button onclick="clDismissAlert('${item.id}')">Dismiss</button><button onclick="clImportAlert('${item.id}')" style="color:var(--green);font-weight:600">Create Task</button></div></div>`;
+    });
+    h += '</div>';
+  }
+
+  // ── Reported During Stay (resolved cleaning tasks from HostBuddy) ──
+  const reportedTasks = clGetReportedDuringStay(pid);
+  if (reportedTasks.length > 0) {
+    h += `<div class="cl-reported-section"><div class="cl-reported-title"><span style="font-size:.9rem">📋</span> Reported During Stay</div><div class="cl-reported-subtitle">Cleaning issues guests reported during their stay (imported from Hostbuddy AI). These don't affect the rating but show what the cleaning team missed.</div>`;
+    reportedTasks.forEach(t => {
+      const dateStr = new Date(t.created).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+      const isComplete = t.status === 'complete' || t.status === 'completed';
+      const statusH = isComplete
+        ? `<span class="cl-reported-status cl-reported-resolved">✓ Completed</span>`
+        : `<span class="cl-reported-status cl-reported-open">⟳ Open</span>`;
+      const guestNote = t.notes ? t.notes.find(n => n.text && n.text.includes('Guest said:')) : null;
+      const guestQuote = guestNote ? guestNote.text.replace(/^Imported from HostBuddy AI\.\s*Guest said:\s*"?/, '').replace(/"$/, '') : t.problem;
+      h += `<div class="cl-reported-entry" onclick="clOpenTaskFromCleaning('${t.id}')"><div style="font-weight:600;color:var(--text)">${escHtml(t.guest || 'Guest')}</div><div style="font-size:.7rem;color:var(--text3);margin-top:2px">${dateStr} · During stay · Imported from Hostbuddy AI</div><div style="color:var(--text2);margin-top:4px;line-height:1.45">"${escHtml((guestQuote || t.problem || '').substring(0, 200))}"</div><div class="cl-reported-task-row">${statusH}<span class="cl-reported-task-link">View Task →</span></div></div>`;
+    });
+    h += '</div>';
+  }
+
+  // Show review flags for this property
   if (recentFlags.length > 0) {
     h += `<div style="background:rgba(192,57,43,.08);border:1px solid rgba(192,57,43,.2);border-radius:8px;padding:12px 14px;margin-bottom:16px">
-      <div style="font-size:.85rem;font-weight:600;color:var(--red);margin-bottom:8px">⚠ Recent Flags (${recentFlags.length})</div>
+      <div style="font-size:.85rem;font-weight:600;color:var(--red);margin-bottom:8px">⚠ Review Flags (${recentFlags.length})</div>
       ${recentFlags.map(f => {
         const dateStr = new Date(f.reviewedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
         return `<div style="font-size:.75rem;margin-bottom:8px;padding:8px;background:var(--white);border-radius:4px;border-left:3px solid var(--red)">
