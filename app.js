@@ -3495,16 +3495,9 @@ async function hbTest() {
 async function clImportHistorical() {
   const historical = [
     { date: '2026-04-03T08:57:00', property: 'prc5', guest: 'Jessie Jirles', problem: 'The guest reported that the dishes on the shelf were found dirty and gross upon arrival.' },
-    { date: '2026-04-03T08:43:00', property: 'prc5', guest: 'Jessie Jirles', problem: 'The guest expressed dissatisfaction with the cleanliness of the unit upon arrival, noting they had to perform some cleaning themselves.' },
     { date: '2026-04-01T23:43:00', property: 'umc40', guest: 'Victoria Groll', problem: 'The guest reported a strong smell of urine in the living room and the host team needs to investigate the cleanliness with their team.' },
-    { date: '2026-03-26T16:07:00', property: 'umc60', guest: 'Megan Edwards-Baker', problem: 'The guest reported that the cabin is dirty with dishes in the sink and uncleaned bathrooms; the host needs to ensure the cleaning team addresses these specific areas immediately.' },
-    { date: '2026-03-26T16:00:00', property: 'umc60', guest: 'Megan Edwards-Baker', problem: 'The guest reported that the cleaning crew has not finished the unit and beds are stripped; the host needs to confirm cleaning status and coordinate with the guest.' },
     { date: '2026-03-22T22:53:00', property: 'umc60', guest: 'Hope Layton', problem: 'The host needs to address the severe cleanliness failures (dog hair, pee stains, dirty floors, and rags) with the cleaning team.' },
-    { date: '2026-03-22T22:37:00', property: 'umc60', guest: 'Hope Layton', problem: 'The guest reported that the floors are filthy, leaving their daughter\'s feet black after walking barefoot.' },
-    { date: '2026-03-22T22:37:00', property: 'umc60', guest: 'Hope Layton', problem: 'The guest reported finding dirty rags left around the cabin.' },
-    { date: '2026-03-22T22:08:00', property: 'umc60', guest: 'Hope Layton', problem: 'The guest reported that the sofa bed was dirty with dog hair and pee stains on the mattress protector.' },
     { date: '2026-03-20T21:43:00', property: 'hero', guest: 'Tristin Miller', problem: 'The guest reported that the floors were extremely dirty and sticky, suggesting a failure in the cleaning service\'s floor maintenance.' },
-    { date: '2026-03-17T18:35:00', property: 'umc60', guest: 'Tamika', problem: 'The host needs to confirm with the cleaning team that the property is guest-ready so the pending reservation can be approved.' },
   ];
 
   let imported = 0;
@@ -3532,6 +3525,7 @@ async function clImportHistorical() {
       vendor: '',
       urgent: false,
       recurring: false,
+      _historicalImport: true,
       notes: [
         { text: `Imported from HostBuddy AI. Guest said: "${item.problem}"`, type: 'admin', time: item.date }
       ],
@@ -4001,7 +3995,11 @@ function clShowPropDetail(pid, allPropStats) {
         : `<span class="cl-reported-status cl-reported-open">⟳ Open</span>`;
       const guestNote = t.notes ? t.notes.find(n => n.text && n.text.includes('Guest said:')) : null;
       const guestQuote = guestNote ? guestNote.text.replace(/^Imported from HostBuddy AI\.\s*Guest said:\s*"?/, '').replace(/"$/, '') : t.problem;
-      h += `<div class="cl-reported-entry" onclick="clOpenTaskFromCleaning('${t.id}')"><div style="font-weight:600;color:var(--text)">${escHtml(t.guest || 'Guest')}</div><div style="font-size:.7rem;color:var(--text3);margin-top:2px">${dateStr} · During stay · Imported from Hostbuddy AI</div><div style="color:var(--text2);margin-top:4px;line-height:1.45">"${escHtml((guestQuote || t.problem || '').substring(0, 200))}"</div><div class="cl-reported-task-row">${statusH}<span class="cl-reported-task-link">View Task →</span></div></div>`;
+      const isHistorical = !!t._historicalImport;
+      const clickAttr = isHistorical ? '' : `onclick="clOpenTaskFromCleaning('${t.id}')"`;
+      const clickClass = isHistorical ? 'cl-reported-entry cl-reported-static' : 'cl-reported-entry';
+      const taskLink = isHistorical ? '' : '<span class="cl-reported-task-link">View Task →</span>';
+      h += `<div class="${clickClass}" ${clickAttr}><div style="font-weight:600;color:var(--text)">${escHtml(t.guest || 'Guest')}</div><div style="font-size:.7rem;color:var(--text3);margin-top:2px">${dateStr} · During stay · Imported from Hostbuddy AI</div><div style="color:var(--text2);margin-top:4px;line-height:1.45">"${escHtml((guestQuote || t.problem || '').substring(0, 200))}"</div><div class="cl-reported-task-row">${statusH}${taskLink}</div></div>`;
     });
     h += '</div>';
   }
