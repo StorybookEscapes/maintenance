@@ -3491,6 +3491,69 @@ async function hbTest() {
   } catch (e) { console.error('Test failed:', e); }
 }
 
+// One-time import: historical HostBuddy cleaning alerts (call from console: clImportHistorical())
+async function clImportHistorical() {
+  const historical = [
+    { date: '2026-04-03T08:57:00', property: 'prc5', guest: 'Jessie Jirles', problem: 'The guest reported that the dishes on the shelf were found dirty and gross upon arrival.' },
+    { date: '2026-04-03T08:43:00', property: 'prc5', guest: 'Jessie Jirles', problem: 'The guest expressed dissatisfaction with the cleanliness of the unit upon arrival, noting they had to perform some cleaning themselves.' },
+    { date: '2026-04-01T23:43:00', property: 'umc40', guest: 'Victoria Groll', problem: 'The guest reported a strong smell of urine in the living room and the host team needs to investigate the cleanliness with their team.' },
+    { date: '2026-03-26T16:07:00', property: 'umc60', guest: 'Megan Edwards-Baker', problem: 'The guest reported that the cabin is dirty with dishes in the sink and uncleaned bathrooms; the host needs to ensure the cleaning team addresses these specific areas immediately.' },
+    { date: '2026-03-26T16:00:00', property: 'umc60', guest: 'Megan Edwards-Baker', problem: 'The guest reported that the cleaning crew has not finished the unit and beds are stripped; the host needs to confirm cleaning status and coordinate with the guest.' },
+    { date: '2026-03-22T22:53:00', property: 'umc60', guest: 'Hope Layton', problem: 'The host needs to address the severe cleanliness failures (dog hair, pee stains, dirty floors, and rags) with the cleaning team.' },
+    { date: '2026-03-22T22:37:00', property: 'umc60', guest: 'Hope Layton', problem: 'The guest reported that the floors are filthy, leaving their daughter\'s feet black after walking barefoot.' },
+    { date: '2026-03-22T22:37:00', property: 'umc60', guest: 'Hope Layton', problem: 'The guest reported finding dirty rags left around the cabin.' },
+    { date: '2026-03-22T22:08:00', property: 'umc60', guest: 'Hope Layton', problem: 'The guest reported that the sofa bed was dirty with dog hair and pee stains on the mattress protector.' },
+    { date: '2026-03-20T21:43:00', property: 'hero', guest: 'Tristin Miller', problem: 'The guest reported that the floors were extremely dirty and sticky, suggesting a failure in the cleaning service\'s floor maintenance.' },
+    { date: '2026-03-17T18:35:00', property: 'umc60', guest: 'Tamika', problem: 'The host needs to confirm with the cleaning team that the property is guest-ready so the pending reservation can be approved.' },
+  ];
+
+  let imported = 0;
+  for (const item of historical) {
+    // Check for duplicates (same property + guest + similar date)
+    const isDuplicate = tasks.some(t =>
+      t.property === item.property &&
+      t.guest === item.guest &&
+      t.category === 'cleaning' &&
+      t.notes && t.notes.some(n => n.text && n.text.includes('Imported from HostBuddy AI'))
+    );
+    if (isDuplicate) {
+      console.log(`Skipping duplicate: ${item.guest} at ${item.property}`);
+      continue;
+    }
+
+    const t = {
+      id: Date.now().toString() + Math.random().toString(36).slice(2, 6) + imported,
+      property: item.property,
+      guest: item.guest,
+      problem: item.problem,
+      category: 'cleaning',
+      status: 'complete',
+      date: '',
+      vendor: '',
+      urgent: false,
+      recurring: false,
+      notes: [
+        { text: `Imported from HostBuddy AI. Guest said: "${item.problem}"`, type: 'admin', time: item.date }
+      ],
+      vendorNotes: '',
+      created: item.date,
+    };
+    tasks.unshift(t);
+    imported++;
+  }
+
+  if (imported > 0) {
+    await saveTasks();
+    renderAll();
+    if (typeof renderCleaningLog === 'function') renderCleaningLog();
+    showToast(`${imported} historical cleaning alert(s) imported.`);
+  } else {
+    showToast('No new items to import (all duplicates).');
+  }
+  console.log(`Historical import complete: ${imported} items imported, ${historical.length - imported} skipped.`);
+}
+
+
 // ── Cleaning Log ───────────────────────────────────────────────
 let clData = []; // all cleaning-relevant review entries (flagged issues)
 let clAllRatings = {}; // ALL cleanliness ratings per property (for winners/trends): { pid: [{rating, reviewedAt}] }
