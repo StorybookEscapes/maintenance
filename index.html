@@ -26,7 +26,6 @@
     </div>
     <div class="hnav">
       <button class="nav-btn active" onclick="switchView('tasks',this)">Tasks</button>
-      <button class="nav-btn" onclick="switchView('recurring',this)">Recurring</button>
       <button class="nav-btn" onclick="switchView('history',this)">Service History</button>
       <button class="nav-btn" onclick="switchView('vendors',this)">Vendors</button>
       <button class="nav-btn" onclick="switchView('cleaning',this)">Cleaning</button>
@@ -60,9 +59,12 @@
       <div id="three-week-cal" style="margin-bottom:20px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
           <div class="cal-legend" id="cal-legend" style="margin-bottom:0"></div>
-          <div class="cal-toggle">
-            <label onclick="toggleShowDone()" style="font-size:.74rem;color:var(--text2);cursor:pointer;user-select:none">Show completed</label>
-            <div class="toggle-track" id="toggle-done" onclick="toggleShowDone()"><div class="toggle-thumb"></div></div>
+          <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+            <a onclick="goToRecurring()" style="font-size:.72rem;color:var(--text3);cursor:pointer;text-decoration:none;border-bottom:1px dashed var(--text3)">Recurring Tasks</a>
+            <div class="cal-toggle">
+              <label onclick="toggleShowDone()" style="font-size:.74rem;color:var(--text2);cursor:pointer;user-select:none">Show completed</label>
+              <div class="toggle-track" id="toggle-done" onclick="toggleShowDone()"><div class="toggle-thumb"></div></div>
+            </div>
           </div>
         </div>
         <div id="cal-container"></div>

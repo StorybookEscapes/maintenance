@@ -262,12 +262,14 @@ function switchView(name,btn){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('view-'+name).classList.add('active');
-  btn.classList.add('active');
+  if(btn)btn.classList.add('active');
   // Cleaning log now pre-loaded on init; this is a fallback
   if (name === 'cleaning' && !clLoaded && !clFetching) clFetch();
   // Refresh replacements view when switching to it
   if (name === 'replacements') renderReplacements();
 }
+// Navigate to Recurring view without a nav button (it's been removed from the main nav)
+function goToRecurring(){switchView('recurring');window.scrollTo(0,0);}
 
 function populatePropSel(id){
   const s=document.getElementById(id);
