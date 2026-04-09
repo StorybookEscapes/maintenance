@@ -2694,6 +2694,34 @@ async function toggleDetailUrgent(){
 }
 
 // ─── VENDOR SEARCHABLE DROPDOWN ─────────────────────────────────
+// Validate vendor input on blur: must match an existing vendor name (case-insensitive).
+// If partial/invalid text, revert to the last saved vendor for this task.
+async function validateVendorInput(){
+  const inp=document.getElementById('d-vendor');
+  const val=inp.value.trim();
+  const t=tasks.find(x=>x.id===detailId);
+  if(!t)return;
+  // Empty is valid — means unassigning vendor
+  if(!val){
+    if(t.vendor){
+      await updateField('vendor','');
+      showToast('Vendor removed.');
+    }
+    return;
+  }
+  // Check for exact match (case-insensitive) in vendor list
+  const match=vendors.find(v=>v.name.toLowerCase()===val.toLowerCase());
+  if(match){
+    // Normalize to proper casing and save
+    inp.value=match.name;
+    if(t.vendor!==match.name) await updateField('vendor',match.name);
+  } else {
+    // Invalid — revert to last saved vendor
+    inp.value=t.vendor||'';
+    showToast('Please select a vendor from the list.');
+  }
+  closeVendorDD();
+}
 let vdOpen=false;
 function buildVendorDD(filter=''){
   const dd=document.getElementById('vd-dropdown');

@@ -381,7 +381,7 @@
       <div class="fgr" style="position:relative">
         <label>Assigned Vendor</label>
         <div class="vd-wrap" id="vd-wrap">
-          <input type="text" id="d-vendor" autocomplete="off" placeholder="Search or select..." oninput="filterVendorDD(this.value)" onfocus="openVendorDD()" onchange="updateField('vendor',this.value)">
+          <input type="text" id="d-vendor" autocomplete="off" placeholder="Search or select..." oninput="filterVendorDD(this.value)" onfocus="openVendorDD()" onblur="setTimeout(validateVendorInput,150)">
           <button type="button" class="vd-arrow" onclick="toggleVendorDD()">&#x25BC;</button>
           <div class="vd-dropdown" id="vd-dropdown" style="display:none"></div>
         </div>
