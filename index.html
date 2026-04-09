@@ -447,18 +447,18 @@
 <!-- VENDOR DAY MODAL -->
 <div class="mo" id="vendor-day-modal">
   <div class="modal">
-    <div class="mhdr">
-      <div>
-        <div id="vd-date" style="font-size:.67rem;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;color:var(--gold);margin-bottom:4px"></div>
-        <div class="mtitle" id="vd-title"></div>
-      </div>
+    <div class="mhdr" style="display:flex;justify-content:space-between;align-items:center">
+      <div class="mtitle" id="vd-title" style="font-size:1.1rem"></div>
       <button class="mclose" onclick="closeModal('vendor-day-modal')">&#x2715;</button>
     </div>
+    <div id="vd-contact-row"></div>
     <div id="vd-combined-sms"></div>
-    <div class="stitle">Individual Tasks</div>
-    <div id="vd-tasks" style="display:flex;flex-direction:column;gap:7px;margin-bottom:16px"></div>
-    <div style="display:flex;justify-content:flex-end;gap:7px">
-      <button class="btn" onclick="closeModal('vendor-day-modal')">Close</button>
+    <div style="display:flex;justify-content:space-between;gap:7px;margin-top:4px">
+      <button class="btn btn-red" style="font-size:.68rem;padding:6px 10px" onclick="closeModal('vendor-day-modal')">Delete</button>
+      <div style="display:flex;gap:6px">
+        <button class="btn" style="padding:6px 14px" onclick="closeModal('vendor-day-modal')">Close</button>
+        <button class="btn btn-g" style="padding:6px 14px" onclick="closeModal('vendor-day-modal')">Mark Complete</button>
+      </div>
     </div>
   </div>
 </div>

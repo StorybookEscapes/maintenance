@@ -1708,9 +1708,26 @@ async function openVendorDay(vendorName,date){
   const vdTasks=getVendorDayTasks(vendorName,date);
   if(!vdTasks.length)return;
   const v=vendors.find(x=>x.name.toLowerCase()===vendorName.toLowerCase());
-  const fmtD=new Date(date+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
-  document.getElementById('vd-date').textContent=fmtD;
-  document.getElementById('vd-title').textContent=`${vendorName} — ${vdTasks.length} Jobs`;
+  // Header — just the vendor name
+  document.getElementById('vd-title').textContent=vendorName;
+  // Contact row
+  const contactEl=document.getElementById('vd-contact-row');
+  if(v){
+    const tel=v.phone.replace(/\D/g,'');
+    const phoneFmt=v.phone;
+    contactEl.innerHTML=`<div class="cg-contact-row">
+      <a href="sms:${tel}" class="cg-contact-btn cg-primary">
+        <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg>
+        Text ${phoneFmt}
+      </a>
+      <a href="tel:${tel}" class="cg-contact-btn cg-secondary">
+        <svg viewBox="0 0 24 24"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>
+        Call
+      </a>
+    </div>`;
+  } else {
+    contactEl.innerHTML='';
+  }
   // Pre-generate vendor sheet token
   let sheetUrl='';
   if(v&&date){
@@ -1722,49 +1739,12 @@ async function openVendorDay(vendorName,date){
       }
     }catch(e){console.error('[vendor-sheet] Token gen error:',e);}
   }
-  // Render combined SMS if vendor exists in our list
+  // Render combined task card (property-grouped + send job sheet)
   if(v){
     document.getElementById('vd-combined-sms').innerHTML=combinedVendorCard(v,vdTasks,sheetUrl);
   } else {
     document.getElementById('vd-combined-sms').innerHTML=`<div style="font-size:.82rem;color:var(--text2);padding:6px 0;margin-bottom:8px"><strong>${vendorName}</strong> is not in the vendor list — add them to send a combined message.</div>`;
   }
-  // Render individual task cards sorted by neighborhood then property (matches SMS order)
-  const sortedVd=[...vdTasks].sort((a,b)=>{
-    const nbA=getNb(a.property),nbB=getNb(b.property);
-    const nA=nbA?nbA.name:'zzz',nB=nbB?nbB.name:'zzz';
-    if(nA!==nB)return nA.localeCompare(nB);
-    return(a.property||'').localeCompare(b.property||'');
-  });
-  let th='';let lastNb='';let lastProp='';let propCount=0;
-  // Pre-count tasks per property for grouping decisions
-  const propCounts={};sortedVd.forEach(t=>{propCounts[t.property]=(propCounts[t.property]||0)+1;});
-  sortedVd.forEach((t,i)=>{
-    const p=getProp(t.property);const nc=getNbCls(t.property);const nb=getNb(t.property);const sh=p?p.name.split(' - ').pop():t.property;
-    const nbName=nb?nb.name:'Other';
-    // Neighborhood header when neighborhood changes
-    if(nbName!==lastNb){
-      if(lastProp&&propCounts[lastProp]>1) th+=`</div>`; // close previous property group
-      if(lastNb) th+=`</div>`; // close previous neighborhood section
-      th+=`<div class="vd-nb-section" style="margin-bottom:2px">`;
-      th+=`<div class="vd-nb-hdr nb-${nc}-h" style="display:flex;align-items:center;gap:8px;padding:6px 0 4px;border-bottom:2px solid;margin-bottom:6px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px">${nbName}</div>`;
-      lastNb=nbName;lastProp='';
-    }
-    // Property sub-group container when property changes and has multiple tasks
-    if(t.property!==lastProp){
-      if(lastProp&&propCounts[lastProp]>1) th+=`</div>`; // close previous property group
-      if(propCounts[t.property]>1){
-        th+=`<div style="background:rgba(0,0,0,.02);border-radius:8px;padding:6px 6px 6px 6px;margin-bottom:4px">`;
-        th+=`<div style="font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);padding:2px 8px 4px;display:flex;align-items:center;gap:6px"><span style="color:var(--${nc})">${sh}</span><span style="font-weight:400;letter-spacing:0;text-transform:none">${propCounts[t.property]} tasks</span></div>`;
-      }
-      lastProp=t.property;
-    }
-    th+=`<div class="tc nb-${nc}" style="cursor:pointer" onclick="closeModal('vendor-day-modal');openDetail('${t.id}')">
-      <div class="tc-top"><div class="tdot dot-${t.status}"></div><div class="tmain"><div class="tprop pl-${nc}">${sh}</div><div class="tprob">${t.problem}</div>
-      <div class="tmeta"><span class="badge b-${t.status}">${t.status.replace('_',' ')}</span>${t.urgent?'<span class="badge b-urgent">Urgent</span>':''}<span class="tmi">${t.category?t.category.replace('_',' '):''}</span></div></div></div></div>`;
-  });
-  if(lastProp&&propCounts[lastProp]>1) th+=`</div>`; // close last property group
-  if(lastNb) th+=`</div>`; // close last neighborhood section
-  document.getElementById('vd-tasks').innerHTML=th;
   document.getElementById('vendor-day-modal').classList.add('open');
 }
 async function renderMiniCal(pid){
@@ -1918,28 +1898,8 @@ async function renderDetailVendors(t,p){
   }
 
   function combinedCard(v,taskList){
-    let sms=buildMultiSMS(taskList,v,sheetUrl);
-    const tel=v.phone.replace(/\D/g,'');
-    const smsId='sms-combined-'+v.id;
-    const sorted=[...taskList].sort((a,b)=>{
-      const nbA=getNb(a.property),nbB=getNb(b.property);
-      const nA=nbA?nbA.name:'zzz',nB=nbB?nbB.name:'zzz';
-      if(nA!==nB)return nA.localeCompare(nB);
-      return(a.property||'').localeCompare(b.property||'');
-    });
-    const taskSummary=sorted.map(t=>{const p=getProp(t.property);return`<li>${p?p.name.split(' - ').pop():t.property}: ${t.problem}${t.urgent?' <span style="color:var(--red);font-weight:700">URGENT</span>':''}${t.purchaseNote?' <span style="color:#e65100;font-weight:600">&#x1F6D2; Buy: '+t.purchaseNote+'</span>':''}</li>`;}).join('');
-    return`<div class="combined-sms-banner">
-      <div class="combined-sms-hdr"><span class="combined-sms-title">Combined Message for ${v.name}</span><span class="combined-sms-count">${taskList.length} jobs</span></div>
-      <ul class="combined-sms-tasks">${taskSummary}</ul>
-      <div class="sms-box" style="margin-top:0">
-        <div class="sms-lbl">Ready-to-Send Combined Text</div>
-        <textarea class="sms-edit" id="${smsId}" style="min-height:200px">${sms.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
-        <div class="sms-acts">
-          <a id="${smsId}-link" href="sms:${tel}?body=${encodeURIComponent(sms)}" class="sms-btn sms-send" onclick="updateSmsLink('${smsId}','${tel}')">Open in Messages</a>
-          <button class="sms-btn sms-copy" onclick="copySms('${smsId}')">Copy Text</button>
-        </div>
-      </div>
-    </div>`;
+    // Reuse the global combinedVendorCard with the same redesigned layout
+    return combinedVendorCard(v,taskList,sheetUrl);
   }
 
   // If a vendor is assigned and they're in our list
@@ -2572,7 +2532,7 @@ function buildMultiSMS(taskList,v,sheetUrlParam){
   }
   return sms;
 }
-/* Render combined SMS card for a vendor with multiple same-day tasks */
+/* Render combined SMS card for a vendor with multiple same-day tasks (redesigned) */
 function combinedVendorCard(v,taskList,sheetUrl){
   // Sort tasks by neighborhood then property for grouped display
   const sorted=[...taskList].sort((a,b)=>{
@@ -2583,18 +2543,62 @@ function combinedVendorCard(v,taskList,sheetUrl){
   });
   const sms=buildMultiSMS(sorted,v,sheetUrl||'');const tel=v.phone.replace(/\D/g,'');
   const smsId='sms-combined-'+v.id;
-  const taskSummary=sorted.map(t=>{const p=getProp(t.property);return`<li>${p?p.name.split(' - ').pop():t.property}: ${t.problem}${t.urgent?' <span style="color:var(--red);font-weight:700">URGENT</span>':''}${t.purchaseNote?' <span style="color:#e65100;font-weight:600">&#x1F6D2; Buy: '+t.purchaseNote+'</span>':''}</li>`;}).join('');
-  return`<div class="combined-sms-banner">
-    <div class="combined-sms-hdr"><span class="combined-sms-title">Combined Message for ${v.name}</span><span class="combined-sms-count">${taskList.length} jobs</span></div>
-    <ul class="combined-sms-tasks">${taskSummary}</ul>
-    <div class="sms-box" style="margin-top:0">
-      <div class="sms-lbl">Ready-to-Send Combined Text</div>
-      <textarea class="sms-edit" id="${smsId}" style="min-height:200px">${sms.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
-      <div class="sms-acts">
-        <a id="${smsId}-link" href="sms:${tel}?body=${encodeURIComponent(sms)}" class="sms-btn sms-send" onclick="updateSmsLink('${smsId}','${tel}')">Open in Messages</a>
-        <button class="sms-btn sms-copy" onclick="copySms('${smsId}')">Copy Text</button>
+
+  // Group tasks by property
+  const propGroups={};const propOrder=[];
+  sorted.forEach(t=>{
+    if(!propGroups[t.property]){propGroups[t.property]=[];propOrder.push(t.property);}
+    propGroups[t.property].push(t);
+  });
+
+  // Build property-grouped task cards
+  let taskHtml='';
+  propOrder.forEach(pid=>{
+    const p=getProp(pid);const nc=getNbCls(pid);
+    const shortName=p?p.name.split(' - ').pop():pid;
+    taskHtml+=`<div class="cg-prop-group">`;
+    taskHtml+=`<div class="cg-prop-hdr" style="color:var(--${nc})">${shortName}</div>`;
+    propGroups[pid].forEach(t=>{
+      const isRoutine=!!t.recurring;
+      taskHtml+=`<div class="cg-task${isRoutine?' routine':''}" onclick="closeModal('vendor-day-modal');openDetail('${t.id}')">`;
+      taskHtml+=`<div class="cg-task-desc">${t.problem}${t.urgent?' <span style="color:var(--red);font-weight:700;font-size:.7rem">URGENT</span>':''}</div>`;
+      if(t.purchaseNote)taskHtml+=`<span class="cg-task-purchase">Buy: ${t.purchaseNote}</span>`;
+      taskHtml+=`</div>`;
+    });
+    taskHtml+=`</div>`;
+  });
+
+  // Build send row + collapsible message preview
+  const escapedSms=sms.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const sendHtml=`
+    <div class="cg-send-row">
+      <div class="cg-send-main">
+        <a id="${smsId}-link" href="sms:${tel}?body=${encodeURIComponent(sms)}" class="cg-send-btn" onclick="updateSmsLink('${smsId}','${tel}')">
+          <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg>
+          Send Job Sheet
+        </a>
+        <span class="cg-send-status">Not yet sent</span>
       </div>
+      <button class="cg-send-edit" onclick="const b=this.closest('.combined-sms-banner');const m=b.querySelector('.cg-msg-body');const t=b.querySelector('.cg-msg-toggle');m.classList.toggle('open');t.classList.toggle('open')">Preview & edit</button>
     </div>
+    <button class="cg-msg-toggle" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
+      <span class="cg-msg-toggle-label">Message Preview</span>
+      <span class="cg-msg-toggle-arrow">&#x25BC;</span>
+    </button>
+    <div class="cg-msg-body">
+      <div class="sms-box" style="margin-top:3px">
+        <textarea class="sms-edit" id="${smsId}" style="min-height:100px">${escapedSms}</textarea>
+        <div class="sms-acts">
+          <a href="sms:${tel}?body=${encodeURIComponent(sms)}" class="sms-btn sms-send" onclick="updateSmsLink('${smsId}','${tel}')">Send Job Sheet</a>
+          <button class="sms-btn sms-copy" onclick="copySms('${smsId}')">Copy Text</button>
+        </div>
+      </div>
+    </div>`;
+
+  return`<div class="combined-sms-banner">
+    <div class="cg-section-label">Tasks</div>
+    ${taskHtml}
+    ${sendHtml}
   </div>`;
 }
 function renderNotes(t){

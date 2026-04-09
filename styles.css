@@ -379,13 +379,71 @@ textarea{resize:vertical;min-height:76px}
 .vg-mt-prop{font-weight:700;text-transform:uppercase;font-size:.55rem;letter-spacing:.3px;opacity:.85}
 
 /* COMBINED SMS PANEL (detail modal) */
-.combined-sms-banner{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px}
-.combined-sms-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
-.combined-sms-title{font-size:.72rem;text-transform:uppercase;letter-spacing:1.5px;color:var(--text2);font-weight:700}
-.combined-sms-count{font-size:.67rem;background:var(--green);color:#fff;border-radius:12px;padding:2px 9px;font-weight:600}
-.combined-sms-tasks{font-size:.77rem;color:var(--text2);margin-bottom:10px;line-height:1.5;padding:0}
-.combined-sms-tasks li{margin-bottom:2px;list-style:none;padding-left:12px;position:relative}
-.combined-sms-tasks li:before{content:"\2022";position:absolute;left:0;color:var(--green);font-weight:700}
+/* ── COMBINED TASK SHEET (redesigned) ── */
+.combined-sms-banner{margin-bottom:10px}
+
+/* Property groups */
+.cg-prop-group{border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:5px;background:var(--white)}
+.cg-prop-hdr{padding:6px 10px;background:var(--surface2);border-bottom:1px solid var(--border);font-size:.64rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px}
+.cg-task{padding:7px 10px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:2px;cursor:pointer;transition:background .1s}
+.cg-task:last-child{border-bottom:none}
+.cg-task:hover{background:var(--surface2)}
+.cg-task-desc{font-size:.8rem;font-weight:500;color:var(--text);line-height:1.35}
+.cg-task-detail{font-size:.7rem;color:var(--text2);line-height:1.35}
+.cg-task-purchase{display:inline-flex;align-items:center;gap:4px;font-size:.68rem;font-weight:600;color:#b8700a;background:rgba(255,149,0,.08);border:1px solid rgba(255,149,0,.25);padding:1px 8px;border-radius:4px;margin-top:2px;width:fit-content}
+.cg-task-purchase::before{content:'';display:inline-block;width:5px;height:5px;border-radius:50%;background:#ff9500;flex-shrink:0}
+/* Routine/recurring tasks — compact treatment */
+.cg-task.routine{padding:4px 10px;opacity:.6;flex-direction:row;align-items:center;gap:8px}
+.cg-task.routine .cg-task-desc{font-size:.72rem;font-weight:500;color:var(--text2)}
+.cg-task.routine .cg-task-detail{font-size:.64rem;color:var(--text3)}
+
+/* Send Job Sheet row */
+.cg-send-row{display:flex;gap:6px;align-items:center;margin:10px 0 6px;padding:8px 10px;background:var(--green-pale,#f2f7f4);border:1px solid var(--border);border-radius:8px}
+.cg-send-main{flex:1;display:flex;align-items:center;gap:6px}
+.cg-send-btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:7px;font-size:.78rem;font-weight:600;font-family:inherit;cursor:pointer;border:none;background:var(--green);color:#fff;transition:all .15s}
+.cg-send-btn:hover{background:var(--green-mid,#1a5240)}
+.cg-send-btn svg{width:14px;height:14px;fill:currentColor}
+.cg-send-status{font-size:.66rem;color:var(--text2)}
+.cg-send-edit{font-size:.66rem;color:var(--green-mid,#1a5240);cursor:pointer;background:none;border:none;font-family:inherit;font-weight:500;text-decoration:underline;text-underline-offset:2px;flex-shrink:0}
+.cg-send-edit:hover{color:var(--green)}
+
+/* Collapsible message preview */
+.cg-msg-toggle{display:flex;align-items:center;gap:5px;padding:5px 0;cursor:pointer;border:none;background:none;font-family:inherit;width:100%}
+.cg-msg-toggle-label{font-size:.68rem;text-transform:uppercase;letter-spacing:1px;color:var(--text2);font-weight:600}
+.cg-msg-toggle-arrow{font-size:.5rem;color:var(--text3);transition:transform .2s}
+.cg-msg-toggle.open .cg-msg-toggle-arrow{transform:rotate(180deg)}
+.cg-msg-body{display:none;animation:cgFadeIn .15s}
+.cg-msg-body.open{display:block}
+@keyframes cgFadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+
+/* Contact row */
+.cg-contact-row{display:flex;gap:5px;margin-bottom:10px}
+.cg-contact-btn{display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:7px;font-size:.72rem;font-weight:600;font-family:inherit;cursor:pointer;text-decoration:none;border:none;transition:all .15s}
+.cg-contact-btn.cg-primary{background:var(--green);color:#fff}
+.cg-contact-btn.cg-primary:hover{background:var(--green-mid,#1a5240)}
+.cg-contact-btn.cg-secondary{background:var(--surface2);color:var(--green);border:1.5px solid var(--border)}
+.cg-contact-btn.cg-secondary:hover{background:var(--green-light,#e8f0ec)}
+.cg-contact-btn svg{width:13px;height:13px;fill:currentColor}
+
+/* Section label with line */
+.cg-section-label{font-size:.62rem;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3);font-weight:700;margin:10px 0 6px;display:flex;align-items:center;gap:8px}
+.cg-section-label::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* Mobile overrides */
+@media(max-width:480px){
+  .cg-contact-row{flex-direction:column}
+  .cg-contact-btn{justify-content:center;width:100%;padding:8px 10px}
+  .cg-send-row{flex-direction:column;align-items:stretch;gap:8px}
+  .cg-send-main{justify-content:space-between}
+  .cg-send-btn{flex:1;justify-content:center;padding:10px 14px}
+  .cg-send-edit{text-align:center;padding:4px 0}
+}
+
+/* Legacy classes kept for backward compat */
+.combined-sms-hdr{display:none}
+.combined-sms-tasks{display:none}
+.combined-sms-count{display:none}
+.combined-sms-title{display:none}
 
 /* NOTES */
 .notes{display:flex;flex-direction:column;gap:4px;margin-bottom:6px;max-height:160px;overflow-y:auto;scrollbar-width:thin}
