@@ -6648,16 +6648,21 @@ function ppRender() {
   const listWrap = document.getElementById('pp-list-wrap');
   const detailWrap = document.getElementById('pp-detail-wrap');
   const inboxWrap = document.getElementById('pp-inbox-wrap');
+  const invWrap = document.getElementById('pp-inv-wrap');
   if (!listWrap) return;
   listWrap.style.display = ppTab === 'list' ? '' : 'none';
   detailWrap.style.display = ppTab === 'detail' ? '' : 'none';
   inboxWrap.style.display = ppTab === 'inbox' ? '' : 'none';
+  if (invWrap) invWrap.style.display = ppTab === 'inventory' ? '' : 'none';
   // Update tab buttons
   const tabList = document.getElementById('pp-tab-list');
   const tabInbox = document.getElementById('pp-tab-inbox');
+  const tabInv = document.getElementById('pp-tab-inv');
   if (tabList && tabInbox) {
-    tabList.classList.toggle('active', ppTab !== 'inbox');
+    // Cabins tab is active in 'list' and 'detail' (drill-down) modes
+    tabList.classList.toggle('active', ppTab === 'list' || ppTab === 'detail');
     tabInbox.classList.toggle('active', ppTab === 'inbox');
+    if (tabInv) tabInv.classList.toggle('active', ppTab === 'inventory');
   }
   const inboxCount = ppInboxCount();
   const badge = document.getElementById('pp-inbox-badge');
@@ -6666,6 +6671,7 @@ function ppRender() {
   if (ppTab === 'list') ppRenderList();
   else if (ppTab === 'detail') ppRenderDetail();
   else if (ppTab === 'inbox') ppRenderInbox();
+  else if (ppTab === 'inventory') ppRenderInventory();
 }
 
 function ppSwitchTab(tab) {
@@ -6692,12 +6698,22 @@ function ppRenderList() {
       const gapCount = (p._gaps || []).length;
       const issueCount = (p.outstanding_issues || []).filter((i) => i.status === 'imported' || i.status === 'imported_for_promotion').length;
       const appProp = getProp(pid);
+      // Backup-key status dot (admin tier only)
+      let keyDot = '';
+      if (ppCanSee('admin')) {
+        const kStatus = p && p.access && p.access.exterior_backup_key && p.access.exterior_backup_key.status;
+        // unknown/missing both render red (same urgency)
+        const kCls = kStatus === 'ok' ? 'ok' : (kStatus ? 'warn' : 'bad');
+        const kLabel = kStatus || 'unknown';
+        keyDot = `<span class="pp-card-stat key ${kCls}" title="Exterior backup key: ${ppEsc(kLabel)}">🔑 ${ppEsc(kLabel)}</span>`;
+      }
       html += `<div class="pp-card nb-${nb.cls}" onclick="ppOpenDetail('${pid}')">`;
       html += `<div class="pp-card-title">${ppEsc(p.property_name || (appProp && appProp.name) || pid)}</div>`;
       html += `<div class="pp-card-sub">${ppEsc(p.address || (appProp && appProp.address) || '')}</div>`;
       html += `<div class="pp-card-stats">`;
       html += `<span class="pp-card-stat ${gapCount ? 'gap' : 'ok'}">${gapCount ? '⚠' : '✓'} ${gapCount} gap${gapCount === 1 ? '' : 's'}</span>`;
       html += `<span class="pp-card-stat ${issueCount ? 'issue' : 'ok'}">${issueCount ? '!' : '✓'} ${issueCount} issue${issueCount === 1 ? '' : 's'}</span>`;
+      html += keyDot;
       html += `</div></div>`;
     });
     html += `</div></div>`;
@@ -7061,6 +7077,238 @@ async function ppDismissIssue(pid, issueId) {
   await ppSave('se_pp_log', PP_LOG);
   if (typeof showToast === 'function') showToast('Dismissed');
 }
+
+// ─── Filter Inventory sub-tab (Deploy 3) ──────────────────────────
+// Portfolio matrix of filter stock per cabin, grouped by neighborhood.
+// Reads hvac.filter_supply.current_inventory from each profile.
+// Null counts are assumed 0 (red) until a vendor confirms on-site.
+// Click any cell to record a count manually (owner edit path).
+
+function ppInvGetLocation(p) {
+  // Returns the filter storage location string for a cabin, resolving
+  // shared stashes via stash_id when the local on_site_location is null.
+  const fs = (p && p.hvac && p.hvac.filter_supply) || null;
+  if (!fs) return null;
+  if (fs.on_site_location) return fs.on_site_location;
+  if (fs.stash_id && PP_STASHES && PP_STASHES[fs.stash_id]) {
+    const stash = PP_STASHES[fs.stash_id];
+    return stash.location || stash.on_site_location || null;
+  }
+  return null;
+}
+
+function ppRenderInventory() {
+  const wrap = document.getElementById('pp-inv-wrap');
+  if (!wrap) return;
+  if (!PP || !Object.keys(PP).length) {
+    wrap.innerHTML = '<div class="pp-empty">No property profiles loaded yet.</div>';
+    return;
+  }
+
+  // Portfolio-wide stats
+  let totalSlots = 0, confirmedCount = 0, outOfStock = 0;
+  Object.values(PP).forEach((p) => {
+    const inv = (p.hvac && p.hvac.filter_supply && p.hvac.filter_supply.current_inventory) || {};
+    Object.keys(inv).forEach((size) => {
+      totalSlots++;
+      const v = inv[size];
+      if (v != null) confirmedCount++;
+      const count = v == null ? 0 : v;
+      if (count === 0) outOfStock++;
+    });
+  });
+
+  let h = '';
+  h += `<div style="font-size:.78rem;color:var(--text2);line-height:1.5;margin-bottom:14px">Portfolio filter stock by cabin. Cells assumed <b style="color:var(--red)">0</b> until a vendor confirms on-site during a filter-change task. Click any cell to record a count manually.</div>`;
+
+  h += `<div class="pp-inv-summary">`;
+  h += `<div class="pp-inv-stat"><div class="k">Total slots</div><div class="v">${totalSlots}</div></div>`;
+  h += `<div class="pp-inv-stat"><div class="k">Confirmed counts</div><div class="v ok">${confirmedCount}</div><div class="sub">of ${totalSlots}</div></div>`;
+  h += `<div class="pp-inv-stat"><div class="k">Out of stock</div><div class="v bad">${outOfStock}</div><div class="sub">slots at 0</div></div>`;
+  h += `</div>`;
+
+  // Per-neighborhood matrices (matches ppRenderList grouping)
+  NBS.forEach((nb) => {
+    const cabinsInNb = nb.props.filter((pid) => PP[pid]);
+    if (!cabinsInNb.length) return;
+
+    // Collect unique sizes used across this neighborhood
+    const sizesSet = new Set();
+    cabinsInNb.forEach((pid) => {
+      const inv = (PP[pid].hvac && PP[pid].hvac.filter_supply && PP[pid].hvac.filter_supply.current_inventory) || {};
+      Object.keys(inv).forEach((s) => sizesSet.add(s));
+    });
+    if (!sizesSet.size) return;
+    const sizes = Array.from(sizesSet).sort();
+
+    h += `<div class="pp-inv-group nb-${nb.cls}">`;
+    h += `<h3>${ppEsc(nb.name)} <span class="sub">— ${ppEsc(nb.sub || '')}</span></h3>`;
+    h += `<div class="pp-inv-scroll"><table class="pp-inv-table"><thead><tr>`;
+    h += `<th class="size-head">Size</th>`;
+    cabinsInNb.forEach((pid) => {
+      const p = PP[pid];
+      const name = p.property_name || pid;
+      h += `<th class="cabin-head" title="${ppEsc(name)}">${ppEsc(name)}</th>`;
+    });
+    h += `</tr></thead><tbody>`;
+
+    sizes.forEach((size) => {
+      h += `<tr><td class="size-head">${ppEsc(size.replace('x','×'))}</td>`;
+      cabinsInNb.forEach((pid) => {
+        const inv = (PP[pid].hvac && PP[pid].hvac.filter_supply && PP[pid].hvac.filter_supply.current_inventory) || {};
+        if (!(size in inv)) {
+          h += `<td class="pp-inv-cell na" title="size not used at this cabin">—</td>`;
+          return;
+        }
+        const v = inv[size];
+        const confirmed = v != null;
+        const count = v == null ? 0 : v;
+        let cls;
+        if (!confirmed) cls = 'out';
+        else if (count === 0) cls = 'out';
+        else if (count <= 2) cls = 'low';
+        else cls = 'ok';
+        const title = confirmed
+          ? `Confirmed: ${count} on hand`
+          : 'Unmeasured — assumed 0 until vendor confirms';
+        h += `<td class="pp-inv-cell ${cls}" onclick="ppInvEditCell(event,'${pid}','${ppEsc(size)}')" title="${title}">${count}</td>`;
+      });
+      h += `</tr>`;
+    });
+    h += `</tbody></table></div></div>`;
+  });
+
+  // Legend
+  h += `<div class="pp-inv-legend">`;
+  h += `<span><i class="dot ok"></i> in stock (confirmed)</span>`;
+  h += `<span><i class="dot low"></i> low (1–2)</span>`;
+  h += `<span><i class="dot out"></i> out / unmeasured (assumed 0)</span>`;
+  h += `<span><i class="dot na"></i> size not used at cabin</span>`;
+  h += `</div>`;
+
+  wrap.innerHTML = h;
+}
+
+// Owner edit popover for matrix cells. Saves to se_pp + se_pp_log.
+function ppInvEditCell(ev, pid, size) {
+  if (ev && ev.stopPropagation) ev.stopPropagation();
+  const cell = ev && ev.currentTarget;
+  const p = PP[pid];
+  if (!p || !p.hvac || !p.hvac.filter_supply) return;
+
+  // Close any existing popover
+  const existing = document.getElementById('pp-inv-pop');
+  if (existing) existing.remove();
+
+  const inv = p.hvac.filter_supply.current_inventory || {};
+  const v = inv[size];
+  const currentCount = v == null ? '' : v;
+  const confirmed = v != null;
+  const storageLoc = ppInvGetLocation(p);
+  const cabinName = p.property_name || pid;
+
+  const pop = document.createElement('div');
+  pop.id = 'pp-inv-pop';
+  pop.className = 'pp-inv-pop';
+  const storageHtml = storageLoc
+    ? `<div class="pp-inv-pop-stash"><b>Filter storage:</b> ${ppEsc(storageLoc)}</div>`
+    : `<div class="pp-inv-pop-stash missing">No filter storage location recorded yet — vendor will capture on first filter visit.</div>`;
+  pop.innerHTML =
+    `<div class="pp-inv-pop-title">${ppEsc(cabinName)} — ${ppEsc(size.replace('x','×'))}</div>` +
+    storageHtml +
+    `<label>Count on hand</label>` +
+    `<input type="number" id="pp-inv-pop-count" min="0" value="${currentCount}" placeholder="${confirmed ? '' : 'assumed 0'}">` +
+    `<label>Note (optional)</label>` +
+    `<textarea id="pp-inv-pop-note" placeholder="e.g. restocked from Costco trip"></textarea>` +
+    `<div class="pp-inv-pop-actions">` +
+      `<button class="btn" onclick="document.getElementById('pp-inv-pop').remove()">Cancel</button>` +
+      `<button class="btn btn-g" onclick="ppInvSaveCell('${pid}','${ppEsc(size)}')">Save</button>` +
+    `</div>`;
+  document.body.appendChild(pop);
+
+  // Position near the clicked cell, clamped to viewport
+  if (cell) {
+    const rect = cell.getBoundingClientRect();
+    const popW = 280;
+    let left = rect.left + window.scrollX;
+    if (left + popW > window.innerWidth - 12) left = window.innerWidth - popW - 12;
+    pop.style.top = (rect.bottom + window.scrollY + 6) + 'px';
+    pop.style.left = left + 'px';
+  } else {
+    pop.style.top = '100px';
+    pop.style.left = '50%';
+    pop.style.transform = 'translateX(-50%)';
+  }
+
+  // Focus the count field
+  setTimeout(() => {
+    const inp = document.getElementById('pp-inv-pop-count');
+    if (inp) { inp.focus(); inp.select(); }
+  }, 0);
+
+  // Close on outside click
+  setTimeout(() => {
+    document.addEventListener('click', ppInvPopOutsideClick, { once: false });
+  }, 0);
+}
+
+function ppInvPopOutsideClick(e) {
+  const pop = document.getElementById('pp-inv-pop');
+  if (!pop) {
+    document.removeEventListener('click', ppInvPopOutsideClick);
+    return;
+  }
+  if (pop.contains(e.target)) return;
+  // Ignore clicks on matrix cells (they re-open the popover themselves)
+  if (e.target.closest && e.target.closest('.pp-inv-cell')) return;
+  pop.remove();
+  document.removeEventListener('click', ppInvPopOutsideClick);
+}
+
+async function ppInvSaveCell(pid, size) {
+  const p = PP[pid];
+  if (!p || !p.hvac || !p.hvac.filter_supply) return;
+  const inp = document.getElementById('pp-inv-pop-count');
+  const noteEl = document.getElementById('pp-inv-pop-note');
+  if (!inp) return;
+  const raw = (inp.value || '').trim();
+  if (raw === '') { document.getElementById('pp-inv-pop').remove(); return; }
+  const newCount = parseInt(raw, 10);
+  if (isNaN(newCount) || newCount < 0) {
+    if (typeof showToast === 'function') showToast('❌ Invalid count');
+    return;
+  }
+  const note = (noteEl && noteEl.value || '').trim();
+
+  if (!p.hvac.filter_supply.current_inventory) p.hvac.filter_supply.current_inventory = {};
+  const prev = p.hvac.filter_supply.current_inventory[size];
+  p.hvac.filter_supply.current_inventory[size] = newCount;
+  p.last_updated = new Date().toISOString().slice(0, 10);
+  p.last_updated_by = 'chip';
+
+  if (!Array.isArray(PP_LOG)) PP_LOG = [];
+  PP_LOG.push({
+    timestamp: new Date().toISOString(),
+    property_id: pid,
+    path: 'hvac.filter_supply.current_inventory.' + size,
+    prev_value: prev == null ? null : prev,
+    new_value: newCount,
+    source: 'owner_inventory_edit',
+    note: note || null,
+    by: 'chip',
+  });
+
+  const okPp = await ppSave('se_pp', PP);
+  const okLog = await ppSave('se_pp_log', PP_LOG);
+  const popEl = document.getElementById('pp-inv-pop');
+  if (popEl) popEl.remove();
+  document.removeEventListener('click', ppInvPopOutsideClick);
+  if (okPp && okLog && typeof showToast === 'function') {
+    showToast(`✓ ${size.replace('x','×')} count saved: ${newCount}`);
+  }
+  ppRenderInventory();
+}
+// ─── end Filter Inventory sub-tab ─────────────────────────────────
 
 function ppInboxCount() {
   if (!PP) return 0;
