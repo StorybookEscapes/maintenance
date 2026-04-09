@@ -30,6 +30,7 @@
       <button class="nav-btn" onclick="switchView('vendors',this)">Vendors</button>
       <button class="nav-btn" onclick="switchView('cleaning',this)">Cleaning</button>
       <button class="nav-btn" onclick="switchView('replacements',this)">Replacements</button>
+      <button class="nav-btn" onclick="switchView('properties',this)">Properties</button>
       <button class="nav-btn" onclick="switchView('settings',this)">Settings</button>
     </div>
     <div class="hactions">
@@ -145,6 +146,20 @@
       </div>
       <div id="vendor-dir"></div>
     </div>
+
+    <div class="view" id="view-properties">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+        <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--green);font-weight:600">Property Bible</h2>
+        <div class="pp-tabs">
+          <button class="pp-tab active" id="pp-tab-list" onclick="ppSwitchTab('list')">Cabins</button>
+          <button class="pp-tab" id="pp-tab-inbox" onclick="ppSwitchTab('inbox')">Needs Attention <span class="pp-badge" id="pp-inbox-badge">0</span></button>
+        </div>
+      </div>
+      <div id="pp-list-wrap"></div>
+      <div id="pp-detail-wrap" style="display:none"></div>
+      <div id="pp-inbox-wrap" style="display:none"></div>
+    </div>
+
     <div class="view" id="view-settings">
       <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--green);font-weight:600;margin-bottom:18px">Settings</h2>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px">

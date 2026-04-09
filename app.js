@@ -267,6 +267,8 @@ function switchView(name,btn){
   if (name === 'cleaning' && !clLoaded && !clFetching) clFetch();
   // Refresh replacements view when switching to it
   if (name === 'replacements') renderReplacements();
+  // Property Bible (Deploy 1) — lazy load on first open
+  if (name === 'properties' && typeof ppLoadIfNeeded === 'function') ppLoadIfNeeded();
 }
 // Navigate to Recurring view without a nav button (it's been removed from the main nav)
 function goToRecurring(){switchView('recurring');window.scrollTo(0,0);}
@@ -6518,3 +6520,584 @@ function cvBackToOverview() {
   const topEl = document.getElementById('cv-summary');
   if (topEl) topEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+
+// ════════════════════════════════════════════════════════════════
+// ═══════════════  PROPERTY BIBLE — Deploy 1  ════════════════════
+// ════════════════════════════════════════════════════════════════
+// KV keys:
+//   se_pp         → { [propertyId]: profile }  (18 cabins)
+//   se_pp_stashes → { [stashId]: stash }
+//   se_pp_log     → append-only array of change records
+//
+// Visibility tiers are encoded at the SECTION level in the schema doc.
+// Deploy 1 hard-codes the current role to 'admin' so Chip sees every
+// field. When Deploy 2 introduces real vendors, flip PP_ROLE via the
+// auth layer and the same render code will filter automatically.
+const PP_ROLE = 'admin'; // 'admin' | 'operator' | 'vendor'
+const PP_VIS_ORDER = { admin: 3, operator: 2, vendor: 1 };
+function ppCanSee(tier) {
+  return (PP_VIS_ORDER[PP_ROLE] || 0) >= (PP_VIS_ORDER[tier] || 0);
+}
+// Per-section visibility — matches property-profile-schema.md v0.1
+const PP_SECTION_VIS = {
+  connected_properties: 'vendor',
+  access: 'operator',
+  hvac: 'vendor',
+  appliances: 'vendor',
+  utilities: 'vendor',
+  safety: 'vendor',
+  outstanding_issues: 'admin',
+};
+// Fields within `access` that are admin-only (never leak to vendors even inside an operator-tier section)
+const PP_ADMIN_PATHS = [
+  'access.front_door.code',
+  'access.exterior_backup_key.combo',
+  'access.exterior_backup_key.location',
+  'access.exterior_backup_key.last_verified',
+  'access.exterior_backup_key.status',
+  'access.exterior_backup_key.currently_holds_keys_for_other_cabins',
+  'access.interior_master_key.combo',
+  'access.interior_master_key.location',
+  'access.interior_master_key.last_verified',
+];
+function ppPathIsAdmin(path) {
+  return PP_ADMIN_PATHS.some((p) => path === p || path.startsWith(p + '.'));
+}
+
+let PP = null;
+let PP_STASHES = null;
+let PP_LOG = null;
+let ppLoaded = false;
+let ppLoading = false;
+let ppCurrentId = null;
+let ppTab = 'list'; // list | detail | inbox
+let ppEditingPath = null;
+
+function ppEsc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function ppHumanLabel(key) {
+  return String(key).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+function ppGetPath(obj, path) {
+  return path.split('.').reduce((o, k) => {
+    if (o == null) return undefined;
+    if (/^\d+$/.test(k)) return o[parseInt(k, 10)];
+    return o[k];
+  }, obj);
+}
+function ppSetPath(obj, path, val) {
+  const keys = path.split('.');
+  let o = obj;
+  for (let i = 0; i < keys.length - 1; i++) {
+    const k = keys[i];
+    const nextKey = keys[i + 1];
+    if (o[k] == null) o[k] = /^\d+$/.test(nextKey) ? [] : {};
+    o = /^\d+$/.test(k) ? o[parseInt(k, 10)] : o[k];
+  }
+  const last = keys[keys.length - 1];
+  if (/^\d+$/.test(last)) o[parseInt(last, 10)] = val;
+  else o[last] = val;
+}
+
+async function ppLoadIfNeeded() {
+  if (ppLoaded || ppLoading) {
+    if (ppLoaded) ppRender();
+    return;
+  }
+  ppLoading = true;
+  const wrap = document.getElementById('pp-list-wrap');
+  if (wrap) wrap.innerHTML = '<div class="pp-empty">Loading Property Bible…</div>';
+  try {
+    const [pp, stashes, log] = await Promise.all([S.get('se_pp'), S.get('se_pp_stashes'), S.get('se_pp_log')]);
+    PP = pp && pp.value ? JSON.parse(pp.value) : {};
+    PP_STASHES = stashes && stashes.value ? JSON.parse(stashes.value) : {};
+    PP_LOG = log && log.value ? JSON.parse(log.value) : [];
+    if (!Array.isArray(PP_LOG)) PP_LOG = [];
+    ppLoaded = true;
+  } catch (e) {
+    console.error('[pp] load failed', e);
+    if (wrap) wrap.innerHTML = '<div class="pp-empty">Failed to load Property Bible. Check your connection.</div>';
+    ppLoading = false;
+    return;
+  }
+  ppLoading = false;
+  ppRender();
+}
+
+async function ppSave(key, value) {
+  try {
+    await S.set(key, JSON.stringify(value));
+    return true;
+  } catch (e) {
+    console.error('[pp] save failed', key, e);
+    if (typeof showToast === 'function') showToast('❌ Property save failed','','',5000);
+    return false;
+  }
+}
+
+function ppRender() {
+  const listWrap = document.getElementById('pp-list-wrap');
+  const detailWrap = document.getElementById('pp-detail-wrap');
+  const inboxWrap = document.getElementById('pp-inbox-wrap');
+  if (!listWrap) return;
+  listWrap.style.display = ppTab === 'list' ? '' : 'none';
+  detailWrap.style.display = ppTab === 'detail' ? '' : 'none';
+  inboxWrap.style.display = ppTab === 'inbox' ? '' : 'none';
+  // Update tab buttons
+  const tabList = document.getElementById('pp-tab-list');
+  const tabInbox = document.getElementById('pp-tab-inbox');
+  if (tabList && tabInbox) {
+    tabList.classList.toggle('active', ppTab !== 'inbox');
+    tabInbox.classList.toggle('active', ppTab === 'inbox');
+  }
+  const inboxCount = ppInboxCount();
+  const badge = document.getElementById('pp-inbox-badge');
+  if (badge) badge.textContent = inboxCount;
+
+  if (ppTab === 'list') ppRenderList();
+  else if (ppTab === 'detail') ppRenderDetail();
+  else if (ppTab === 'inbox') ppRenderInbox();
+}
+
+function ppSwitchTab(tab) {
+  ppTab = tab;
+  if (tab !== 'detail') ppCurrentId = null;
+  ppRender();
+}
+
+function ppRenderList() {
+  const wrap = document.getElementById('pp-list-wrap');
+  if (!PP || !Object.keys(PP).length) {
+    wrap.innerHTML = '<div class="pp-empty">No property profiles loaded yet. Run the import script: <code>node import-property-bible.js --token=…</code></div>';
+    return;
+  }
+  let html = '';
+  NBS.forEach((nb) => {
+    const cabinsInNb = nb.props.filter((pid) => PP[pid]);
+    if (!cabinsInNb.length) return;
+    html += `<div style="margin-bottom:22px">`;
+    html += `<h3 style="font-family:'Cormorant Garamond',serif;font-size:1.1rem;color:var(--green);margin-bottom:10px;font-weight:600">${ppEsc(nb.name)} <span style="font-size:.72rem;color:var(--text3);font-weight:400">— ${ppEsc(nb.sub)}</span></h3>`;
+    html += `<div class="pp-list">`;
+    cabinsInNb.forEach((pid) => {
+      const p = PP[pid];
+      const gapCount = (p._gaps || []).length;
+      const issueCount = (p.outstanding_issues || []).filter((i) => i.status === 'imported' || i.status === 'imported_for_promotion').length;
+      const appProp = getProp(pid);
+      html += `<div class="pp-card nb-${nb.cls}" onclick="ppOpenDetail('${pid}')">`;
+      html += `<div class="pp-card-title">${ppEsc(p.property_name || (appProp && appProp.name) || pid)}</div>`;
+      html += `<div class="pp-card-sub">${ppEsc(p.address || (appProp && appProp.address) || '')}</div>`;
+      html += `<div class="pp-card-stats">`;
+      html += `<span class="pp-card-stat ${gapCount ? 'gap' : 'ok'}">${gapCount ? '⚠' : '✓'} ${gapCount} gap${gapCount === 1 ? '' : 's'}</span>`;
+      html += `<span class="pp-card-stat ${issueCount ? 'issue' : 'ok'}">${issueCount ? '!' : '✓'} ${issueCount} issue${issueCount === 1 ? '' : 's'}</span>`;
+      html += `</div></div>`;
+    });
+    html += `</div></div>`;
+  });
+  wrap.innerHTML = html;
+}
+
+function ppOpenDetail(pid) {
+  ppCurrentId = pid;
+  ppTab = 'detail';
+  ppEditingPath = null;
+  ppRender();
+  window.scrollTo(0, 0);
+}
+
+function ppRenderDetail() {
+  const wrap = document.getElementById('pp-detail-wrap');
+  const p = PP && PP[ppCurrentId];
+  if (!p) {
+    wrap.innerHTML = '<div class="pp-empty">Profile not found.</div>';
+    return;
+  }
+  const appProp = getProp(ppCurrentId);
+  const activeIssues = (p.outstanding_issues || []).filter((i) => i.status === 'imported' || i.status === 'imported_for_promotion');
+  const resolvedIssues = (p.outstanding_issues || []).filter((i) => i.status === 'promoted' || i.status === 'dismissed');
+
+  let h = '<div class="pp-detail">';
+  h += `<button class="pp-back" onclick="ppSwitchTab('list')">← Back to cabins</button>`;
+  h += `<div class="pp-header">`;
+  h += `<h2>${ppEsc(p.property_name || (appProp && appProp.name) || ppCurrentId)}</h2>`;
+  h += `<div class="pp-addr">${ppEsc(p.address || (appProp && appProp.address) || '')}</div>`;
+  h += `<div class="pp-meta">Schema v${ppEsc(p.schema_version || '0.1')} · Last updated ${ppEsc(p.last_updated || '—')}${p.last_updated_by ? ' by ' + ppEsc(p.last_updated_by) : ''}</div>`;
+  h += `</div>`;
+
+  // Inline gaps banner
+  if ((p._gaps || []).length) {
+    h += `<div class="pp-gap-banner"><h4>⚠ ${p._gaps.length} Data Gap${p._gaps.length === 1 ? '' : 's'}</h4><ul>`;
+    p._gaps.forEach((g) => { h += `<li>${ppEsc(g)}</li>`; });
+    h += `</ul></div>`;
+  }
+
+  // Inline outstanding issues
+  if (activeIssues.length) {
+    h += `<div class="pp-issue-banner"><h4>! ${activeIssues.length} Outstanding Issue${activeIssues.length === 1 ? '' : 's'}</h4>`;
+    activeIssues.forEach((iss) => { h += ppRenderIssue(iss); });
+    h += `</div>`;
+  }
+  if (resolvedIssues.length) {
+    h += `<details style="margin-bottom:14px"><summary style="cursor:pointer;font-size:.74rem;color:var(--text3);padding:6px 0">Show ${resolvedIssues.length} resolved/dismissed issue${resolvedIssues.length === 1 ? '' : 's'}</summary><div class="pp-issue-banner" style="background:var(--surface2);border-color:var(--border)">`;
+    resolvedIssues.forEach((iss) => { h += ppRenderIssue(iss); });
+    h += `</div></details>`;
+  }
+
+  // Sections — render every top-level key except the handled-inline ones
+  const SKIP = new Set(['property_id', 'property_name', 'address', 'last_updated', 'last_updated_by', 'schema_version', '_gaps', '_notes', 'outstanding_issues', 'is_parent_listing']);
+  const ORDER = ['neighborhood', 'resort_position', 'square_footage', 'bedrooms', 'bathrooms', 'max_occupancy', 'theme', 'connected_properties', 'access', 'hvac', 'appliances', 'utilities', 'safety'];
+  const orderedKeys = ORDER.filter((k) => k in p).concat(Object.keys(p).filter((k) => !ORDER.includes(k) && !SKIP.has(k)));
+  const simpleTopLevel = [];
+  orderedKeys.forEach((k) => {
+    const v = p[k];
+    if (v === null || typeof v !== 'object') simpleTopLevel.push(k);
+  });
+
+  if (simpleTopLevel.length) {
+    h += `<div class="pp-section"><div class="pp-section-head" onclick="this.parentNode.classList.toggle('collapsed')"><h3>Overview</h3><span class="caret">▾</span></div><div class="pp-section-body">`;
+    simpleTopLevel.forEach((k) => { h += ppFieldHtml(k, p[k], k, 'vendor'); });
+    h += `</div></div>`;
+  }
+
+  orderedKeys.forEach((k) => {
+    const v = p[k];
+    if (v === null || typeof v !== 'object') return;
+    const tier = PP_SECTION_VIS[k] || 'vendor';
+    if (!ppCanSee(tier)) return;
+    h += ppRenderSection(k, v, k, tier);
+  });
+
+  // Notes
+  if (p._notes) {
+    h += `<div class="pp-section"><div class="pp-section-head" onclick="this.parentNode.classList.toggle('collapsed')"><h3>Admin Notes</h3><span class="caret">▾</span></div><div class="pp-section-body">`;
+    h += ppFieldHtml('_notes', p._notes, '_notes', 'admin');
+    h += `</div></div>`;
+  }
+
+  h += '</div>';
+  wrap.innerHTML = h;
+  if (ppEditingPath) ppStartEdit(ppEditingPath, true);
+}
+
+function ppRenderSection(title, data, path, tier) {
+  const label = ppHumanLabel(title);
+  const visTag = `<span class="pp-visibility-tag pp-vis-${tier}">${tier}</span>`;
+  let h = `<div class="pp-section"><div class="pp-section-head" onclick="this.parentNode.classList.toggle('collapsed')"><h3>${ppEsc(label)} ${visTag}</h3><span class="caret">▾</span></div><div class="pp-section-body">`;
+  h += ppRenderNode(data, path, tier);
+  h += `</div></div>`;
+  return h;
+}
+
+function ppRenderNode(data, path, tier) {
+  if (data === null || data === undefined) return '<div class="pp-field-val unset">(empty)</div>';
+  if (Array.isArray(data)) {
+    if (!data.length) return '<div class="pp-field-val unset">(none)</div>';
+    // Special-case connected_properties — render as link chips
+    if (path === 'connected_properties') return ppRenderConnected(data);
+    let h = '';
+    data.forEach((item, idx) => {
+      const subpath = path + '.' + idx;
+      h += `<div class="pp-sub-item">`;
+      if (typeof item === 'object' && item !== null) {
+        h += ppRenderNode(item, subpath, tier);
+      } else {
+        h += ppFieldHtml('#' + (idx + 1), item, subpath, tier);
+      }
+      h += `</div>`;
+    });
+    return h;
+  }
+  if (typeof data === 'object') {
+    let h = '';
+    Object.keys(data).forEach((k) => {
+      const v = data[k];
+      const subpath = path + '.' + k;
+      // Hide admin-only paths when role can't see them
+      if (ppPathIsAdmin(subpath) && !ppCanSee('admin')) return;
+      if (v !== null && typeof v === 'object' && !Array.isArray(v)) {
+        // Nested object — render as sub-group
+        h += `<div class="pp-sub-title">${ppEsc(ppHumanLabel(k))}</div>`;
+        h += `<div class="pp-sub-list">${ppRenderNode(v, subpath, tier)}</div>`;
+      } else if (Array.isArray(v)) {
+        h += `<div class="pp-sub-title">${ppEsc(ppHumanLabel(k))}</div>`;
+        h += `<div class="pp-sub-list">${ppRenderNode(v, subpath, tier)}</div>`;
+      } else {
+        h += ppFieldHtml(k, v, subpath, tier);
+      }
+    });
+    return h;
+  }
+  // Scalar at root — wrap in a field
+  return ppFieldHtml(path.split('.').pop(), data, path, tier);
+}
+
+function ppRenderConnected(arr) {
+  let h = '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px">';
+  arr.forEach((rel) => {
+    const label = rel.relationship ? ppHumanLabel(rel.relationship) : 'connection';
+    if (rel.property_id) {
+      const target = PP && PP[rel.property_id];
+      const name = (target && target.property_name) || (getProp(rel.property_id) && getProp(rel.property_id).name) || rel.property_id;
+      h += `<span class="pp-conn" onclick="ppOpenDetail('${rel.property_id}')">${ppEsc(label)}: ${ppEsc(name)}</span>`;
+    } else if (Array.isArray(rel.property_ids)) {
+      h += `<div style="flex-basis:100%;font-size:.7rem;color:var(--text3);margin-top:4px">${ppEsc(label)}:</div>`;
+      rel.property_ids.forEach((pid) => {
+        if (pid === ppCurrentId) return;
+        const target = PP && PP[pid];
+        const name = (target && target.property_name) || (getProp(pid) && getProp(pid).name) || pid;
+        h += `<span class="pp-conn" onclick="ppOpenDetail('${pid}')">${ppEsc(name)}</span>`;
+      });
+    }
+    if (rel.notes) {
+      h += `<div style="flex-basis:100%;font-size:.72rem;color:var(--text2);padding:4px 4px 8px;line-height:1.4">${ppEsc(rel.notes)}</div>`;
+    }
+  });
+  h += '</div>';
+  return h;
+}
+
+function ppFieldHtml(label, val, path, tier) {
+  const escPath = ppEsc(path);
+  let valHtml;
+  if (val === null || val === undefined || val === '') {
+    valHtml = `<div class="pp-field-val unset" data-pp-path="${escPath}" onclick="ppStartEdit('${escPath}')">(not set)</div>`;
+  } else if (typeof val === 'boolean') {
+    valHtml = `<div class="pp-field-val bool-${val ? 'true' : 'false'}" data-pp-path="${escPath}" onclick="ppStartEdit('${escPath}')">${val ? '✓ yes' : '✗ no'}</div>`;
+  } else if (typeof val === 'object') {
+    // Inline JSON display for edge cases
+    valHtml = `<div class="pp-field-val" data-pp-path="${escPath}">${ppEsc(JSON.stringify(val))}</div>`;
+  } else {
+    valHtml = `<div class="pp-field-val" data-pp-path="${escPath}" onclick="ppStartEdit('${escPath}')">${ppEsc(val)}</div>`;
+  }
+  return `<div class="pp-field"><div class="pp-field-label">${ppEsc(ppHumanLabel(label))}</div>${valHtml}</div>`;
+}
+
+function ppStartEdit(path, rehydrate) {
+  ppEditingPath = path;
+  const p = PP && PP[ppCurrentId];
+  if (!p) return;
+  const cur = ppGetPath(p, path);
+  const el = document.querySelector(`[data-pp-path="${CSS.escape(path)}"]`);
+  if (!el) return;
+  const curStr = cur === null || cur === undefined ? '' : String(cur);
+  const isBool = typeof cur === 'boolean';
+  const isLong = !isBool && curStr.length > 60;
+  const field = el.parentNode;
+  const escPath = ppEsc(path);
+  let editor;
+  if (isBool) {
+    editor = `<select id="pp-ed-${escPath}"><option value="true"${cur ? ' selected' : ''}>yes</option><option value="false"${!cur ? ' selected' : ''}>no</option><option value="null">(unset)</option></select>`;
+  } else if (isLong) {
+    editor = `<textarea id="pp-ed-${escPath}">${ppEsc(curStr)}</textarea>`;
+  } else {
+    editor = `<input type="text" id="pp-ed-${escPath}" value="${ppEsc(curStr)}">`;
+  }
+  const html = `<div class="pp-field-edit">${editor}<button class="save" onclick="ppCommitEdit('${escPath}')">Save</button><button class="cancel" onclick="ppCancelEdit()">Cancel</button></div>`;
+  // Replace the value element with the editor
+  el.outerHTML = html;
+  const input = document.getElementById('pp-ed-' + path);
+  if (input) {
+    input.focus();
+    if (input.select) input.select();
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !(input.tagName === 'TEXTAREA' && !e.metaKey && !e.ctrlKey)) {
+        e.preventDefault();
+        ppCommitEdit(path);
+      } else if (e.key === 'Escape') {
+        ppCancelEdit();
+      }
+    });
+  }
+}
+
+function ppCancelEdit() {
+  ppEditingPath = null;
+  ppRenderDetail();
+}
+
+async function ppCommitEdit(path) {
+  const input = document.getElementById('pp-ed-' + path);
+  if (!input) return;
+  const raw = input.value;
+  const p = PP[ppCurrentId];
+  const oldVal = ppGetPath(p, path);
+  // Parse new value based on the old value's type
+  let newVal;
+  if (raw === 'null' && input.tagName === 'SELECT') newVal = null;
+  else if (typeof oldVal === 'boolean') newVal = raw === 'true';
+  else if (typeof oldVal === 'number' && raw !== '') {
+    const n = Number(raw);
+    newVal = isNaN(n) ? raw : n;
+  } else if (raw === '') newVal = null;
+  else newVal = raw;
+
+  if (JSON.stringify(oldVal) === JSON.stringify(newVal)) {
+    ppEditingPath = null;
+    ppRenderDetail();
+    return;
+  }
+
+  ppSetPath(p, path, newVal);
+  p.last_updated = new Date().toISOString().slice(0, 10);
+  p.last_updated_by = (typeof getCurrentUserName === 'function' ? getCurrentUserName() : 'admin');
+
+  // Append full change log entry
+  const logEntry = {
+    id: 'ppc_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    ts: new Date().toISOString(),
+    user: p.last_updated_by,
+    property_id: ppCurrentId,
+    path: path,
+    old_value: oldVal === undefined ? null : oldVal,
+    new_value: newVal,
+  };
+  PP_LOG.push(logEntry);
+
+  ppEditingPath = null;
+  // Optimistic render
+  ppRenderDetail();
+
+  const okPP = await ppSave('se_pp', PP);
+  const okLog = await ppSave('se_pp_log', PP_LOG);
+  if (okPP && okLog) {
+    if (typeof showToast === 'function') showToast('✓ Saved');
+  }
+}
+
+function ppRenderIssue(iss) {
+  const cls = iss.status === 'promoted' ? 'promoted' : iss.status === 'dismissed' ? 'dismissed' : '';
+  const pri = iss.suggested_priority || 'normal';
+  let h = `<div class="pp-issue ${cls}" data-iss="${ppEsc(iss.id)}">`;
+  h += `<div class="pp-issue-desc">${ppEsc(iss.description)}</div>`;
+  h += `<div class="pp-issue-meta">`;
+  if (iss.suggested_category) h += `<span>${ppEsc(iss.suggested_category)}</span>`;
+  h += `<span class="pri-${pri}">${ppEsc(pri)}</span>`;
+  if (iss.suggested_vendor_name) h += `<span>→ ${ppEsc(iss.suggested_vendor_name)}</span>`;
+  else if (iss.suggested_vendor_type) h += `<span>→ ${ppEsc(iss.suggested_vendor_type)}</span>`;
+  if (iss.status === 'promoted') h += `<span>promoted → task ${ppEsc(iss.promoted_task_id || '')}</span>`;
+  if (iss.status === 'dismissed') h += `<span>dismissed</span>`;
+  h += `</div>`;
+  if (iss.status === 'imported' || iss.status === 'imported_for_promotion') {
+    h += `<div class="pp-issue-actions">`;
+    h += `<button class="promote" onclick="ppPromoteIssue('${ppEsc(ppCurrentId)}','${ppEsc(iss.id)}')">Promote to Task</button>`;
+    h += `<button class="dismiss" onclick="ppDismissIssue('${ppEsc(ppCurrentId)}','${ppEsc(iss.id)}')">Dismiss</button>`;
+    h += `</div>`;
+  }
+  h += `</div>`;
+  return h;
+}
+
+async function ppPromoteIssue(pid, issueId) {
+  const p = PP[pid];
+  if (!p) return;
+  const iss = (p.outstanding_issues || []).find((i) => i.id === issueId);
+  if (!iss) return;
+  // Create a real task via the existing task system
+  const newTaskId = 't_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  const priorityUrgent = iss.suggested_priority === 'urgent';
+  const newTask = {
+    id: newTaskId,
+    property: pid,
+    category: iss.suggested_category || 'General',
+    problem: iss.description,
+    status: 'open',
+    vendor: iss.suggested_vendor_name || '',
+    date: '',
+    urgent: priorityUrgent,
+    guest: '',
+    notes: [{ text: 'Promoted from Property Bible outstanding issue (' + issueId + ')', type: 'admin', time: new Date().toISOString(), by: (typeof getCurrentUserName === 'function' ? getCurrentUserName() : 'admin') }],
+    photos: [],
+    created: new Date().toISOString(),
+  };
+  tasks.push(newTask);
+  iss.status = 'promoted';
+  iss.promoted_task_id = newTaskId;
+  PP_LOG.push({
+    id: 'ppc_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    ts: new Date().toISOString(),
+    user: (typeof getCurrentUserName === 'function' ? getCurrentUserName() : 'admin'),
+    property_id: pid,
+    type: 'promote_issue',
+    issue_id: issueId,
+    task_id: newTaskId,
+  });
+  ppRenderDetail();
+  if (typeof saveTasks === 'function') await saveTasks();
+  await ppSave('se_pp', PP);
+  await ppSave('se_pp_log', PP_LOG);
+  if (typeof renderAll === 'function') renderAll();
+  if (typeof showToast === 'function') showToast('✓ Promoted to task');
+}
+
+async function ppDismissIssue(pid, issueId) {
+  const p = PP[pid];
+  if (!p) return;
+  const iss = (p.outstanding_issues || []).find((i) => i.id === issueId);
+  if (!iss) return;
+  iss.status = 'dismissed';
+  PP_LOG.push({
+    id: 'ppc_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    ts: new Date().toISOString(),
+    user: (typeof getCurrentUserName === 'function' ? getCurrentUserName() : 'admin'),
+    property_id: pid,
+    type: 'dismiss_issue',
+    issue_id: issueId,
+  });
+  ppRenderDetail();
+  await ppSave('se_pp', PP);
+  await ppSave('se_pp_log', PP_LOG);
+  if (typeof showToast === 'function') showToast('Dismissed');
+}
+
+function ppInboxCount() {
+  if (!PP) return 0;
+  let n = 0;
+  Object.values(PP).forEach((p) => {
+    n += (p._gaps || []).length;
+    n += (p.outstanding_issues || []).filter((i) => i.status === 'imported' || i.status === 'imported_for_promotion').length;
+  });
+  return n;
+}
+
+function ppRenderInbox() {
+  const wrap = document.getElementById('pp-inbox-wrap');
+  if (!PP) { wrap.innerHTML = ''; return; }
+  const propIds = Object.keys(PP).sort();
+  const totalGaps = propIds.reduce((n, pid) => n + (PP[pid]._gaps || []).length, 0);
+  const totalIssues = propIds.reduce((n, pid) => n + (PP[pid].outstanding_issues || []).filter((i) => i.status === 'imported' || i.status === 'imported_for_promotion').length, 0);
+
+  let h = `<div style="font-size:.78rem;color:var(--text2);margin-bottom:14px;line-height:1.5">All gaps and unpromoted outstanding issues across the portfolio. Click a row to jump to that cabin.</div>`;
+
+  // Issues first (they're actionable)
+  h += `<div class="pp-inbox-group"><div class="pp-inbox-group-head"><h3>Outstanding Issues</h3><span class="count">${totalIssues}</span></div>`;
+  if (!totalIssues) h += '<div class="pp-empty" style="padding:20px">None.</div>';
+  propIds.forEach((pid) => {
+    const p = PP[pid];
+    const active = (p.outstanding_issues || []).filter((i) => i.status === 'imported' || i.status === 'imported_for_promotion');
+    active.forEach((iss) => {
+      h += `<div class="pp-inbox-row" onclick="ppOpenDetail('${pid}')">`;
+      h += `<span class="pp-inbox-pill pp-pill-issue">${ppEsc(iss.suggested_priority || 'normal')}</span>`;
+      h += `<div class="pp-inbox-body">${ppEsc(iss.description)}<div class="pp-inbox-cabin">${ppEsc(p.property_name || pid)}${iss.suggested_category ? ' · ' + ppEsc(iss.suggested_category) : ''}</div></div>`;
+      h += `</div>`;
+    });
+  });
+  h += `</div>`;
+
+  // Gaps
+  h += `<div class="pp-inbox-group"><div class="pp-inbox-group-head"><h3>Data Gaps</h3><span class="count">${totalGaps}</span></div>`;
+  if (!totalGaps) h += '<div class="pp-empty" style="padding:20px">None.</div>';
+  propIds.forEach((pid) => {
+    const p = PP[pid];
+    (p._gaps || []).forEach((g) => {
+      h += `<div class="pp-inbox-row" onclick="ppOpenDetail('${pid}')">`;
+      h += `<span class="pp-inbox-pill pp-pill-gap">gap</span>`;
+      h += `<div class="pp-inbox-body">${ppEsc(g)}<div class="pp-inbox-cabin">${ppEsc(p.property_name || pid)}</div></div>`;
+      h += `</div>`;
+    });
+  });
+  h += `</div>`;
+
+  wrap.innerHTML = h;
+}
+// ═══════════════  END Property Bible  ═══════════════
