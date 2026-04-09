@@ -1277,3 +1277,35 @@ textarea{resize:vertical;min-height:76px}
 .pp-inbox-cabin{font-size:.68rem;color:var(--text3);margin-top:2px}
 
 .pp-empty{text-align:center;padding:40px 20px;color:var(--text3);font-size:.82rem}
+
+/* Filter Service — Deploy 2 */
+.fs-panel .pp-section-head h3{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.fs-pill{display:inline-block;font-size:.64rem;font-weight:700;padding:3px 9px;border-radius:10px;text-transform:uppercase;letter-spacing:.5px}
+.fs-pill.fs-ok{background:var(--green-pale);color:var(--green);border:1px solid var(--border)}
+.fs-pill.fs-bundle{background:var(--gold-pale);color:var(--gold);border:1px solid var(--gold-light)}
+.fs-pill.fs-extreme{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
+.fs-pill.fs-none{background:var(--surface2);color:var(--text3);border:1px solid var(--border)}
+.fs-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+.fs-cell{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px}
+.fs-cell .fs-k{font-size:.64rem;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px}
+.fs-cell .fs-v{font-size:.82rem;color:var(--text);font-weight:600}
+.fs-filter-list{list-style:none;padding:0;margin:0 0 12px;font-size:.76rem;color:var(--text);line-height:1.5}
+.fs-filter-list li{padding:5px 0;border-bottom:1px dashed var(--border)}
+.fs-filter-list li:last-child{border-bottom:none}
+.fs-loc{color:var(--text2)}
+.fs-ladder{display:inline-block;font-size:.6rem;padding:1px 6px;border-radius:8px;background:var(--gold-pale);color:var(--gold);margin-left:4px;text-transform:uppercase;letter-spacing:.4px}
+.fs-actions{display:flex;gap:8px;flex-wrap:wrap}
+.fs-actions .btn{font-size:.72rem;padding:5px 10px}
+.fs-actions .btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border)}
+
+/* Task modal bundler banner */
+.fs-bundler{border-radius:6px;padding:10px 12px;margin-top:6px}
+.fs-bundler.fs-bundle{background:var(--gold-pale);border:1px solid var(--gold-light)}
+.fs-bundler.fs-extreme{background:var(--red-bg);border:1px solid var(--red-border)}
+.fs-bundler-head{font-size:.78rem;color:var(--text);margin-bottom:6px}
+.fs-bundler-sub{font-size:.7rem;color:var(--text2);margin-left:4px}
+.fs-bundler-check{display:flex;align-items:center;gap:8px;font-size:.76rem;color:var(--text);cursor:pointer}
+.fs-bundler-check input[type="checkbox"]{width:16px;height:16px}
+
+/* Needs Attention pill for extreme */
+.pp-inbox-pill.fs-extreme{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}

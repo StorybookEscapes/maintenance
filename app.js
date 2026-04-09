@@ -1307,6 +1307,7 @@ function onPropChange(){
   document.getElementById('f-dp-display').textContent='Select a date...';
   document.getElementById('f-dp-display').className='dp-ph';
   document.getElementById('f-dp-btn').classList.remove('has-val');
+  if (typeof fsRenderBundlerInline === 'function') fsRenderBundlerInline();
 }
 function onCatChange(){
   const cat=document.getElementById('f-category').value;
@@ -1333,8 +1334,9 @@ function openAddTask(propId){
   document.getElementById('f-dp-display').className='dp-ph';
   document.getElementById('f-dp-btn').classList.remove('has-val');
   document.getElementById('f-vendor-suggest').innerHTML='';
+  const fsb=document.getElementById('f-fs-bundler');if(fsb)fsb.innerHTML='';
   document.getElementById('task-modal').classList.add('open');
-  if(propId)setTimeout(()=>document.getElementById('f-property').value=propId,50);
+  if(propId){setTimeout(()=>{document.getElementById('f-property').value=propId;if(typeof fsRenderBundlerInline==='function')fsRenderBundlerInline();},50);}
   else document.getElementById('f-property').value='';
 }
 async function saveTask(){
@@ -1349,6 +1351,8 @@ async function saveTask(){
   const t={id:Date.now().toString(),property:pid,guest:document.getElementById('f-guest').value.trim(),problem:prob,category:fCat,status:fStatus,date:fDate,vendor:document.getElementById('f-vendor').value.trim(),urgent:document.getElementById('f-urgent').checked,recurring:false,notes:nt?[{text:nt,type:'admin',time:new Date().toISOString()}]:[],vendorNotes:'',created:new Date().toISOString()};
   // Auto-init purchase tracking for replacement tasks
   if(fCat==='replacement'){t.purchaseNote=prob;t.purchaseStatus='needed';t.purchaser='owner';}
+  // Deploy 2: bundle filter service into this task if the user checked the bundler
+  if(typeof fsMaybeStampTask==='function')fsMaybeStampTask(t);
   tasks.unshift(t);await saveTasks();closeModal('task-modal');renderAll();renderReplacements();showToast('Task created.');
 }
 
@@ -2785,6 +2789,8 @@ async function markComplete(){
   t.status='complete';document.getElementById('d-status').value='complete';
   document.getElementById('complete-btn').style.display='none';
   await saveTasks();closeModal('detail-modal');renderAll();showToast('Task marked complete.');
+  // Deploy 2: if this task carried filter service, writeback profile last_service_date
+  if(typeof fsOnTaskComplete==='function')fsOnTaskComplete(t);
   // Check if this completes a payment group where vendor requested payment
   checkAdminPaymentPrompt(t);
 }
@@ -2795,6 +2801,7 @@ async function vdQuickComplete(id,e){
   const t=tasks.find(x=>x.id===id);if(!t)return;
   t.status='complete';
   await saveTasks();renderAll();showToast('Task marked complete.');
+  if(typeof fsOnTaskComplete==='function')fsOnTaskComplete(t);
   checkAdminPaymentPrompt(t);
 }
 
@@ -6744,6 +6751,11 @@ function ppRenderDetail() {
     h += `</div></details>`;
   }
 
+  // Filter Service panel (Deploy 2)
+  if (typeof fsRenderPanel === 'function') {
+    h += fsRenderPanel(p);
+  }
+
   // Sections — render every top-level key except the handled-inline ones
   const SKIP = new Set(['property_id', 'property_name', 'address', 'last_updated', 'last_updated_by', 'schema_version', '_gaps', '_notes', 'outstanding_issues', 'is_parent_listing']);
   const ORDER = ['neighborhood', 'resort_position', 'square_footage', 'bedrooms', 'bathrooms', 'max_occupancy', 'theme', 'connected_properties', 'access', 'hvac', 'appliances', 'utilities', 'safety'];
@@ -7069,6 +7081,11 @@ function ppRenderInbox() {
 
   let h = `<div style="font-size:.78rem;color:var(--text2);margin-bottom:14px;line-height:1.5">All gaps and unpromoted outstanding issues across the portfolio. Click a row to jump to that cabin.</div>`;
 
+  // Filter Service extreme rollup (Deploy 2) — surfaces extreme cabins only
+  if (typeof fsRenderNeedsAttention === 'function') {
+    h += fsRenderNeedsAttention();
+  }
+
   // Issues first (they're actionable)
   h += `<div class="pp-inbox-group"><div class="pp-inbox-group-head"><h3>Outstanding Issues</h3><span class="count">${totalIssues}</span></div>`;
   if (!totalIssues) h += '<div class="pp-empty" style="padding:20px">None.</div>';
@@ -7101,3 +7118,291 @@ function ppRenderInbox() {
   wrap.innerHTML = h;
 }
 // ═══════════════  END Property Bible  ═══════════════
+
+// ═══════════════  Filter Service (Deploy 2)  ═══════════════
+// Tracks HVAC filter service per cabin. One cadence per cabin: all filters
+// (disposable HVAC, washable mini-split, dehumidifier) get serviced together
+// on a single handyman visit, because the profiling data explicitly couples
+// them via `maintenance_coupling: "hvac_filter_change"` and equivalent notes.
+//
+// Thresholds (global, no per-cabin cadence field needed):
+//   0-29 days since last service  → ok         (never shown)
+//   30-59 days                    → bundle     (offer to bundle on task create)
+//   60+ days, or no record        → extreme    (auto-create handyman task)
+//
+// Storage: hvac.filter_service = { last_service_date: "YYYY-MM-DD" | null }
+//          written into each profile in se_pp.
+// Task flag: filter_service_bundled = true  (on tasks that include filters)
+
+const FS_BUNDLE_DAYS = 30;
+const FS_EXTREME_DAYS = 60;
+
+function fsDaysBetween(a, b) {
+  const ms = 1000 * 60 * 60 * 24;
+  return Math.floor((b.getTime() - a.getTime()) / ms);
+}
+function fsTodayISO() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function fsParseDate(s) {
+  if (!s) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (!m) return null;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
+
+// Enumerate every filter item for a cabin that gets serviced on the visit.
+// Returns [{kind, id, label, location, ladder_required}]
+function fsAllFilters(profile) {
+  const out = [];
+  const hvac = profile.hvac || {};
+  (hvac.disposable_filters || []).forEach((f) => {
+    out.push({
+      kind: 'hvac_disposable',
+      id: f.id || '',
+      label: 'HVAC Filter' + (f.size ? ' ' + f.size : '') + (f.quantity_per_change > 1 ? ' ×' + f.quantity_per_change : ''),
+      location: f.location || '',
+      ladder_required: !!f.ladder_required,
+    });
+  });
+  (hvac.washable_filters || []).forEach((f) => {
+    out.push({
+      kind: 'mini_split_washable',
+      id: f.id || '',
+      label: (f.unit_label || 'Mini-Split') + ' (washable)',
+      location: f.location || '',
+      ladder_required: !!f.ladder_required,
+    });
+  });
+  (hvac.dehumidifiers || []).forEach((d) => {
+    if ((d.filter_type || '').toLowerCase() === 'washable') {
+      out.push({
+        kind: 'dehumidifier_washable',
+        id: d.id || '',
+        label: 'Dehumidifier (' + (d.location || 'unknown') + ') — wash filter',
+        location: d.location || '',
+        ladder_required: false,
+      });
+    }
+  });
+  return out;
+}
+
+// Given a profile, return current filter service state.
+function fsStatus(profile) {
+  const fs = (profile.hvac && profile.hvac.filter_service) || {};
+  const last = fsParseDate(fs.last_service_date);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  let daysSince = null;
+  if (last) daysSince = fsDaysBetween(last, today);
+  const filters = fsAllFilters(profile);
+  if (!filters.length) return { state: 'none', daysSince, lastServiceDate: fs.last_service_date || null, filters };
+  let state = 'ok';
+  if (daysSince === null) state = 'extreme';
+  else if (daysSince >= FS_EXTREME_DAYS) state = 'extreme';
+  else if (daysSince >= FS_BUNDLE_DAYS) state = 'bundle';
+  return { state, daysSince, lastServiceDate: fs.last_service_date || null, filters };
+}
+
+function fsStateLabel(state) {
+  if (state === 'extreme') return { txt: 'EXTREME — service overdue 60+ days', cls: 'fs-extreme' };
+  if (state === 'bundle') return { txt: 'Bundle window — due for service', cls: 'fs-bundle' };
+  if (state === 'ok') return { txt: 'OK', cls: 'fs-ok' };
+  return { txt: 'No filter data', cls: 'fs-none' };
+}
+
+// Property Bible detail-view panel (inserted by ppRenderDetail).
+function fsRenderPanel(profile) {
+  const s = fsStatus(profile);
+  if (s.state === 'none') return '';
+  const lab = fsStateLabel(s.state);
+  const lastTxt = s.lastServiceDate ? s.lastServiceDate : '—';
+  const daysTxt = s.daysSince === null ? 'never recorded' : s.daysSince + ' days ago';
+  let h = '<div class="pp-section fs-panel"><div class="pp-section-head"><h3>Filter Service <span class="fs-pill ' + lab.cls + '">' + lab.txt + '</span></h3></div><div class="pp-section-body">';
+  h += '<div class="fs-grid">';
+  h += '<div class="fs-cell"><div class="fs-k">Last service</div><div class="fs-v">' + lastTxt + '</div></div>';
+  h += '<div class="fs-cell"><div class="fs-k">Age</div><div class="fs-v">' + daysTxt + '</div></div>';
+  h += '<div class="fs-cell"><div class="fs-k">Filters on this visit</div><div class="fs-v">' + s.filters.length + '</div></div>';
+  h += '</div>';
+  h += '<ul class="fs-filter-list">';
+  s.filters.forEach((f) => {
+    h += '<li><strong>' + ppEsc(f.label) + '</strong>' + (f.location ? ' — <span class="fs-loc">' + ppEsc(f.location) + '</span>' : '') + (f.ladder_required ? ' <span class="fs-ladder">ladder</span>' : '') + '</li>';
+  });
+  h += '</ul>';
+  h += '<div class="fs-actions">';
+  h += '<button class="btn btn-sm" onclick="fsBumpServiceDate(\'' + profile.property_id + '\')">Mark serviced today</button>';
+  h += '<button class="btn btn-sm btn-ghost" onclick="fsEditServiceDate(\'' + profile.property_id + '\')">Edit last service date</button>';
+  h += '</div>';
+  h += '</div></div>';
+  return h;
+}
+
+// Task-creation bundler banner. Renders inline in the task modal when a
+// property is selected. Silent if nothing to bundle.
+function fsRenderBundlerInline() {
+  const wrap = document.getElementById('f-fs-bundler');
+  if (!wrap) return;
+  const pid = document.getElementById('f-property').value;
+  if (!pid || !PP || !PP[pid]) { wrap.innerHTML = ''; return; }
+  const s = fsStatus(PP[pid]);
+  if (s.state !== 'bundle' && s.state !== 'extreme') { wrap.innerHTML = ''; return; }
+  const lab = fsStateLabel(s.state);
+  let h = '<div class="fs-bundler ' + lab.cls + '">';
+  h += '<div class="fs-bundler-head"><strong>Filter service ' + (s.state === 'extreme' ? 'is extreme here' : 'is due at this cabin') + '</strong>';
+  h += ' <span class="fs-bundler-sub">' + (s.daysSince === null ? 'no recorded service date' : s.daysSince + ' days since last service') + '</span></div>';
+  h += '<label class="fs-bundler-check"><input type="checkbox" id="f-fs-bundle-cb" ' + (s.state === 'extreme' ? 'checked' : '') + '> Add filter service to this visit (' + s.filters.length + ' filter' + (s.filters.length === 1 ? '' : 's') + ')</label>';
+  h += '</div>';
+  wrap.innerHTML = h;
+}
+
+// Build a notes string describing every filter to service.
+function fsBuildNotesBlock(profile) {
+  const s = fsStatus(profile);
+  const lines = ['— FILTER SERVICE BUNDLED —'];
+  s.filters.forEach((f) => {
+    let ln = '• ' + f.label;
+    if (f.location) ln += ' @ ' + f.location;
+    if (f.ladder_required) ln += ' (ladder)';
+    lines.push(ln);
+  });
+  lines.push('Write date on filter and take a photo.');
+  return lines.join('\n');
+}
+
+// Hook invoked from saveTask(). If bundler checkbox is checked, stamp the
+// task with filter_service_bundled and append a notes block.
+function fsMaybeStampTask(task) {
+  const cb = document.getElementById('f-fs-bundle-cb');
+  if (!cb || !cb.checked) return;
+  if (!PP || !PP[task.property]) return;
+  task.filter_service_bundled = true;
+  const block = fsBuildNotesBlock(PP[task.property]);
+  if (!task.notes) task.notes = [];
+  task.notes.push({ text: block, type: 'admin', time: new Date().toISOString() });
+}
+
+// Hook invoked from markComplete()/vdQuickComplete(). If the task was
+// bundled with filter service (or is an auto-generated filter task), write
+// today's date back into the cabin profile + append a change log entry.
+async function fsOnTaskComplete(task) {
+  if (!task) return;
+  const isFilterTask = !!task.filter_service_bundled || !!task.filter_auto_generated;
+  if (!isFilterTask) return;
+  if (!PP || !PP[task.property]) return;
+  const p = PP[task.property];
+  if (!p.hvac) p.hvac = {};
+  if (!p.hvac.filter_service) p.hvac.filter_service = {};
+  const prev = p.hvac.filter_service.last_service_date || null;
+  const today = fsTodayISO();
+  p.hvac.filter_service.last_service_date = today;
+  p.last_updated = today;
+  p.last_updated_by = getCurrentUserName ? (getCurrentUserName() || 'user') : 'user';
+  // Append change log
+  try {
+    if (!Array.isArray(PP_LOG)) PP_LOG = [];
+    PP_LOG.push({
+      id: 'chg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+      ts: new Date().toISOString(),
+      user: p.last_updated_by,
+      property_id: task.property,
+      path: 'hvac.filter_service.last_service_date',
+      old_value: prev,
+      new_value: today,
+      source: 'task_complete',
+      task_id: task.id,
+    });
+    await ppSave('se_pp_log', PP_LOG);
+  } catch (e) { console.warn('[fs] log save failed', e); }
+  try {
+    await ppSave('se_pp', PP);
+  } catch (e) { console.warn('[fs] profile save failed', e); }
+}
+
+// Needs Attention rollup. Extreme cabins only — bundle cabins stay quiet.
+function fsRenderNeedsAttention() {
+  if (!PP) return '';
+  const extremes = [];
+  Object.keys(PP).forEach((pid) => {
+    const s = fsStatus(PP[pid]);
+    if (s.state === 'extreme') extremes.push({ pid, status: s });
+  });
+  if (!extremes.length) return '';
+  extremes.sort((a, b) => {
+    const aa = a.status.daysSince === null ? Infinity : a.status.daysSince;
+    const bb = b.status.daysSince === null ? Infinity : b.status.daysSince;
+    return bb - aa;
+  });
+  let h = '<div class="pp-inbox-group"><div class="pp-inbox-group-head"><h3>Filter Service — Extreme</h3><span class="count">' + extremes.length + '</span></div>';
+  extremes.forEach((e) => {
+    const p = PP[e.pid];
+    const ageTxt = e.status.daysSince === null ? 'no recorded service' : e.status.daysSince + ' days';
+    h += '<div class="pp-inbox-row" onclick="ppOpenDetail(\'' + e.pid + '\')">';
+    h += '<span class="pp-inbox-pill fs-extreme">extreme</span>';
+    h += '<div class="pp-inbox-body">' + ppEsc(p.property_name || e.pid) + '<div class="pp-inbox-cabin">' + ageTxt + ' · ' + e.status.filters.length + ' filter' + (e.status.filters.length === 1 ? '' : 's') + '</div></div>';
+    h += '</div>';
+  });
+  h += '</div>';
+  return h;
+}
+
+async function fsBumpServiceDate(pid) {
+  if (!PP || !PP[pid]) return;
+  if (!confirm('Mark filter service complete for this cabin as of today?')) return;
+  const p = PP[pid];
+  if (!p.hvac) p.hvac = {};
+  if (!p.hvac.filter_service) p.hvac.filter_service = {};
+  const prev = p.hvac.filter_service.last_service_date || null;
+  const today = fsTodayISO();
+  p.hvac.filter_service.last_service_date = today;
+  p.last_updated = today;
+  p.last_updated_by = getCurrentUserName ? (getCurrentUserName() || 'user') : 'user';
+  if (!Array.isArray(PP_LOG)) PP_LOG = [];
+  PP_LOG.push({
+    id: 'chg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+    ts: new Date().toISOString(),
+    user: p.last_updated_by,
+    property_id: pid,
+    path: 'hvac.filter_service.last_service_date',
+    old_value: prev,
+    new_value: today,
+    source: 'manual_bump',
+  });
+  await ppSave('se_pp', PP);
+  await ppSave('se_pp_log', PP_LOG);
+  ppRenderDetail();
+  showToast('Marked serviced ' + today);
+}
+
+async function fsEditServiceDate(pid) {
+  if (!PP || !PP[pid]) return;
+  const p = PP[pid];
+  const cur = (p.hvac && p.hvac.filter_service && p.hvac.filter_service.last_service_date) || '';
+  const next = prompt('Set last service date (YYYY-MM-DD, or blank to clear):', cur);
+  if (next === null) return;
+  const clean = next.trim();
+  if (clean && !/^\d{4}-\d{2}-\d{2}$/.test(clean)) { showToast('Date must be YYYY-MM-DD', 'err'); return; }
+  if (!p.hvac) p.hvac = {};
+  if (!p.hvac.filter_service) p.hvac.filter_service = {};
+  const prev = p.hvac.filter_service.last_service_date || null;
+  p.hvac.filter_service.last_service_date = clean || null;
+  p.last_updated = fsTodayISO();
+  p.last_updated_by = getCurrentUserName ? (getCurrentUserName() || 'user') : 'user';
+  if (!Array.isArray(PP_LOG)) PP_LOG = [];
+  PP_LOG.push({
+    id: 'chg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+    ts: new Date().toISOString(),
+    user: p.last_updated_by,
+    property_id: pid,
+    path: 'hvac.filter_service.last_service_date',
+    old_value: prev,
+    new_value: clean || null,
+    source: 'manual_edit',
+  });
+  await ppSave('se_pp', PP);
+  await ppSave('se_pp_log', PP_LOG);
+  ppRenderDetail();
+  showToast('Updated');
+}
+// ═══════════════  END Filter Service  ═══════════════
