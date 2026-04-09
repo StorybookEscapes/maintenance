@@ -2786,6 +2786,12 @@ document.addEventListener('click',e=>{
 
 async function markComplete(){
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
+  // Deploy 3: gate filter tasks on a recount close-out before marking complete.
+  // Vendor must enter how many filters of each size are left at the cabin.
+  if(typeof fsPromptRecount==='function' && (t.filter_service_bundled || t.filter_auto_generated)){
+    const ok=await fsPromptRecount(t);
+    if(!ok)return; // cancelled — stay open
+  }
   t.status='complete';document.getElementById('d-status').value='complete';
   document.getElementById('complete-btn').style.display='none';
   await saveTasks();closeModal('detail-modal');renderAll();showToast('Task marked complete.');
@@ -2799,6 +2805,11 @@ async function markComplete(){
 async function vdQuickComplete(id,e){
   e.stopPropagation();
   const t=tasks.find(x=>x.id===id);if(!t)return;
+  // Deploy 3: filter tasks get the recount modal even on quick-complete path
+  if(typeof fsPromptRecount==='function' && (t.filter_service_bundled || t.filter_auto_generated)){
+    const ok=await fsPromptRecount(t);
+    if(!ok)return;
+  }
   t.status='complete';
   await saveTasks();renderAll();showToast('Task marked complete.');
   if(typeof fsOnTaskComplete==='function')fsOnTaskComplete(t);
@@ -7105,208 +7116,434 @@ function ppRenderInventory() {
     return;
   }
 
-  // Portfolio-wide stats
-  let totalSlots = 0, confirmedCount = 0, outOfStock = 0;
+  // Portfolio-wide calculations
+  const allSizes = new Set();
+  let confirmedSlots = 0, totalSlots = 0, outOfStock = 0;
   Object.values(PP).forEach((p) => {
     const inv = (p.hvac && p.hvac.filter_supply && p.hvac.filter_supply.current_inventory) || {};
-    Object.keys(inv).forEach((size) => {
+    Object.keys(inv).forEach((s) => {
+      allSizes.add(s);
       totalSlots++;
-      const v = inv[size];
-      if (v != null) confirmedCount++;
-      const count = v == null ? 0 : v;
-      if (count === 0) outOfStock++;
+      const v = inv[s];
+      if (v != null) confirmedSlots++;
+      if ((v == null ? 0 : v) === 0) outOfStock++;
     });
   });
+  const sizes = Array.from(allSizes).sort();
+  const cabinCount = Object.keys(PP).length;
 
-  let h = '';
-  h += `<div style="font-size:.78rem;color:var(--text2);line-height:1.5;margin-bottom:14px">Portfolio filter stock by cabin. Cells assumed <b style="color:var(--red)">0</b> until a vendor confirms on-site during a filter-change task. Click any cell to record a count manually.</div>`;
-
-  h += `<div class="pp-inv-summary">`;
-  h += `<div class="pp-inv-stat"><div class="k">Total slots</div><div class="v">${totalSlots}</div></div>`;
-  h += `<div class="pp-inv-stat"><div class="k">Confirmed counts</div><div class="v ok">${confirmedCount}</div><div class="sub">of ${totalSlots}</div></div>`;
-  h += `<div class="pp-inv-stat"><div class="k">Out of stock</div><div class="v bad">${outOfStock}</div><div class="sub">slots at 0</div></div>`;
-  h += `</div>`;
-
-  // Per-neighborhood matrices (matches ppRenderList grouping)
+  // Build ordered cabin list (by neighborhood) with nb metadata
+  const ordered = [];
+  const nbRuns = [];
   NBS.forEach((nb) => {
     const cabinsInNb = nb.props.filter((pid) => PP[pid]);
     if (!cabinsInNb.length) return;
+    nbRuns.push({ nb, count: cabinsInNb.length });
+    cabinsInNb.forEach((pid) => ordered.push({ pid, nb }));
+  });
+  // Include any cabins not in NBS
+  const orderedIds = new Set(ordered.map((o) => o.pid));
+  const orphans = Object.keys(PP).filter((pid) => !orderedIds.has(pid));
+  if (orphans.length) {
+    nbRuns.push({ nb: null, count: orphans.length });
+    orphans.forEach((pid) => ordered.push({ pid, nb: null }));
+  }
 
-    // Collect unique sizes used across this neighborhood
-    const sizesSet = new Set();
-    cabinsInNb.forEach((pid) => {
-      const inv = (PP[pid].hvac && PP[pid].hvac.filter_supply && PP[pid].hvac.filter_supply.current_inventory) || {};
-      Object.keys(inv).forEach((s) => sizesSet.add(s));
-    });
-    if (!sizesSet.size) return;
-    const sizes = Array.from(sizesSet).sort();
-
-    h += `<div class="pp-inv-group nb-${nb.cls}">`;
-    h += `<h3>${ppEsc(nb.name)} <span class="sub">— ${ppEsc(nb.sub || '')}</span></h3>`;
-    h += `<div class="pp-inv-scroll"><table class="pp-inv-table"><thead><tr>`;
-    h += `<th class="size-head">Size</th>`;
-    cabinsInNb.forEach((pid) => {
-      const p = PP[pid];
-      const name = p.property_name || pid;
-      h += `<th class="cabin-head" title="${ppEsc(name)}">${ppEsc(name)}</th>`;
-    });
-    h += `</tr></thead><tbody>`;
-
-    sizes.forEach((size) => {
-      h += `<tr><td class="size-head">${ppEsc(size.replace('x','×'))}</td>`;
-      cabinsInNb.forEach((pid) => {
-        const inv = (PP[pid].hvac && PP[pid].hvac.filter_supply && PP[pid].hvac.filter_supply.current_inventory) || {};
-        if (!(size in inv)) {
-          h += `<td class="pp-inv-cell na" title="size not used at this cabin">—</td>`;
-          return;
-        }
-        const v = inv[size];
-        const confirmed = v != null;
-        const count = v == null ? 0 : v;
-        let cls;
-        if (!confirmed) cls = 'out';
-        else if (count === 0) cls = 'out';
-        else if (count <= 2) cls = 'low';
-        else cls = 'ok';
-        const title = confirmed
-          ? `Confirmed: ${count} on hand`
-          : 'Unmeasured — assumed 0 until vendor confirms';
-        h += `<td class="pp-inv-cell ${cls}" onclick="ppInvEditCell(event,'${pid}','${ppEsc(size)}')" title="${title}">${count}</td>`;
-      });
-      h += `</tr>`;
-    });
-    h += `</tbody></table></div></div>`;
+  // Key-status stats (admin only)
+  const canSeeKey = ppCanSee('admin');
+  let keyAttention = 0;
+  const kBreak = { missing: 0, unknown: 0, pending_install: 0 };
+  ordered.forEach(({ pid }) => {
+    const p = PP[pid];
+    const s = p && p.access && p.access.exterior_backup_key && p.access.exterior_backup_key.status;
+    if (s === 'ok' || s === 'present' || s === 'shared_with_sibling') return;
+    keyAttention++;
+    if (!s) kBreak.unknown++;
+    else if (kBreak[s] != null) kBreak[s]++;
+    else kBreak.unknown++;
   });
 
-  // Legend
-  h += `<div class="pp-inv-legend">`;
-  h += `<span><i class="dot ok"></i> in stock (confirmed)</span>`;
-  h += `<span><i class="dot low"></i> low (1–2)</span>`;
-  h += `<span><i class="dot out"></i> out / unmeasured (assumed 0)</span>`;
-  h += `<span><i class="dot na"></i> size not used at cabin</span>`;
-  h += `</div>`;
+  let h = '';
+
+  // ── Overview summary cards ──
+  h += `<section class="inv-panel"><header><h2>Overview</h2></header>`;
+  h += `<div class="inv-cards">`;
+  h += `<div class="inv-card"><div class="k">Filter sizes tracked</div><div class="v">${sizes.length}</div><div class="sub">across ${cabinCount} cabins</div></div>`;
+  h += `<div class="inv-card"><div class="k">Confirmed stock counts</div><div class="v warn">${confirmedSlots}</div><div class="sub">of ${totalSlots} slots — vendors to measure</div></div>`;
+  h += `<div class="inv-card"><div class="k">Out of stock</div><div class="v bad">${outOfStock}</div><div class="sub">unmeasured slots assumed 0</div></div>`;
+  if (canSeeKey) {
+    const parts = [];
+    if (kBreak.missing) parts.push(`${kBreak.missing} missing`);
+    if (kBreak.unknown) parts.push(`${kBreak.unknown} unknown`);
+    if (kBreak.pending_install) parts.push(`${kBreak.pending_install} pending`);
+    const sub = parts.join(' · ') || 'all set';
+    h += `<div class="inv-card"><div class="k">Key badges needing attention</div><div class="v bad">${keyAttention}</div><div class="sub">${ppEsc(sub)}</div></div>`;
+  }
+  h += `</div></section>`;
+
+  // ── Filter Inventory Matrix ──
+  h += `<section class="inv-panel"><header><h2>Filter Inventory Matrix</h2></header>`;
+  h += `<div class="inv-hint">Click any cell to enter or update its count. Unmeasured cells show as red 0 until a vendor confirms on-site. Click the <b style="color:var(--inv-text)">📍 Filter storage</b> row to record where filters are stashed at each cabin — you can fill this in even if you don't have a count yet.</div>`;
+  h += `<div class="inv-matrix-wrap"><table class="inv-matrix"><thead>`;
+
+  // Neighborhood header row (colspan per nb group)
+  h += `<tr><th class="size-head" style="background:var(--inv-panel)"></th>`;
+  nbRuns.forEach(({ nb, count }) => {
+    if (nb) {
+      h += `<th class="nb-head nb-${nb.cls}" colspan="${count}">${ppEsc(nb.name)}</th>`;
+    } else {
+      h += `<th class="nb-head" colspan="${count}">Other</th>`;
+    }
+  });
+  h += `</tr>`;
+
+  // Cabin name row (rotated)
+  h += `<tr><th class="size-head">Filter size</th>`;
+  ordered.forEach(({ pid }) => {
+    const p = PP[pid];
+    const name = p.property_name || pid;
+    h += `<th class="cabin" onclick="ppInvEditLocation('${pid}')" title="${ppEsc(name)} — click to edit filter storage">${ppEsc(name)}</th>`;
+  });
+  h += `</tr></thead><tbody>`;
+
+  // Filter storage row (always present; set-or-missing indicator)
+  h += `<tr class="loc-row"><td class="size-head">📍 Filter storage</td>`;
+  ordered.forEach(({ pid }) => {
+    const p = PP[pid];
+    const fs = (p.hvac && p.hvac.filter_supply) || null;
+    const hasInv = fs && fs.current_inventory && Object.keys(fs.current_inventory).length;
+    const loc = ppInvGetLocation(p);
+    if (!hasInv && !loc && !(fs && fs.stash_id)) {
+      h += `<td class="na" title="No filter tracking for this cabin">—</td>`;
+      return;
+    }
+    const isSet = !!loc;
+    const display = isSet ? '✓' : 'set…';
+    const cls = isSet ? 'set' : 'missing';
+    const title = isSet ? `Stored: ${loc}` : 'Click to record storage location';
+    h += `<td class="${cls}" onclick="ppInvEditLocation('${pid}')" title="${ppEsc(title)}">${display}</td>`;
+  });
+  h += `</tr>`;
+
+  // Size rows
+  sizes.forEach((size) => {
+    h += `<tr><td class="size-head">${ppEsc(size.replace('x','×'))}</td>`;
+    ordered.forEach(({ pid }) => {
+      const inv = (PP[pid].hvac && PP[pid].hvac.filter_supply && PP[pid].hvac.filter_supply.current_inventory) || {};
+      if (!(size in inv)) {
+        h += `<td class="count na" title="size not used at this cabin">—</td>`;
+        return;
+      }
+      const v = inv[size];
+      const confirmed = v != null;
+      const count = v == null ? 0 : v;
+      let cls;
+      if (count === 0) cls = 'out';
+      else if (count <= 2) cls = 'low';
+      else cls = 'ok';
+      const title = confirmed ? `Confirmed: ${count} on hand` : 'Unmeasured — assumed 0 until vendor confirms';
+      h += `<td class="count ${cls}" onclick="ppInvEditCell(event,'${pid}','${ppEsc(size)}')" title="${ppEsc(title)}">${count}</td>`;
+    });
+    h += `</tr>`;
+  });
+
+  h += `</tbody></table></div>`;
+
+  // Matrix legend
+  h += `<div class="inv-legend">`;
+  h += `<span class="ok">in stock (confirmed)</span>`;
+  h += `<span class="low">low</span>`;
+  h += `<span class="out">out (0) — assumed zero until vendor confirms</span>`;
+  h += `<span class="na">size not used at cabin</span>`;
+  h += `</div></section>`;
+
+  // ── Cabins · Exterior Backup Key Status (admin only) ──
+  if (canSeeKey) {
+    h += `<section class="inv-panel"><header><h2>Cabins · Exterior Backup Key Status</h2></header>`;
+    h += `<div class="inv-hint">Click any status pill to change it. Unknown renders red under the "assume worst" rule — distinct label, same urgency.</div>`;
+    h += `<ul class="inv-cabins">`;
+    ordered.forEach(({ pid }) => {
+      const p = PP[pid];
+      const name = p.property_name || pid;
+      const k = p && p.access && p.access.exterior_backup_key;
+      const status = (k && k.status) || '';
+      const label = status || 'unknown';
+      const cls = status || 'unknown';
+      h += `<li>`;
+      h += `<div class="inv-dot ${cls}"></div>`;
+      h += `<div class="inv-cabin-name">${ppEsc(name)}</div>`;
+      h += `<div class="inv-cabin-key ${cls}" onclick="ppInvEditKey(event,'${pid}')" title="Click to change">${ppEsc(label)}</div>`;
+      h += `</li>`;
+    });
+    h += `</ul></section>`;
+  }
 
   wrap.innerHTML = h;
 }
 
-// Owner edit popover for matrix cells. Saves to se_pp + se_pp_log.
+// ── Popover: edit a single cell (count + location) ──
 function ppInvEditCell(ev, pid, size) {
   if (ev && ev.stopPropagation) ev.stopPropagation();
-  const cell = ev && ev.currentTarget;
-  const p = PP[pid];
-  if (!p || !p.hvac || !p.hvac.filter_supply) return;
+  ppInvOpenPopover({ pid, size, anchor: ev && ev.currentTarget });
+}
 
-  // Close any existing popover
+// ── Popover: edit filter storage location only (no size) ──
+function ppInvEditLocation(pid, ev) {
+  if (ev && ev.stopPropagation) ev.stopPropagation();
+  ppInvOpenPopover({ pid, size: null, locationOnly: true, anchor: ev && ev.currentTarget });
+}
+
+function ppInvOpenPopover({ pid, size, anchor, locationOnly }) {
   const existing = document.getElementById('pp-inv-pop');
   if (existing) existing.remove();
 
-  const inv = p.hvac.filter_supply.current_inventory || {};
-  const v = inv[size];
-  const currentCount = v == null ? '' : v;
-  const confirmed = v != null;
-  const storageLoc = ppInvGetLocation(p);
+  const p = PP[pid];
+  if (!p) return;
+  if (!p.hvac) p.hvac = {};
+  if (!p.hvac.filter_supply) p.hvac.filter_supply = {};
+  const fs = p.hvac.filter_supply;
+  const inv = fs.current_inventory || {};
+  const storageLoc = fs.on_site_location || '';
+  const sharedLoc = (!storageLoc && fs.stash_id && PP_STASHES && PP_STASHES[fs.stash_id])
+    ? (PP_STASHES[fs.stash_id].location || '')
+    : '';
+  const currentCount = (size && inv[size] != null) ? inv[size] : '';
   const cabinName = p.property_name || pid;
 
   const pop = document.createElement('div');
   pop.id = 'pp-inv-pop';
-  pop.className = 'pp-inv-pop';
-  const storageHtml = storageLoc
-    ? `<div class="pp-inv-pop-stash"><b>Filter storage:</b> ${ppEsc(storageLoc)}</div>`
-    : `<div class="pp-inv-pop-stash missing">No filter storage location recorded yet — vendor will capture on first filter visit.</div>`;
-  pop.innerHTML =
-    `<div class="pp-inv-pop-title">${ppEsc(cabinName)} — ${ppEsc(size.replace('x','×'))}</div>` +
-    storageHtml +
-    `<label>Count on hand</label>` +
-    `<input type="number" id="pp-inv-pop-count" min="0" value="${currentCount}" placeholder="${confirmed ? '' : 'assumed 0'}">` +
-    `<label>Note (optional)</label>` +
-    `<textarea id="pp-inv-pop-note" placeholder="e.g. restocked from Costco trip"></textarea>` +
-    `<div class="pp-inv-pop-actions">` +
-      `<button class="btn" onclick="document.getElementById('pp-inv-pop').remove()">Cancel</button>` +
-      `<button class="btn btn-g" onclick="ppInvSaveCell('${pid}','${ppEsc(size)}')">Save</button>` +
-    `</div>`;
+  let html = '';
+  html += `<div class="t">${ppEsc(cabinName)}${size ? ' — ' + ppEsc(size.replace('x','×')) : ''}</div>`;
+  html += `<div class="s">${locationOnly ? 'Edit filter storage location' : 'Update stock count and storage'}</div>`;
+
+  if (!locationOnly && size) {
+    html += `<label>Count on hand</label>`;
+    html += `<input type="number" id="pp-inv-pop-count" min="0" value="${currentCount}" placeholder="0">`;
+  }
+  html += `<label>Filter storage location</label>`;
+  if (sharedLoc && !storageLoc) {
+    html += `<div class="stash-note">Shared stash: ${ppEsc(sharedLoc)}</div>`;
+  }
+  html += `<input type="text" id="pp-inv-pop-loc" value="${ppEsc(storageLoc)}" placeholder="e.g. LR closet top shelf">`;
+  if (!locationOnly && size) {
+    html += `<label>Note (optional)</label>`;
+    html += `<textarea id="pp-inv-pop-note" placeholder="e.g. restocked from Costco trip"></textarea>`;
+  }
+  html += `<div class="actions">`;
+  html += `<button onclick="ppInvClosePop()">Cancel</button>`;
+  html += `<button class="primary" onclick="ppInvSavePopover('${pid}',${size ? `'${ppEsc(size)}'` : 'null'})">Save</button>`;
+  html += `</div>`;
+  pop.innerHTML = html;
   document.body.appendChild(pop);
 
-  // Position near the clicked cell, clamped to viewport
-  if (cell) {
-    const rect = cell.getBoundingClientRect();
-    const popW = 280;
+  // Position near anchor, clamped to viewport
+  if (anchor) {
+    const rect = anchor.getBoundingClientRect();
+    const popW = 320;
     let left = rect.left + window.scrollX;
     if (left + popW > window.innerWidth - 12) left = window.innerWidth - popW - 12;
     pop.style.top = (rect.bottom + window.scrollY + 6) + 'px';
-    pop.style.left = left + 'px';
+    pop.style.left = Math.max(12, left) + 'px';
   } else {
-    pop.style.top = '100px';
+    pop.style.top = (window.scrollY + 150) + 'px';
     pop.style.left = '50%';
     pop.style.transform = 'translateX(-50%)';
   }
 
-  // Focus the count field
   setTimeout(() => {
-    const inp = document.getElementById('pp-inv-pop-count');
-    if (inp) { inp.focus(); inp.select(); }
+    const focusId = (locationOnly || !size) ? 'pp-inv-pop-loc' : 'pp-inv-pop-count';
+    const f = document.getElementById(focusId);
+    if (f) { f.focus(); if (f.select) f.select(); }
   }, 0);
+  setTimeout(() => {
+    document.addEventListener('click', ppInvPopOutsideClick);
+  }, 0);
+}
 
-  // Close on outside click
-  setTimeout(() => {
-    document.addEventListener('click', ppInvPopOutsideClick, { once: false });
-  }, 0);
+function ppInvClosePop() {
+  const pop = document.getElementById('pp-inv-pop');
+  if (pop) pop.remove();
+  document.removeEventListener('click', ppInvPopOutsideClick);
 }
 
 function ppInvPopOutsideClick(e) {
   const pop = document.getElementById('pp-inv-pop');
-  if (!pop) {
-    document.removeEventListener('click', ppInvPopOutsideClick);
-    return;
-  }
+  if (!pop) { document.removeEventListener('click', ppInvPopOutsideClick); return; }
   if (pop.contains(e.target)) return;
-  // Ignore clicks on matrix cells (they re-open the popover themselves)
-  if (e.target.closest && e.target.closest('.pp-inv-cell')) return;
-  pop.remove();
-  document.removeEventListener('click', ppInvPopOutsideClick);
+  // Ignore clicks on elements that open the popover themselves
+  if (e.target.closest && (e.target.closest('.count') || e.target.closest('.loc-row') || e.target.closest('th.cabin') || e.target.closest('.inv-cabin-key'))) return;
+  ppInvClosePop();
 }
 
-async function ppInvSaveCell(pid, size) {
+async function ppInvSavePopover(pid, size) {
   const p = PP[pid];
-  if (!p || !p.hvac || !p.hvac.filter_supply) return;
-  const inp = document.getElementById('pp-inv-pop-count');
+  if (!p) return;
+  if (!p.hvac) p.hvac = {};
+  if (!p.hvac.filter_supply) p.hvac.filter_supply = {};
+  const fs = p.hvac.filter_supply;
+
+  const countEl = document.getElementById('pp-inv-pop-count');
+  const locEl = document.getElementById('pp-inv-pop-loc');
   const noteEl = document.getElementById('pp-inv-pop-note');
-  if (!inp) return;
-  const raw = (inp.value || '').trim();
-  if (raw === '') { document.getElementById('pp-inv-pop').remove(); return; }
-  const newCount = parseInt(raw, 10);
-  if (isNaN(newCount) || newCount < 0) {
-    if (typeof showToast === 'function') showToast('❌ Invalid count');
-    return;
-  }
   const note = (noteEl && noteEl.value || '').trim();
 
-  if (!p.hvac.filter_supply.current_inventory) p.hvac.filter_supply.current_inventory = {};
-  const prev = p.hvac.filter_supply.current_inventory[size];
-  p.hvac.filter_supply.current_inventory[size] = newCount;
+  const entries = [];
+
+  // Count change (only if size provided)
+  if (size && countEl) {
+    const raw = (countEl.value || '').trim();
+    if (raw !== '') {
+      const newCount = parseInt(raw, 10);
+      if (isNaN(newCount) || newCount < 0) {
+        if (typeof showToast === 'function') showToast('❌ Invalid count');
+        return;
+      }
+      if (!fs.current_inventory) fs.current_inventory = {};
+      const prev = fs.current_inventory[size];
+      if (prev !== newCount) {
+        fs.current_inventory[size] = newCount;
+        entries.push({
+          path: 'hvac.filter_supply.current_inventory.' + size,
+          prev_value: prev == null ? null : prev,
+          new_value: newCount,
+        });
+      }
+    }
+  }
+
+  // Location change
+  if (locEl) {
+    const newLoc = (locEl.value || '').trim();
+    const prevLoc = fs.on_site_location || '';
+    if (newLoc !== prevLoc) {
+      fs.on_site_location = newLoc || null;
+      entries.push({
+        path: 'hvac.filter_supply.on_site_location',
+        prev_value: prevLoc || null,
+        new_value: newLoc || null,
+      });
+    }
+  }
+
+  if (!entries.length) { ppInvClosePop(); return; }
+
   p.last_updated = new Date().toISOString().slice(0, 10);
   p.last_updated_by = 'chip';
-
   if (!Array.isArray(PP_LOG)) PP_LOG = [];
-  PP_LOG.push({
-    timestamp: new Date().toISOString(),
-    property_id: pid,
-    path: 'hvac.filter_supply.current_inventory.' + size,
-    prev_value: prev == null ? null : prev,
-    new_value: newCount,
-    source: 'owner_inventory_edit',
-    note: note || null,
-    by: 'chip',
+  const ts = new Date().toISOString();
+  entries.forEach((e) => {
+    PP_LOG.push({
+      timestamp: ts,
+      property_id: pid,
+      path: e.path,
+      prev_value: e.prev_value,
+      new_value: e.new_value,
+      source: 'owner_inventory_edit',
+      note: note || null,
+      by: 'chip',
+    });
   });
 
   const okPp = await ppSave('se_pp', PP);
   const okLog = await ppSave('se_pp_log', PP_LOG);
-  const popEl = document.getElementById('pp-inv-pop');
-  if (popEl) popEl.remove();
-  document.removeEventListener('click', ppInvPopOutsideClick);
+  ppInvClosePop();
   if (okPp && okLog && typeof showToast === 'function') {
-    showToast(`✓ ${size.replace('x','×')} count saved: ${newCount}`);
+    showToast(`✓ Saved ${entries.length} change${entries.length === 1 ? '' : 's'}`);
   }
   ppRenderInventory();
+}
+
+// ── Popover: edit exterior backup key status (admin only) ──
+function ppInvEditKey(ev, pid) {
+  if (ev && ev.stopPropagation) ev.stopPropagation();
+  if (!ppCanSee('admin')) return;
+  const p = PP[pid];
+  if (!p) return;
+  if (!p.access) p.access = {};
+  if (!p.access.exterior_backup_key) p.access.exterior_backup_key = {};
+  const cur = p.access.exterior_backup_key.status || '';
+
+  const existing = document.getElementById('pp-inv-pop');
+  if (existing) existing.remove();
+
+  const options = ['present', 'missing', 'unknown', 'pending_install', 'shared_with_sibling'];
+  let html = `<div class="t">${ppEsc(p.property_name || pid)}</div>`;
+  html += `<div class="s">Exterior backup key status</div>`;
+  html += `<label>Status</label>`;
+  html += `<select id="pp-inv-pop-key">`;
+  options.forEach((o) => {
+    const sel = o === cur ? ' selected' : '';
+    html += `<option value="${o}"${sel}>${o}</option>`;
+  });
+  if (cur && !options.includes(cur)) {
+    html += `<option value="${ppEsc(cur)}" selected>${ppEsc(cur)}</option>`;
+  }
+  html += `</select>`;
+  html += `<div class="actions">`;
+  html += `<button onclick="ppInvClosePop()">Cancel</button>`;
+  html += `<button class="primary" onclick="ppInvSaveKey('${pid}')">Save</button>`;
+  html += `</div>`;
+
+  const pop = document.createElement('div');
+  pop.id = 'pp-inv-pop';
+  pop.innerHTML = html;
+  document.body.appendChild(pop);
+
+  const anchor = ev && ev.currentTarget;
+  if (anchor) {
+    const rect = anchor.getBoundingClientRect();
+    const popW = 300;
+    let left = rect.right + window.scrollX - popW;
+    if (left < 12) left = 12;
+    pop.style.top = (rect.bottom + window.scrollY + 6) + 'px';
+    pop.style.left = left + 'px';
+  } else {
+    pop.style.top = (window.scrollY + 150) + 'px';
+    pop.style.left = '50%';
+    pop.style.transform = 'translateX(-50%)';
+  }
+
+  setTimeout(() => {
+    const f = document.getElementById('pp-inv-pop-key');
+    if (f) f.focus();
+  }, 0);
+  setTimeout(() => {
+    document.addEventListener('click', ppInvPopOutsideClick);
+  }, 0);
+}
+
+async function ppInvSaveKey(pid) {
+  const p = PP[pid];
+  if (!p) return;
+  if (!p.access) p.access = {};
+  if (!p.access.exterior_backup_key) p.access.exterior_backup_key = {};
+  const sel = document.getElementById('pp-inv-pop-key');
+  if (!sel) return;
+  const val = sel.value;
+  const prev = p.access.exterior_backup_key.status || null;
+  if (val === prev) { ppInvClosePop(); return; }
+  p.access.exterior_backup_key.status = val;
+  p.last_updated = new Date().toISOString().slice(0, 10);
+  p.last_updated_by = 'chip';
+  if (!Array.isArray(PP_LOG)) PP_LOG = [];
+  PP_LOG.push({
+    timestamp: new Date().toISOString(),
+    property_id: pid,
+    path: 'access.exterior_backup_key.status',
+    prev_value: prev,
+    new_value: val,
+    source: 'owner_key_status_edit',
+    note: null,
+    by: 'chip',
+  });
+  const okPp = await ppSave('se_pp', PP);
+  const okLog = await ppSave('se_pp_log', PP_LOG);
+  ppInvClosePop();
+  if (okPp && okLog && typeof showToast === 'function') {
+    showToast(`✓ Key status: ${val}`);
+  }
+  ppRenderInventory();
+  if (typeof ppRenderList === 'function') ppRenderList(); // refresh cabin list pills too
 }
 // ─── end Filter Inventory sub-tab ─────────────────────────────────
 
@@ -7505,30 +7742,84 @@ function fsRenderBundlerInline() {
   wrap.innerHTML = h;
 }
 
-// Build a notes string describing every filter to service.
+// Required filters per size for a single visit. Respects quantity_per_change.
+// ALL filters are replaced on a visit ("change one, change all" rule).
+function fsRequiredBySize(profile) {
+  const out = {};
+  const hvac = (profile && profile.hvac) || {};
+  (hvac.disposable_filters || []).forEach((f) => {
+    if (!f.size) return;
+    const n = Number(f.quantity_per_change) || 1;
+    out[f.size] = (out[f.size] || 0) + n;
+  });
+  return out;
+}
+
+// Buy list from shortfall only (no opportunistic restocking). Uses assume-zero
+// rule — unmeasured counts treated as 0 for shortfall math.
+function fsShortfallList(profile) {
+  const required = fsRequiredBySize(profile);
+  const inv = (profile.hvac && profile.hvac.filter_supply && profile.hvac.filter_supply.current_inventory) || {};
+  const gaps = [];
+  Object.keys(required).sort().forEach((size) => {
+    const need = required[size];
+    const have = inv[size] == null ? 0 : inv[size]; // assume-zero
+    const gap = Math.max(0, need - have);
+    if (gap > 0) gaps.push(gap + '× ' + size.replace('x','×'));
+  });
+  return gaps;
+}
+
+// Build a notes string describing every filter to service. Includes the
+// "change one, change all" rule, storage location, required quantities, and
+// a heads-up about the recount close-out flow.
 function fsBuildNotesBlock(profile) {
   const s = fsStatus(profile);
-  const lines = ['— FILTER SERVICE BUNDLED —'];
+  const storage = (profile.hvac && profile.hvac.filter_supply && profile.hvac.filter_supply.on_site_location) || null;
+  const required = fsRequiredBySize(profile);
+  const needList = Object.keys(required).sort().map((sz) => required[sz] + '× ' + sz.replace('x','×')).join(', ');
+  const lines = [
+    '— FILTER SERVICE BUNDLED —',
+    'REPLACE ALL filters at this cabin (change one, change all rule).',
+    '',
+  ];
+  if (storage) lines.push('Filter storage at cabin: ' + storage);
+  else lines.push('Filter storage: not yet recorded — please note where you find them when you arrive.');
+  if (needList) lines.push('Per visit: ' + needList);
+  lines.push('', 'Filters to service:');
   s.filters.forEach((f) => {
     let ln = '• ' + f.label;
     if (f.location) ln += ' @ ' + f.location;
     if (f.ladder_required) ln += ' (ladder)';
     lines.push(ln);
   });
-  lines.push('Write date on filter and take a photo.');
+  lines.push('', 'At close-out the app will ask you to recount what\'s left at the cabin for each size.', 'Write date on new filter and take a photo.');
   return lines.join('\n');
 }
 
 // Hook invoked from saveTask(). If bundler checkbox is checked, stamp the
-// task with filter_service_bundled and append a notes block.
+// task with filter_service_bundled, append a notes block, and auto-populate
+// Purchase Required from shortfall.
 function fsMaybeStampTask(task) {
   const cb = document.getElementById('f-fs-bundle-cb');
   if (!cb || !cb.checked) return;
   if (!PP || !PP[task.property]) return;
+  const p = PP[task.property];
   task.filter_service_bundled = true;
-  const block = fsBuildNotesBlock(PP[task.property]);
+  const block = fsBuildNotesBlock(p);
   if (!task.notes) task.notes = [];
   task.notes.push({ text: block, type: 'admin', time: new Date().toISOString() });
+
+  // Auto-populate Purchase Required from shortfall (only for today's visit).
+  // Respects existing purchaseNote if set manually.
+  if (!task.purchaseNote) {
+    const shortfall = fsShortfallList(p);
+    if (shortfall.length) {
+      task.purchaseNote = 'Filters: ' + shortfall.join(', ');
+      task.purchaseStatus = task.purchaseStatus || 'needed';
+      task.purchaser = task.purchaser || 'owner';
+    }
+  }
 }
 
 // Hook invoked from markComplete()/vdQuickComplete(). If the task was
@@ -7566,6 +7857,160 @@ async function fsOnTaskComplete(task) {
   try {
     await ppSave('se_pp', PP);
   } catch (e) { console.warn('[fs] profile save failed', e); }
+}
+
+// ── Recount modal (close-out for filter tasks) ────────────────────
+// Vendor must enter how many of each filter size is left at the cabin
+// before a filter task can be marked complete. Updates current_inventory
+// and optionally filter storage location. Logs each change to se_pp_log.
+
+let _fsRecountResolver = null;
+let _fsRecountTask = null;
+
+function fsPromptRecount(task) {
+  return new Promise((resolve) => {
+    if (!PP || !PP[task.property]) { resolve(true); return; }
+    const p = PP[task.property];
+    const sizes = fsRequiredBySize(p);
+    if (!Object.keys(sizes).length) { resolve(true); return; }
+    _fsRecountResolver = resolve;
+    _fsRecountTask = task;
+    fsRecountOpen(p, sizes);
+  });
+}
+
+function fsRecountOpen(profile, sizes) {
+  const existing = document.getElementById('fs-recount-modal');
+  if (existing) existing.remove();
+
+  const fs = (profile.hvac && profile.hvac.filter_supply) || {};
+  const currentLoc = fs.on_site_location || '';
+  const sharedLoc = (!currentLoc && fs.stash_id && PP_STASHES && PP_STASHES[fs.stash_id])
+    ? (PP_STASHES[fs.stash_id].location || '') : '';
+  const cabinName = profile.property_name || profile.property_id;
+
+  let body = '';
+  Object.keys(sizes).sort().forEach((size) => {
+    const req = sizes[size];
+    body += `<div class="fs-rc-row">`;
+    body += `<div class="fs-rc-size"><b>${ppEsc(size.replace('x','×'))}</b> <span class="fs-rc-req">needed per visit: ${req}</span></div>`;
+    body += `<input type="number" min="0" class="fs-recount-input" data-size="${ppEsc(size)}" placeholder="#" required>`;
+    body += `</div>`;
+  });
+
+  const stashNote = sharedLoc && !currentLoc
+    ? `<div class="fs-rc-stash-note">Shared stash recorded: ${ppEsc(sharedLoc)}</div>` : '';
+
+  const html = `<div class="mo open" id="fs-recount-modal">
+    <div class="modal" style="max-width:480px">
+      <div class="mhdr">
+        <div>
+          <div class="mtitle">Close out filter visit</div>
+          <div class="fs-rc-sub">${ppEsc(cabinName)}</div>
+        </div>
+        <button class="mclose" onclick="fsRecountCancel()">&times;</button>
+      </div>
+      <div class="fs-rc-intro">How many filters of each size are <b>left at the cabin</b> after today's work? Required for every size.</div>
+      <div class="fs-rc-list">${body}</div>
+      <div class="fs-rc-loc">
+        <label>Filter storage location ${currentLoc ? '' : '(please capture if you found them)'}</label>
+        ${stashNote}
+        <input type="text" id="fs-recount-loc" value="${ppEsc(currentLoc)}" placeholder="e.g. LR closet top shelf">
+      </div>
+      <div class="fs-rc-actions">
+        <button class="btn" onclick="fsRecountCancel()">Cancel</button>
+        <button class="btn btn-g" onclick="fsRecountSave()">Save & Complete</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+  setTimeout(() => {
+    const first = document.querySelector('.fs-recount-input');
+    if (first) first.focus();
+  }, 20);
+}
+
+async function fsRecountSave() {
+  const task = _fsRecountTask;
+  if (!task) return;
+  const p = PP && PP[task.property];
+  if (!p) { fsRecountClose(true); return; }
+
+  const inputs = document.querySelectorAll('.fs-recount-input');
+  const counts = {};
+  let missing = false;
+  inputs.forEach((el) => {
+    el.style.borderColor = '';
+    const raw = (el.value || '').trim();
+    if (raw === '') { missing = true; el.style.borderColor = 'var(--red)'; return; }
+    const n = parseInt(raw, 10);
+    if (isNaN(n) || n < 0) { missing = true; el.style.borderColor = 'var(--red)'; return; }
+    counts[el.getAttribute('data-size')] = n;
+  });
+  if (missing) {
+    if (typeof showToast === 'function') showToast('❌ Enter a count for every filter size');
+    return;
+  }
+
+  if (!p.hvac) p.hvac = {};
+  if (!p.hvac.filter_supply) p.hvac.filter_supply = {};
+  if (!p.hvac.filter_supply.current_inventory) p.hvac.filter_supply.current_inventory = {};
+
+  if (!Array.isArray(PP_LOG)) PP_LOG = [];
+  const ts = new Date().toISOString();
+  const by = (typeof getCurrentUserName === 'function' && getCurrentUserName()) || task.vendor || 'vendor';
+
+  Object.keys(counts).forEach((size) => {
+    const prev = p.hvac.filter_supply.current_inventory[size];
+    const newVal = counts[size];
+    if (prev !== newVal) {
+      p.hvac.filter_supply.current_inventory[size] = newVal;
+      PP_LOG.push({
+        id: 'chg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+        ts, user: by, property_id: task.property,
+        path: 'hvac.filter_supply.current_inventory.' + size,
+        old_value: prev == null ? null : prev,
+        new_value: newVal,
+        source: 'filter_task_recount',
+        task_id: task.id,
+      });
+    }
+  });
+
+  const locEl = document.getElementById('fs-recount-loc');
+  if (locEl) {
+    const newLoc = (locEl.value || '').trim();
+    const prevLoc = p.hvac.filter_supply.on_site_location || '';
+    if (newLoc && newLoc !== prevLoc) {
+      p.hvac.filter_supply.on_site_location = newLoc;
+      PP_LOG.push({
+        id: 'chg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+        ts, user: by, property_id: task.property,
+        path: 'hvac.filter_supply.on_site_location',
+        old_value: prevLoc || null,
+        new_value: newLoc,
+        source: 'filter_task_recount',
+        task_id: task.id,
+      });
+    }
+  }
+  p.last_updated = fsTodayISO();
+  p.last_updated_by = by;
+
+  try { await ppSave('se_pp', PP); } catch (e) { console.warn('[fs] recount save failed', e); }
+  try { await ppSave('se_pp_log', PP_LOG); } catch (e) { console.warn('[fs] recount log failed', e); }
+
+  fsRecountClose(true);
+}
+
+function fsRecountCancel() { fsRecountClose(false); }
+function fsRecountClose(ok) {
+  const m = document.getElementById('fs-recount-modal');
+  if (m) m.remove();
+  const resolver = _fsRecountResolver;
+  _fsRecountResolver = null;
+  _fsRecountTask = null;
+  if (resolver) resolver(ok);
 }
 
 // Needs Attention rollup. Extreme cabins only — bundle cabins stay quiet.
