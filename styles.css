@@ -643,13 +643,11 @@ textarea{resize:vertical;min-height:76px}
 @keyframes checkPop{0%{transform:scale(1)}30%{transform:scale(1.4)}60%{transform:scale(.9)}100%{transform:scale(1)}}
 @keyframes vsShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
 
-/* ── Vendor sheet: purchase callout at property header ── */
-.vs-purchase-callout{background:var(--red-bg);border:1px solid var(--red-border);border-radius:8px;padding:8px 12px;margin-top:8px}
-.vs-purchase-callout p{font-size:.8rem;color:#6b2018;font-weight:500;line-height:1.4}
-
-/* ── Vendor sheet: report issue button ── */
-.vs-report-btn{display:flex;align-items:center;justify-content:space-between;width:100%;padding:12px 16px;border:2px solid var(--green-mid);border-radius:var(--radius);background:linear-gradient(135deg,var(--green-pale),var(--green-light));cursor:pointer;font-family:inherit;font-size:.82rem;font-weight:600;color:var(--green);box-shadow:var(--shadow);transition:all .15s;margin-top:12px}
-.vs-report-btn:hover{border-color:var(--green);box-shadow:var(--shadow-md)}
+/* ── Vendor sheet: report issue — simple text link ── */
+.vs-report-link{display:flex;align-items:center;gap:6px;padding:6px 0;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent}
+.vs-report-link-icon{font-size:.7rem;color:var(--text3)}
+.vs-report-link-label{font-size:.68rem;color:var(--text3);font-weight:500;transition:color .15s}
+.vs-report-link:hover .vs-report-link-label{color:var(--green);text-decoration:underline}
 
 /* ── Cleaning Log ── */
 .cl-wrap{border-radius:var(--radius)}
@@ -959,7 +957,7 @@ textarea{resize:vertical;min-height:76px}
 .vs-card.vs-done .vs-card-check{background:var(--green);border-color:var(--green);color:#fff}
 .vs-card-info{flex:1;min-width:0}
 .vs-card-prop{font-size:.68rem;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:3px}
-.vs-card-prob{font-size:.92rem;font-weight:500;color:var(--text)}
+.vs-card-prob{font-size:.88rem;font-weight:600;color:var(--text);line-height:1.35}
 .vs-card-badges{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
 .vs-urgent{background:var(--red);color:#fff;font-size:.6rem;font-weight:700;padding:2px 8px;border-radius:20px;text-transform:uppercase}
 .vs-card-detail{max-height:0;overflow:hidden;padding:0 16px;border-top:0 solid var(--border);transition:max-height .4s ease,padding .4s ease,border-top-width .1s ease;opacity:0}
@@ -993,13 +991,7 @@ textarea{resize:vertical;min-height:76px}
 .vs-nb-header{font-family:'Cormorant Garamond',serif;font-size:1.05rem;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;margin:20px 0 6px;padding-bottom:4px;border-bottom:1px solid var(--border)}
 /* Mobile zoom prevention — force 16px on all vendor inputs */
 #vendor-sheet input,#vendor-sheet textarea,#vendor-sheet select,#vendor-sheet button{font-size:16px}
-/* ── Vendor Report Button — solid green with icon circle ── */
-.vs-report-btn{display:flex;align-items:center;gap:10px;width:100%;padding:13px 15px;border:1.5px solid var(--green-mid,#2e7d52);border-radius:var(--radius);background:linear-gradient(135deg,rgba(46,125,82,.06) 0%,rgba(13,53,40,.04) 100%);cursor:pointer;transition:all .2s;font-family:inherit;-webkit-tap-highlight-color:transparent}
-.vs-report-btn:hover,.vs-report-btn:active{background:linear-gradient(135deg,rgba(46,125,82,.12) 0%,rgba(13,53,40,.08) 100%);border-color:var(--green)}
-.vs-report-btn .vsrb-icon{font-size:.85rem;width:32px;height:32px;background:var(--green);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.vs-report-btn .vsrb-text{text-align:left;flex:1}
-.vs-report-btn .vsrb-main{font-size:.82rem;font-weight:600;color:var(--green)}
-.vs-report-btn .vsrb-hint{font-size:.66rem;color:var(--text3);margin-top:1px}
+/* ── Vendor Report — simple text link (replaces old gradient button) ── */
 /* ── Vendor Report Photo Step ── */
 .vs-photo-step{display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
 .vs-photo-step.open{display:block}
@@ -1018,10 +1010,15 @@ textarea{resize:vertical;min-height:76px}
 .vs-prop-header{margin:12px 0 6px;padding-left:10px;border-left:3px solid var(--green)}
 .vs-prop-name{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text)}
 .vs-prop-meta{font-size:.68rem;color:var(--text2);margin-top:1px;font-weight:400}
-.vs-guest-alert{font-size:.72rem;padding:5px 8px;border-radius:6px;margin-top:5px;display:flex;align-items:center;gap:6px;font-weight:500}
-.vs-guest-alert-checkout{background:#fff3e0;color:#e65100;border:1px solid #ffcc80}
-.vs-guest-alert-checkin{background:var(--green-light);color:var(--green);border:1px solid var(--border-dark)}
-.vs-guest-alert-inhouse{background:#fff8e1;color:#f57f17;border:1px solid #ffe082}
+/* Guest alerts — compact inline pills */
+.vs-alert-row{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.vs-guest-alert{font-size:.62rem;padding:3px 7px;border-radius:4px;display:inline-flex;align-items:center;gap:4px;font-weight:600;letter-spacing:.3px}
+.vs-guest-alert-checkout{background:rgba(230,81,0,.06);color:#bf5b00;border:1px solid rgba(230,81,0,.15)}
+.vs-guest-alert-checkin{background:rgba(13,53,40,.04);color:var(--green-mid);border:1px solid rgba(13,53,40,.1)}
+.vs-guest-alert-inhouse{background:rgba(245,127,23,.05);color:#c67000;border:1px solid rgba(245,127,23,.15)}
+/* Inline purchase tag on task cards */
+.vs-purchase-tag{display:inline-flex;align-items:center;gap:4px;font-size:.6rem;font-weight:600;color:#b8700a;background:rgba(255,149,0,.08);border:1px solid rgba(255,149,0,.25);padding:1px 7px;border-radius:4px}
+.vs-purchase-tag::before{content:'';display:inline-block;width:5px;height:5px;border-radius:50%;background:#ff9500;flex-shrink:0}
 /* Vendor-done badge for admin task cards */
 .vd-badge{display:inline-flex;align-items:center;gap:3px;background:#e8f5e9;color:#2e7d32;font-size:.62rem;font-weight:600;padding:2px 7px;border-radius:12px;border:1px solid #a5d6a7;text-transform:uppercase;letter-spacing:.5px}
 .vd-badge::before{content:'\\2713';font-size:.7rem}

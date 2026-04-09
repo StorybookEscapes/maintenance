@@ -5348,34 +5348,25 @@ async function rpImportFromReview(rv) {
       if(t.propertyName!==lastProp){
         if(propGroupOpen){html+=vsReportBtn(lastPropId,lastPropShort);html+='</div>';}
         const shortName=t.propertyName.replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
-        // Guest alerts for this property
+        // Guest alerts — compact inline pills
         const propAlerts=vGuestAlerts[t.property]||[];
         let alertHtml='';
         if(propAlerts.length){
-          alertHtml=propAlerts.map(a=>{
+          alertHtml='<div class="vs-alert-row">'+propAlerts.map(a=>{
             const icon=a.type==='checkout'?'&#x1F6AA;':a.type==='inhouse'?'&#x1F6A8;':'&#x1F3E0;';
             const label=a.type==='checkout'
               ?`Guests checking out this morning`
               :a.type==='inhouse'
-              ?`Guests are in house. Please announce yourself!`
+              ?`Guests in house — announce yourself`
               :`Guests checking in this afternoon`;
-            return `<div class="vs-guest-alert vs-guest-alert-${a.type}">${icon} <strong>${label}</strong></div>`;
-          }).join('');
+            return `<div class="vs-guest-alert vs-guest-alert-${a.type}">${icon} ${label}</div>`;
+          }).join('')+'</div>';
         }
         html+=`<div class="vs-prop-header" style="border-left-color:var(--${nbCls||'green'})">
           <div class="vs-prop-name">${shortName}</div>
           <div class="vs-prop-meta">${t.address?'<a href="https://maps.google.com/?q='+encodeURIComponent(t.address)+'" target="_blank">'+t.address+'</a>':''}${t.doorCode?' &middot; Code: '+t.doorCode:''}</div>
           ${alertHtml}
         </div>`;
-        // Purchase callout at property level
-        const propPurchases=vTasks.filter(pt=>pt.property===t.property&&pt.purchaseNote);
-        if(propPurchases.length){
-          html+='<div class="vs-purchase-callout">';
-          propPurchases.forEach(pt=>{
-            html+=`<p style="margin:4px 0"><span style="font-size:.66rem;text-transform:uppercase;letter-spacing:1px;font-weight:700;color:var(--red)">&#x1F6D2; Purchase needed:</span> ${pt.purchaseNote.replace(/</g,'&lt;')}</p>`;
-          });
-          html+='</div>';
-        }
         html+='<div class="vs-prop-group">';
         propGroupOpen=true;
         lastProp=t.propertyName;
@@ -5408,7 +5399,7 @@ async function rpImportFromReview(rv) {
           <div class="vs-card-prob">${t.problem}</div>
           <div class="vs-card-badges">
             ${t.urgent?'<span class="vs-urgent">Urgent</span>':''}
-            ${t.purchaseNote?'<span style="font-size:.7rem;color:#e65100;font-weight:600;background:#fff3e0;padding:1px 7px;border-radius:10px;border:1px solid #ffcc80">&#x1F6D2; Purchase needed</span>':''}
+            ${t.purchaseNote?'<span class="vs-purchase-tag">Purchase needed</span>':''}
             ${done?'<span style="font-size:.7rem;color:var(--green);font-weight:500">Submitted &#x2713;</span>':''}
           </div>
         </div>
@@ -5443,14 +5434,11 @@ async function rpImportFromReview(rv) {
 
   // Report Issue button — rendered at property level below last task
   function vsReportBtn(propId,propName){
-    return`<div style="padding:8px 0" id="vsrw-${propId}">
-      <button class="vs-report-btn" id="vsrb-${propId}" onclick="window._vsShowReport('${propId}')">
-        <div class="vsrb-icon">&#x1F527;</div>
-        <div class="vsrb-text">
-          <div class="vsrb-main">Report an Issue at ${propName}</div>
-          <div class="vsrb-hint">Found something else? Let Chip know!</div>
-        </div>
-      </button>
+    return`<div style="padding:6px 0" id="vsrw-${propId}">
+      <div class="vs-report-link" id="vsrb-${propId}" onclick="window._vsShowReport('${propId}')">
+        <span class="vs-report-link-icon">&#x1F527;</span>
+        <span class="vs-report-link-label">Report an issue at ${propName}</span>
+      </div>
       <div id="vsrf-${propId}" style="display:none;margin-top:8px;padding:14px;background:#f8faf8;border:1.5px solid var(--green-mid,#2e7d52);border-radius:var(--radius);box-shadow:var(--shadow)">
         <div style="font-size:.74rem;text-transform:uppercase;letter-spacing:1px;color:var(--green);margin-bottom:10px;font-weight:700">What did you find at ${propName}?</div>
         <div style="display:flex;gap:8px;margin-bottom:12px">
