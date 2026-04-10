@@ -62,10 +62,19 @@ function pjRenderList() {
   el.innerHTML = html;
 }
 
+// Helper: get unique property IDs for a project (from linked tasks + project.property)
+function pjGetProperties(p) {
+  const projTasks = tasks.filter(t => t.project_id === p.id);
+  const propIds = new Set(projTasks.map(t => t.property).filter(Boolean));
+  if (p.property) propIds.add(p.property);
+  return [...propIds];
+}
+
 function pjCard(p) {
-  const prop = getProp(p.property);
-  const nb = getNb(p.property);
-  const nbcls = nb ? 'nb-' + nb.cls : '';
+  const propIds = pjGetProperties(p);
+  // Use first property's neighborhood for card accent color
+  const firstNb = propIds.length ? getNb(propIds[0]) : null;
+  const nbcls = firstNb ? 'nb-' + firstNb.cls : '';
   const projTasks = tasks.filter(t => t.project_id === p.id);
   const doneCount = projTasks.filter(t => t.status === 'complete' || t.status === 'resolved_by_guest').length;
   const total = projTasks.length;
@@ -73,17 +82,27 @@ function pjCard(p) {
   const isOverdue = p.due_date && new Date(p.due_date) < new Date() && p.status !== 'complete';
   const dueClass = isOverdue ? ' overdue' : '';
 
+  // Build property pills — show up to 3, then "+N more"
+  let propPills = '';
+  const maxShow = 3;
+  propIds.slice(0, maxShow).forEach(pid => {
+    const pr = getProp(pid);
+    propPills += `<span class="pj-pill pj-pill-prop">${pr ? pr.name : pid}</span>`;
+  });
+  if (propIds.length > maxShow) propPills += `<span class="pj-pill pj-pill-prop" style="background:var(--surface2)">+${propIds.length - maxShow} more</span>`;
+  if (!propIds.length) propPills = '<span class="pj-pill pj-pill-prop" style="opacity:.5">No properties yet</span>';
+
   return `<div class="pj-card ${p.status === 'complete' ? 'pj-complete' : ''} ${nbcls}" onclick="pjShowDetail('${p.id}')">
     <div class="pj-card-title">${p.title}</div>
     <div class="pj-card-meta">
-      <span class="pj-pill pj-pill-prop">${prop ? prop.name : p.property}</span>
+      ${propPills}
       ${p.type ? `<span class="pj-pill pj-pill-type">${p.type}</span>` : ''}
       ${p.due_date ? `<span class="pj-pill pj-pill-due${dueClass}">Due: ${p.due_date}</span>` : ''}
     </div>
     ${total ? `<div class="pj-progress">
       <div class="pj-bar"><div class="pj-bar-fill" style="width:${pct}%"></div></div>
       <div class="pj-progress-label">${doneCount} of ${total} tasks complete (${pct}%)</div>
-    </div>` : '<div class="pj-progress-label" style="font-size:.68rem;color:var(--text3)">No tasks created yet</div>'}
+    </div>` : '<div class="pj-progress-label" style="font-size:.68rem;color:var(--text3)">No tasks yet</div>'}
   </div>`;
 }
 
@@ -96,8 +115,7 @@ function pjShowDetail(pid) {
   list.style.display = 'none';
   el.style.display = '';
 
-  const prop = getProp(p.property);
-  const nb = getNb(p.property);
+  const propIds = pjGetProperties(p);
   const projTasks = tasks.filter(t => t.project_id === pid);
   const doneCount = projTasks.filter(t => t.status === 'complete' || t.status === 'resolved_by_guest').length;
   const failCount = p.items ? p.items.filter(i => i.status === 'fail').length : 0;
@@ -105,6 +123,14 @@ function pjShowDetail(pid) {
   const pct = total ? Math.round(doneCount / total * 100) : 0;
   const circumference = 2 * Math.PI * 26;
   const offset = circumference - (pct / 100) * circumference;
+
+  // Build property pills from linked tasks
+  let propPills = '';
+  propIds.forEach(pid2 => {
+    const pr = getProp(pid2);
+    propPills += `<span class="pj-pill pj-pill-prop">${pr ? pr.name : pid2}</span>`;
+  });
+  if (!propIds.length) propPills = '<span class="pj-pill pj-pill-prop" style="opacity:.5">No properties yet</span>';
 
   let html = '';
 
@@ -114,7 +140,7 @@ function pjShowDetail(pid) {
     <div>
       <div class="pj-detail-title">${p.title}</div>
       <div class="pj-card-meta" style="margin-top:6px">
-        <span class="pj-pill pj-pill-prop">${prop ? prop.name : p.property}</span>
+        ${propPills}
         ${p.type ? `<span class="pj-pill pj-pill-type">${p.type}</span>` : ''}
         ${p.due_date ? `<span class="pj-pill pj-pill-due">${p.due_date}</span>` : ''}
         <span class="pj-pill" style="background:${p.status === 'complete' ? 'var(--green-light);color:var(--green)' : 'var(--gold-pale);color:#8b7120'};border:1px solid var(--border)">${p.status === 'complete' ? 'Complete' : 'Open'}</span>
@@ -123,16 +149,30 @@ function pjShowDetail(pid) {
     <div class="pj-detail-actions">
       <button class="btn" onclick="pjToggleVisibility('${pid}')">${p.visible !== false ? '👁 Hide Tasks' : '👁 Show Tasks'}</button>
       ${p.status !== 'complete' ? `<button class="btn btn-g" onclick="pjConfirmComplete('${pid}')">Mark Complete</button>` : ''}
+      <button class="btn btn-red" onclick="pjDeleteProject('${pid}')">Delete</button>
     </div>
   </div>`;
 
-  // Source info bar
+  // Source info bar — full metadata display
   if (p.source) {
     const s = p.source;
+    let contactParts = [];
+    if (s.inspector_phone) contactParts.push(s.inspector_phone);
+    if (s.inspector_email) contactParts.push(s.inspector_email);
+    const contactStr = contactParts.length ? contactParts.join(' · ') : '';
+
+    let metaRows = '';
+    if (s.inspector) metaRows += `<div class="pj-src-field"><span class="pj-src-fld-label">Inspector</span><span class="pj-src-fld-val">${s.inspector}</span></div>`;
+    if (contactStr) metaRows += `<div class="pj-src-field"><span class="pj-src-fld-label">Contact</span><span class="pj-src-fld-val">${contactStr}</span></div>`;
+    if (s.inspection_date) metaRows += `<div class="pj-src-field"><span class="pj-src-fld-label">Inspection Date</span><span class="pj-src-fld-val">${s.inspection_date}</span></div>`;
+    if (s.reinspection_date) metaRows += `<div class="pj-src-field"><span class="pj-src-fld-label">Re-inspection</span><span class="pj-src-fld-val">${s.reinspection_date}</span></div>`;
+    if (s.next_annual) metaRows += `<div class="pj-src-field"><span class="pj-src-fld-label">Next Annual</span><span class="pj-src-fld-val">${s.next_annual}</span></div>`;
+    if (s.address) metaRows += `<div class="pj-src-field"><span class="pj-src-fld-label">Address</span><span class="pj-src-fld-val">${s.address}</span></div>`;
+
     html += `<div class="pj-source-bar">
-      <div>
+      <div style="flex:1">
         <div class="pj-src-label">Source Document</div>
-        <div style="font-size:.82rem;color:var(--text);margin-top:2px">${s.inspector || ''} ${s.inspection_date ? '· ' + s.inspection_date : ''}</div>
+        <div class="pj-src-grid">${metaRows}</div>
       </div>
       ${s.pdf_url ? `<span class="pj-src-link" onclick="pjOpenPdf('${s.pdf_url}',null,'${p.title.replace(/'/g, "\\'")}')">📄 View Full Report</span>` : ''}
     </div>`;
@@ -188,7 +228,8 @@ function pjShowDetail(pid) {
         ? `<span class="pj-remark" onclick="pjOpenPdf('${pdfUrl}',${item.page},'${item.name.replace(/'/g, "\\'")}')">${remarkText}</span>`
         : remarkText;
 
-      const roomHtml = `<span contenteditable="true" style="display:inline-block;min-width:50px;padding:2px 4px;border-radius:3px;border:1px dashed var(--border);font-size:.76rem;color:var(--text2);cursor:text" onfocus="this.style.borderColor='var(--green)'" onblur="this.style.borderColor='var(--border)';pjUpdateRoom('${pid}','${item.item_id}',this.textContent)">${item.room || '<span style="color:var(--text3)">+ add</span>'}</span>`;
+      const hasRoom = item.room && item.room.trim();
+      const roomHtml = `<span contenteditable="true" data-placeholder="+ add" data-pid="${pid}" data-iid="${item.item_id}" class="pj-room-edit" onfocus="pjRoomFocus(this)" onblur="pjRoomBlur(this)">${hasRoom ? item.room : '<span class="pj-room-ph">+ add</span>'}</span>`;
 
       html += `<tr class="${rowCls}">
         <td><span class="pj-status-pill ${item.status}">${item.status.toUpperCase()}</span></td>
@@ -201,6 +242,42 @@ function pjShowDetail(pid) {
 
     html += '</tbody></table></div>';
   }
+
+  // ── Project Tasks (grouped by property) ──
+  html += `<div class="pj-items-panel" style="margin-bottom:18px">
+    <div class="pj-items-hdr">
+      <span>Project Tasks (${total})</span>
+      <div style="display:flex;gap:6px">
+        <button class="btn" style="font-size:.72rem;padding:4px 10px" onclick="pjOpenTaskPicker('${pid}')">+ Add Existing</button>
+        <button class="btn btn-g" style="font-size:.72rem;padding:4px 10px" onclick="pjOpenCreateTask('${pid}')">+ Create Task</button>
+      </div>
+    </div>`;
+  if (projTasks.length) {
+    // Group tasks by property
+    const byProp = {};
+    projTasks.forEach(t => {
+      const key = t.property || '_none';
+      if (!byProp[key]) byProp[key] = [];
+      byProp[key].push(t);
+    });
+    Object.keys(byProp).sort().forEach(propKey => {
+      const pr = getProp(propKey);
+      const prName = pr ? pr.name : (propKey === '_none' ? 'No Property' : propKey);
+      html += `<div style="padding:6px 16px 2px;font-size:.68rem;text-transform:uppercase;letter-spacing:1px;color:var(--text3);font-weight:600;background:var(--surface2);border-bottom:1px solid var(--border)">${prName}</div>`;
+      byProp[propKey].forEach(t => {
+        const isDone = t.status === 'complete' || t.status === 'resolved_by_guest';
+        html += `<div class="pj-task-row ${isDone ? 'done' : ''}" onclick="openDetail('${t.id}')">
+          <button class="pj-inspect-btn ${isDone ? 'ready' : 'not-done'}" onclick="event.stopPropagation();pjToggleTask('${t.id}','${pid}')">${isDone ? '✓ Done' : 'Open'}</button>
+          <span class="pj-task-desc">${t.problem}</span>
+          <span class="pj-task-meta">${t.vendor ? t.vendor : ''} ${t.date ? '· ' + t.date : ''}</span>
+          <button class="pj-task-unlink" onclick="event.stopPropagation();pjUnlinkTask('${t.id}','${pid}')" title="Remove from project">✕</button>
+        </div>`;
+      });
+    });
+  } else {
+    html += '<div style="padding:16px;text-align:center;font-size:.8rem;color:var(--text3)">No tasks yet — add existing tasks or create new ones above.</div>';
+  }
+  html += '</div>';
 
   // Notes
   html += `<div class="pj-notes"><div class="pj-notes-title">Project Notes</div>`;
@@ -251,6 +328,29 @@ function pjConfirmComplete(pid) {
   }
 }
 
+function pjDeleteProject(pid) {
+  const p = projects.find(x => x.id === pid);
+  if (!p) return;
+  const projTasks = tasks.filter(t => t.project_id === pid);
+  let msg = `Delete "${p.title}"?\n\nThis will permanently remove the project.`;
+  if (projTasks.length) msg += `\n\n${projTasks.length} linked task${projTasks.length !== 1 ? 's' : ''} will be unlinked and kept on the Tasks tab.`;
+  msg += '\n\nThis cannot be undone.';
+  if (!confirm(msg)) return;
+  // Unlink tasks (keep them, just remove project association)
+  projTasks.forEach(t => {
+    delete t.project_id;
+    delete t.project_title;
+  });
+  // Remove project
+  const idx = projects.findIndex(x => x.id === pid);
+  if (idx !== -1) projects.splice(idx, 1);
+  savePJ();
+  saveTasks();
+  pjRenderList();
+  renderAll();
+  showToast('Project deleted — tasks kept on Tasks tab');
+}
+
 function pjAddNote(pid) {
   const input = document.getElementById('pj-note-input');
   const text = input.value.trim();
@@ -263,11 +363,195 @@ function pjAddNote(pid) {
   pjShowDetail(pid);
 }
 
+function pjRoomFocus(el) {
+  el.style.borderColor = 'var(--green)';
+  // Clear placeholder on focus
+  const ph = el.querySelector('.pj-room-ph');
+  if (ph) { el.textContent = ''; }
+}
+function pjRoomBlur(el) {
+  el.style.borderColor = 'var(--border)';
+  const val = el.textContent.trim();
+  const pid = el.dataset.pid;
+  const iid = el.dataset.iid;
+  if (val) {
+    pjUpdateRoom(pid, iid, val);
+  } else {
+    // Restore placeholder
+    el.innerHTML = '<span class="pj-room-ph">+ add</span>';
+    pjUpdateRoom(pid, iid, '');
+  }
+}
 function pjUpdateRoom(pid, itemId, val) {
   const p = projects.find(x => x.id === pid);
   if (!p) return;
   const item = p.items.find(i => i.item_id === itemId);
   if (item) { item.room = val.trim(); savePJ(); }
+}
+
+// ── TASK PICKER (Add Existing Tasks) ────────────────────────
+function pjOpenTaskPicker(pid) {
+  const p = projects.find(x => x.id === pid);
+  if (!p) return;
+  // Show tasks that are NOT already in any project, grouped by property
+  const available = tasks.filter(t => !t.project_id && t.status !== 'complete' && t.status !== 'resolved_by_guest');
+  const byProp = {};
+  available.forEach(t => {
+    const key = t.property || '_none';
+    if (!byProp[key]) byProp[key] = [];
+    byProp[key].push(t);
+  });
+
+  let body = `<div style="max-height:60vh;overflow-y:auto;padding:4px 0">`;
+  if (!available.length) {
+    body += '<div style="padding:20px;text-align:center;font-size:.82rem;color:var(--text3)">All open tasks are already assigned to projects.</div>';
+  } else {
+    // Sort property groups by neighborhood order
+    const sortedKeys = Object.keys(byProp).sort((a, b) => {
+      const pa = getProp(a), pb = getProp(b);
+      return (pa ? pa.name : a).localeCompare(pb ? pb.name : b);
+    });
+    sortedKeys.forEach(propKey => {
+      const pr = getProp(propKey);
+      const prName = pr ? pr.name : (propKey === '_none' ? 'No Property' : propKey);
+      body += `<div style="padding:8px 16px 4px;font-size:.68rem;text-transform:uppercase;letter-spacing:1px;color:var(--green);font-weight:700;background:var(--surface2);border-bottom:1px solid var(--border)">${prName}</div>`;
+      byProp[propKey].forEach(t => {
+        body += `<label class="pj-picker-row" style="display:flex;align-items:center;gap:10px;padding:8px 16px;cursor:pointer;border-bottom:1px solid var(--green-light)">
+          <input type="checkbox" value="${t.id}" class="pj-pick-cb">
+          <span style="flex:1;font-size:.82rem">${t.problem}</span>
+          <span style="font-size:.68rem;color:var(--text3)">${t.category || ''}</span>
+        </label>`;
+      });
+    });
+  }
+  body += '</div>';
+
+  const modal = document.getElementById('pj-import-modal');
+  document.getElementById('pj-import-title').textContent = 'Add Tasks to Project';
+  document.getElementById('pj-import-body').innerHTML = body + `
+    <div style="display:flex;justify-content:space-between;padding:14px 0 0">
+      <button class="btn" onclick="closeModal('pj-import-modal')">Cancel</button>
+      <button class="btn btn-g" onclick="pjLinkSelected('${pid}')">Add Selected</button>
+    </div>`;
+  modal.classList.add('open');
+}
+
+function pjLinkSelected(pid) {
+  const p = projects.find(x => x.id === pid);
+  if (!p) return;
+  const cbs = document.querySelectorAll('.pj-pick-cb:checked');
+  let count = 0;
+  cbs.forEach(cb => {
+    const t = tasks.find(x => x.id === cb.value);
+    if (t) {
+      t.project_id = pid;
+      t.project_title = p.title;
+      count++;
+    }
+  });
+  if (count) {
+    saveTasks();
+    closeModal('pj-import-modal');
+    pjShowDetail(pid);
+    renderAll();
+    showToast(`${count} task${count !== 1 ? 's' : ''} added to project`);
+  } else {
+    showToast('No tasks selected');
+  }
+}
+
+function pjUnlinkTask(taskId, pid) {
+  const t = tasks.find(x => x.id === taskId);
+  if (!t) return;
+  if (!confirm('Remove this task from the project? The task will remain on the main Tasks tab.')) return;
+  delete t.project_id;
+  delete t.project_title;
+  saveTasks();
+  pjShowDetail(pid);
+  renderAll();
+  showToast('Task removed from project');
+}
+
+// ── CREATE TASK (within project) ────────────────────────────
+function pjOpenCreateTask(pid) {
+  const p = projects.find(x => x.id === pid);
+  if (!p) return;
+  const modal = document.getElementById('pj-import-modal');
+  document.getElementById('pj-import-title').textContent = 'Create Task';
+
+  let body = `<div class="fg" style="padding-top:6px">
+    <div class="fgr"><label>Property</label><select id="pjt-property"></select></div>
+    <div class="fgr"><label>Category</label>
+      <select id="pjt-category">
+        <option value="">Select category</option>
+        <option value="replacement">Replacement</option>
+        <option value="cleaning">Cleaning</option>
+        <option value="handyman">Handyman</option>
+        <option value="plumbing">Plumbing</option>
+        <option value="hvac">HVAC</option>
+        <option value="electrical">Electrical</option>
+        <option value="pest">Pest Control</option>
+        <option value="landscaping">Landscaping</option>
+        <option value="hot_tub">Hot Tub</option>
+        <option value="pool">Pool</option>
+        <option value="arcade">Arcade / Billiards</option>
+        <option value="septic">Septic</option>
+        <option value="water">Water Filtration</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div class="fgr full"><label>Problem Description</label><textarea id="pjt-problem" rows="3" placeholder="Describe the issue..."></textarea></div>
+    <div class="fgr"><label>Vendor</label><input type="text" id="pjt-vendor" placeholder="(optional)"></div>
+    <div class="fgr"><label>Scheduled Date</label><input type="date" id="pjt-date"></div>
+  </div>
+  <div style="display:flex;justify-content:space-between;margin-top:18px">
+    <button class="btn" onclick="closeModal('pj-import-modal')">Cancel</button>
+    <button class="btn btn-g" onclick="pjSaveNewTask('${pid}')">Create Task</button>
+  </div>`;
+
+  document.getElementById('pj-import-body').innerHTML = body;
+  modal.classList.add('open');
+  // Populate property selector, pre-select project's primary property if set
+  populatePropSel('pjt-property');
+  if (p.property) document.getElementById('pjt-property').value = p.property;
+}
+
+function pjSaveNewTask(pid) {
+  const p = projects.find(x => x.id === pid);
+  if (!p) return;
+  const propVal = document.getElementById('pjt-property').value;
+  const prob = document.getElementById('pjt-problem').value.trim();
+  if (!propVal || !prob) { showToast('Property and problem are required', 'err'); return; }
+  const fDate = document.getElementById('pjt-date').value;
+  let fStatus = 'open';
+  if (fDate) fStatus = 'scheduled';
+  const cat = document.getElementById('pjt-category').value;
+  const vendor = document.getElementById('pjt-vendor').value.trim();
+
+  const t = {
+    id: 'pt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+    property: propVal,
+    guest: '',
+    problem: prob,
+    category: cat,
+    status: fStatus,
+    date: fDate,
+    vendor: vendor,
+    urgent: false,
+    recurring: false,
+    notes: [],
+    vendorNotes: '',
+    created: new Date().toISOString(),
+    project_id: pid,
+    project_title: p.title
+  };
+  if (cat === 'replacement') { t.purchaseNote = prob; t.purchaseStatus = 'needed'; t.purchaser = 'owner'; }
+  tasks.unshift(t);
+  saveTasks();
+  closeModal('pj-import-modal');
+  pjShowDetail(pid);
+  renderAll();
+  showToast('Task created and added to project');
 }
 
 // ── PDF VIEWER ──────────────────────────────────────────────
@@ -283,13 +567,13 @@ function pjOpenPdf(url, page, title) {
 }
 
 // ── IMPORT WIZARD ───────────────────────────────────────────
-// Step 1: Title, Property, Type (required — manual)
+// Step 1: Title, Property (optional), Type (required — manual)
 // Step 2: Paste report text (auto-detects inspector, dates, items)
 // Step 3: Review everything — auto-detected fields editable, items table
-let pjImportData = { step: 1, title: '', property: '', type: 'inspection', due: '', inspector: '', inspDate: '', reinspDate: '', pdfUrl: '', items: [], _rawText: '' };
+let pjImportData = { step: 1, title: '', property: '', type: 'inspection', due: '', inspector: '', inspPhone: '', inspEmail: '', inspDate: '', reinspDate: '', nextAnnual: '', address: '', pdfUrl: '', items: [], _rawText: '' };
 
 function pjOpenImport() {
-  pjImportData = { step: 1, title: '', property: '', type: 'inspection', due: '', inspector: '', inspDate: '', reinspDate: '', pdfUrl: '', items: [], _rawText: '' };
+  pjImportData = { step: 1, title: '', property: '', type: 'inspection', due: '', inspector: '', inspPhone: '', inspEmail: '', inspDate: '', reinspDate: '', nextAnnual: '', address: '', pdfUrl: '', items: [], _rawText: '' };
   document.getElementById('pj-import-modal').classList.add('open');
   document.getElementById('pj-import-title').textContent = 'New Project';
   pjRenderStep();
@@ -306,7 +590,7 @@ function pjRenderStep() {
       <div style="font-size:.72rem;color:var(--text2);margin-bottom:14px;font-weight:600;text-transform:uppercase;letter-spacing:1px">Step 1 — Project Basics</div>
       <div class="fg">
         <div class="fgr full"><label>Project Title</label><input type="text" id="pji-title" value="${pjImportData.title}" placeholder="e.g. Fire Inspection - Bearadise Lodge - 2026"></div>
-        <div class="fgr"><label>Property</label><select id="pji-property"></select></div>
+        <div class="fgr"><label>Property <span style="font-weight:400;color:var(--text3);font-size:.68rem">(optional for multi-property projects)</span></label><select id="pji-property"></select></div>
         <div class="fgr"><label>Project Type</label><select id="pji-type">
           <option value="inspection"${pjImportData.type === 'inspection' ? ' selected' : ''}>Inspection</option>
           <option value="renovation"${pjImportData.type === 'renovation' ? ' selected' : ''}>Renovation</option>
@@ -362,9 +646,12 @@ function pjRenderStep() {
       <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:1px;color:var(--green);font-weight:700;margin-bottom:10px">Auto-Detected Details <span style="font-weight:400;color:var(--text3);text-transform:none;letter-spacing:0">(edit if needed)</span></div>
       <div class="fg">
         <div class="fgr"><label>Inspector</label><input type="text" id="pji-inspector" value="${d.inspector}" placeholder="Not detected"></div>
+        <div class="fgr"><label>Phone</label><input type="text" id="pji-inspphone" value="${d.inspPhone || ''}" placeholder="Not detected"></div>
+        <div class="fgr"><label>Email</label><input type="text" id="pji-inspemail" value="${d.inspEmail || ''}" placeholder="Not detected"></div>
         <div class="fgr"><label>Inspection Date</label><input type="date" id="pji-inspdate" value="${d.inspDate}"></div>
         <div class="fgr"><label>Re-inspection / Due Date</label><input type="date" id="pji-due" value="${d.due}"></div>
-        <div class="fgr"><label>PDF URL (optional)</label><input type="text" id="pji-pdf" value="${d.pdfUrl}" placeholder="https://..."></div>
+        <div class="fgr"><label>Next Annual</label><input type="date" id="pji-nextannual" value="${d.nextAnnual || ''}"></div>
+        <div class="fgr full"><label>Address</label><input type="text" id="pji-address" value="${d.address || ''}" placeholder="Not detected"></div>
       </div>
     </div>`;
 
@@ -398,7 +685,6 @@ function pjStep1Next() {
   pjImportData.property = document.getElementById('pji-property').value;
   pjImportData.type = document.getElementById('pji-type').value;
   if (!pjImportData.title) { showToast('Please enter a project title'); return; }
-  if (!pjImportData.property) { showToast('Please select a property'); return; }
   pjImportData.step = 2;
   pjRenderStep();
 }
@@ -411,8 +697,12 @@ function pjStep2Parse() {
     pjImportData.items = parsed.items;
     // Auto-fill detected metadata (only if not already manually set)
     if (parsed.inspector && !pjImportData.inspector) pjImportData.inspector = parsed.inspector;
+    if (parsed.inspPhone) pjImportData.inspPhone = parsed.inspPhone;
+    if (parsed.inspEmail) pjImportData.inspEmail = parsed.inspEmail;
     if (parsed.inspDate && !pjImportData.inspDate) pjImportData.inspDate = parsed.inspDate;
     if (parsed.reinspDate && !pjImportData.due) pjImportData.due = parsed.reinspDate;
+    if (parsed.nextAnnual) pjImportData.nextAnnual = parsed.nextAnnual;
+    if (parsed.address) pjImportData.address = parsed.address;
   }
   if (!pjImportData.items.length && text.trim()) {
     showToast('Could not detect items — you can add them manually on the next screen');
@@ -430,13 +720,19 @@ function pjSkipToReview() {
 // Save editable fields from Step 3 before creating
 function pjSaveReviewFields() {
   const insp = document.getElementById('pji-inspector');
+  const inspPhone = document.getElementById('pji-inspphone');
+  const inspEmail = document.getElementById('pji-inspemail');
   const inspDate = document.getElementById('pji-inspdate');
   const due = document.getElementById('pji-due');
-  const pdf = document.getElementById('pji-pdf');
+  const nextAnnual = document.getElementById('pji-nextannual');
+  const address = document.getElementById('pji-address');
   if (insp) pjImportData.inspector = insp.value.trim();
+  if (inspPhone) pjImportData.inspPhone = inspPhone.value.trim();
+  if (inspEmail) pjImportData.inspEmail = inspEmail.value.trim();
   if (inspDate) pjImportData.inspDate = inspDate.value;
   if (due) pjImportData.due = due.value;
-  if (pdf) pjImportData.pdfUrl = pdf.value.trim();
+  if (nextAnnual) pjImportData.nextAnnual = nextAnnual.value;
+  if (address) pjImportData.address = address.value.trim();
 }
 
 function pjAddManualItem() {
@@ -516,11 +812,15 @@ async function pjExtractPdf(file) {
 // ── REPORT PARSER ───────────────────────────────────────────
 // Handles TCPDF fire inspection format (flat text from PDF.js extraction)
 // Also handles structured line-by-line text if pasted manually.
-// Returns { items:[], inspector:'', inspDate:'', reinspDate:'' }
+// Returns { items:[], inspector:'', inspPhone:'', inspEmail:'', inspDate:'', reinspDate:'', nextAnnual:'', address:'' }
 function pjParseReport(text) {
   let inspector = '';
+  let inspPhone = '';
+  let inspEmail = '';
   let inspDate = '';
   let reinspDate = '';
+  let nextAnnual = '';
+  let address = '';
   const items = [];
   let idCounter = 1;
 
@@ -531,7 +831,6 @@ function pjParseReport(text) {
   }
 
   // ── Join all pages into one blob, but track page boundaries ──
-  // Page markers look like "1 / 9" or "2 / 3" at end of each page chunk
   const fullText = text.replace(/\n/g, ' ');
 
   // ── Extract metadata ──
@@ -542,91 +841,103 @@ function pjParseReport(text) {
     inspDate = toISO(metaMatch[2]);
   }
 
-  // Re-inspection date: "Re-Inspection scheduled to be conducted on or after MM/DD/YYYY"
+  // Inspector contact from signature block: "NAME -- Inspector PHONE EMAIL"
+  // Bearadise: "DONALD SHROPSHIRE II -- Inspector 865-263-1983 dshropshire@gatlinburgtn.gov"
+  // Wizard's: "Matthew Rich(FMO2) -- Fire Inspector -- 865-441-4547 mrich@seviercountytn.gov"
+  const sigMatch = fullText.match(/(\w[\w\s().]+?)\s+--\s+(?:Fire\s+)?Inspector\s*(?:--\s*)?([\d()-]{10,})\s+([\w.@+-]+@[\w.-]+)/i);
+  if (sigMatch) {
+    if (!inspector) inspector = sigMatch[1].trim();
+    inspPhone = sigMatch[2].trim();
+    inspEmail = sigMatch[3].trim();
+  }
+
+  // Address: "Address  Suite  City  State  Zip  734 HEIDEN DR  --  GATLINBURG  TN  37738"
+  const addrMatch = fullText.match(/Address\s+(?:Suite\s+)?(?:City\s+)?(?:State\s+)?(?:Zip\s+)?([\d]+\s+[\w\s]+?)\s+--\s+([\w\s]+?)\s{2,}(\w{2})\s+(\d{5})/i);
+  if (addrMatch) {
+    const street = addrMatch[1].trim().replace(/\s+/g, ' ');
+    const city = addrMatch[2].trim().replace(/\s+/g, ' ');
+    // Title case the street and city
+    const titleCase = s => s.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+    address = `${titleCase(street)}, ${titleCase(city)}, ${addrMatch[3].toUpperCase()} ${addrMatch[4]}`;
+  }
+
+  // Re-inspection date
   const reinspMatch = fullText.match(/Re-?Inspection\s+scheduled\s+to\s+be\s+conducted\s+on\s+or\s+after\s+(\d{1,2}\/\d{1,2}\/\d{4})/i);
   if (reinspMatch) {
     reinspDate = toISO(reinspMatch[1]);
-  } else {
-    // Next annual: "Next inspection scheduled to be conducted on or after MM/DD/YYYY"
-    const nextMatch = fullText.match(/Next\s+inspection\s+scheduled\s+to\s+be\s+conducted\s+on\s+or\s+after\s+(\d{1,2}\/\d{1,2}\/\d{4})/i);
-    if (nextMatch) reinspDate = toISO(nextMatch[1]);
   }
 
-  // ── Determine page number for each character position ──
-  // Split into pages using the "N / M" markers added by our extractor
-  const pageChunks = fullText.split(/---\s*Page\s+(\d+)\s*---/i);
-  // Build a map: character position → page number
-  let pageMap = []; // array of {start, end, page}
-  let pos = 0;
-  let currentPage = 1;
-  for (let c = 0; c < pageChunks.length; c++) {
-    if (c % 2 === 1) {
-      // This chunk is the page number captured group
-      currentPage = parseInt(pageChunks[c]) || currentPage;
-      pos += pageChunks[c].length;
-    } else {
-      const chunk = pageChunks[c];
-      pageMap.push({ start: pos, end: pos + chunk.length, page: currentPage });
-      pos += chunk.length;
-    }
-  }
-  // Reconstruct clean text without page markers
-  const cleanText = pageChunks.filter((_, i) => i % 2 === 0).join('');
-
-  function getPage(charIdx) {
-    let offset = 0;
-    for (const pm of pageMap) {
-      const len = pm.end - pm.start;
-      if (charIdx < offset + len) return pm.page;
-      offset += len;
-    }
-    return 1;
+  // Next annual inspection
+  const nextMatch = fullText.match(/Next\s+inspection\s+scheduled\s+to\s+be\s+conducted\s+on\s+or\s+after\s+(\d{1,2}\/\d{1,2}\/\d{4})/i);
+  if (nextMatch) {
+    nextAnnual = toISO(nextMatch[1]);
+    // If no re-inspection date, use next annual as fallback due date
+    if (!reinspDate) reinspDate = nextAnnual;
   }
 
-  // ── Extract items: "Fail ITEM: ... REMARK: ... CODE: ..." ──
-  // This regex captures: (Fail|Pass) ITEM: (name) followed by REMARK: (remark) and/or CODE: (code)
-  const itemRegex = /(Fail|Pass)\s+ITEM:\s+(.*?)(?:\s+REMARK:\s+(.*?))?(?:\s+(?:RESULT:\s+(.*?))?)?\s+CODE:\s+/gi;
-  let match;
-  // We need a more robust approach — split on "Fail ITEM:" or "Pass ITEM:" boundaries
+  // ── Build page-aware item list ──
+  // Strategy: walk through fullText finding page markers and item boundaries
+  // so each item gets the correct page number.
+  // Page markers from our extractor: "--- Page N ---"
+  // Also handle PDF-native markers: "N / M" at end of page text
+
+  // First, split the full text on item boundaries but KEEP page markers inline
+  // so we can track which page each item falls on.
   const itemSplitRegex = /(?=(?:Fail|Pass)\s+ITEM:)/gi;
-  const chunks = cleanText.split(itemSplitRegex).filter(s => s.trim());
+  const rawChunks = fullText.split(itemSplitRegex);
 
-  for (const chunk of chunks) {
-    // Parse each chunk
-    const headMatch = chunk.match(/^(Fail|Pass)\s+ITEM:\s+(.*?)(?:\s{2,}REMARK:\s+(.*?))?(?:\s{2,}RESULT:\s+(.*?))?\s{2,}CODE:\s/i);
-    if (!headMatch) {
-      // Try alternate: "RESULT:" without CODE (Wizard's Edge Notes/Life Safety items)
-      const altMatch = chunk.match(/^(?:.*?:)?\s*ITEM:\s+(.*?)\s{2,}RESULT:\s+(.*?)(?:\s{2,}|$)/i);
-      if (altMatch) {
-        // These are informational items (Pass-type from RESULT)
-        const charIdx = cleanText.indexOf(chunk);
-        items.push({
-          item_id: 'i_' + (idCounter++),
-          name: altMatch[1].trim(),
-          status: 'pass',
-          remark: altMatch[2].trim().substring(0, 200),
-          page: getPage(charIdx),
-          room: '',
-          _create: true
-        });
-      }
+  // Track current page by scanning for page markers in the text before/within each chunk
+  let currentPage = 1;
+
+  for (const chunk of rawChunks) {
+    // Capture page at the START of this chunk (before any mid-chunk page breaks)
+    // This is the page where the item heading (Fail ITEM: ...) appears
+    const itemPage = currentPage;
+
+    // Then update currentPage from any "--- Page N ---" markers in this chunk
+    // (these affect the NEXT chunk, or items that start after the marker)
+    const pageMarkers = [...chunk.matchAll(/---\s*Page\s+(\d+)\s*---/gi)];
+    if (pageMarkers.length) {
+      currentPage = parseInt(pageMarkers[pageMarkers.length - 1][1]) || currentPage;
+    }
+    // Also check for "N / M" PDF page footers (e.g., "  2 / 9")
+    const footerMatch = chunk.match(/\s+(\d+)\s*\/\s*\d+\s*$/);
+    if (!pageMarkers.length && footerMatch) {
+      const pgNum = parseInt(footerMatch[1]);
+      if (pgNum >= currentPage && pgNum <= currentPage + 1) currentPage = pgNum;
+    }
+
+    // Strip page markers from within the chunk for matching (they can split REMARK from CODE)
+    const cleanChunk = chunk.replace(/---\s*Page\s+\d+\s*---/gi, '  ');
+    // Try to parse an item from this chunk
+    const headMatch = cleanChunk.match(/(Fail|Pass)\s+ITEM:\s+(.*?)(?:\s{2,}REMARK:\s+(.*?))?(?:\s{2,}RESULT:\s+(.*?))?\s{2,}CODE:\s/i);
+    if (headMatch) {
+      const status = headMatch[1].toLowerCase();
+      const name = headMatch[2].trim();
+      const remark = (headMatch[3] || headMatch[4] || '').trim().replace(/\s*\d+\s*\/\s*\d+\s*$/, '');
+      items.push({
+        item_id: 'i_' + (idCounter++),
+        name, status, remark,
+        page: itemPage,
+        room: '',
+        _create: true
+      });
       continue;
     }
 
-    const status = headMatch[1].toLowerCase();
-    const name = headMatch[2].trim();
-    const remark = (headMatch[3] || headMatch[4] || '').trim().replace(/\s*\d+\s*\/\s*\d+\s*$/, '');
-    const charIdx = cleanText.indexOf(chunk);
-
-    items.push({
-      item_id: 'i_' + (idCounter++),
-      name,
-      status,
-      remark,
-      page: getPage(charIdx),
-      room: '',
-      _create: true
-    });
+    // Try alternate format: RESULT without CODE (Wizard's Edge Life Safety items)
+    const altMatch = cleanChunk.match(/(?:.*?:)?\s*ITEM:\s+(.*?)\s{2,}RESULT:\s+(.*?)(?:\s{2,}|$)/i);
+    if (altMatch) {
+      items.push({
+        item_id: 'i_' + (idCounter++),
+        name: altMatch[1].trim(),
+        status: 'pass',
+        remark: altMatch[2].trim().substring(0, 200),
+        page: itemPage,
+        room: '',
+        _create: true
+      });
+    }
   }
 
   // ── Fallback: line-by-line parser for manually pasted text ──
@@ -656,7 +967,7 @@ function pjParseReport(text) {
     }
   }
 
-  return { items, inspector, inspDate, reinspDate };
+  return { items, inspector, inspPhone, inspEmail, inspDate, reinspDate, nextAnnual, address };
 }
 
 // ── CREATE PROJECT ──────────────────────────────────────────
@@ -710,8 +1021,12 @@ function pjCreateProject() {
     created: new Date().toISOString(),
     source: {
       inspector: d.inspector || null,
+      inspector_phone: d.inspPhone || null,
+      inspector_email: d.inspEmail || null,
       inspection_date: d.inspDate || null,
-      reinspection_date: d.reinspDate || null,
+      reinspection_date: d.due || null,
+      next_annual: d.nextAnnual || null,
+      address: d.address || null,
       pdf_url: d.pdfUrl || null,
       pdf_filename: d._pdfFileName || null
     },
