@@ -1634,6 +1634,7 @@ textarea{resize:vertical;min-height:76px}
 .pj-vendor-card-name{font-size:.84rem;font-weight:600;color:var(--text)}
 .pj-vendor-card-role{font-size:.72rem;color:var(--text3);margin-top:1px}
 .pj-vendor-card-contact{font-size:.74rem;color:var(--text2);margin-top:3px}
+.pj-share-btn{font-size:.72rem;padding:4px 10px;white-space:nowrap}
 
 /* ── Projects Mobile ───────────────────────────────────────── */
 @media(max-width:680px){

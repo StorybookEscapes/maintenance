@@ -570,6 +570,7 @@ function pjRenderVendorsPanel(p, pid) {
     const contactBits = [];
     if (v.phone) contactBits.push(`<a href="tel:${v.phone}" style="color:inherit;text-decoration:none">${v.phone}</a>`);
     if (v.email) contactBits.push(`<a href="mailto:${v.email}" style="color:inherit;text-decoration:none">${v.email}</a>`);
+    const shareLabel = v.token ? '&#128279; Copy Link' : '&#128279; Share Project';
     cards += `<div class="pj-vendor-card">
       <div class="pj-vendor-card-info">
         <div class="pj-vendor-card-name">${v.name}</div>
@@ -577,6 +578,7 @@ function pjRenderVendorsPanel(p, pid) {
         ${contactBits.length ? `<div class="pj-vendor-card-contact">${contactBits.join(' · ')}</div>` : ''}
       </div>
       <div class="pj-vendor-card-actions">
+        <button class="btn btn-g pj-share-btn" id="pj-share-${pid}-${idx}" onclick="pjShareVendor('${pid}',${idx},this)">${shareLabel}</button>
         <button class="pj-task-unlink" onclick="pjRemoveVendor('${pid}',${idx})" title="Remove vendor">✕</button>
       </div>
     </div>`;
@@ -640,6 +642,53 @@ function pjRemoveVendor(pid, idx) {
   savePJ();
   pjShowDetail(pid);
   showToast(`${name} removed`);
+}
+
+// ── VENDOR SHARE LINKS ──────────────────────────────────────
+function pjProjectShareUrl(token) {
+  return 'https://storybook-webhook.vercel.app/api/vendor-page?token=' + token;
+}
+
+async function pjShareVendor(pid, idx, btnEl) {
+  const p = projects.find(x => x.id === pid);
+  if (!p || !p.vendors || !p.vendors[idx]) return;
+  const v = p.vendors[idx];
+
+  const orig = btnEl.textContent;
+  btnEl.textContent = 'Generating...';
+  btnEl.disabled = true;
+
+  try {
+    // Reuse existing token or generate a new one
+    let token = v.token;
+    if (!token) {
+      token = 'pj' + generateVendorToken();
+      const kvPayload = {
+        type: 'project',
+        project_id: pid,
+        project_title: p.title,
+        vendor_name: v.name,
+        created: new Date().toISOString()
+      };
+      await S.set('se_vs_' + token, JSON.stringify(kvPayload));
+      p.vendors[idx].token = token;
+      savePJ();
+    }
+
+    const url = pjProjectShareUrl(token);
+    await navigator.clipboard.writeText(url);
+    btnEl.textContent = '✓ Link Copied!';
+    btnEl.disabled = false;
+    setTimeout(() => {
+      btnEl.textContent = '&#128279; Copy Link';
+      btnEl.disabled = false;
+    }, 2500);
+  } catch (e) {
+    console.error('[pj-share] Error:', e);
+    btnEl.textContent = orig;
+    btnEl.disabled = false;
+    showToast('Failed to generate link');
+  }
 }
 
 // ── PDF VIEWER ──────────────────────────────────────────────
