@@ -1580,7 +1580,10 @@ textarea{resize:vertical;min-height:76px}
 .pj-tbl td{padding:9px 12px;border-bottom:1px solid var(--green-light);vertical-align:top}
 .pj-tbl tr.pj-row-fail{background:var(--red-bg)}
 .pj-tbl tr.pj-row-pass{background:var(--white)}
+.pj-tbl tr.pj-row-elsewhere{opacity:.55}
 .pj-tbl tr[onclick]:hover{background:var(--green-pale,#f0f7f0)}
+.pj-tbl tr.pj-row-elsewhere:hover{opacity:.85}
+.pj-assigned-badge{display:inline-block;font-size:.64rem;font-weight:700;color:var(--green);background:var(--green-pale,#e8f5e9);border:1px solid var(--green-mid,#a5c9a8);padding:2px 8px;border-radius:12px;text-transform:uppercase;letter-spacing:.3px}
 .pj-tbl tr:hover{filter:brightness(.97)}
 .pj-status-pill{font-size:.6rem;font-weight:700;padding:2px 7px;border-radius:10px;text-transform:uppercase}
 .pj-status-pill.fail{background:var(--red);color:#fff}

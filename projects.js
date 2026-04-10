@@ -205,7 +205,23 @@ function pjShowDetail(pid) {
 
   // Items table
   if (p.items && p.items.length) {
+    // Build set of project vendor names (lowercase) for comparison
+    const projVendorNames = (p.vendors || []).map(v => (v.name || '').toLowerCase().trim());
+
+    // Check if a task is assigned to someone outside the project
+    const isAssignedElsewhere = (task) => {
+      if (!task || !task.vendor) return false;
+      const tv = task.vendor.toLowerCase().trim();
+      if (!tv) return false;
+      return !projVendorNames.includes(tv);
+    };
+
     const sorted = [...p.items].sort((a, b) => {
+      const taskA = a.task_id ? tasks.find(t => t.id === a.task_id) : null;
+      const taskB = b.task_id ? tasks.find(t => t.id === b.task_id) : null;
+      const elseA = isAssignedElsewhere(taskA) ? 1 : 0;
+      const elseB = isAssignedElsewhere(taskB) ? 1 : 0;
+      if (elseA !== elseB) return elseA - elseB; // assigned elsewhere → bottom
       if (a.status === 'fail' && b.status !== 'fail') return -1;
       if (a.status !== 'fail' && b.status === 'fail') return 1;
       return 0;
@@ -220,14 +236,22 @@ function pjShowDetail(pid) {
     </tr></thead><tbody>`;
 
     sorted.forEach(item => {
-      const rowCls = item.status === 'fail' ? 'pj-row-fail' : 'pj-row-pass';
       const task = item.task_id ? tasks.find(t => t.id === item.task_id) : null;
+      const elsewhere = isAssignedElsewhere(task);
+      const rowCls = (item.status === 'fail' ? 'pj-row-fail' : 'pj-row-pass') + (elsewhere ? ' pj-row-elsewhere' : '');
       const isComplete = task && task.status === 'complete';
+
+      // Task cell: show assigned badge if routed elsewhere, otherwise normal toggle
       let taskCell = '';
       if (task) {
-        taskCell = isComplete
-          ? `<button class="pj-inspect-btn ready" onclick="event.stopPropagation();pjToggleTask('${task.id}','${pid}')">✓ Ready for Inspection</button>`
-          : `<button class="pj-inspect-btn not-done" onclick="event.stopPropagation();pjToggleTask('${task.id}','${pid}')">Not Complete</button>`;
+        if (elsewhere) {
+          taskCell = `<span class="pj-assigned-badge" title="Assigned to ${task.vendor}">${task.vendor.split(' ')[0]}</span>`;
+          if (isComplete) taskCell += ` <span class="pj-inspect-btn ready" style="font-size:.62rem;padding:2px 6px;width:auto;display:inline">✓</span>`;
+        } else {
+          taskCell = isComplete
+            ? `<button class="pj-inspect-btn ready" onclick="event.stopPropagation();pjToggleTask('${task.id}','${pid}')">✓ Ready for Inspection</button>`
+            : `<button class="pj-inspect-btn not-done" onclick="event.stopPropagation();pjToggleTask('${task.id}','${pid}')">Not Complete</button>`;
+        }
       }
 
       const pdfUrl = p.source && p.source.pdf_url ? p.source.pdf_url : '';
