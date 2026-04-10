@@ -244,6 +244,12 @@ async function load() {
   try{const r=await S.get('se_t');if(r)tasks=JSON.parse(r.value);}catch(e){tasks=[];}
   try{const r=await S.get('se_v');if(r)vendors=JSON.parse(r.value);else{vendors=JSON.parse(JSON.stringify(DEF_VENDORS));await save('se_v',vendors);}}catch(e){vendors=JSON.parse(JSON.stringify(DEF_VENDORS));}
   try{const r=await S.get('se_r');if(r)recurring=JSON.parse(r.value);else{recurring=JSON.parse(JSON.stringify(DEF_RECURRING));await save('se_r',recurring);}}catch(e){recurring=JSON.parse(JSON.stringify(DEF_RECURRING));}
+  // Property Bible (se_pp) is normally lazy-loaded when Chip opens the
+  // Properties tab, but taskEffectivePurchaseNote() reads PP to synthesize
+  // shortfall-based purchase alerts for filter tasks on the dispatch/task
+  // views. Load it on boot so those views show purchase tags without
+  // requiring a trip through Properties first.
+  try{if(typeof ppLoadIfNeeded==='function')await ppLoadIfNeeded();}catch(e){}
 }
 async function save(k,v){try{await S.set(k,JSON.stringify(v));}catch(e){}}
 const saveTasks=()=>save('se_t',tasks);
