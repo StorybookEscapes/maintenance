@@ -86,14 +86,21 @@ main{flex:1;padding:22px;max-width:1440px;margin:0 auto;width:100%}
 .tprob{font-size:.88rem;font-weight:500;line-height:1.35}
 .tmeta{display:flex;gap:8px;margin-top:5px;flex-wrap:wrap;align-items:center}
 /* PROPERTY GROUP (group-by-property mode) */
-.prop-group{margin-bottom:8px}
-.prop-group-hdr{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:all .15s;user-select:none}
-.prop-group-hdr:hover{border-color:var(--green);background:var(--surface2)}
-.prop-group-left{display:flex;align-items:center;gap:8px}
-.prop-group-chevron{font-size:.6rem;color:var(--text3);width:10px;display:inline-block}
-.prop-group-name{font-size:.67rem;text-transform:uppercase;letter-spacing:1.5px;font-weight:700}
-.prop-group-count{font-size:.68rem;background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:20px;padding:2px 9px;font-weight:700}
+.prop-group{margin-bottom:6px}
+.prop-group-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:all .15s;user-select:none}
+.prop-group-hdr:hover{filter:brightness(1.08)}
+.prop-group-left{display:flex;align-items:center;gap:9px}
+.prop-group-chevron{font-size:.65rem;color:rgba(255,255,255,.7);width:10px;display:inline-block}
+.prop-group-name{font-size:.78rem;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;color:#fff}
+.prop-group-count{font-size:.68rem;background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:20px;padding:2px 9px;font-weight:700}
 .prop-group-tasks{margin-top:4px;padding-left:0}
+.prop-group-hdr.phdr-prc{background:var(--prc);border-color:var(--prc)}
+.prop-group-hdr.phdr-umc{background:var(--umc);border-color:var(--umc)}
+.prop-group-hdr.phdr-gatlinburg{background:var(--gatlinburg);border-color:var(--gatlinburg)}
+.prop-group-hdr.phdr-alpine{background:var(--alpine);border-color:var(--alpine)}
+.prop-group-hdr.phdr-sevierville{background:var(--sevierville);border-color:var(--sevierville)}
+.prop-group-hdr.phdr-hillside{background:var(--hillside);border-color:var(--hillside)}
+.prop-group-hdr.phdr-other{background:#6b7c6e;border-color:#6b7c6e}
 .tmi{font-size:.7rem;color:var(--text2)}
 .badge{padding:2px 8px;border-radius:20px;font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
 .b-open{background:rgba(192,57,43,.1);color:var(--red)}

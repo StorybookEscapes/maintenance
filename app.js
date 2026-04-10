@@ -533,13 +533,13 @@ function renderTasks(){
       const pTasks=sortTasks(propGroups[pid].slice());
       const collapsed=_collapsedProps.has(pid);
       const hasUrgent=pTasks.some(t=>t.urgent);
-      const plcls=nb?'pl-'+nb.cls:'';
+      const phdr=nb?'phdr-'+nb.cls:'phdr-other';
       html+=`<div class="prop-group">
-        <div class="prop-group-hdr" onclick="togglePropCollapse('${pid}')">
+        <div class="prop-group-hdr ${phdr}" onclick="togglePropCollapse('${pid}')">
           <div class="prop-group-left">
             <span class="prop-group-chevron">${collapsed?'▸':'▾'}</span>
-            <span class="prop-group-name ${plcls}">${propName}</span>
-            ${hasUrgent?'<div class="udot" style="margin-top:0;flex-shrink:0"></div>':''}
+            <span class="prop-group-name">${propName}</span>
+            ${hasUrgent?'<div class="udot" style="margin-top:0;flex-shrink:0;background:#fff"></div>':''}
           </div>
           <span class="prop-group-count">${pTasks.length}</span>
         </div>
@@ -584,7 +584,17 @@ function renderTasks(){
 function setCatFilter(c,btn){catFilter=c;document.querySelectorAll('.fb').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderTasks();}
 function setPropFilter(v){propFilter=v;renderTasks();}
 function toggleDateSort(){dateSort=!dateSort;document.getElementById('date-sort-btn').classList.toggle('active',dateSort);renderTasks();}
-function toggleGroupMode(){groupMode=groupMode==='status'?'property':'status';_collapsedProps.clear();renderTasks();}
+function toggleGroupMode(){
+  if(groupMode==='status'){
+    groupMode='property';
+    _collapsedProps.clear();
+    tasks.filter(t=>!isDone(t)).forEach(t=>_collapsedProps.add(t.property));
+  } else {
+    groupMode='status';
+    _collapsedProps.clear();
+  }
+  renderTasks();
+}
 function togglePropCollapse(pid){if(_collapsedProps.has(pid))_collapsedProps.delete(pid);else _collapsedProps.add(pid);renderTasks();}
 function populatePropFilter(){
   const sel=document.getElementById('prop-filter');if(!sel)return;
