@@ -5399,35 +5399,38 @@ async function rpImportFromReview(rv) {
     wrap.innerHTML=html;
   }
 
-  // Render the read-only filter panel that sits inside vs-card-detail when
-  // a task has filter_context attached (see vendor.js buildFilterContext).
-  // Chunk 2: display-only — recount inputs and save button land in Chunk 3.
+  // Read-only filter service panel shown inside vs-card-detail. Tells the
+  // vendor what to install and where the filters live. Does NOT ask for
+  // counts here — counts are collected in the "Mark as Done" modal so they
+  // happen at close-out after service (see _vsMarkDone filter branch).
   function vsFilterPanel(t){
     const ctx=t&&t.filter_context;
     if(!ctx||!Array.isArray(ctx.sizes)||ctx.sizes.length===0)return'';
     const esc=s=>String(s==null?'':s).replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    // Total filters to install across all sizes (sum of required_per_change)
+    const totalFilters=ctx.sizes.reduce((s,sz)=>s+(Number(sz.required_per_change)||0),0);
+    const multi=totalFilters>1;
+    const heading=multi
+      ?`<div class="vs-filter-rule">Replace ${totalFilters} filters at this cabin.</div>`
+      :'';
     const storage=ctx.storage_location
       ?`<div class="vs-filter-storage"><span class="vs-filter-storage-label">Filter storage at cabin:</span> ${esc(ctx.storage_location)}</div>`
-      :`<div class="vs-filter-storage vs-filter-storage-missing">Filter storage location not yet recorded &mdash; please note where you find them.</div>`;
+      :`<div class="vs-filter-storage vs-filter-storage-missing">Filter storage location not yet recorded &mdash; please record it when you complete this task.</div>`;
     const rows=ctx.sizes.map(sz=>{
       const sizeLabel=esc(sz.size).replace('x','&times;');
       const locs=Array.isArray(sz.locations)&&sz.locations.length
         ?sz.locations.map(esc).join(', ')
         :'Location not recorded';
-      const installLine=`<div class="vs-filter-install">Install <strong>${sz.required_per_change}&times; ${sizeLabel}</strong> &mdash; ${locs}</div>`;
-      const onHandLine=sz.confirmed
-        ?`<div class="vs-filter-onhand">On hand: <strong>${sz.on_hand}</strong></div>`
-        :`<div class="vs-filter-onhand vs-filter-onhand-unknown">On hand: <strong>unknown</strong> &mdash; please count when you arrive</div>`;
-      const rowCls=sz.confirmed?'vs-filter-row':'vs-filter-row vs-filter-row-needs-count';
-      return`<div class="${rowCls}">${installLine}${onHandLine}</div>`;
+      return`<div class="vs-filter-row"><div class="vs-filter-install">Install <strong>${sz.required_per_change}&times; ${sizeLabel}</strong> &mdash; ${locs}</div></div>`;
     }).join('');
     return`<div class="vs-filter">
       <div class="vs-filter-icon">&#x1F32C;&#xFE0F;</div>
       <div class="vs-filter-content">
         <div class="vs-filter-label">HVAC Filter Service</div>
-        <div class="vs-filter-rule">Replace ALL filters &mdash; change one, change all.</div>
+        ${heading}
         ${storage}
         <div class="vs-filter-rows">${rows}</div>
+        <div class="vs-filter-footnote">You'll record remaining counts when you mark this task done.</div>
       </div>
     </div>`;
   }
@@ -5637,13 +5640,52 @@ async function rpImportFromReview(rv) {
     const t=vTasks.find(x=>x.id===id);if(!t)return;
     _vsFbFiles=[];_vsFbReceiptFiles=[];
     const isHvac=(t.category||'').toLowerCase()==='hvac';
+    const isFilter=!!(t.filter_context&&Array.isArray(t.filter_context.sizes)&&t.filter_context.sizes.length);
+    const esc=s=>String(s==null?'':s).replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+    // Filter-service fields (storage location + per-size counts). All counts
+    // are required before the Submit button enables. Server enforces again.
+    let filterHtml='';
+    if(isFilter){
+      const ctx=t.filter_context;
+      const locVal=ctx.storage_location?esc(ctx.storage_location):'';
+      const locPlaceholder=ctx.storage_location?'':'e.g. Main floor laundry closet, upper shelf';
+      const sizeRows=ctx.sizes.map((sz,i)=>{
+        const sizeLabel=esc(sz.size).replace('x','&times;');
+        const locs=Array.isArray(sz.locations)&&sz.locations.length?sz.locations.map(esc).join(', '):'';
+        return`<div class="vs-fb-filter-row">
+          <div class="vs-fb-filter-row-label">
+            <strong>${sizeLabel}</strong>
+            <div class="vs-fb-filter-row-sub">Install ${sz.required_per_change}&times;${locs?' &mdash; '+locs:''}</div>
+          </div>
+          <input type="number" min="0" step="1" inputmode="numeric" class="vs-fb-filter-count" id="vsfb-fc-${i}" data-size="${esc(sz.size)}" placeholder="Count" oninput="window._vsFbCount()">
+        </div>`;
+      }).join('');
+      filterHtml=`<div class="vs-fb-filter">
+        <div class="vs-fb-filter-title">Filter Service &mdash; Close-out</div>
+        <div class="vs-fb-filter-storage-block">
+          <label class="vs-fb-filter-label">Where are the filters stored at this cabin?</label>
+          <input type="text" id="vsfb-fl-storage" class="vs-fb-filter-text" value="${locVal}" placeholder="${locPlaceholder}" oninput="window._vsFbCount()">
+        </div>
+        <div class="vs-fb-filter-label" style="margin-top:10px">After service, how many of each size are left at the cabin?</div>
+        <div class="vs-fb-filter-rows">${sizeRows}</div>
+      </div>`;
+    }
+
+    const title=isFilter?'Complete Filter Service':'Mark as Done';
+    const subText=isFilter
+      ?'Record remaining filters and storage location, then tell Chip what you did.'
+      :'Quick notes on what you did — helps Chip keep records straight.';
+    const submitLabel=isFilter?'Submit &amp; Complete':'Submit Done';
+
     const overlay=document.createElement('div');
     overlay.className='vs-fb-overlay';
     overlay.id='vsfb-overlay';
     overlay.innerHTML=`<div class="vs-fb-modal">
-      <div class="vs-fb-title">Mark as Done</div>
-      <div class="vs-fb-sub">Quick notes on what you did — helps Chip keep records straight.</div>
+      <div class="vs-fb-title">${title}</div>
+      <div class="vs-fb-sub">${subText}</div>
       <div style="font-size:.82rem;font-weight:500;color:var(--text);margin-bottom:14px;padding:10px 12px;background:var(--surface2);border-radius:8px;border-left:3px solid var(--green)">${t.problem}</div>
+      ${filterHtml}
       <textarea class="vs-fb-textarea" id="vsfb-text" placeholder="What did you do? Any notes for Chip..." oninput="window._vsFbCount()"></textarea>
       <div class="vs-fb-charcount" id="vsfb-cc">0 / 10 minimum</div>
       ${isHvac?'<div class="vs-fb-photo-req"><span>&#x1F4F7;</span> HVAC tasks require a photo of the completed work</div>':''}
@@ -5654,12 +5696,13 @@ async function rpImportFromReview(rv) {
       <div id="vsfb-previews" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"></div>
       <div class="vs-fb-actions">
         <button style="padding:10px 22px;border-radius:8px;font-family:inherit;font-size:.82rem;font-weight:600;cursor:pointer;background:transparent;color:var(--text2);border:1px solid var(--border)" onclick="document.getElementById('vsfb-overlay').remove()">Cancel</button>
-        <button id="vsfb-submit" style="padding:10px 22px;border-radius:8px;font-family:inherit;font-size:.82rem;font-weight:600;cursor:pointer;background:var(--green);color:#fff;border:1px solid var(--green);opacity:.4" onclick="window._vsFbSubmit('${id}',${isHvac})">Submit Done</button>
+        <button id="vsfb-submit" style="padding:10px 22px;border-radius:8px;font-family:inherit;font-size:.82rem;font-weight:600;cursor:pointer;background:var(--green);color:#fff;border:1px solid var(--green);opacity:.4" onclick="window._vsFbSubmit('${id}',${isHvac},${isFilter})">${submitLabel}</button>
       </div>
     </div>`;
     document.body.appendChild(overlay);
     overlay.addEventListener('click',function(e){if(e.target===overlay)overlay.remove();});
-    setTimeout(()=>document.getElementById('vsfb-text')?.focus(),100);
+    // Initial enable-state pass (so filter-count check runs even before focus)
+    setTimeout(()=>{window._vsFbCount&&window._vsFbCount();document.getElementById(isFilter?'vsfb-fc-0':'vsfb-text')?.focus();},100);
   };
 
   window._vsFbCount=function(){
@@ -5670,7 +5713,20 @@ async function rpImportFromReview(rv) {
     const len=ta.value.trim().length;
     cc.textContent=len+' / 10 minimum';
     cc.style.color=len>=10?'var(--green)':'var(--text3)';
-    if(btn)btn.style.opacity=len>=10?'1':'.4';
+    // Filter tasks also require all size counts + a storage location filled
+    let filterOk=true;
+    const countInputs=document.querySelectorAll('.vs-fb-filter-count');
+    if(countInputs.length){
+      countInputs.forEach(inp=>{
+        const v=(inp.value||'').trim();
+        const n=parseInt(v,10);
+        if(v===''||!Number.isFinite(n)||n<0)filterOk=false;
+      });
+      const locInp=document.getElementById('vsfb-fl-storage');
+      if(locInp&&!(locInp.value||'').trim())filterOk=false;
+    }
+    const ok=len>=10&&filterOk;
+    if(btn)btn.style.opacity=ok?'1':'.4';
   };
 
   window._vsFbPreview=function(type,files){
@@ -5684,7 +5740,7 @@ async function rpImportFromReview(rv) {
     prev.innerHTML=h;
   };
 
-  window._vsFbSubmit=async function(id,isHvac){
+  window._vsFbSubmit=async function(id,isHvac,isFilter){
     const ta=document.getElementById('vsfb-text');
     const txt=(ta?ta.value:'').trim();
     if(txt.length<10){
@@ -5692,6 +5748,25 @@ async function rpImportFromReview(rv) {
       return;
     }
     if(isHvac&&_vsFbFiles.length===0){alert('HVAC tasks require at least one photo.');return;}
+
+    // Filter tasks: collect + validate all size counts and storage location
+    let filterCounts=null, filterStorageLoc=null;
+    if(isFilter){
+      filterCounts={};
+      let bad=false;
+      document.querySelectorAll('.vs-fb-filter-count').forEach(inp=>{
+        const sz=inp.getAttribute('data-size');
+        const raw=(inp.value||'').trim();
+        const n=parseInt(raw,10);
+        if(raw===''||!Number.isFinite(n)||n<0){bad=true;inp.style.borderColor='var(--red)';}
+        else{inp.style.borderColor='';filterCounts[sz]=n;}
+      });
+      const locInp=document.getElementById('vsfb-fl-storage');
+      filterStorageLoc=locInp?(locInp.value||'').trim():'';
+      if(!filterStorageLoc){bad=true;if(locInp)locInp.style.borderColor='var(--red)';}
+      if(bad){alert('Please enter a count for every size and confirm the filter storage location.');return;}
+    }
+
     // Remove modal
     document.getElementById('vsfb-overlay')?.remove();
     // Upload photos first if any
@@ -5709,12 +5784,41 @@ async function rpImportFromReview(rv) {
         }catch(e){}
       }
     }
-    // Mark done via API
+    // Submit via API — filter tasks use filter_recount (writes inventory +
+    // marks done atomically); everything else uses markDone.
     try{
-      const r=await fetch(VAPI,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,action:'markDone',taskId:id})});
+      let r;
+      if(isFilter){
+        r=await fetch(VAPI,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+          token,action:'filter_recount',taskId:id,counts:filterCounts,storage_location:filterStorageLoc,note:txt
+        })});
+      }else{
+        r=await fetch(VAPI,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,action:'markDone',taskId:id})});
+      }
       if(!r.ok){alert('Failed to submit. Please try again.');return;}
       const data=await r.json();
-      if(t){t.vendorDone=data.vendorDone;if(!t.notes)t.notes=[];t.notes.push({text:txt,type:'vendor',time:data.vendorDone,by:vVendor});}
+      if(t){
+        t.vendorDone=data.vendorDone;
+        if(!t.notes)t.notes=[];
+        if(isFilter){
+          // Server already wrote a recount summary note — also push the
+          // vendor's free-text note so it appears in the local UI right away
+          t.notes.push({text:txt,type:'vendor',time:data.vendorDone,by:vVendor});
+          // Optimistic local filter_context update so re-render doesn't
+          // show stale on-hand data if the panel is reopened
+          if(t.filter_context&&Array.isArray(t.filter_context.sizes)){
+            t.filter_context.sizes.forEach(sz=>{
+              if(filterCounts&&(sz.size in filterCounts)){
+                sz.on_hand=filterCounts[sz.size];
+                sz.confirmed=true;
+              }
+            });
+            if(filterStorageLoc)t.filter_context.storage_location=filterStorageLoc;
+          }
+        } else {
+          t.notes.push({text:txt,type:'vendor',time:data.vendorDone,by:vVendor});
+        }
+      }
       // Completion animation
       const card=document.getElementById('vsc-'+id);
       if(card){
