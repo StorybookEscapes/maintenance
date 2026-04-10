@@ -470,7 +470,9 @@ function taskCard(t){
   const nbcls=nb?'nb-'+nb.cls:'';const plcls=nb?'pl-'+nb.cls:'';
   const dot=t.urgent?'<div class="udot"></div>':`<div class="tdot dot-${t.status}"></div>`;
   const propRow=groupMode==='property'?'':`<div class="tprop ${plcls}">${p?p.name:t.property}</div>`;
-  return`<div class="tc ${nbcls} ${t.status==='complete'?'done':''}" onclick="openDetail('${t.id}')">
+  const isSched=t.status==='scheduled'||t.status==='in_progress'||!!t.date;
+  const unschedCls=groupMode==='property'&&!isSched?' tc-unsched':'';
+  return`<div class="tc ${nbcls}${unschedCls} ${t.status==='complete'?'done':''}" onclick="openDetail('${t.id}')">
     <div class="tc-top">${dot}<div class="tmain">
       ${propRow}
       <div class="tprob">${t.problem}</div>
@@ -551,7 +553,7 @@ function renderTasks(){
           const needsSched=pTasks.filter(t=>!isSchedTask(t));
           const schedTasks=pTasks.filter(t=>isSchedTask(t));
           if(needsSched.length&&schedTasks.length){
-            tasksHtml=`<div class="pg-sub-hdr">Needs Scheduling</div><div class="task-list">${needsSched.map(taskCard).join('')}</div><div class="pg-sub-hdr pg-sub-sched">Scheduled</div><div class="task-list">${schedTasks.map(taskCard).join('')}</div>`;
+            tasksHtml=`<div class="pg-sub-hdr pg-sub-needs">Needs Scheduling</div><div class="task-list">${needsSched.map(taskCard).join('')}</div><div class="pg-sub-hdr pg-sub-sched">Scheduled</div><div class="task-list">${schedTasks.map(taskCard).join('')}</div>`;
           } else {
             tasksHtml=`<div class="task-list">${pTasks.map(taskCard).join('')}</div>`;
           }
