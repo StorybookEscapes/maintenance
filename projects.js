@@ -1275,14 +1275,12 @@ function pjCreateProject() {
         ? `<span class="pvs-remark-link" onclick="pvsOpenPdf(${item.page},'${item.name.replace(/'/g, "\\'")}')">${remarkText}</span>`
         : remarkText;
 
-      let taskCell = '';
+      let actionBadge = '';
       if (item.status === 'fail') {
         if (hasTask) {
-          taskCell = isComplete
-            ? `<div class="pvs-task-done">&#10003; ${completedBy ? 'Done by ' + completedBy : 'Complete'}<br><button class="pvs-undo-btn" onclick="pvsToggle('${item.item_id}',true)">Undo</button></div>`
-            : `<button class="pvs-done-btn" onclick="pvsToggle('${item.item_id}',false)">Mark Complete</button>`;
-        } else {
-          taskCell = `<span style="font-size:.72rem;color:#aaa">No task linked</span>`;
+          actionBadge = isComplete
+            ? `<span class="pvs-done-badge" onclick="pvsToggle('${item.item_id}',true)" title="Tap to undo">&#10003;</span>`
+            : `<span class="pvs-mark-btn" onclick="pvsToggle('${item.item_id}',false)" title="Mark complete">&#9675;</span>`;
         }
       }
 
@@ -1290,14 +1288,20 @@ function pjCreateProject() {
         ? `<span class="pvs-room-tag">${item.room}</span>`
         : '';
 
+      // PDF hint icon for clickable remarks
+      const pdfHint = (pvsPdfUrl && item.page && !isComplete)
+        ? `<span class="pvs-pdf-hint" onclick="pvsOpenPdf(${item.page},'${item.name.replace(/'/g, "\\'")}')">&#128196;</span>`
+        : '';
+
       rows += `<div class="pvs-row ${item.status === 'fail' ? 'pvs-row-fail' : 'pvs-row-pass'} ${isComplete ? 'pvs-row-done' : ''}" id="pvs-item-${item.item_id}">
         <div class="pvs-row-top">
+          ${actionBadge}
           <span class="pvs-pill ${item.status}">${item.status.toUpperCase()}</span>
           <span class="pvs-row-cat">${item.name}</span>
           ${roomLabel}
         </div>
-        <div class="pvs-row-remark ${isComplete ? 'pvs-strikethrough' : ''}">${remarkClickable}</div>
-        ${taskCell ? `<div class="pvs-row-action">${taskCell}</div>` : ''}
+        <div class="pvs-row-remark ${isComplete ? 'pvs-strikethrough' : ''}">${remarkClickable} ${pdfHint}</div>
+        ${isComplete && completedBy ? `<div class="pvs-completed-by">Done by ${completedBy}</div>` : ''}
       </div>`;
     });
 
@@ -1346,8 +1350,8 @@ function pjCreateProject() {
     const item = pvData.items.find(i => i.item_id === item_id);
     if (!item) return;
 
-    const btn = document.querySelector(`#pvs-item-${item_id} ${undo ? '.pvs-undo-btn' : '.pvs-done-btn'}`);
-    if (btn) { btn.disabled = true; btn.textContent = '...'; }
+    const badge = document.querySelector(`#pvs-item-${item_id} ${undo ? '.pvs-done-badge' : '.pvs-mark-btn'}`);
+    if (badge) { badge.style.opacity = '.4'; badge.style.pointerEvents = 'none'; }
 
     try {
       const r = await fetch(API, {
@@ -1370,7 +1374,7 @@ function pjCreateProject() {
       ).length;
       pvsRender();
     } catch (e) {
-      if (btn) { btn.disabled = false; btn.textContent = undo ? '↩ Undo' : 'Mark Complete'; }
+      if (badge) { badge.style.opacity = '1'; badge.style.pointerEvents = 'auto'; }
       alert('Could not save. Please check your connection and try again.');
     }
   }
