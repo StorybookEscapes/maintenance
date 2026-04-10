@@ -271,10 +271,13 @@ function pjOpenPdf(url, page, title) {
 }
 
 // ── IMPORT WIZARD ───────────────────────────────────────────
-let pjImportData = { step: 1, title: '', property: '', type: 'inspection', due: '', inspector: '', inspDate: '', reinspDate: '', pdfUrl: '', items: [] };
+// Step 1: Title, Property, Type (required — manual)
+// Step 2: Paste report text (auto-detects inspector, dates, items)
+// Step 3: Review everything — auto-detected fields editable, items table
+let pjImportData = { step: 1, title: '', property: '', type: 'inspection', due: '', inspector: '', inspDate: '', reinspDate: '', pdfUrl: '', items: [], _rawText: '' };
 
 function pjOpenImport() {
-  pjImportData = { step: 1, title: '', property: '', type: 'inspection', due: '', inspector: '', inspDate: '', reinspDate: '', pdfUrl: '', items: [] };
+  pjImportData = { step: 1, title: '', property: '', type: 'inspection', due: '', inspector: '', inspDate: '', reinspDate: '', pdfUrl: '', items: [], _rawText: '' };
   document.getElementById('pj-import-modal').classList.add('open');
   document.getElementById('pj-import-title').textContent = 'New Project';
   pjRenderStep();
@@ -285,9 +288,10 @@ function pjRenderStep() {
   const step = pjImportData.step;
   const dots = [1, 2, 3].map(n => `<span class="pj-step-dot${n <= step ? ' active' : ''}"></span>`).join('');
 
+  // ── STEP 1: Just the basics ──
   if (step === 1) {
     body.innerHTML = `<div class="pj-step-indicator">${dots}</div>
-      <div style="font-size:.72rem;color:var(--text2);margin-bottom:14px;font-weight:600;text-transform:uppercase;letter-spacing:1px">Step 1 — Project Info</div>
+      <div style="font-size:.72rem;color:var(--text2);margin-bottom:14px;font-weight:600;text-transform:uppercase;letter-spacing:1px">Step 1 — Project Basics</div>
       <div class="fg">
         <div class="fgr full"><label>Project Title</label><input type="text" id="pji-title" value="${pjImportData.title}" placeholder="e.g. Fire Inspection - Bearadise Lodge - 2026"></div>
         <div class="fgr"><label>Property</label><select id="pji-property"></select></div>
@@ -297,36 +301,48 @@ function pjRenderStep() {
           <option value="compliance"${pjImportData.type === 'compliance' ? ' selected' : ''}>Compliance</option>
           <option value="other"${pjImportData.type === 'other' ? ' selected' : ''}>Other</option>
         </select></div>
-        <div class="fgr"><label>Due / Re-inspection Date</label><input type="date" id="pji-due" value="${pjImportData.due}"></div>
-        <div class="fgr"><label>Inspector Name</label><input type="text" id="pji-inspector" value="${pjImportData.inspector}" placeholder="Inspector name"></div>
-        <div class="fgr"><label>Inspection Date</label><input type="date" id="pji-inspdate" value="${pjImportData.inspDate}"></div>
-        <div class="fgr full"><label>PDF URL (optional)</label><input type="text" id="pji-pdf" value="${pjImportData.pdfUrl}" placeholder="https://..."></div>
       </div>
       <div style="display:flex;justify-content:flex-end;margin-top:18px"><button class="btn btn-g" onclick="pjStep1Next()">Next →</button></div>`;
-    // Populate property dropdown
     populatePropSel('pji-property');
     if (pjImportData.property) document.getElementById('pji-property').value = pjImportData.property;
   }
 
+  // ── STEP 2: Paste report text ──
   if (step === 2) {
     body.innerHTML = `<div class="pj-step-indicator">${dots}</div>
-      <div style="font-size:.72rem;color:var(--text2);margin-bottom:14px;font-weight:600;text-transform:uppercase;letter-spacing:1px">Step 2 — Import Items</div>
-      <p style="font-size:.82rem;color:var(--text2);margin-bottom:12px;line-height:1.4">Paste the inspection report text below. The parser will detect <strong>FAIL</strong> and <strong>PASS</strong> items along with their remarks and page numbers.</p>
+      <div style="font-size:.72rem;color:var(--text2);margin-bottom:14px;font-weight:600;text-transform:uppercase;letter-spacing:1px">Step 2 — Import Report</div>
+      <p style="font-size:.82rem;color:var(--text2);margin-bottom:12px;line-height:1.4">Paste the inspection report text below. The parser will auto-detect <strong>items, inspector name, dates, and page numbers</strong>.</p>
       <div class="fgr full" style="margin-bottom:14px">
         <label>Paste Report Text</label>
-        <textarea id="pji-paste" rows="10" placeholder="Paste the inspection report text here..." style="font-size:.78rem;font-family:monospace">${pjImportData._rawText || ''}</textarea>
+        <textarea id="pji-paste" rows="12" placeholder="Paste the full inspection report text here..." style="font-size:.78rem;font-family:monospace">${pjImportData._rawText || ''}</textarea>
       </div>
       <div style="display:flex;justify-content:space-between">
         <button class="btn" onclick="pjImportData.step=1;pjRenderStep()">← Back</button>
         <div style="display:flex;gap:8px">
-          <button class="btn" onclick="pjAddManualItem()">+ Add Item Manually</button>
+          <button class="btn" onclick="pjSkipToReview()">Skip — Add Items Manually</button>
           <button class="btn btn-g" onclick="pjStep2Parse()">Parse & Review →</button>
         </div>
       </div>`;
   }
 
+  // ── STEP 3: Review everything ──
   if (step === 3) {
-    const items = pjImportData.items;
+    const d = pjImportData;
+    const items = d.items;
+    const failCount = items.filter(i => i.status === 'fail').length;
+
+    // Auto-detected details bar (editable)
+    let detectedHtml = `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px">
+      <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:1px;color:var(--green);font-weight:700;margin-bottom:10px">Auto-Detected Details <span style="font-weight:400;color:var(--text3);text-transform:none;letter-spacing:0">(edit if needed)</span></div>
+      <div class="fg">
+        <div class="fgr"><label>Inspector</label><input type="text" id="pji-inspector" value="${d.inspector}" placeholder="Not detected"></div>
+        <div class="fgr"><label>Inspection Date</label><input type="date" id="pji-inspdate" value="${d.inspDate}"></div>
+        <div class="fgr"><label>Re-inspection / Due Date</label><input type="date" id="pji-due" value="${d.due}"></div>
+        <div class="fgr"><label>PDF URL (optional)</label><input type="text" id="pji-pdf" value="${d.pdfUrl}" placeholder="https://..."></div>
+      </div>
+    </div>`;
+
+    // Items table
     let rows = '';
     items.forEach((item, i) => {
       rows += `<tr class="${item.status === 'fail' ? 'fail-row' : ''}">
@@ -337,14 +353,16 @@ function pjRenderStep() {
         <td><input type="number" value="${item.page || ''}" onchange="pjImportData.items[${i}].page=parseInt(this.value)||0" style="width:50px;font-size:.78rem"></td>
       </tr>`;
     });
-    const failCount = items.filter(i => i.status === 'fail').length;
+
     body.innerHTML = `<div class="pj-step-indicator">${dots}</div>
       <div style="font-size:.72rem;color:var(--text2);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:1px">Step 3 — Review & Create</div>
-      <p style="font-size:.82rem;color:var(--text2);margin-bottom:12px">${items.length} items found (${failCount} fail, ${items.length - failCount} pass). Check the items to include, then create the project. Tasks will be auto-created for checked <strong>FAIL</strong> items.</p>
-      <table class="pj-review-tbl"><thead><tr><th style="width:30px">✓</th><th style="width:50px">Result</th><th>Item</th><th>Remark</th><th style="width:55px">Page</th></tr></thead><tbody>${rows}</tbody></table>
+      ${detectedHtml}
+      <p style="font-size:.82rem;color:var(--text2);margin-bottom:10px">${items.length} items found (${failCount} fail, ${items.length - failCount} pass). Tasks auto-created for checked <strong>FAIL</strong> items.</p>
+      ${items.length ? `<table class="pj-review-tbl"><thead><tr><th style="width:30px">✓</th><th style="width:50px">Result</th><th>Item</th><th>Remark</th><th style="width:55px">Page</th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="empty" style="margin:10px 0">No items detected. Add items manually below.</div>'}
+      <div style="margin-top:8px"><button class="btn" onclick="pjAddManualItem()" style="font-size:.74rem">+ Add Item Manually</button></div>
       <div style="display:flex;justify-content:space-between;margin-top:18px">
         <button class="btn" onclick="pjImportData.step=2;pjRenderStep()">← Back</button>
-        <button class="btn btn-g" onclick="pjCreateProject()">Create Project</button>
+        <button class="btn btn-g" onclick="pjSaveReviewFields();pjCreateProject()">Create Project</button>
       </div>`;
   }
 }
@@ -353,10 +371,6 @@ function pjStep1Next() {
   pjImportData.title = document.getElementById('pji-title').value.trim();
   pjImportData.property = document.getElementById('pji-property').value;
   pjImportData.type = document.getElementById('pji-type').value;
-  pjImportData.due = document.getElementById('pji-due').value;
-  pjImportData.inspector = document.getElementById('pji-inspector').value.trim();
-  pjImportData.inspDate = document.getElementById('pji-inspdate').value;
-  pjImportData.pdfUrl = document.getElementById('pji-pdf').value.trim();
   if (!pjImportData.title) { showToast('Please enter a project title'); return; }
   if (!pjImportData.property) { showToast('Please select a property'); return; }
   pjImportData.step = 2;
@@ -367,16 +381,40 @@ function pjStep2Parse() {
   const text = document.getElementById('pji-paste').value;
   pjImportData._rawText = text;
   if (text.trim()) {
-    pjImportData.items = pjParseReport(text);
+    const parsed = pjParseReport(text);
+    pjImportData.items = parsed.items;
+    // Auto-fill detected metadata (only if not already manually set)
+    if (parsed.inspector && !pjImportData.inspector) pjImportData.inspector = parsed.inspector;
+    if (parsed.inspDate && !pjImportData.inspDate) pjImportData.inspDate = parsed.inspDate;
+    if (parsed.reinspDate && !pjImportData.due) pjImportData.due = parsed.reinspDate;
   }
   if (!pjImportData.items.length && text.trim()) {
-    showToast('Could not detect items — try adding manually');
+    showToast('Could not detect items — you can add them manually on the next screen');
   }
   pjImportData.step = 3;
   pjRenderStep();
 }
 
+function pjSkipToReview() {
+  pjImportData.items = [];
+  pjImportData.step = 3;
+  pjRenderStep();
+}
+
+// Save editable fields from Step 3 before creating
+function pjSaveReviewFields() {
+  const insp = document.getElementById('pji-inspector');
+  const inspDate = document.getElementById('pji-inspdate');
+  const due = document.getElementById('pji-due');
+  const pdf = document.getElementById('pji-pdf');
+  if (insp) pjImportData.inspector = insp.value.trim();
+  if (inspDate) pjImportData.inspDate = inspDate.value;
+  if (due) pjImportData.due = due.value;
+  if (pdf) pjImportData.pdfUrl = pdf.value.trim();
+}
+
 function pjAddManualItem() {
+  pjSaveReviewFields();
   pjImportData.items.push({
     item_id: 'i_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
     name: 'New Item',
@@ -386,33 +424,64 @@ function pjAddManualItem() {
     room: '',
     _create: true
   });
-  pjImportData.step = 3;
-  pjRenderStep();
+  pjRenderStep();  // stays on step 3
 }
 
 // ── REPORT PARSER ───────────────────────────────────────────
+// Returns { items:[], inspector:'', inspDate:'', reinspDate:'' }
 function pjParseReport(text) {
   const items = [];
   const lines = text.split('\n');
   let currentPage = 1;
   let idCounter = 1;
+  let inspector = '';
+  let inspDate = '';
+  let reinspDate = '';
+
+  // Helper: try to parse a date from text into YYYY-MM-DD
+  function tryParseDate(str) {
+    if (!str) return '';
+    // Match MM/DD/YYYY or MM-DD-YYYY
+    let m = str.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    if (m) return `${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;
+    // Match Month DD, YYYY
+    m = str.match(/(\w+)\s+(\d{1,2}),?\s+(\d{4})/);
+    if (m) {
+      const months = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+      const mon = months[m[1].toLowerCase().slice(0,3)];
+      if (mon) return `${m[3]}-${String(mon).padStart(2,'0')}-${m[2].padStart(2,'0')}`;
+    }
+    return '';
+  }
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
 
-    // Detect page markers
+    // ── Detect metadata ──
+    // Inspector name
+    const inspMatch = line.match(/(?:inspector|inspected\s+by|fire\s+marshal|examiner)\s*[:–-]\s*(.+)/i);
+    if (inspMatch && !inspector) { inspector = inspMatch[1].trim(); continue; }
+
+    // Inspection date
+    const dateMatch = line.match(/(?:inspection\s+date|date\s+of\s+inspection|inspected\s+on)\s*[:–-]\s*(.+)/i);
+    if (dateMatch && !inspDate) { inspDate = tryParseDate(dateMatch[1].trim()); continue; }
+
+    // Re-inspection / due date
+    const reinspMatch = line.match(/(?:re-?inspection|follow.?up|due\s+date|next\s+inspection|annual\s+inspection)\s*[:–-]\s*(.+)/i);
+    if (reinspMatch && !reinspDate) { reinspDate = tryParseDate(reinspMatch[1].trim()); continue; }
+
+    // ── Detect page markers ──
     const pageMatch = line.match(/page\s+(\d+)/i) || line.match(/^(\d+)\s*of\s*\d+$/i);
     if (pageMatch) { currentPage = parseInt(pageMatch[1]); continue; }
 
-    // Detect FAIL / PASS lines
+    // ── Detect FAIL / PASS lines ──
     const failMatch = line.match(/^(?:FAIL|Failed|✗|✘|X)\s*[-–:]\s*(.+)/i) || line.match(/^(.+?)\s*[-–:]\s*(?:FAIL|Failed)$/i);
     const passMatch = line.match(/^(?:PASS|Passed|✓|✔)\s*[-–:]\s*(.+)/i) || line.match(/^(.+?)\s*[-–:]\s*(?:PASS|Passed)$/i);
 
     if (failMatch || passMatch) {
       const status = failMatch ? 'fail' : 'pass';
       const name = (failMatch || passMatch)[1].trim();
-      // Look ahead for REMARK / ITEM lines
       let remark = '';
       let j = i + 1;
       while (j < lines.length && j <= i + 3) {
@@ -420,7 +489,6 @@ function pjParseReport(text) {
         if (!next) { j++; continue; }
         const remarkMatch = next.match(/^(?:REMARK|Remark|Note|Comment)\s*[-–:]\s*(.+)/i);
         if (remarkMatch) { remark = remarkMatch[1].trim(); break; }
-        // If the next non-empty line is not a new FAIL/PASS, treat it as a remark
         if (!next.match(/^(?:FAIL|PASS|Failed|Passed|✗|✘|✓|✔|X)\s*[-–:]/i) && !next.match(/[-–:]\s*(?:FAIL|PASS|Failed|Passed)$/i)) {
           remark = next;
           break;
@@ -439,7 +507,7 @@ function pjParseReport(text) {
       });
     }
   }
-  return items;
+  return { items, inspector, inspDate, reinspDate };
 }
 
 // ── CREATE PROJECT ──────────────────────────────────────────
