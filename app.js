@@ -469,7 +469,7 @@ function taskCard(t){
         <span class="badge b-${t.status}">${t.status.replace('_',' ')}</span>
         ${t.date?`<span class="tmi">${t.date}</span>${overdueBadge(t)}`:(t.status!=='scheduled'?'<span class="tmi" style="color:var(--text3)">Not scheduled</span>':'')}
         ${t.vendor?`<span class="tmi">${t.vendor}</span>`:''}${t.vendorDone?'<span class="vd-badge">Vendor Done</span>':''}
-        ${taskEffectivePurchaseNote(t)?`<span style="font-size:.62rem;color:#e65100;font-weight:600;background:#fff3e0;padding:1px 6px;border-radius:10px;border:1px solid #ffcc80">&#x1F6D2; ${t.purchaseStatus==='delivered'?'Delivered':t.purchaseStatus==='purchased'?'Purchased — deliver':'Buy'}${t.purchaser==='vendor'?' (vendor)':''}</span>`:''}
+        ${taskEffectivePurchaseNote(t)?`<span style="font-size:.62rem;color:#e65100;font-weight:600;background:#fff3e0;padding:1px 6px;border-radius:10px;border:1px solid #ffcc80">&#x1F6D2; ${t.purchaseStatus==='delivered'?'Delivered':t.purchaseStatus==='purchased'?'Purchased — deliver':'Buy'}${taskEffectivePurchaser(t)==='vendor'?' (vendor)':''}</span>`:''}
         ${t.guest?`<span class="tmi">Reported by ${t.guest}</span>`:''}
       </div>
     </div></div>
@@ -1016,7 +1016,7 @@ function renderDayDetail(ds){
             ${t.urgent?'<span class="badge b-urgent">Urgent</span>':''}
             <span class="badge b-${t.status}">${t.status.replace('_',' ')}</span>
             ${t.vendor?`<span class="tmi">${t.vendor}</span>`:''}
-            ${taskEffectivePurchaseNote(t)?`<span style="font-size:.62rem;color:#e65100;font-weight:600;background:#fff3e0;padding:1px 6px;border-radius:10px;border:1px solid #ffcc80">&#x1F6D2; ${t.purchaseStatus==='delivered'?'Delivered':t.purchaseStatus==='purchased'?'Purchased — deliver':'Buy'}${t.purchaser==='vendor'?' (vendor)':''}</span>`:''}
+            ${taskEffectivePurchaseNote(t)?`<span style="font-size:.62rem;color:#e65100;font-weight:600;background:#fff3e0;padding:1px 6px;border-radius:10px;border:1px solid #ffcc80">&#x1F6D2; ${t.purchaseStatus==='delivered'?'Delivered':t.purchaseStatus==='purchased'?'Purchased — deliver':'Buy'}${taskEffectivePurchaser(t)==='vendor'?' (vendor)':''}</span>`:''}
           </div>
         </div></div></div>`;
     });
@@ -2492,8 +2492,9 @@ function buildSMS(t,p,v){
   // Photo link removed — job sheet handles this now
   if(/hvac\s*filter/i.test(t.problem)||t.category==='hvac'&&/filter/i.test(t.problem))msg+=`\n\nPlease write today's date on the new filter and send us a photo when it's installed.`;
   const _effPurchase=taskEffectivePurchaseNote(t);
+  const _effPurchaser=taskEffectivePurchaser(t);
   if(_effPurchase){
-    if(t.purchaser==='vendor')msg+=`\n\n🛒 You'll need to pick up: ${_effPurchase}`;
+    if(_effPurchaser==='vendor')msg+=`\n\n🛒 You'll need to pick up: ${_effPurchase}`;
     else if(t.purchaseStatus==='purchased')msg+=`\n\n📦 We've purchased: ${_effPurchase} — please deliver/install it at the property.`;
     else msg+=`\n\n🛒 Item needed: ${_effPurchase} (we'll handle purchasing — just deliver when ready)`;
   }
@@ -2520,8 +2521,8 @@ function buildMultiSMS(taskList,v,sheetUrlParam){
     .filter(x=>x.note);
   let purchaseText='';
   if(purchaseTasks.length){
-    const vendorBuys=purchaseTasks.filter(x=>x.t.purchaser==='vendor');
-    const ownerBuys=purchaseTasks.filter(x=>x.t.purchaser!=='vendor');
+    const vendorBuys=purchaseTasks.filter(x=>taskEffectivePurchaser(x.t)==='vendor');
+    const ownerBuys=purchaseTasks.filter(x=>taskEffectivePurchaser(x.t)!=='vendor');
     const lines=[];
     if(vendorBuys.length){
       lines.push(`🛒 You'll need to pick up before heading out:`);
@@ -7963,6 +7964,17 @@ function taskEffectivePurchaseNote(task) {
   return '';
 }
 
+// Effective purchaser for SMS routing. Filter tasks are always vendor-pickup
+// on the way to the cabin — vendor grabs the filter en route, no owner
+// delivery. Deploy 2 bootstrap tasks never set purchaser, so we force
+// 'vendor' for any filter task regardless of stored value.
+function taskEffectivePurchaser(task) {
+  if (!task) return 'owner';
+  const isFilter = !!(task.filter_service_bundled || task.filter_auto_generated);
+  if (isFilter) return 'vendor';
+  return task.purchaser || 'owner';
+}
+
 // Buy list from shortfall only (no opportunistic restocking). Uses assume-zero
 // rule — unmeasured counts treated as 0 for shortfall math.
 function fsShortfallList(profile) {
@@ -8025,7 +8037,7 @@ function fsMaybeStampTask(task) {
     if (shortfall.length) {
       task.purchaseNote = 'Filters: ' + shortfall.join(', ');
       task.purchaseStatus = task.purchaseStatus || 'needed';
-      task.purchaser = task.purchaser || 'owner';
+      task.purchaser = task.purchaser || 'vendor';
     }
   }
 }
