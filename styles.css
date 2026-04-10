@@ -1686,12 +1686,12 @@ textarea{resize:vertical;min-height:76px}
 .pvs-loading,.pvs-error,.pvs-empty{text-align:center;padding:60px 20px;font-size:.9rem;color:#666}
 .pvs-error{color:#c0392b}
 
-/* Header */
-.pvs-header{background:linear-gradient(165deg,#1a3a25 0%,#0f2a1a 100%);color:#fff;padding:28px 24px 24px;text-align:center}
-.pvs-header-brand{font-family:'Cormorant Garamond',serif;font-size:1.1rem;font-weight:600;color:#c8dfc9;letter-spacing:1px}
-.pvs-header-rule{width:40px;height:1px;background:#4a7a55;margin:10px auto}
-.pvs-header-title{font-family:'Cormorant Garamond',serif;font-size:1.35rem;font-weight:600;line-height:1.3;color:#fff;margin-bottom:8px}
-.pvs-header-vendor{font-size:.82rem;color:#a5c9a8;font-weight:500;letter-spacing:.3px}
+/* Header — matches daily tasks MAINTENANCE branding */
+.pvs-header{background:var(--green,#2e7d52);padding:20px 24px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.pvs-logo{height:40px}
+.pvs-header-text{flex:1}
+.pvs-header-title{font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--gold-light,#d4a960);margin:0;font-weight:600;text-transform:uppercase;letter-spacing:2px}
+.pvs-header-sub{font-size:.82rem;color:rgba(255,255,255,.65);margin:2px 0 0}
 
 /* Body padding */
 .pvs-body{padding:14px 12px 0}
@@ -1723,35 +1723,39 @@ textarea{resize:vertical;min-height:76px}
 .pvs-items-hdr span:first-child{font-size:.68rem;text-transform:uppercase;letter-spacing:1.5px;color:#2d6a3f;font-weight:700}
 .pvs-items-hdr span:last-child{font-size:.68rem;color:#7a9a7e}
 
-/* Item rows */
-.pvs-row{padding:12px 16px;border-bottom:1px solid #e8ede8}
+/* Item rows — card-banner pattern matching daily tasks */
+.pvs-row{border-bottom:1px solid #e8ede8}
 .pvs-row:last-child{border-bottom:none}
 .pvs-row-fail{background:#fff5f5}
 .pvs-row-pass{background:#fff}
-.pvs-row-done{opacity:.72;background:#f4fbf4 !important}
-.pvs-row-top{display:flex;align-items:center;gap:8px;margin-bottom:5px}
-.pvs-row-name{font-size:.86rem;font-weight:600;color:#1a2a1e;line-height:1.3;flex:1}
+.pvs-row-done{background:#f4fbf4 !important}
+.pvs-row-banner{padding:14px 16px;display:flex;align-items:flex-start;gap:12px}
+.pvs-row-info{flex:1;min-width:0}
+.pvs-row-remark{font-size:.88rem;font-weight:600;color:#1a2a1e;line-height:1.35}
+.pvs-row-done .pvs-row-remark{opacity:.65}
 .pvs-strikethrough{text-decoration:line-through;color:#7a9a7e}
-.pvs-pill{font-size:.58rem;font-weight:700;padding:2px 7px;border-radius:10px;text-transform:uppercase;flex-shrink:0;margin-top:2px}
+.pvs-row-meta{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center}
+.pvs-pill{font-size:.58rem;font-weight:700;padding:2px 7px;border-radius:10px;text-transform:uppercase;flex-shrink:0}
 .pvs-pill.fail{background:#e53935;color:#fff}
 .pvs-pill.pass{background:#2d6a3f;color:#fff}
-.pvs-row-cat{font-size:.68rem;color:#7a9a7e;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
-.pvs-room-tag{font-size:.64rem;background:#e8ede8;color:#4a6350;padding:1px 7px;border-radius:8px;font-weight:500;margin-left:auto}
-.pvs-row-remark{font-size:.84rem;color:#1a2a1e;line-height:1.45;margin-bottom:8px;font-weight:500}
+.pvs-room-tag{font-size:.64rem;background:#e8ede8;color:#4a6350;padding:1px 7px;border-radius:8px;font-weight:500}
+.pvs-completed-by{font-size:.68rem;color:#2d6a3f;font-weight:500}
 .pvs-remark-link{cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;text-decoration-color:#2d6a3f}
 .pvs-remark-link:hover{color:#2d6a3f;text-decoration-style:solid}
 .pvs-report-btn{font-size:.72rem;background:#2d6a3f;color:#fff;border:none;padding:5px 12px;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:600}
 .pvs-report-btn:hover{background:#245534}
-/* Compact toggle circle — left of row */
-.pvs-mark-btn{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;border:2px solid #a5c9a8;color:#a5c9a8;font-size:.82rem;cursor:pointer;flex-shrink:0;transition:all .15s;user-select:none;line-height:1}
-.pvs-mark-btn:hover{border-color:#2d6a3f;color:#2d6a3f;background:#f0f7f0}
-.pvs-done-badge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:#2d6a3f;color:#fff;font-size:.72rem;cursor:pointer;flex-shrink:0;transition:all .15s;user-select:none;line-height:1}
-.pvs-done-badge:hover{background:#c62828}
-.pvs-done-badge:hover::after{content:' undo';font-size:.6rem;position:absolute;right:-30px;color:#c62828;white-space:nowrap}
-.pvs-completed-by{font-size:.68rem;color:#7a9a7e;margin-top:2px;padding-left:30px}
-/* PDF hint icon next to clickable remarks */
-.pvs-pdf-hint{display:inline;font-size:.72rem;margin-left:5px;cursor:pointer;opacity:.5;transition:opacity .15s;vertical-align:middle}
-.pvs-pdf-hint:hover{opacity:1}
+/* Circle check — matches vs-card-check from daily tasks */
+.pvs-check{width:28px;height:28px;border-radius:50%;border:2px solid var(--border-dark,#bbb);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s;font-size:.9rem;color:transparent;background:#fff;cursor:pointer;-webkit-tap-highlight-color:transparent;position:relative}
+.pvs-check::before{content:'';position:absolute;inset:-8px;border-radius:50%}
+.pvs-checked{background:var(--green,#2e7d52);border-color:var(--green,#2e7d52);color:#fff}
+/* PDF page hint */
+.pvs-pdf-hint{font-size:.64rem;color:#2d6a3f;background:#e8f5e9;padding:1px 6px;border-radius:4px;cursor:pointer;margin-left:5px;font-weight:600;white-space:nowrap;transition:background .15s;vertical-align:middle}
+.pvs-pdf-hint:hover{background:#c8e6c9}
+/* Task notes */
+.pvs-notes{margin-top:8px;padding-top:8px;border-top:1px dashed #dde5db}
+.pvs-note{font-size:.76rem;color:#4a6350;line-height:1.5;margin-bottom:4px}
+.pvs-note:last-child{margin-bottom:0}
+.pvs-note-who{font-weight:600;color:#2d6a3f}
 
 /* PDF modal (vendor view) */
 .pvs-pdf-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1000;align-items:center;justify-content:center}
@@ -1778,10 +1782,7 @@ textarea{resize:vertical;min-height:76px}
   .pvs-source-body{flex-direction:column;gap:10px}
   .pvs-date-row{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;width:100%}
   .pvs-date-box{min-width:unset}
-  /* Tighten row padding */
-  .pvs-row{padding:10px 14px}
-  .pvs-row-remark{font-size:.8rem}
-  /* Header tighten */
-  .pvs-header{padding:20px 16px 18px}
-  .pvs-header-title{font-size:1.15rem}
+  /* Header */
+  .pvs-header{padding:16px}
+  .pvs-header-title{font-size:1.2rem}
 }

@@ -1275,42 +1275,62 @@ function pjCreateProject() {
         ? `<span class="pvs-remark-link" onclick="pvsOpenPdf(${item.page},'${item.name.replace(/'/g, "\\'")}')">${remarkText}</span>`
         : remarkText;
 
-      let actionBadge = '';
-      if (item.status === 'fail') {
-        if (hasTask) {
-          actionBadge = isComplete
-            ? `<span class="pvs-done-badge" onclick="pvsToggle('${item.item_id}',true)" title="Tap to undo">&#10003;</span>`
-            : `<span class="pvs-mark-btn" onclick="pvsToggle('${item.item_id}',false)" title="Mark complete">&#9675;</span>`;
-        }
+      // Circle check — matches daily tasks vs-card-check pattern
+      let checkHtml = '';
+      if (item.status === 'fail' && hasTask) {
+        checkHtml = isComplete
+          ? `<div class="pvs-check pvs-checked" onclick="pvsToggle('${item.item_id}',true)" title="Tap to undo">&#x2713;</div>`
+          : `<div class="pvs-check" onclick="pvsToggle('${item.item_id}',false)" title="Mark complete"></div>`;
       }
 
       const roomLabel = item.room && item.room.trim()
         ? `<span class="pvs-room-tag">${item.room}</span>`
         : '';
 
-      // PDF hint icon for clickable remarks
+      // PDF page link hint
       const pdfHint = (pvsPdfUrl && item.page && !isComplete)
-        ? `<span class="pvs-pdf-hint" onclick="pvsOpenPdf(${item.page},'${item.name.replace(/'/g, "\\'")}')">&#128196;</span>`
+        ? ` <span class="pvs-pdf-hint" onclick="pvsOpenPdf(${item.page},'${item.name.replace(/'/g, "\\'")}')">pg ${item.page}</span>`
         : '';
 
+      // Task notes (non-admin, non-system)
+      const notes = (item.task_notes || []).filter(n => {
+        if (!n.text) return false;
+        if (/^Combined with/i.test(n.text)) return false;
+        if (/Imported from Hostbuddy/i.test(n.text)) return false;
+        if (/Marked complete by.*via project/i.test(n.text)) return false;
+        if (/Completion undone by/i.test(n.text)) return false;
+        if (n.type === 'system' || n.type === 'admin_log') return false;
+        return true;
+      });
+      const notesHtml = notes.length ? `<div class="pvs-notes">${notes.map(n => {
+        const who = n.by || 'Storybook Escapes';
+        const when = n.time ? new Date(n.time).toLocaleDateString() : '';
+        return `<div class="pvs-note"><span class="pvs-note-who">${who}${when ? ' · ' + when : ''}</span> ${n.text.replace(/</g,'&lt;')}</div>`;
+      }).join('')}</div>` : '';
+
       rows += `<div class="pvs-row ${item.status === 'fail' ? 'pvs-row-fail' : 'pvs-row-pass'} ${isComplete ? 'pvs-row-done' : ''}" id="pvs-item-${item.item_id}">
-        <div class="pvs-row-top">
-          ${actionBadge}
-          <span class="pvs-pill ${item.status}">${item.status.toUpperCase()}</span>
-          <span class="pvs-row-cat">${item.name}</span>
-          ${roomLabel}
+        <div class="pvs-row-banner">
+          ${checkHtml}
+          <div class="pvs-row-info">
+            <div class="pvs-row-remark ${isComplete ? 'pvs-strikethrough' : ''}">${remarkClickable}${pdfHint}</div>
+            <div class="pvs-row-meta">
+              <span class="pvs-pill ${item.status}">${item.status.toUpperCase()}</span>
+              ${roomLabel}
+              ${isComplete && completedBy ? `<span class="pvs-completed-by">Done by ${completedBy}</span>` : ''}
+            </div>
+            ${notesHtml}
+          </div>
         </div>
-        <div class="pvs-row-remark ${isComplete ? 'pvs-strikethrough' : ''}">${remarkClickable} ${pdfHint}</div>
-        ${isComplete && completedBy ? `<div class="pvs-completed-by">Done by ${completedBy}</div>` : ''}
       </div>`;
     });
 
     root.innerHTML = `
       <div class="pvs-header">
-        <div class="pvs-header-brand">Storybook Escapes</div>
-        <div class="pvs-header-rule"></div>
-        <div class="pvs-header-title">${title}</div>
-        <div class="pvs-header-vendor">${vendor_name}</div>
+        <img class="pvs-logo" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAQFUlEQVR4nO1ba3RUVZb+9rlVlfdDMLx8jA8abKK97BZblMakgAZEZ+xe3VWtJqlKoiQSfLSiPTO9ZtbNnbWc1lFRIFWheAYEnalqxx4dAUlVbiIRUdHWRrK6ZRBGRh7hEZKQVFJ179l7fxxSpYYQwjMof+pb61b9c+t839n7u/v7DoD/R/cCM8ChI1d/9gsnTHrRlXKq9uL8DwnAIVUFMCP+0rGCufSOuaFo4t7J8Z0SIB/1goiYpcl8AqKJe/1z/M4Ioqt5Nqf2YNRWFc7IGpI2EyQaE9/U99vvOyFAMOhSnFqDUVt7r7HbbatO2PSMBGIkTmsalpaM6WmKtSMV9VwzNWrqnuf2BaY+dem39kgeHzJi17PBJ+/es//nIl3RCbLjQOFMLIFZVqs9pSo2aSc4rcjLePNTSqU6es/KfrAZ6VUW6VKLXS1OOVATSGBwnokOGoeyc9ujyPVY7qy54sYQ4IwHUOne33p73wMTszJSNMcOodj68ck59oPhWELnZ5Lsk43qABTN3E6EDTAyCgwgAqFkQRSBpeX7F8j8CiaCKkFvAFZIX0h1OWwArldWrvCPsyconzPgi2mXMS02x/b1h8M2S5edM9B+m5LBdpn3ufMR/tG//Bl/xVQZhkiLwcyHE7WBuYpgv5JWv2mC1sTZZLldQJlaaAYyrZ5d4uuKdlgDMIFSqVI9dDh7BepLDPqG72/hMUeh7DPrQNI21gsQR0+QcUjCcmbLBYBLUyiz3SMlb0xX67I7Zq762iI5oSZ8LQpEQ1GaYWGMIen3qrGX7j/9dVdRX1otvvPkRAlzB4y1m7fxHk1J+MMR0OgeWRZ6OAKSriY1LxOd5LT016b62zu7ujFRHUkc0FmdGqxCUwRImCPvBfIiBViReh8kAkA3GMCGEA4zDIGwm0Jr82SveAIDGpaVO05SzhBBjTEN+yeDauJSN9uavtp8qM9SrXOmGSB9mSDMlZtgP/s3jVx4gGlhMGbAAVj2v1lf0THZ6ym+7YgZSkuxo7+g+xMQ6kahDXL4PdP6X85HQ0W97xjurCtMcR3Etk3IbQNOJeCKB7AAiRFiYV16zCQAaAp5pUoppknk0wEwk9kHy/zCjGQq3ksndUBSY0kwGC5sQFCPwlwejnU3uuaHoQDkNWICeXN7YsLCwJCMteXl3zOgGsMWU8A+/vOP3N7pDsdP50b6o95f+ECTvh6ApLAFA1oMRclas3Gy12bCwdJRDiQ+XJFJJSDIlxRwKH+lsdxycMbd3uV07vyDT4VAyUodGD9/hHpgQpxTACnrvLPDclZKsvC2EoO7u+EbJFCCmZggkEyFZgiUxTGbJColjJmsyTAAQxFISS5aCFWGyNBVpU9AlJbdHY0bUrtgvsztovABmMOFWZs5k4M+Q/KEgfMqsbGc2D0o7t7NiN+xx0yEhsqQpR5LCKWxSVBE4EIvadk5/clnLQINhvwL0kOc6n3emzS6WS0ayYZgAEYiRJgQpkhkASwb1vPoCgNgESBIgmTnxFzCRuAyATIANEJkEmGA2mChKQAtLbiMiIsJQACmSQSCOAdRJ4BYp0SYUdDBTTBCxhDSJqcmEsT0mk/ZCdLWl7f+6faA7ygG5QG2g6Oohit3Y1RIzsrKTCAkW8bR49JjK7XE6VuhIUbIkcAAZ9svkHgBdR1s4py2Vo0My+eqR+7hpG3DdqMu4fcxIPnCgiV0XeO3vi8FVXu4BA1SpqlQJINTURHAl7rv6/AOEVYzJ2dZM+ciXqNQYBJyX3aR13sfMdPyFM7vQe+H464LjfwGt4mD6pZ1APgAAAABJRU5ErkJggg==" alt="Storybook Escapes">
+        <div class="pvs-header-text">
+          <div class="pvs-header-title">MAINTENANCE</div>
+          <div class="pvs-header-sub">${vendor_name} — ${title}</div>
+        </div>
       </div>
 
       <div class="pvs-body">
@@ -1350,8 +1370,8 @@ function pjCreateProject() {
     const item = pvData.items.find(i => i.item_id === item_id);
     if (!item) return;
 
-    const badge = document.querySelector(`#pvs-item-${item_id} ${undo ? '.pvs-done-badge' : '.pvs-mark-btn'}`);
-    if (badge) { badge.style.opacity = '.4'; badge.style.pointerEvents = 'none'; }
+    const check = document.querySelector(`#pvs-item-${item_id} .pvs-check`);
+    if (check) { check.style.opacity = '.4'; check.style.pointerEvents = 'none'; }
 
     try {
       const r = await fetch(API, {
@@ -1374,7 +1394,7 @@ function pjCreateProject() {
       ).length;
       pvsRender();
     } catch (e) {
-      if (badge) { badge.style.opacity = '1'; badge.style.pointerEvents = 'auto'; }
+      if (check) { check.style.opacity = '1'; check.style.pointerEvents = 'auto'; }
       alert('Could not save. Please check your connection and try again.');
     }
   }
@@ -1402,9 +1422,17 @@ function pjCreateProject() {
     }
     document.getElementById('pvs-pdf-title').textContent = title || 'Source Document';
     document.getElementById('pvs-pdf-page').textContent = page ? 'Page ' + page : 'Full Report';
-    const frame = document.getElementById('pvs-pdf-frame');
-    frame.src = 'about:blank';
-    setTimeout(() => { frame.src = pvsPdfUrl + (page ? '#page=' + page : ''); }, 50);
+    // Destroy and recreate iframe for reliable page navigation
+    const wrap = modal.querySelector('.pvs-pdf-frame-wrap');
+    const old = document.getElementById('pvs-pdf-frame');
+    if (old) old.remove();
+    const f = document.createElement('iframe');
+    f.id = 'pvs-pdf-frame';
+    f.style.cssText = 'width:100%;height:100%;border:none';
+    // Use view=FitH so the PDF fits the width on mobile, + page if provided
+    const hash = page ? '#page=' + page + '&view=FitH' : '#view=FitH';
+    f.src = pvsPdfUrl + hash;
+    wrap.appendChild(f);
     modal.classList.add('open');
   }
   window.pvsOpenPdf = pvsOpenPdf;
