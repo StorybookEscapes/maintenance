@@ -23,10 +23,17 @@
   // URL: #pv/{token} — skip auth, show vendor-facing project sheet
   if (_hash.startsWith('#pv/')) {
     const _pvtoken = _hash.slice(4);
-    const _pvSheet = document.getElementById('project-vendor-sheet');
-    if (_pvtoken.length >= 6 && _pvSheet) {
+    if (_pvtoken.length >= 6) {
       document.getElementById('login-screen').style.display = 'none';
       document.getElementById('app').style.display = 'none';
+      // Create container if index.html hasn't been updated yet
+      let _pvSheet = document.getElementById('project-vendor-sheet');
+      if (!_pvSheet) {
+        _pvSheet = document.createElement('div');
+        _pvSheet.id = 'project-vendor-sheet';
+        _pvSheet.innerHTML = '<div id="pvs-root"></div>';
+        document.body.appendChild(_pvSheet);
+      }
       _pvSheet.style.display = 'block';
       window._projectVendorToken = _pvtoken;
       window._projectVendorMode = true;
