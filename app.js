@@ -7,6 +7,7 @@ function getCurrentUserName(){
 
 // ── Hospitable REST API v2 (replaces iCal) ──────────────────
 // Property shortnames → Hospitable UUID property IDs
+// ⚠ PROPS, NBS, HOSPITABLE_IDS also appear in vendor.js — keep in sync
 const HOSPITABLE_IDS = {
   "bearadise":"02c1caaf-5a7c-4a72-bd6e-b3be2fc56202",
   "hero":"f98bdb26-4ed6-4633-83ef-96e5e567ef77",
@@ -257,9 +258,14 @@ const saveVendors=()=>save('se_v',vendors);
 const saveRec=()=>save('se_r',recurring);
 
 // HELPERS
-const getNb=id=>NBS.find(n=>n.props.includes(id));
-const getProp=id=>PROPS.find(p=>p.id===id);
-const getNbCls=id=>{const n=getNb(id);return n?n.cls:'other';};
+// Lookup maps — O(1) instead of linear search on every call
+const _propMap=Object.fromEntries(PROPS.map(p=>[p.id,p]));
+const _nbMap={};NBS.forEach(n=>n.props.forEach(pid=>{_nbMap[pid]=n;}));
+const getNb=id=>_nbMap[id]||null;
+const getProp=id=>_propMap[id]||null;
+const getNbCls=id=>{const n=_nbMap[id];return n?n.cls:'other';};
+const DONE_STATUSES=['complete','resolved_by_guest'];
+const isDone=t=>DONE_STATUSES.includes(t.status);
 const fmtDate=ds=>{if(!ds)return'';const d=new Date(ds+'T12:00:00');return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});};
 const fmtReported=iso=>{if(!iso)return'';const d=new Date(iso);const now=new Date();const diff=now-d;const days=Math.floor(diff/864e5);const hrs=Math.floor(diff/36e5);const mins=Math.floor(diff/6e4);const ago=days>0?days===1?'1 day ago':`${days} days ago`:hrs>0?hrs===1?'1 hr ago':`${hrs} hrs ago`:mins>1?`${mins} min ago`:'Just now';return`${d.toLocaleDateString('en-US',{month:'short',day:'numeric'})} (${ago})`;};
 
@@ -304,7 +310,7 @@ function renderAll(){renderVR();renderVD();renderUB();renderTasks();renderCalend
 
 // URGENT BANNER
 function renderUB(){
-  const u=tasks.filter(t=>t.urgent&&!['complete','resolved_by_guest'].includes(t.status));
+  const u=tasks.filter(t=>t.urgent&&!isDone(t));
   const c=document.getElementById('ub-wrap');
   if(!u.length){c.innerHTML='';return;}
   c.innerHTML=`<div class="ub"><div class="ub-title">Urgent — Immediate Attention Required (${u.length})</div>${u.map(t=>{const p=getProp(t.property);return`<div class="ui" onclick="openDetail('${t.id}')"><div><div class="ui-prop">${p?p.name:t.property}</div><div class="ui-prob">${t.problem}</div></div><span class="upill">Urgent</span></div>`;}).join('')}</div>`;
@@ -312,7 +318,7 @@ function renderUB(){
 
 // VENDOR-DONE BANNER — tasks vendors marked complete, awaiting admin confirmation
 function renderVD(){
-  const vd=tasks.filter(t=>t.vendorDone&&!['complete','resolved_by_guest'].includes(t.status));
+  const vd=tasks.filter(t=>t.vendorDone&&!isDone(t));
   const c=document.getElementById('vdn-wrap');
   if(!vd.length){c.innerHTML='';return;}
   // Sort by vendorDone timestamp (most recent first)
@@ -429,7 +435,7 @@ async function vrDismiss(id){
 
 // STATS
 function renderStats(){
-  const u=tasks.filter(t=>t.urgent&&!['complete','resolved_by_guest'].includes(t.status)).length;
+  const u=tasks.filter(t=>t.urgent&&!isDone(t)).length;
   const o=tasks.filter(t=>t.status==='open').length;
   const s=tasks.filter(t=>t.status==='scheduled').length;
   const i=tasks.filter(t=>t.status==='in_progress').length;
@@ -448,7 +454,7 @@ let catFilter='all';
 let propFilter='all';
 let dateSort=false;
 function overdueBadge(t){
-  if(!t.date||['complete','resolved_by_guest'].includes(t.status))return'';
+  if(!t.date||isDone(t))return'';
   const today=new Date();today.setHours(0,0,0,0);
   const d=new Date(t.date+'T12:00:00');d.setHours(0,0,0,0);
   const diff=Math.floor((today-d)/(86400000));
@@ -477,7 +483,7 @@ function taskCard(t){
 }
 function renderTasks(){
   const q=document.getElementById('search-input').value.toLowerCase();
-  const active=tasks.filter(t=>!['complete','resolved_by_guest'].includes(t.status));
+  const active=tasks.filter(t=>!isDone(t));
   let f=active.filter(t=>{
     // Property filter
     if(propFilter!=='all'&&t.property!==propFilter)return false;
@@ -771,7 +777,7 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
       const st=dayState(d);
       const isGuestInHouse=st==='booked';
       // Allow past dates when editing a completed task (retroactive fix dates)
-      const allowPast=px==='d'&&detailId&&tasks.find(x=>x.id===detailId&&(x.status==='complete'||x.status==='resolved_by_guest'));
+      const allowPast=px==='d'&&detailId&&tasks.find(x=>x.id===detailId&&isDone(x));
       let cls='dp-cell';
       if(isToday)cls+=' dp-today-cell';
       if(isSel)cls+=' dp-selected';
@@ -945,7 +951,7 @@ function renderCalendar(){
       const isSel=ds===selectedDay;
       const isPast=d<today&&!isT;
       h+=`<div class="wk-day ${isT?'tw-today':''} ${isSel?'tw-sel':''} ${isPast?'tw-past':''}" onclick="selectDay('${ds}')" style="cursor:pointer">`;
-      const wkDayTasks=tasks.filter(t=>t.date===ds&&!['complete','resolved_by_guest'].includes(t.status));
+      const wkDayTasks=tasks.filter(t=>t.date===ds&&!isDone(t));
       const wkVendorGroups={};const wkUngrouped=[];
       wkDayTasks.forEach(t=>{
         if(t.vendor){const vk=t.vendor.toLowerCase();if(!wkVendorGroups[vk])wkVendorGroups[vk]={name:t.vendor,tasks:[]};wkVendorGroups[vk].tasks.push(t);}
@@ -959,7 +965,7 @@ function renderCalendar(){
         h+=`<div class="de de-${nc} ${t.urgent?'urg':''} ${t.recurring?'rec':''}" onclick="event.stopPropagation();openDetail('${t.id}')"><div class="de-prop">${p?p.name.split(' - ').pop():''}</div><div class="de-title">${t.problem}</div>${t.vendor?`<div class="de-cat">${t.vendor}</div>`:''}</div>`;
       });
       if(showDone){
-        tasks.filter(t=>t.date===ds&&['complete','resolved_by_guest'].includes(t.status)).forEach(t=>{
+        tasks.filter(t=>t.date===ds&&isDone(t)).forEach(t=>{
           const nc=getNbCls(t.property);const p=getProp(t.property);
           h+=`<div class="de de-${nc} done" onclick="event.stopPropagation();openDetail('${t.id}')"><div class="de-prop">${p?p.name.split(' - ').pop():''}</div><div class="de-title" style="text-decoration:line-through;opacity:.6"><span style="color:var(--green);margin-right:3px">&#x2713;</span>${t.problem}</div></div>`;
         });
@@ -999,7 +1005,7 @@ function renderDayDetail(ds){
   const DOW=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const MN=['January','February','March','April','May','June','July','August','September','October','November','December'];
   document.getElementById('day-detail-title').textContent=`${DOW[d.getDay()]}, ${MN[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
-  const dayTasks=tasks.filter(t=>t.date===ds&&(showDone||!['complete','resolved_by_guest'].includes(t.status)));
+  const dayTasks=tasks.filter(t=>t.date===ds&&(showDone||!isDone(t)));
   if(!dayTasks.length){
     document.getElementById('day-detail-tasks').innerHTML='<div style="font-size:.84rem;color:var(--text2);padding:8px 0">No tasks scheduled for this day.</div>';
   } else {
@@ -1007,8 +1013,8 @@ function renderDayDetail(ds){
     dayTasks.forEach(t=>{
       const p=getProp(t.property);const nb=getNb(t.property);
       const plcls=nb?'pl-'+nb.cls:'';const nbcls=nb?'nb-'+nb.cls:'';
-      const isDone=['complete','resolved_by_guest'].includes(t.status);
-      h+=`<div class="tc ${nbcls} ${isDone?'done':''}" onclick="openDetail('${t.id}')" style="cursor:pointer">
+      const tDone=isDone(t);
+      h+=`<div class="tc ${nbcls} ${tDone?'done':''}" onclick="openDetail('${t.id}')" style="cursor:pointer">
         <div class="tc-top"><div class="${t.urgent?'udot':'tdot dot-'+t.status}"></div><div class="tmain">
           <div class="tprop ${plcls}">${p?p.name:t.property}</div>
           <div class="tprob">${t.problem}</div>
@@ -1045,7 +1051,7 @@ function buildMonth(){
     if(!isO){
       h+=`<div class="cdn ${isT?'today':''}">${dn}</div>`;
       const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(dn).padStart(2,'0')}`;
-      const dayTasks=tasks.filter(t=>t.date===ds&&!['complete','resolved_by_guest'].includes(t.status));
+      const dayTasks=tasks.filter(t=>t.date===ds&&!isDone(t));
       // Group tasks by vendor for same-day dispatch indicators
       const vendorGroups={};const ungrouped=[];
       dayTasks.forEach(t=>{
@@ -1067,7 +1073,7 @@ function buildMonth(){
       });
       // Completed tasks (only when showDone toggle is on)
       if(showDone){
-        tasks.filter(t=>t.date===ds&&['complete','resolved_by_guest'].includes(t.status)).forEach(t=>{
+        tasks.filter(t=>t.date===ds&&isDone(t)).forEach(t=>{
           const nc=getNbCls(t.property);const p=getProp(t.property);const sh=p?p.name.split(' - ').pop():t.property;
           h+=`<div class="ce ce-${nc} done" onclick="openDetail('${t.id}')" title="${t.problem} (completed)"><span class="ce-check">&#x2713;</span>${sh}: ${t.problem}</div>`;
         });
@@ -1096,7 +1102,7 @@ function buildWeek(ws){
     const d=new Date(ws);d.setDate(ws.getDate()+i);
     const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     h+='<div class="wk-day">';
-    const wkDayTasks=tasks.filter(t=>t.date===ds&&!['complete','resolved_by_guest'].includes(t.status));
+    const wkDayTasks=tasks.filter(t=>t.date===ds&&!isDone(t));
     const wkVendorGroups={};const wkUngrouped=[];
     wkDayTasks.forEach(t=>{
       if(t.vendor){const vk=t.vendor.toLowerCase();if(!wkVendorGroups[vk])wkVendorGroups[vk]={name:t.vendor,tasks:[]};wkVendorGroups[vk].tasks.push(t);}
@@ -1114,7 +1120,7 @@ function buildWeek(ws){
     });
     // Completed tasks (only when showDone toggle is on)
     if(showDone){
-      tasks.filter(t=>t.date===ds&&['complete','resolved_by_guest'].includes(t.status)).forEach(t=>{
+      tasks.filter(t=>t.date===ds&&isDone(t)).forEach(t=>{
         const nc=getNbCls(t.property);const p=getProp(t.property);
         h+=`<div class="de de-${nc} done" onclick="openDetail('${t.id}')"><div class="de-prop">${p?p.name.split(' - ').pop():''}</div><div class="de-title" style="text-decoration:line-through;opacity:.6"><span style="color:var(--green);margin-right:3px">&#x2713;</span>${t.problem}</div></div>`;
       });
@@ -1258,7 +1264,7 @@ async function genFromRec(id){
   const ps=r.properties.includes('all')?PROPS.map(p=>p.id):r.properties;let n=0;let skipped=0;
   ps.forEach(pid=>{
     // Prevent duplicates: skip if a task for this recurring item already exists on this date for this property
-    const dup=tasks.some(x=>x.property===pid&&x.date===(r.nextDue||'')&&x.recurring&&x.problem===r.name&&!['complete','resolved_by_guest'].includes(x.status));
+    const dup=tasks.some(x=>x.property===pid&&x.date===(r.nextDue||'')&&x.recurring&&x.problem===r.name&&!isDone(x));
     if(dup){skipped++;return;}
     tasks.unshift({id:Date.now().toString()+Math.random().toString(36).slice(2,6)+pid,property:pid,guest:'',problem:r.name,category:r.category,status:'scheduled',date:r.nextDue||'',vendor:r.vendor,urgent:false,recurring:true,notes:[],vendorNotes:'',created:new Date().toISOString()});n++;
   });
@@ -1272,7 +1278,7 @@ async function genFromRec(id){
 function checkCombine(){
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
   const area=document.getElementById('d-combine');area.innerHTML='';
-  if(!t.date||['complete','resolved_by_guest'].includes(t.status)||t.assignedToGuest)return;
+  if(!t.date||isDone(t)||t.assignedToGuest)return;
   const td=new Date(t.date+'T12:00:00');
   const nearby=recurring.filter(r=>{
     if(!r.nextDue)return false;
@@ -1284,7 +1290,7 @@ function checkCombine(){
     // Skip if the current task IS this recurring item (don't suggest combining with itself)
     if(t.recurring&&matchesRecurring(t.problem))return false;
     // Hide if already scheduled: a recurring task matching this name already exists as an active task for this property (any date)
-    const alreadyScheduled=tasks.some(x=>x.property===t.property&&x.recurring&&matchesRecurring(x.problem)&&!['complete','resolved_by_guest'].includes(x.status));
+    const alreadyScheduled=tasks.some(x=>x.property===t.property&&x.recurring&&matchesRecurring(x.problem)&&!isDone(x));
     return !alreadyScheduled;
   });
   if(!nearby.length)return;
@@ -1405,12 +1411,12 @@ async function openDetail(id){
   document.getElementById('d-guest-context').innerHTML='';
   // Guest communication tools — only during active guest stay
   renderGuestComm(t);
-  const isDone=['complete','resolved_by_guest'].includes(t.status);
-  document.getElementById('complete-btn').style.display=isDone?'none':'';
+  const tDone=isDone(t);
+  document.getElementById('complete-btn').style.display=tDone?'none':'';
   // Vendor-done approval notice
   const vdNotice=document.getElementById('d-vendor-done-notice');
   if(vdNotice){
-    if(t.vendorDone&&!['complete','resolved_by_guest'].includes(t.status)){
+    if(t.vendorDone&&!isDone(t)){
       vdNotice.style.display='';
       vdNotice.querySelector('.vd-time').textContent=new Date(t.vendorDone).toLocaleString();
     }else{vdNotice.style.display='none';}
@@ -1684,7 +1690,7 @@ async function cleanupOldPhotos(){
   const token=localStorage.getItem('se_auth_token')||'';
   let changed=false;
   for(const t of tasks){
-    if(!['complete','resolved_by_guest'].includes(t.status))continue;
+    if(!isDone(t))continue;
     const resolved=t.date||t.created;
     if(!resolved)continue;
     if(new Date(resolved+'T12:00:00').getTime()>cutoff)continue;
@@ -1805,7 +1811,7 @@ async function renderGuestComm(t){
   </div>`;
   // Determine if guest action buttons should show
   const tRef=tasks.find(x=>x.id===detailId);
-  const gcIsDone=tRef&&['complete','resolved_by_guest'].includes(tRef.status);
+  const gcIsDone=tRef&&isDone(tRef);
   const showAssignGuest=tRef&&!gcIsDone&&!tRef.assignedToGuest;
   const showResolved=tRef&&!gcIsDone;
   const gcActions=`<div class="gc-hosp-actions">
@@ -1850,7 +1856,7 @@ async function renderDetailVendors(t,p){
   const titleEl=document.getElementById('d-vendors-title');
 
   // Completed tasks: just show who did it, no SMS or suggestions
-  if(t.status==='complete'||t.status==='resolved_by_guest'){
+  if(isDone(t)){
     titleEl.textContent='Vendor';
     if(t.vendor){
       area.innerHTML=`<div style="font-size:.82rem;color:var(--text2);padding:6px 0">Completed by <strong>${t.vendor}</strong></div>`;
@@ -1867,7 +1873,7 @@ async function renderDetailVendors(t,p){
   let sheetUrl='';
   if(assignedVendor&&t.date){
     try{
-      const sameDayIds=tasks.filter(x=>x.vendor&&x.vendor.toLowerCase()===assignedVendor.name.toLowerCase()&&x.date===t.date&&!['complete','resolved_by_guest'].includes(x.status)).map(x=>x.id);
+      const sameDayIds=tasks.filter(x=>x.vendor&&x.vendor.toLowerCase()===assignedVendor.name.toLowerCase()&&x.date===t.date&&!isDone(x)).map(x=>x.id);
       if(sameDayIds.length){
         const token=await createVendorSheet(assignedVendor.name,t.date,sameDayIds);
         sheetUrl=vendorSheetUrl(token);
@@ -2429,7 +2435,7 @@ async function generateAndInsertSheet(smsId,vendorName,taskId,btnEl){
   // Collect all task IDs for this vendor+date
   const t=tasks.find(x=>x.id===taskId);
   if(!t||!t.date){alert('Task needs a scheduled date before generating a job sheet link.');return;}
-  const sameDayIds=tasks.filter(x=>x.vendor&&x.vendor.toLowerCase()===vendorName.toLowerCase()&&x.date===t.date&&!['complete','resolved_by_guest'].includes(x.status)).map(x=>x.id);
+  const sameDayIds=tasks.filter(x=>x.vendor&&x.vendor.toLowerCase()===vendorName.toLowerCase()&&x.date===t.date&&!isDone(x)).map(x=>x.id);
   if(!sameDayIds.length)return;
   if(btnEl){btnEl.textContent='Generating...';btnEl.disabled=true;}
   try{
@@ -2454,7 +2460,7 @@ async function generateAndInsertSheet(smsId,vendorName,taskId,btnEl){
 // Auto-inject job sheet link into all SMS textareas for a vendor after render
 async function autoInjectSheetLink(vendorName,task){
   if(!task.date||!vendorName)return;
-  const sameDayIds=tasks.filter(x=>x.vendor&&x.vendor.toLowerCase()===vendorName.toLowerCase()&&x.date===task.date&&!['complete','resolved_by_guest'].includes(x.status)).map(x=>x.id);
+  const sameDayIds=tasks.filter(x=>x.vendor&&x.vendor.toLowerCase()===vendorName.toLowerCase()&&x.date===task.date&&!isDone(x)).map(x=>x.id);
   if(!sameDayIds.length)return;
   try{
     const token=await createVendorSheet(vendorName,task.date,sameDayIds);
@@ -2504,7 +2510,7 @@ function buildSMS(t,p,v){
 /* Get all active tasks for a vendor on a specific date */
 function getVendorDayTasks(vendorName,date){
   if(!vendorName||!date)return[];
-  return tasks.filter(t=>t.vendor&&t.vendor.toLowerCase()===vendorName.toLowerCase()&&t.date===date&&!['complete','resolved_by_guest'].includes(t.status));
+  return tasks.filter(t=>t.vendor&&t.vendor.toLowerCase()===vendorName.toLowerCase()&&t.date===date&&!isDone(t));
 }
 /* Build a consolidated SMS for multiple tasks going to the same vendor on the same day */
 function buildMultiSMS(taskList,v,sheetUrlParam){
@@ -2666,7 +2672,7 @@ async function assignVendor(name){
   if(t.status==='open'&&t.date)t.status='scheduled';
   // Also assign vendor to any other tasks on the same date & property (combined tasks)
   if(t.date){
-    tasks.filter(x=>x.id!==t.id&&x.property===t.property&&x.date===t.date&&!['complete','resolved_by_guest'].includes(x.status))
+    tasks.filter(x=>x.id!==t.id&&x.property===t.property&&x.date===t.date&&!isDone(x))
       .forEach(x=>{x.vendor=name;if(x.status==='open'&&x.date)x.status='scheduled';});
   }
   await saveTasks();
@@ -2800,7 +2806,7 @@ async function markComplete(){
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
   // Deploy 3: gate filter tasks on a recount close-out before marking complete.
   // Vendor must enter how many filters of each size are left at the cabin.
-  if(typeof fsPromptRecount==='function' && (t.filter_service_bundled || t.filter_auto_generated)){
+  if(typeof fsPromptRecount==='function' && (t.filter_service_bundled || t.filter_auto_generated) && !t.filter_recount_submitted_by_vendor){
     const ok=await fsPromptRecount(t);
     if(!ok)return; // cancelled — stay open
   }
@@ -2818,7 +2824,7 @@ async function vdQuickComplete(id,e){
   e.stopPropagation();
   const t=tasks.find(x=>x.id===id);if(!t)return;
   // Deploy 3: filter tasks get the recount modal even on quick-complete path
-  if(typeof fsPromptRecount==='function' && (t.filter_service_bundled || t.filter_auto_generated)){
+  if(typeof fsPromptRecount==='function' && (t.filter_service_bundled || t.filter_auto_generated) && !t.filter_recount_submitted_by_vendor){
     const ok=await fsPromptRecount(t);
     if(!ok)return;
   }
@@ -2842,7 +2848,7 @@ function checkAdminPaymentPrompt(justCompleted){
   );
   if(groupTasks.length===0)return;
   // Check if ALL are now complete
-  const allConfirmed=groupTasks.every(x=>x.status==='complete'||x.status==='resolved_by_guest');
+  const allConfirmed=groupTasks.every(x=>isDone(x));
   if(!allConfirmed)return;
   // Show admin payment prompt
   const vendorName=justCompleted.vendor;
@@ -3102,7 +3108,7 @@ function renderHistory(){
   NBS.forEach(nb=>{
     const cards=nb.props.map(pid=>{
       const p=getProp(pid);if(!p)return'';
-      const done=tasks.filter(t=>t.property===pid&&['complete','resolved_by_guest'].includes(t.status)).length;
+      const done=tasks.filter(t=>t.property===pid&&isDone(t)).length;
       return`<div class="pc nb-${nb.cls} ${selProp===pid?'sel':''}" id="pc-${pid}" onclick="selPropFn('${pid}')" style="cursor:pointer">
         <div class="pc-name">${p.name.split(' - ').pop()}</div>
         <div class="pcs"><strong>${done}</strong> completed</div>
@@ -3111,7 +3117,7 @@ function renderHistory(){
     gridHtml+=`<div class="nb-section" id="nb-${nb.cls}"><div class="nb-hdr nb-${nb.cls}-h"><h3>${nb.name}</h3><span class="nb-sub">${nb.sub}</span></div><div class="prop-grid nb-${nb.cls}">${cards}</div><div id="detail-slot-${nb.cls}"></div></div>`;
   });
   // Completed tasks list (shown when NO property is selected)
-  const allDone=tasks.filter(t=>['complete','resolved_by_guest'].includes(t.status));
+  const allDone=tasks.filter(t=>isDone(t));
   let bottomHtml='';
   if(!selProp){
     let done=allDone;
@@ -3165,7 +3171,7 @@ function renderPropDetail(pid){
   const nb=getNb(pid);if(!nb)return;
   const slot=document.getElementById('detail-slot-'+nb.cls);if(!slot)return;
   const p=getProp(pid);
-  const done=tasks.filter(t=>t.property===pid&&['complete','resolved_by_guest'].includes(t.status));
+  const done=tasks.filter(t=>t.property===pid&&isDone(t));
   let filtered=histCat==='all'?done:done.filter(t=>t.category===histCat);
   filtered.sort((a,b)=>(b.date||b.created||'').localeCompare(a.date||a.created||''));
   // Category chips
@@ -5144,13 +5150,13 @@ function renderReplacements() {
   } else if (rpPhaseFilter === 'purchased') {
     filtered = repTasks.filter(t => t.purchaseStatus === 'purchased');
   } else {
-    filtered = repTasks.filter(t => t.purchaseStatus === 'delivered' || ['complete','resolved_by_guest'].includes(t.status));
+    filtered = repTasks.filter(t => t.purchaseStatus === 'delivered' || isDone(t));
   }
 
   // Count badges on tabs
   const cNeeded = repTasks.filter(t => !t.purchaseStatus || t.purchaseStatus === 'needed').length;
   const cPurchased = repTasks.filter(t => t.purchaseStatus === 'purchased').length;
-  const cDelivered = repTasks.filter(t => t.purchaseStatus === 'delivered' || ['complete','resolved_by_guest'].includes(t.status)).length;
+  const cDelivered = repTasks.filter(t => t.purchaseStatus === 'delivered' || isDone(t)).length;
   const tabN = document.getElementById('rp-tab-needed');
   const tabP = document.getElementById('rp-tab-purchased');
   const tabD = document.getElementById('rp-tab-delivered');
@@ -6059,7 +6065,7 @@ async function gaFetch(){
   // Find open/scheduled tasks (not complete, not resolved_by_guest)
   // Exclude routine recurring items that don't affect guest experience (HVAC filters, etc.)
   const GA_EXCLUDE=/hvac\s*filter|filter\s*replace/i;
-  const activeTasks=tasks.filter(t=>!['complete','resolved_by_guest'].includes(t.status)&&!GA_EXCLUDE.test(t.problem||'')&&!t.assignedToGuest);
+  const activeTasks=tasks.filter(t=>!isDone(t)&&!GA_EXCLUDE.test(t.problem||'')&&!t.assignedToGuest);
   if(!activeTasks.length){document.getElementById('ga-wrap').innerHTML='';gaItems=[];return;}
 
   // Group active tasks by property
