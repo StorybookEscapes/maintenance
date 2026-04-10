@@ -101,6 +101,20 @@ main{flex:1;padding:22px;max-width:1440px;margin:0 auto;width:100%}
 .prop-group-hdr.phdr-sevierville{background:var(--sevierville);border-color:var(--sevierville)}
 .prop-group-hdr.phdr-hillside{background:var(--hillside);border-color:var(--hillside)}
 .prop-group-hdr.phdr-other{background:#6b7c6e;border-color:#6b7c6e}
+/* NEIGHBORHOOD GROUP (outer wrapper in group-by-property mode) */
+.nb-group{margin-bottom:14px}
+.nb-group-hdr{display:flex;align-items:center;justify-content:space-between;padding:6px 14px;border-radius:var(--radius);cursor:pointer;transition:all .15s;user-select:none;margin-bottom:6px;border:1px solid transparent}
+.nb-group-hdr:hover{filter:brightness(.94)}
+.nb-group-chevron{font-size:.6rem;width:10px;display:inline-block;opacity:.7}
+.nb-group-name{font-size:.7rem;text-transform:uppercase;letter-spacing:2px;font-weight:700}
+.nb-group-meta{font-size:.65rem;opacity:.75;font-weight:600}
+.nb-group-props{display:flex;flex-direction:column;gap:4px;padding-left:10px;border-left:2px solid transparent}
+.nbhdr-prc{background:rgba(45,106,63,.12);color:var(--prc);border-color:rgba(45,106,63,.25)}.nb-group:has(.nbhdr-prc) .nb-group-props{border-color:rgba(45,106,63,.3)}
+.nbhdr-umc{background:rgba(184,131,10,.12);color:var(--umc);border-color:rgba(184,131,10,.25)}.nb-group:has(.nbhdr-umc) .nb-group-props{border-color:rgba(184,131,10,.3)}
+.nbhdr-gatlinburg{background:rgba(107,63,160,.12);color:var(--gatlinburg);border-color:rgba(107,63,160,.25)}.nb-group:has(.nbhdr-gatlinburg) .nb-group-props{border-color:rgba(107,63,160,.3)}
+.nbhdr-alpine{background:rgba(192,57,43,.12);color:var(--alpine);border-color:rgba(192,57,43,.25)}.nb-group:has(.nbhdr-alpine) .nb-group-props{border-color:rgba(192,57,43,.3)}
+.nbhdr-sevierville{background:rgba(36,113,163,.12);color:var(--sevierville);border-color:rgba(36,113,163,.25)}.nb-group:has(.nbhdr-sevierville) .nb-group-props{border-color:rgba(36,113,163,.3)}
+.nbhdr-hillside{background:rgba(26,58,92,.12);color:var(--hillside);border-color:rgba(26,58,92,.25)}.nb-group:has(.nbhdr-hillside) .nb-group-props{border-color:rgba(26,58,92,.3)}
 .tmi{font-size:.7rem;color:var(--text2)}
 .badge{padding:2px 8px;border-radius:20px;font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
 .b-open{background:rgba(192,57,43,.1);color:var(--red)}

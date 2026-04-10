@@ -455,6 +455,7 @@ let propFilter='all';
 let dateSort=false;
 let groupMode='status'; // 'status' | 'property'
 const _collapsedProps=new Set();
+const _collapsedNbs=new Set();
 function overdueBadge(t){
   if(!t.date||isDone(t))return'';
   const today=new Date();today.setHours(0,0,0,0);
@@ -518,34 +519,68 @@ function renderTasks(){
   if(groupMode==='property'){
     const propGroups={};
     f.forEach(t=>{if(!propGroups[t.property])propGroups[t.property]=[];propGroups[t.property].push(t);});
-    // Sort properties: urgent first, then by task count desc, then alphabetically
-    const propIds=Object.keys(propGroups).sort((a,b)=>{
-      const au=propGroups[a].some(t=>t.urgent);const bu=propGroups[b].some(t=>t.urgent);
-      if(au&&!bu)return-1;if(!au&&bu)return 1;
-      if(propGroups[b].length!==propGroups[a].length)return propGroups[b].length-propGroups[a].length;
-      const pa=getProp(a);const pb=getProp(b);
-      return(pa?pa.name:a).localeCompare(pb?pb.name:b);
-    });
     let html='';
-    propIds.forEach(pid=>{
-      const p=getProp(pid);const nb=getNb(pid);
-      const propName=p?p.name:pid;
-      const pTasks=sortTasks(propGroups[pid].slice());
-      const collapsed=_collapsedProps.has(pid);
-      const hasUrgent=pTasks.some(t=>t.urgent);
-      const phdr=nb?'phdr-'+nb.cls:'phdr-other';
-      html+=`<div class="prop-group">
-        <div class="prop-group-hdr ${phdr}" onclick="togglePropCollapse('${pid}')">
-          <div class="prop-group-left">
-            <span class="prop-group-chevron">${collapsed?'▸':'▾'}</span>
-            <span class="prop-group-name">${propName}</span>
-            ${hasUrgent?'<div class="udot" style="margin-top:0;flex-shrink:0;background:#fff"></div>':''}
+    NBS.forEach(nb=>{
+      // Properties in this neighborhood that have tasks
+      const nbPropIds=nb.props.filter(pid=>propGroups[pid]);
+      if(!nbPropIds.length)return;
+      // Sort within neighborhood: urgent first, then task count desc
+      nbPropIds.sort((a,b)=>{
+        const au=propGroups[a].some(t=>t.urgent);const bu=propGroups[b].some(t=>t.urgent);
+        if(au&&!bu)return-1;if(!au&&bu)return 1;
+        return propGroups[b].length-propGroups[a].length;
+      });
+      const nbCollapsed=_collapsedNbs.has(nb.id);
+      const nbTaskCount=nbPropIds.reduce((s,pid)=>s+propGroups[pid].length,0);
+      const nbHasUrgent=nbPropIds.some(pid=>propGroups[pid].some(t=>t.urgent));
+      // Build property rows
+      let propsHtml='';
+      nbPropIds.forEach(pid=>{
+        const p=getProp(pid);
+        const propName=p?p.name:pid;
+        const pTasks=sortTasks(propGroups[pid].slice());
+        const collapsed=_collapsedProps.has(pid);
+        const hasUrgent=pTasks.some(t=>t.urgent);
+        const phdr='phdr-'+nb.cls;
+        propsHtml+=`<div class="prop-group">
+          <div class="prop-group-hdr ${phdr}" onclick="togglePropCollapse('${pid}')">
+            <div class="prop-group-left">
+              <span class="prop-group-chevron">${collapsed?'▸':'▾'}</span>
+              <span class="prop-group-name">${propName}</span>
+              ${hasUrgent?'<div class="udot" style="margin-top:0;flex-shrink:0;background:#fff"></div>':''}
+            </div>
+            <span class="prop-group-count">${pTasks.length}</span>
           </div>
-          <span class="prop-group-count">${pTasks.length}</span>
+          ${collapsed?'':`<div class="task-list prop-group-tasks">${pTasks.map(taskCard).join('')}</div>`}
+        </div>`;
+      });
+      html+=`<div class="nb-group">
+        <div class="nb-group-hdr nbhdr-${nb.cls}" onclick="toggleNbCollapse('${nb.id}')">
+          <div class="prop-group-left">
+            <span class="nb-group-chevron">${nbCollapsed?'▸':'▾'}</span>
+            <span class="nb-group-name">${nb.name}</span>
+            ${nbHasUrgent?'<div class="udot" style="margin-top:0;flex-shrink:0"></div>':''}
+          </div>
+          <span class="nb-group-meta">${nbTaskCount} task${nbTaskCount!==1?'s':''}</span>
         </div>
-        ${collapsed?'':`<div class="task-list prop-group-tasks">${pTasks.map(taskCard).join('')}</div>`}
+        ${nbCollapsed?'':`<div class="nb-group-props">${propsHtml}</div>`}
       </div>`;
     });
+    // Any tasks for properties not in a known neighborhood
+    const unknownPids=Object.keys(propGroups).filter(pid=>!NBS.some(nb=>nb.props.includes(pid)));
+    if(unknownPids.length){
+      unknownPids.forEach(pid=>{
+        const p=getProp(pid);const pTasks=sortTasks(propGroups[pid].slice());
+        const collapsed=_collapsedProps.has(pid);
+        html+=`<div class="prop-group">
+          <div class="prop-group-hdr phdr-other" onclick="togglePropCollapse('${pid}')">
+            <div class="prop-group-left"><span class="prop-group-chevron">${collapsed?'▸':'▾'}</span><span class="prop-group-name">${p?p.name:pid}</span></div>
+            <span class="prop-group-count">${pTasks.length}</span>
+          </div>
+          ${collapsed?'':`<div class="task-list prop-group-tasks">${pTasks.map(taskCard).join('')}</div>`}
+        </div>`;
+      });
+    }
     el.innerHTML=html;
     return;
   }
@@ -588,14 +623,17 @@ function toggleGroupMode(){
   if(groupMode==='status'){
     groupMode='property';
     _collapsedProps.clear();
+    _collapsedNbs.clear();
     tasks.filter(t=>!isDone(t)).forEach(t=>_collapsedProps.add(t.property));
   } else {
     groupMode='status';
     _collapsedProps.clear();
+    _collapsedNbs.clear();
   }
   renderTasks();
 }
 function togglePropCollapse(pid){if(_collapsedProps.has(pid))_collapsedProps.delete(pid);else _collapsedProps.add(pid);renderTasks();}
+function toggleNbCollapse(nbId){if(_collapsedNbs.has(nbId))_collapsedNbs.delete(nbId);else _collapsedNbs.add(nbId);renderTasks();}
 function populatePropFilter(){
   const sel=document.getElementById('prop-filter');if(!sel)return;
   const prev=sel.value;
