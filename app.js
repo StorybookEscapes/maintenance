@@ -453,9 +453,10 @@ const CAT_LABELS={replacement:'Replacement',handyman:'Handyman',plumbing:'Plumbi
 let catFilter='all';
 let propFilter='all';
 let dateSort=false;
-let groupMode='status'; // 'status' | 'property'
+let groupMode='property'; // 'status' | 'property'
 const _collapsedProps=new Set();
 const _collapsedNbs=new Set();
+let _propGroupSeeded=false; // true after first auto-collapse seed on load
 function overdueBadge(t){
   if(!t.date||isDone(t))return'';
   const today=new Date();today.setHours(0,0,0,0);
@@ -502,7 +503,7 @@ function renderTasks(){
 
   // Render toolbar
   const tb=document.getElementById('task-toolbar');
-  if(tb) tb.innerHTML=`<div class="task-tb"><button class="tb-btn${groupMode==='property'?' active':''}" onclick="toggleGroupMode()">${groupMode==='property'?'✓ By Property':'Group by Property'}</button></div>`;
+  if(tb) tb.innerHTML=`<div class="task-tb"><button class="tb-btn${groupMode==='property'?' active':''}" onclick="toggleGroupMode()">${groupMode==='property'?'All Tasks':'Group by Property'}</button></div>`;
 
   // Sort within each group: urgent first, then by status, then by date
   const sortTasks=arr=>arr.sort((a,b)=>{
@@ -517,19 +518,21 @@ function renderTasks(){
 
   // ── PROPERTY GROUPING MODE ──
   if(groupMode==='property'){
+    // Seed all props as collapsed on first render (default closed view)
+    if(!_propGroupSeeded){
+      _propGroupSeeded=true;
+      tasks.filter(t=>!isDone(t)).forEach(t=>_collapsedProps.add(t.property));
+    }
     const propGroups={};
     f.forEach(t=>{if(!propGroups[t.property])propGroups[t.property]=[];propGroups[t.property].push(t);});
+    const isSchedTask=t=>t.status==='scheduled'||t.status==='in_progress'||!!t.date;
     let html='';
     NBS.forEach(nb=>{
       // Properties in this neighborhood that have tasks
       const nbPropIds=nb.props.filter(pid=>propGroups[pid]);
       if(!nbPropIds.length)return;
-      // Sort within neighborhood: urgent first, then task count desc
-      nbPropIds.sort((a,b)=>{
-        const au=propGroups[a].some(t=>t.urgent);const bu=propGroups[b].some(t=>t.urgent);
-        if(au&&!bu)return-1;if(!au&&bu)return 1;
-        return propGroups[b].length-propGroups[a].length;
-      });
+      // Sort alphabetically by property name
+      nbPropIds.sort((a,b)=>{const pa=getProp(a);const pb=getProp(b);return(pa?pa.name:a).localeCompare(pb?pb.name:b);});
       const nbCollapsed=_collapsedNbs.has(nb.id);
       const nbTaskCount=nbPropIds.reduce((s,pid)=>s+propGroups[pid].length,0);
       const nbHasUrgent=nbPropIds.some(pid=>propGroups[pid].some(t=>t.urgent));
@@ -542,16 +545,27 @@ function renderTasks(){
         const collapsed=_collapsedProps.has(pid);
         const hasUrgent=pTasks.some(t=>t.urgent);
         const phdr='phdr-'+nb.cls;
+        // Sub-section split: needs scheduling vs scheduled
+        let tasksHtml='';
+        if(!collapsed){
+          const needsSched=pTasks.filter(t=>!isSchedTask(t));
+          const schedTasks=pTasks.filter(t=>isSchedTask(t));
+          if(needsSched.length&&schedTasks.length){
+            tasksHtml=`<div class="pg-sub-hdr">Needs Scheduling</div><div class="task-list">${needsSched.map(taskCard).join('')}</div><div class="pg-sub-hdr pg-sub-sched">Scheduled</div><div class="task-list">${schedTasks.map(taskCard).join('')}</div>`;
+          } else {
+            tasksHtml=`<div class="task-list">${pTasks.map(taskCard).join('')}</div>`;
+          }
+        }
         propsHtml+=`<div class="prop-group">
           <div class="prop-group-hdr ${phdr}" onclick="togglePropCollapse('${pid}')">
             <div class="prop-group-left">
               <span class="prop-group-chevron">${collapsed?'▸':'▾'}</span>
               <span class="prop-group-name">${propName}</span>
-              ${hasUrgent?'<div class="udot" style="margin-top:0;flex-shrink:0;background:#fff"></div>':''}
+              ${hasUrgent?'<div class="udot" style="margin-top:0;flex-shrink:0;background:var(--red)"></div>':''}
             </div>
             <span class="prop-group-count">${pTasks.length}</span>
           </div>
-          ${collapsed?'':`<div class="task-list prop-group-tasks">${pTasks.map(taskCard).join('')}</div>`}
+          ${collapsed?'':`<div class="prop-group-tasks">${tasksHtml}</div>`}
         </div>`;
       });
       html+=`<div class="nb-group">
@@ -624,11 +638,13 @@ function toggleGroupMode(){
     groupMode='property';
     _collapsedProps.clear();
     _collapsedNbs.clear();
+    _propGroupSeeded=true;
     tasks.filter(t=>!isDone(t)).forEach(t=>_collapsedProps.add(t.property));
   } else {
     groupMode='status';
     _collapsedProps.clear();
     _collapsedNbs.clear();
+    _propGroupSeeded=false;
   }
   renderTasks();
 }
