@@ -453,6 +453,8 @@ const CAT_LABELS={replacement:'Replacement',handyman:'Handyman',plumbing:'Plumbi
 let catFilter='all';
 let propFilter='all';
 let dateSort=false;
+let groupMode='status'; // 'status' | 'property'
+const _collapsedProps=new Set();
 function overdueBadge(t){
   if(!t.date||isDone(t))return'';
   const today=new Date();today.setHours(0,0,0,0);
@@ -465,9 +467,10 @@ function taskCard(t){
   const p=getProp(t.property);const nb=getNb(t.property);
   const nbcls=nb?'nb-'+nb.cls:'';const plcls=nb?'pl-'+nb.cls:'';
   const dot=t.urgent?'<div class="udot"></div>':`<div class="tdot dot-${t.status}"></div>`;
+  const propRow=groupMode==='property'?'':`<div class="tprop ${plcls}">${p?p.name:t.property}</div>`;
   return`<div class="tc ${nbcls} ${t.status==='complete'?'done':''}" onclick="openDetail('${t.id}')">
     <div class="tc-top">${dot}<div class="tmain">
-      <div class="tprop ${plcls}">${p?p.name:t.property}</div>
+      ${propRow}
       <div class="tprob">${t.problem}</div>
       <div class="tmeta">
         ${t.urgent?'<span class="badge b-urgent">Urgent</span>':''}
@@ -496,6 +499,10 @@ function renderTasks(){
     return true;
   });
 
+  // Render toolbar
+  const tb=document.getElementById('task-toolbar');
+  if(tb) tb.innerHTML=`<div class="task-tb"><button class="tb-btn${groupMode==='property'?' active':''}" onclick="toggleGroupMode()">${groupMode==='property'?'✓ By Property':'Group by Property'}</button></div>`;
+
   // Sort within each group: urgent first, then by status, then by date
   const sortTasks=arr=>arr.sort((a,b)=>{
     if(a.urgent&&!b.urgent)return-1;if(!a.urgent&&b.urgent)return 1;
@@ -507,6 +514,43 @@ function renderTasks(){
   const el=document.getElementById('task-list');
   if(!f.length){el.innerHTML='<div class="empty">No tasks found.</div>';return;}
 
+  // ── PROPERTY GROUPING MODE ──
+  if(groupMode==='property'){
+    const propGroups={};
+    f.forEach(t=>{if(!propGroups[t.property])propGroups[t.property]=[];propGroups[t.property].push(t);});
+    // Sort properties: urgent first, then by task count desc, then alphabetically
+    const propIds=Object.keys(propGroups).sort((a,b)=>{
+      const au=propGroups[a].some(t=>t.urgent);const bu=propGroups[b].some(t=>t.urgent);
+      if(au&&!bu)return-1;if(!au&&bu)return 1;
+      if(propGroups[b].length!==propGroups[a].length)return propGroups[b].length-propGroups[a].length;
+      const pa=getProp(a);const pb=getProp(b);
+      return(pa?pa.name:a).localeCompare(pb?pb.name:b);
+    });
+    let html='';
+    propIds.forEach(pid=>{
+      const p=getProp(pid);const nb=getNb(pid);
+      const propName=p?p.name:pid;
+      const pTasks=sortTasks(propGroups[pid].slice());
+      const collapsed=_collapsedProps.has(pid);
+      const hasUrgent=pTasks.some(t=>t.urgent);
+      const plcls=nb?'pl-'+nb.cls:'';
+      html+=`<div class="prop-group">
+        <div class="prop-group-hdr" onclick="togglePropCollapse('${pid}')">
+          <div class="prop-group-left">
+            <span class="prop-group-chevron">${collapsed?'▸':'▾'}</span>
+            <span class="prop-group-name ${plcls}">${propName}</span>
+            ${hasUrgent?'<div class="udot" style="margin-top:0;flex-shrink:0"></div>':''}
+          </div>
+          <span class="prop-group-count">${pTasks.length}</span>
+        </div>
+        ${collapsed?'':`<div class="task-list prop-group-tasks">${pTasks.map(taskCard).join('')}</div>`}
+      </div>`;
+    });
+    el.innerHTML=html;
+    return;
+  }
+
+  // ── STATUS GROUPING MODE (default) ──
   // If filtered to a specific category or urgent, just show flat sorted list
   if(catFilter!=='all'){
     sortTasks(f);
@@ -540,6 +584,8 @@ function renderTasks(){
 function setCatFilter(c,btn){catFilter=c;document.querySelectorAll('.fb').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderTasks();}
 function setPropFilter(v){propFilter=v;renderTasks();}
 function toggleDateSort(){dateSort=!dateSort;document.getElementById('date-sort-btn').classList.toggle('active',dateSort);renderTasks();}
+function toggleGroupMode(){groupMode=groupMode==='status'?'property':'status';_collapsedProps.clear();renderTasks();}
+function togglePropCollapse(pid){if(_collapsedProps.has(pid))_collapsedProps.delete(pid);else _collapsedProps.add(pid);renderTasks();}
 function populatePropFilter(){
   const sel=document.getElementById('prop-filter');if(!sel)return;
   const prev=sel.value;
