@@ -158,23 +158,28 @@ function pjShowDetail(pid) {
     const s = p.source;
     let contactParts = [];
     if (s.inspector_phone) contactParts.push(s.inspector_phone);
-    if (s.inspector_email) contactParts.push(s.inspector_email);
-    const contactStr = contactParts.length ? contactParts.join(' · ') : '';
+    if (s.inspector_email) contactParts.push(`<a href="mailto:${s.inspector_email}" style="color:inherit;text-decoration:none">${s.inspector_email}</a>`);
+    const contactStr = contactParts.join(' · ');
 
-    let metaRows = '';
-    if (s.inspector) metaRows += `<div class="pj-src-field"><span class="pj-src-fld-label">Inspector</span><span class="pj-src-fld-val">${s.inspector}</span></div>`;
-    if (contactStr) metaRows += `<div class="pj-src-field"><span class="pj-src-fld-label">Contact</span><span class="pj-src-fld-val">${contactStr}</span></div>`;
-    if (s.inspection_date) metaRows += `<div class="pj-src-field"><span class="pj-src-fld-label">Inspection Date</span><span class="pj-src-fld-val">${s.inspection_date}</span></div>`;
-    if (s.reinspection_date) metaRows += `<div class="pj-src-field"><span class="pj-src-fld-label">Re-inspection</span><span class="pj-src-fld-val">${s.reinspection_date}</span></div>`;
-    if (s.next_annual) metaRows += `<div class="pj-src-field"><span class="pj-src-fld-label">Next Annual</span><span class="pj-src-fld-val">${s.next_annual}</span></div>`;
-    if (s.address) metaRows += `<div class="pj-src-field"><span class="pj-src-fld-label">Address</span><span class="pj-src-fld-val">${s.address}</span></div>`;
+    let dateBxs = '';
+    if (s.inspection_date) dateBxs += `<div class="pj-src-date-box"><div class="pj-src-date-lbl">Inspection</div><div class="pj-src-date-val">${s.inspection_date}</div></div>`;
+    if (s.reinspection_date) dateBxs += `<div class="pj-src-date-box pj-src-date-urgent"><div class="pj-src-date-lbl">Re-Inspection</div><div class="pj-src-date-val">${s.reinspection_date}</div></div>`;
+    if (s.next_annual) dateBxs += `<div class="pj-src-date-box"><div class="pj-src-date-lbl">Next Annual</div><div class="pj-src-date-val">${s.next_annual}</div></div>`;
 
+    const safeTitle = p.title.replace(/'/g, "\\'");
     html += `<div class="pj-source-bar">
-      <div style="flex:1">
+      <div class="pj-src-top">
         <div class="pj-src-label">Source Document</div>
-        <div class="pj-src-grid">${metaRows}</div>
+        ${s.pdf_url ? `<button class="btn btn-g pj-src-pdf-btn" onclick="pjOpenPdf('${s.pdf_url}',null,'${safeTitle}')">&#128196; View Full Report</button>` : ''}
       </div>
-      ${s.pdf_url ? `<span class="pj-src-link" onclick="pjOpenPdf('${s.pdf_url}',null,'${p.title.replace(/'/g, "\\'")}')">📄 View Full Report</span>` : ''}
+      <div class="pj-src-body">
+        <div class="pj-src-person">
+          ${s.inspector ? `<div class="pj-src-name">${s.inspector}</div>` : ''}
+          ${contactStr ? `<div class="pj-src-contact">${contactStr}</div>` : ''}
+          ${s.address ? `<div class="pj-src-address">&#128205; ${s.address}</div>` : ''}
+        </div>
+        ${dateBxs ? `<div class="pj-src-dates">${dateBxs}</div>` : ''}
+      </div>
     </div>`;
   }
 
@@ -194,6 +199,9 @@ function pjShowDetail(pid) {
       </div>
     </div>`;
   }
+
+  // Vendors panel
+  html += pjRenderVendorsPanel(p, pid);
 
   // Items table
   if (p.items && p.items.length) {
@@ -554,6 +562,110 @@ function pjSaveNewTask(pid) {
   showToast('Task created and added to project');
 }
 
+// ── VENDORS PANEL ───────────────────────────────────────────
+function pjRenderVendorsPanel(p, pid) {
+  const pvList = p.vendors || [];
+  let cards = '';
+  pvList.forEach((v, idx) => {
+    const contactBits = [];
+    if (v.phone) contactBits.push(`<a href="tel:${v.phone}" style="color:inherit;text-decoration:none">${v.phone}</a>`);
+    if (v.email) contactBits.push(`<a href="mailto:${v.email}" style="color:inherit;text-decoration:none">${v.email}</a>`);
+    cards += `<div class="pj-vendor-card">
+      <div class="pj-vendor-card-info">
+        <div class="pj-vendor-card-name">${v.name}</div>
+        ${v.role ? `<div class="pj-vendor-card-role">${v.role}</div>` : ''}
+        ${contactBits.length ? `<div class="pj-vendor-card-contact">${contactBits.join(' · ')}</div>` : ''}
+      </div>
+      <div class="pj-vendor-card-actions">
+        <button class="pj-task-unlink" onclick="pjRemoveVendor('${pid}',${idx})" title="Remove vendor">✕</button>
+      </div>
+    </div>`;
+  });
+
+  return `<div class="pj-items-panel" style="margin-bottom:18px">
+    <div class="pj-items-hdr">
+      <span>Vendors (${pvList.length})</span>
+      <button class="btn" style="font-size:.72rem;padding:4px 10px" onclick="pjOpenVendorPicker('${pid}')">+ Add Vendor</button>
+    </div>
+    ${cards || '<div style="padding:14px 16px;font-size:.8rem;color:var(--text3)">No vendors assigned yet.</div>'}
+  </div>`;
+}
+
+function pjOpenVendorPicker(pid) {
+  const existing = (projects.find(x => x.id === pid) || {}).vendors || [];
+  const existingNames = existing.map(v => v.name.toLowerCase());
+  const opts = vendors
+    .filter(v => !existingNames.includes(v.name.toLowerCase()))
+    .map(v => `<div class="pj-picker-row" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--green-light);font-size:.82rem" onclick="pjAddVendor('${pid}','${v.id}')">
+      <strong>${v.name}</strong> <span style="color:var(--text3);font-size:.74rem">— ${v.role || ''}</span>
+    </div>`)
+    .join('');
+
+  const modal = document.getElementById('pj-vendor-picker-modal');
+  if (!modal) {
+    // Create modal if it doesn't exist
+    const m = document.createElement('div');
+    m.id = 'pj-vendor-picker-modal';
+    m.className = 'modal-overlay';
+    m.innerHTML = `<div class="modal" style="max-width:420px;max-height:80vh;display:flex;flex-direction:column">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--border)">
+        <div style="font-weight:600;font-size:.88rem">Add Vendor to Project</div>
+        <button class="modal-close" onclick="closeModal('pj-vendor-picker-modal')">✕</button>
+      </div>
+      <div style="padding:10px 12px;border-bottom:1px solid var(--border)">
+        <input type="text" id="pj-vendor-search" placeholder="Search vendors..." style="width:100%;font-size:.82rem" oninput="pjFilterVendorPicker(this.value,'${pid}')">
+      </div>
+      <div id="pj-vendor-picker-list" style="overflow-y:auto;flex:1">${opts || '<div style="padding:14px;font-size:.8rem;color:var(--text3)">All vendors already added.</div>'}</div>
+    </div>`;
+    document.body.appendChild(m);
+    m.classList.add('open');
+  } else {
+    document.getElementById('pj-vendor-picker-list').innerHTML = opts || '<div style="padding:14px;font-size:.8rem;color:var(--text3)">All vendors already added.</div>';
+    document.getElementById('pj-vendor-search').oninput = (e) => pjFilterVendorPicker(e.target.value, pid);
+    modal.classList.add('open');
+  }
+}
+
+function pjFilterVendorPicker(query, pid) {
+  const existing = (projects.find(x => x.id === pid) || {}).vendors || [];
+  const existingNames = existing.map(v => v.name.toLowerCase());
+  const q = query.toLowerCase();
+  const filtered = vendors
+    .filter(v => !existingNames.includes(v.name.toLowerCase()))
+    .filter(v => !q || v.name.toLowerCase().includes(q) || (v.role || '').toLowerCase().includes(q));
+  const el = document.getElementById('pj-vendor-picker-list');
+  if (!el) return;
+  el.innerHTML = filtered.map(v => `<div class="pj-picker-row" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--green-light);font-size:.82rem" onclick="pjAddVendor('${pid}','${v.id}')">
+    <strong>${v.name}</strong> <span style="color:var(--text3);font-size:.74rem">— ${v.role || ''}</span>
+  </div>`).join('') || '<div style="padding:14px;font-size:.8rem;color:var(--text3)">No matching vendors.</div>';
+}
+
+function pjAddVendor(pid, vendorId) {
+  const p = projects.find(x => x.id === pid);
+  const v = vendors.find(x => x.id === vendorId);
+  if (!p || !v) return;
+  if (!p.vendors) p.vendors = [];
+  if (p.vendors.find(pv => pv.name.toLowerCase() === v.name.toLowerCase())) {
+    showToast('Vendor already added');
+    return;
+  }
+  p.vendors.push({ name: v.name, role: v.role || '', phone: v.phone || '', email: v.email || '' });
+  savePJ();
+  closeModal('pj-vendor-picker-modal');
+  pjShowDetail(pid);
+  showToast(`${v.name} added to project`);
+}
+
+function pjRemoveVendor(pid, idx) {
+  const p = projects.find(x => x.id === pid);
+  if (!p || !p.vendors) return;
+  const name = p.vendors[idx] ? p.vendors[idx].name : 'Vendor';
+  p.vendors.splice(idx, 1);
+  savePJ();
+  pjShowDetail(pid);
+  showToast(`${name} removed`);
+}
+
 // ── PDF VIEWER ──────────────────────────────────────────────
 function pjOpenPdf(url, page, title) {
   const modal = document.getElementById('pj-pdf-modal');
@@ -562,7 +674,10 @@ function pjOpenPdf(url, page, title) {
   const pageEl = document.getElementById('pj-pdf-page');
   titleEl.textContent = title || 'Source Document';
   pageEl.textContent = page ? 'Page ' + page : 'Full Report';
-  frame.src = url + (page ? '#page=' + page : '');
+  // Blank the iframe first so the browser treats the new src as a fresh load
+  // (without this, same-URL hash changes are ignored and the page doesn't update)
+  frame.src = 'about:blank';
+  setTimeout(() => { frame.src = url + (page ? '#page=' + page : ''); }, 0);
   modal.classList.add('open');
 }
 
