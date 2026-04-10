@@ -570,7 +570,8 @@ function pjRenderVendorsPanel(p, pid) {
     const contactBits = [];
     if (v.phone) contactBits.push(`<a href="tel:${v.phone}" style="color:inherit;text-decoration:none">${v.phone}</a>`);
     if (v.email) contactBits.push(`<a href="mailto:${v.email}" style="color:inherit;text-decoration:none">${v.email}</a>`);
-    const shareLabel = v.token ? '&#128279; Copy Link' : '&#128279; Share Project';
+    const firstName = v.name.split(' ')[0];
+    const shareLabel = `&#128279; Send project to ${firstName}`;
     cards += `<div class="pj-vendor-card">
       <div class="pj-vendor-card-info">
         <div class="pj-vendor-card-name">${v.name}</div>
@@ -682,14 +683,14 @@ async function pjShareVendor(pid, idx, btnEl) {
       // Open Messages app with pre-composed text
       const tel = v.phone.replace(/\D/g, '');
       window.location.href = `sms:${tel}?body=${encodeURIComponent(body)}`;
-      btnEl.textContent = '&#128279; Share Project';
+      btnEl.innerHTML = `&#128279; Send project to ${v.name.split(' ')[0]}`;
       btnEl.disabled = false;
     } else {
       // No phone on file — fall back to clipboard
       await navigator.clipboard.writeText(url);
       btnEl.textContent = '✓ Link Copied!';
       btnEl.disabled = false;
-      setTimeout(() => { btnEl.textContent = '&#128279; Share Project'; btnEl.disabled = false; }, 2500);
+      setTimeout(() => { btnEl.innerHTML = `&#128279; Send project to ${v.name.split(' ')[0]}`; btnEl.disabled = false; }, 2500);
       showToast(`${v.name} has no phone — link copied to clipboard instead`);
     }
   } catch (e) {
@@ -703,15 +704,23 @@ async function pjShareVendor(pid, idx, btnEl) {
 // ── PDF VIEWER ──────────────────────────────────────────────
 function pjOpenPdf(url, page, title) {
   const modal = document.getElementById('pj-pdf-modal');
-  const frame = document.getElementById('pj-pdf-frame');
   const titleEl = document.getElementById('pj-pdf-title');
   const pageEl = document.getElementById('pj-pdf-page');
   titleEl.textContent = title || 'Source Document';
   pageEl.textContent = page ? 'Page ' + page : 'Full Report';
-  // Blank the iframe first so the browser treats the new src as a fresh load
-  // (without this, same-URL hash changes are ignored and the page doesn't update)
-  frame.src = 'about:blank';
-  setTimeout(() => { frame.src = url + (page ? '#page=' + page : ''); }, 0);
+
+  // Destroy and recreate the iframe entirely — reusing the same iframe
+  // with different #page= hashes is unreliable across browsers
+  const container = modal.querySelector('div[style*="flex:1"]') || modal.querySelector('.pj-pdf-frame-wrap');
+  if (container) {
+    const oldFrame = document.getElementById('pj-pdf-frame');
+    if (oldFrame) oldFrame.remove();
+    const newFrame = document.createElement('iframe');
+    newFrame.id = 'pj-pdf-frame';
+    newFrame.style.cssText = 'width:100%;height:100%;border:none';
+    newFrame.src = url + (page ? '#page=' + page : '');
+    container.appendChild(newFrame);
+  }
   modal.classList.add('open');
 }
 
@@ -1204,7 +1213,8 @@ function pjCreateProject() {
   const API = 'https://storybook-webhook.vercel.app/api/project-vendor';
   const token = window._projectVendorToken;
   const root = document.getElementById('pvs-root');
-  let pvData = null; // loaded project data
+  let pvData = null;
+  let pvsPdfUrl = null; // blob URL for the project PDF (if available)
 
   function pvsRender() {
     if (!pvData) {
@@ -1231,7 +1241,10 @@ function pjCreateProject() {
       if (source.next_annual) dateBxs += `<div class="pvs-date-box"><div class="pvs-date-lbl">Next Annual</div><div class="pvs-date-val">${source.next_annual}</div></div>`;
 
       sourceHtml = `<div class="pvs-source-card">
-        <div class="pvs-source-label">Source Document</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div class="pvs-source-label" style="margin-bottom:0">Source Document</div>
+          ${pvsPdfUrl ? `<button class="pvs-report-btn" onclick="pvsOpenPdf(null,'Full Report')">&#128196; View Full Report</button>` : ''}
+        </div>
         <div class="pvs-source-body">
           <div class="pvs-source-person">
             ${source.inspector ? `<div class="pvs-source-name">${source.inspector}</div>` : ''}
@@ -1256,23 +1269,34 @@ function pjCreateProject() {
       const hasTask = !!item.task_id;
       const completedBy = item.task_completed_by || null;
 
+      // Remark is the primary text (the actual task); item.name is the category label
+      const remarkText = item.remark || item.name;
+      const remarkClickable = pvsPdfUrl && item.page
+        ? `<span class="pvs-remark-link" onclick="pvsOpenPdf(${item.page},'${item.name.replace(/'/g, "\\'")}')">${remarkText}</span>`
+        : remarkText;
+
       let taskCell = '';
       if (item.status === 'fail') {
         if (hasTask) {
           taskCell = isComplete
-            ? `<div class="pvs-task-done">✓ ${completedBy ? 'Done by ' + completedBy : 'Complete'}<br><button class="pvs-undo-btn" onclick="pvsToggle('${item.item_id}',true)">Undo</button></div>`
+            ? `<div class="pvs-task-done">&#10003; ${completedBy ? 'Done by ' + completedBy : 'Complete'}<br><button class="pvs-undo-btn" onclick="pvsToggle('${item.item_id}',true)">Undo</button></div>`
             : `<button class="pvs-done-btn" onclick="pvsToggle('${item.item_id}',false)">Mark Complete</button>`;
         } else {
-          taskCell = `<span style="font-size:.72rem;color:#aaa">No task</span>`;
+          taskCell = `<span style="font-size:.72rem;color:#aaa">No task linked</span>`;
         }
       }
+
+      const roomLabel = item.room && item.room.trim()
+        ? `<span class="pvs-room-tag">${item.room}</span>`
+        : '';
 
       rows += `<div class="pvs-row ${item.status === 'fail' ? 'pvs-row-fail' : 'pvs-row-pass'} ${isComplete ? 'pvs-row-done' : ''}" id="pvs-item-${item.item_id}">
         <div class="pvs-row-top">
           <span class="pvs-pill ${item.status}">${item.status.toUpperCase()}</span>
-          <span class="pvs-row-name ${isComplete ? 'pvs-strikethrough' : ''}">${item.name}</span>
+          <span class="pvs-row-cat">${item.name}</span>
+          ${roomLabel}
         </div>
-        ${item.remark ? `<div class="pvs-row-remark">${item.remark}</div>` : ''}
+        <div class="pvs-row-remark ${isComplete ? 'pvs-strikethrough' : ''}">${remarkClickable}</div>
         ${taskCell ? `<div class="pvs-row-action">${taskCell}</div>` : ''}
       </div>`;
     });
@@ -1337,8 +1361,10 @@ function pjCreateProject() {
       if (action === 'markDone') item.task_completed_by = pvData.vendor_name;
       else item.task_completed_by = null;
 
-      // Recount
-      pvData.done = pvData.items.filter(i =>
+      // Recount — only items with linked tasks
+      const taskItems = pvData.items.filter(i => !!i.task_id);
+      pvData.total = taskItems.length;
+      pvData.done = taskItems.filter(i =>
         i.task_status === 'complete' || i.task_status === 'resolved_by_guest'
       ).length;
       pvsRender();
@@ -1349,13 +1375,53 @@ function pjCreateProject() {
   }
   window.pvsToggle = pvsToggle;
 
-  // Initial load
+  // ── PDF viewer for vendor view ──
+  function pvsOpenPdf(page, title) {
+    if (!pvsPdfUrl) return;
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('pvs-pdf-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'pvs-pdf-modal';
+      modal.className = 'pvs-pdf-modal';
+      modal.innerHTML = `
+        <div class="pvs-pdf-inner">
+          <div class="pvs-pdf-header">
+            <span id="pvs-pdf-title" class="pvs-pdf-title">Document</span>
+            <span id="pvs-pdf-page" class="pvs-pdf-page-badge"></span>
+            <button class="pvs-pdf-close" onclick="document.getElementById('pvs-pdf-modal').classList.remove('open')">&#10005;</button>
+          </div>
+          <div class="pvs-pdf-frame-wrap"><iframe id="pvs-pdf-frame" src="" style="width:100%;height:100%;border:none"></iframe></div>
+        </div>`;
+      document.body.appendChild(modal);
+    }
+    document.getElementById('pvs-pdf-title').textContent = title || 'Source Document';
+    document.getElementById('pvs-pdf-page').textContent = page ? 'Page ' + page : 'Full Report';
+    const frame = document.getElementById('pvs-pdf-frame');
+    frame.src = 'about:blank';
+    setTimeout(() => { frame.src = pvsPdfUrl + (page ? '#page=' + page : ''); }, 50);
+    modal.classList.add('open');
+  }
+  window.pvsOpenPdf = pvsOpenPdf;
+
+  // ── Initial load ──
   root.innerHTML = '<div class="pvs-loading">Loading project...</div>';
   fetch(`${API}?token=${token}`)
     .then(r => r.json())
     .then(data => {
       if (data.error) { root.innerHTML = `<div class="pvs-error">${data.error}</div>`; return; }
       pvData = data;
+
+      // Reconstruct PDF blob URL from base64 data
+      if (data.pdf_data) {
+        try {
+          const byteStr = atob(data.pdf_data.split(',')[1]);
+          const bytes = new Uint8Array(byteStr.length);
+          for (let i = 0; i < byteStr.length; i++) bytes[i] = byteStr.charCodeAt(i);
+          pvsPdfUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+        } catch (e) { console.warn('[pvs] Could not reconstruct PDF:', e); }
+      }
+
       pvsRender();
     })
     .catch(() => { root.innerHTML = '<div class="pvs-error">Could not load project. Check your connection.</div>'; });
