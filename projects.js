@@ -1213,37 +1213,67 @@ function pjCreateProject() {
     }
 
     const { title, vendor_name, items, done, total, source } = pvData;
+    const failCount = items.filter(i => i.status === 'fail').length;
     const pct = total ? Math.round(done / total * 100) : 0;
-    const circumference = 2 * Math.PI * 28;
+    const circumference = 2 * Math.PI * 26;
     const offset = circumference - (pct / 100) * circumference;
 
+    // ── Source document bar ──
+    let sourceHtml = '';
+    if (source) {
+      const contactParts = [];
+      if (source.inspector_phone) contactParts.push(source.inspector_phone);
+      if (source.inspector_email) contactParts.push(`<a href="mailto:${source.inspector_email}" style="color:inherit">${source.inspector_email}</a>`);
+
+      let dateBxs = '';
+      if (source.inspection_date) dateBxs += `<div class="pvs-date-box"><div class="pvs-date-lbl">Inspection</div><div class="pvs-date-val">${source.inspection_date}</div></div>`;
+      if (source.reinspection_date) dateBxs += `<div class="pvs-date-box pvs-date-urgent"><div class="pvs-date-lbl">Re-Inspection</div><div class="pvs-date-val">${source.reinspection_date}</div></div>`;
+      if (source.next_annual) dateBxs += `<div class="pvs-date-box"><div class="pvs-date-lbl">Next Annual</div><div class="pvs-date-val">${source.next_annual}</div></div>`;
+
+      sourceHtml = `<div class="pvs-source-card">
+        <div class="pvs-source-label">Source Document</div>
+        <div class="pvs-source-body">
+          <div class="pvs-source-person">
+            ${source.inspector ? `<div class="pvs-source-name">${source.inspector}</div>` : ''}
+            ${contactParts.length ? `<div class="pvs-source-contact">${contactParts.join(' · ')}</div>` : ''}
+            ${source.address ? `<div class="pvs-source-address">&#128205; ${source.address}</div>` : ''}
+          </div>
+          ${dateBxs ? `<div class="pvs-date-row">${dateBxs}</div>` : ''}
+        </div>
+      </div>`;
+    }
+
+    // ── Inspection items ──
     const sorted = [...items].sort((a, b) => {
       if (a.status === 'fail' && b.status !== 'fail') return -1;
       if (a.status !== 'fail' && b.status === 'fail') return 1;
       return 0;
     });
 
-    let itemsHtml = '';
+    let rows = '';
     sorted.forEach(item => {
       const isComplete = item.task_status === 'complete' || item.task_status === 'resolved_by_guest';
       const hasTask = !!item.task_id;
-      const completedBy = item.task_completed_by ? `Completed by ${item.task_completed_by}` : 'Complete';
+      const completedBy = item.task_completed_by || null;
 
-      let actionHtml = '';
-      if (hasTask) {
-        actionHtml = isComplete
-          ? `<button class="pvs-undo-btn" onclick="pvsToggle('${item.item_id}', true)">↩ Undo</button>`
-          : `<button class="pvs-done-btn" onclick="pvsToggle('${item.item_id}', false)">Mark Complete</button>`;
+      let taskCell = '';
+      if (item.status === 'fail') {
+        if (hasTask) {
+          taskCell = isComplete
+            ? `<div class="pvs-task-done">✓ ${completedBy ? 'Done by ' + completedBy : 'Complete'}<br><button class="pvs-undo-btn" onclick="pvsToggle('${item.item_id}',true)">Undo</button></div>`
+            : `<button class="pvs-done-btn" onclick="pvsToggle('${item.item_id}',false)">Mark Complete</button>`;
+        } else {
+          taskCell = `<span style="font-size:.72rem;color:#aaa">No task</span>`;
+        }
       }
 
-      itemsHtml += `<div class="pvs-item ${isComplete ? 'pvs-item-done' : ''}" id="pvs-item-${item.item_id}">
-        <div class="pvs-item-top">
+      rows += `<div class="pvs-row ${item.status === 'fail' ? 'pvs-row-fail' : 'pvs-row-pass'} ${isComplete ? 'pvs-row-done' : ''}" id="pvs-item-${item.item_id}">
+        <div class="pvs-row-top">
           <span class="pvs-pill ${item.status}">${item.status.toUpperCase()}</span>
-          <span class="pvs-item-name ${isComplete ? 'pvs-strikethrough' : ''}">${item.name}</span>
+          <span class="pvs-row-name ${isComplete ? 'pvs-strikethrough' : ''}">${item.name}</span>
         </div>
-        ${item.remark ? `<div class="pvs-remark">${item.remark}</div>` : ''}
-        ${isComplete ? `<div class="pvs-completed-label">✓ ${completedBy}</div>` : ''}
-        ${actionHtml ? `<div class="pvs-item-action">${actionHtml}</div>` : ''}
+        ${item.remark ? `<div class="pvs-row-remark">${item.remark}</div>` : ''}
+        ${taskCell ? `<div class="pvs-row-action">${taskCell}</div>` : ''}
       </div>`;
     });
 
@@ -1254,24 +1284,31 @@ function pjCreateProject() {
         <div class="pvs-header-vendor">Hi, ${vendor_name.split(' ')[0]} 👋</div>
       </div>
 
-      <div class="pvs-progress-bar-wrap">
-        <div class="pvs-progress-ring-row">
-          <svg width="68" height="68" viewBox="0 0 68 68">
-            <circle cx="34" cy="34" r="28" fill="none" stroke="var(--green-light,#c8e6c9)" stroke-width="5"/>
-            <circle cx="34" cy="34" r="28" fill="none" stroke="#2d6a3f" stroke-width="5"
+      <div class="pvs-body">
+        ${sourceHtml}
+
+        <div class="pvs-ring-wrap">
+          <svg width="64" height="64" viewBox="0 0 64 64">
+            <circle cx="32" cy="32" r="26" fill="none" stroke="#c8e6c9" stroke-width="5"/>
+            <circle cx="32" cy="32" r="26" fill="none" stroke="#2d6a3f" stroke-width="5"
               stroke-dasharray="${circumference.toFixed(1)}" stroke-dashoffset="${offset.toFixed(1)}"
-              stroke-linecap="round" transform="rotate(-90 34 34)" style="transition:stroke-dashoffset .5s"/>
-            <text x="34" y="39" text-anchor="middle" fill="#2d6a3f" font-size="15" font-weight="700">${pct}%</text>
+              stroke-linecap="round" transform="rotate(-90 32 32)" style="transition:stroke-dashoffset .5s"/>
+            <text x="32" y="36" text-anchor="middle" fill="#2d6a3f" font-size="14" font-weight="700">${pct}%</text>
           </svg>
-          <div class="pvs-progress-text">
-            <div class="pvs-progress-label">${done} of ${total} items complete</div>
-            ${pct === 100 ? '<div class="pvs-all-done">🎉 All done!</div>' : ''}
+          <div>
+            <div class="pvs-ring-label">${done} of ${total} tasks complete</div>
+            <div class="pvs-ring-sub">${failCount} fail items · ${items.length} total items</div>
+            ${pct === 100 ? '<div class="pvs-all-done">🎉 All items complete!</div>' : ''}
           </div>
         </div>
-      </div>
 
-      <div class="pvs-items-wrap">
-        ${itemsHtml || '<div class="pvs-empty">No inspection items.</div>'}
+        <div class="pvs-items-panel">
+          <div class="pvs-items-hdr">
+            <span>Inspection Items (${items.length})</span>
+            <span>${failCount} fail · ${items.length - failCount} pass</span>
+          </div>
+          ${rows || '<div style="padding:14px 16px;font-size:.82rem;color:#999">No items.</div>'}
+        </div>
       </div>
 
       <div class="pvs-footer">Storybook Escapes Maintenance</div>
