@@ -1580,6 +1580,7 @@ textarea{resize:vertical;min-height:76px}
 .pj-tbl td{padding:9px 12px;border-bottom:1px solid var(--green-light);vertical-align:top}
 .pj-tbl tr.pj-row-fail{background:var(--red-bg)}
 .pj-tbl tr.pj-row-pass{background:var(--white)}
+.pj-tbl tr[onclick]:hover{background:var(--green-pale,#f0f7f0)}
 .pj-tbl tr:hover{filter:brightness(.97)}
 .pj-status-pill{font-size:.6rem;font-weight:700;padding:2px 7px;border-radius:10px;text-transform:uppercase}
 .pj-status-pill.fail{background:var(--red);color:#fff}
@@ -1664,8 +1665,9 @@ textarea{resize:vertical;min-height:76px}
   /* Result pill + item name on first row */
   .pj-tbl td:nth-child(1){display:inline-block;width:auto;padding-right:8px;vertical-align:middle}
   .pj-tbl td:nth-child(2){display:inline-block;width:calc(100% - 70px);font-size:.84rem;vertical-align:middle;padding-top:2px}
-  /* Hide Room column on mobile */
-  .pj-tbl td:nth-child(3){display:none}
+  /* Room column on mobile — inline editable tag below remark */
+  .pj-tbl td:nth-child(3){display:inline-block;padding-top:4px}
+  .pj-tbl td:nth-child(3) .pj-room-edit{font-size:.68rem;padding:2px 6px;border-radius:4px;background:var(--surface2)}
   /* Remark full width, slightly muted */
   .pj-tbl td:nth-child(4){display:block;font-size:.78rem;color:var(--text2);padding:5px 0 4px;line-height:1.4}
   /* Task button full width */

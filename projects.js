@@ -233,18 +233,19 @@ function pjShowDetail(pid) {
       const pdfUrl = p.source && p.source.pdf_url ? p.source.pdf_url : '';
       const remarkText = item.remark || '—';
       const remarkHtml = pdfUrl && item.page
-        ? `<span class="pj-remark" onclick="pjOpenPdf('${pdfUrl}',${item.page},'${item.name.replace(/'/g, "\\'")}')">${remarkText}</span>`
+        ? `<span class="pj-remark" onclick="event.stopPropagation();pjOpenPdf('${pdfUrl}',${item.page},'${item.name.replace(/'/g, "\\'")}')">${remarkText}</span>`
         : remarkText;
 
       const hasRoom = item.room && item.room.trim();
       const roomHtml = `<span contenteditable="true" data-placeholder="+ add" data-pid="${pid}" data-iid="${item.item_id}" class="pj-room-edit" onfocus="pjRoomFocus(this)" onblur="pjRoomBlur(this)">${hasRoom ? item.room : '<span class="pj-room-ph">+ add</span>'}</span>`;
 
-      html += `<tr class="${rowCls}">
+      const rowClick = item.task_id ? ` onclick="openDetail('${item.task_id}')" style="cursor:pointer"` : '';
+      html += `<tr class="${rowCls}"${rowClick}>
         <td><span class="pj-status-pill ${item.status}">${item.status.toUpperCase()}</span></td>
         <td><strong>${item.name}</strong></td>
-        <td>${roomHtml}</td>
+        <td onclick="event.stopPropagation()">${roomHtml}</td>
         <td>${remarkHtml}</td>
-        <td>${taskCell}</td>
+        <td onclick="event.stopPropagation()">${taskCell}</td>
       </tr>`;
     });
 
@@ -1215,6 +1216,7 @@ function pjCreateProject() {
   const root = document.getElementById('pvs-root');
   let pvData = null;
   let pvsPdfUrl = null; // blob URL for the project PDF (if available)
+  let pvsPdfBytes = null; // raw Uint8Array for pdf.js
 
   function pvsRender() {
     if (!pvData) {
@@ -1400,9 +1402,47 @@ function pjCreateProject() {
   }
   window.pvsToggle = pvsToggle;
 
-  // ── PDF viewer for vendor view ──
+  // ── PDF viewer for vendor view (pdf.js for reliable mobile page nav) ──
+  let pvsLib = null; // pdf.js library reference
+  let pvsPdfDoc = null; // loaded PDF document
+
+  // Load pdf.js from CDN on first use
+  async function pvsLoadLib() {
+    if (pvsLib) return pvsLib;
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      s.onload = () => {
+        const lib = window.pdfjsLib;
+        lib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        pvsLib = lib;
+        resolve(lib);
+      };
+      s.onerror = () => reject(new Error('Failed to load pdf.js'));
+      document.head.appendChild(s);
+    });
+  }
+
+  async function pvsRenderPage(canvas, pageNum) {
+    if (!pvsPdfDoc) return;
+    const pg = await pvsPdfDoc.getPage(pageNum);
+    const wrap = canvas.parentElement;
+    const wrapWidth = wrap.clientWidth - 32; // 16px padding each side
+    const unscaledVp = pg.getViewport({ scale: 1 });
+    const scale = wrapWidth / unscaledVp.width;
+    const viewport = pg.getViewport({ scale });
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = viewport.width * dpr;
+    canvas.height = viewport.height * dpr;
+    canvas.style.width = viewport.width + 'px';
+    canvas.style.height = viewport.height + 'px';
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    await pg.render({ canvasContext: ctx, viewport }).promise;
+  }
+
   function pvsOpenPdf(page, title) {
-    if (!pvsPdfUrl) return;
+    if (!pvsPdfUrl && !pvsPdfBytes) return;
     // Create modal if it doesn't exist
     let modal = document.getElementById('pvs-pdf-modal');
     if (!modal) {
@@ -1416,24 +1456,55 @@ function pjCreateProject() {
             <span id="pvs-pdf-page" class="pvs-pdf-page-badge"></span>
             <button class="pvs-pdf-close" onclick="document.getElementById('pvs-pdf-modal').classList.remove('open')">&#10005;</button>
           </div>
-          <div class="pvs-pdf-frame-wrap"><iframe id="pvs-pdf-frame" src="" style="width:100%;height:100%;border:none"></iframe></div>
+          <div class="pvs-pdf-frame-wrap" id="pvs-pdf-wrap" style="overflow:auto;-webkit-overflow-scrolling:touch;padding:16px;background:#525659"></div>
         </div>`;
       document.body.appendChild(modal);
     }
     document.getElementById('pvs-pdf-title').textContent = title || 'Source Document';
     document.getElementById('pvs-pdf-page').textContent = page ? 'Page ' + page : 'Full Report';
-    // Destroy and recreate iframe for reliable page navigation
-    const wrap = modal.querySelector('.pvs-pdf-frame-wrap');
-    const old = document.getElementById('pvs-pdf-frame');
-    if (old) old.remove();
-    const f = document.createElement('iframe');
-    f.id = 'pvs-pdf-frame';
-    f.style.cssText = 'width:100%;height:100%;border:none';
-    // Use view=FitH so the PDF fits the width on mobile, + page if provided
-    const hash = page ? '#page=' + page + '&view=FitH' : '#view=FitH';
-    f.src = pvsPdfUrl + hash;
-    wrap.appendChild(f);
     modal.classList.add('open');
+
+    const wrap = document.getElementById('pvs-pdf-wrap');
+    wrap.innerHTML = '<div style="text-align:center;padding:40px;color:#ccc">Loading PDF...</div>';
+
+    (async () => {
+      try {
+        const lib = await pvsLoadLib();
+        if (!pvsPdfDoc) {
+          pvsPdfDoc = await lib.getDocument(pvsPdfUrl).promise;
+        }
+        wrap.innerHTML = '';
+
+        if (page && page > 0 && page <= pvsPdfDoc.numPages) {
+          // Render just the requested page
+          const c = document.createElement('canvas');
+          c.style.display = 'block';
+          c.style.margin = '0 auto';
+          wrap.appendChild(c);
+          await pvsRenderPage(c, page);
+          // Navigation buttons
+          const nav = document.createElement('div');
+          nav.style.cssText = 'display:flex;justify-content:center;gap:12px;padding:12px 0';
+          const total = pvsPdfDoc.numPages;
+          if (page > 1) nav.innerHTML += `<button class="pvs-report-btn" onclick="pvsOpenPdf(${page-1},'${(title||'').replace(/'/g,"\\'")}')">← Prev</button>`;
+          nav.innerHTML += `<span style="color:#ccc;font-size:.76rem;line-height:2">${page} of ${total}</span>`;
+          if (page < total) nav.innerHTML += `<button class="pvs-report-btn" onclick="pvsOpenPdf(${page+1},'${(title||'').replace(/'/g,"\\'")}')">Next →</button>`;
+          wrap.appendChild(nav);
+        } else {
+          // Render all pages
+          for (let i = 1; i <= pvsPdfDoc.numPages; i++) {
+            const c = document.createElement('canvas');
+            c.style.display = 'block';
+            c.style.margin = i > 1 ? '12px auto 0' : '0 auto';
+            wrap.appendChild(c);
+            await pvsRenderPage(c, i);
+          }
+        }
+      } catch (e) {
+        console.error('[pvs-pdf]', e);
+        wrap.innerHTML = '<div style="text-align:center;padding:40px;color:#f88">Could not load PDF.</div>';
+      }
+    })();
   }
   window.pvsOpenPdf = pvsOpenPdf;
 
@@ -1451,6 +1522,7 @@ function pjCreateProject() {
           const byteStr = atob(data.pdf_data.split(',')[1]);
           const bytes = new Uint8Array(byteStr.length);
           for (let i = 0; i < byteStr.length; i++) bytes[i] = byteStr.charCodeAt(i);
+          pvsPdfBytes = bytes;
           pvsPdfUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
         } catch (e) { console.warn('[pvs] Could not reconstruct PDF:', e); }
       }
