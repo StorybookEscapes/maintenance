@@ -334,15 +334,14 @@ function pjRenderStep() {
       </div>
       <div id="pji-extract-status" style="display:none;font-size:.76rem;color:var(--green);margin-bottom:10px;font-weight:500"></div>
 
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+      ${hasFile ? `<textarea id="pji-paste" style="display:none">${pjImportData._rawText || ''}</textarea>` : `<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
         <div style="flex:1;height:1px;background:var(--border)"></div>
         <span style="font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px">or paste text</span>
         <div style="flex:1;height:1px;background:var(--border)"></div>
       </div>
-
       <div class="fgr full" style="margin-bottom:14px">
         <textarea id="pji-paste" rows="8" placeholder="Paste the inspection report text here..." style="font-size:.78rem;font-family:monospace">${pjImportData._rawText || ''}</textarea>
-      </div>
+      </div>`}
       <div style="display:flex;justify-content:space-between">
         <button class="btn" onclick="pjImportData.step=1;pjRenderStep()">← Back</button>
         <div style="display:flex;gap:8px">
@@ -515,85 +514,148 @@ async function pjExtractPdf(file) {
 }
 
 // ── REPORT PARSER ───────────────────────────────────────────
+// Handles TCPDF fire inspection format (flat text from PDF.js extraction)
+// Also handles structured line-by-line text if pasted manually.
 // Returns { items:[], inspector:'', inspDate:'', reinspDate:'' }
 function pjParseReport(text) {
-  const items = [];
-  const lines = text.split('\n');
-  let currentPage = 1;
-  let idCounter = 1;
   let inspector = '';
   let inspDate = '';
   let reinspDate = '';
+  const items = [];
+  let idCounter = 1;
 
-  // Helper: try to parse a date from text into YYYY-MM-DD
-  function tryParseDate(str) {
-    if (!str) return '';
-    // Match MM/DD/YYYY or MM-DD-YYYY
-    let m = str.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-    if (m) return `${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;
-    // Match Month DD, YYYY
-    m = str.match(/(\w+)\s+(\d{1,2}),?\s+(\d{4})/);
-    if (m) {
-      const months = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
-      const mon = months[m[1].toLowerCase().slice(0,3)];
-      if (mon) return `${m[3]}-${String(mon).padStart(2,'0')}-${m[2].padStart(2,'0')}`;
-    }
-    return '';
+  // Helper: MM/DD/YYYY → YYYY-MM-DD
+  function toISO(str) {
+    const m = str.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    return m ? `${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}` : '';
   }
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
+  // ── Join all pages into one blob, but track page boundaries ──
+  // Page markers look like "1 / 9" or "2 / 3" at end of each page chunk
+  const fullText = text.replace(/\n/g, ' ');
 
-    // ── Detect metadata ──
-    // Inspector name
-    const inspMatch = line.match(/(?:inspector|inspected\s+by|fire\s+marshal|examiner)\s*[:–-]\s*(.+)/i);
-    if (inspMatch && !inspector) { inspector = inspMatch[1].trim(); continue; }
+  // ── Extract metadata ──
+  // Inspector + date: "Completed with fail  NAME  MM/DD/YYYY HH:MM:SS"
+  const metaMatch = fullText.match(/Completed\s+with\s+(?:fail|pass)\s+([\w\s().]+?)\s+(\d{1,2}\/\d{1,2}\/\d{4})\s+\d{1,2}:\d{2}:\d{2}/i);
+  if (metaMatch) {
+    inspector = metaMatch[1].trim();
+    inspDate = toISO(metaMatch[2]);
+  }
 
-    // Inspection date
-    const dateMatch = line.match(/(?:inspection\s+date|date\s+of\s+inspection|inspected\s+on)\s*[:–-]\s*(.+)/i);
-    if (dateMatch && !inspDate) { inspDate = tryParseDate(dateMatch[1].trim()); continue; }
+  // Re-inspection date: "Re-Inspection scheduled to be conducted on or after MM/DD/YYYY"
+  const reinspMatch = fullText.match(/Re-?Inspection\s+scheduled\s+to\s+be\s+conducted\s+on\s+or\s+after\s+(\d{1,2}\/\d{1,2}\/\d{4})/i);
+  if (reinspMatch) {
+    reinspDate = toISO(reinspMatch[1]);
+  } else {
+    // Next annual: "Next inspection scheduled to be conducted on or after MM/DD/YYYY"
+    const nextMatch = fullText.match(/Next\s+inspection\s+scheduled\s+to\s+be\s+conducted\s+on\s+or\s+after\s+(\d{1,2}\/\d{1,2}\/\d{4})/i);
+    if (nextMatch) reinspDate = toISO(nextMatch[1]);
+  }
 
-    // Re-inspection / due date
-    const reinspMatch = line.match(/(?:re-?inspection|follow.?up|due\s+date|next\s+inspection|annual\s+inspection)\s*[:–-]\s*(.+)/i);
-    if (reinspMatch && !reinspDate) { reinspDate = tryParseDate(reinspMatch[1].trim()); continue; }
+  // ── Determine page number for each character position ──
+  // Split into pages using the "N / M" markers added by our extractor
+  const pageChunks = fullText.split(/---\s*Page\s+(\d+)\s*---/i);
+  // Build a map: character position → page number
+  let pageMap = []; // array of {start, end, page}
+  let pos = 0;
+  let currentPage = 1;
+  for (let c = 0; c < pageChunks.length; c++) {
+    if (c % 2 === 1) {
+      // This chunk is the page number captured group
+      currentPage = parseInt(pageChunks[c]) || currentPage;
+      pos += pageChunks[c].length;
+    } else {
+      const chunk = pageChunks[c];
+      pageMap.push({ start: pos, end: pos + chunk.length, page: currentPage });
+      pos += chunk.length;
+    }
+  }
+  // Reconstruct clean text without page markers
+  const cleanText = pageChunks.filter((_, i) => i % 2 === 0).join('');
 
-    // ── Detect page markers ──
-    const pageMatch = line.match(/page\s+(\d+)/i) || line.match(/^(\d+)\s*of\s*\d+$/i);
-    if (pageMatch) { currentPage = parseInt(pageMatch[1]); continue; }
+  function getPage(charIdx) {
+    let offset = 0;
+    for (const pm of pageMap) {
+      const len = pm.end - pm.start;
+      if (charIdx < offset + len) return pm.page;
+      offset += len;
+    }
+    return 1;
+  }
 
-    // ── Detect FAIL / PASS lines ──
-    const failMatch = line.match(/^(?:FAIL|Failed|✗|✘|X)\s*[-–:]\s*(.+)/i) || line.match(/^(.+?)\s*[-–:]\s*(?:FAIL|Failed)$/i);
-    const passMatch = line.match(/^(?:PASS|Passed|✓|✔)\s*[-–:]\s*(.+)/i) || line.match(/^(.+?)\s*[-–:]\s*(?:PASS|Passed)$/i);
+  // ── Extract items: "Fail ITEM: ... REMARK: ... CODE: ..." ──
+  // This regex captures: (Fail|Pass) ITEM: (name) followed by REMARK: (remark) and/or CODE: (code)
+  const itemRegex = /(Fail|Pass)\s+ITEM:\s+(.*?)(?:\s+REMARK:\s+(.*?))?(?:\s+(?:RESULT:\s+(.*?))?)?\s+CODE:\s+/gi;
+  let match;
+  // We need a more robust approach — split on "Fail ITEM:" or "Pass ITEM:" boundaries
+  const itemSplitRegex = /(?=(?:Fail|Pass)\s+ITEM:)/gi;
+  const chunks = cleanText.split(itemSplitRegex).filter(s => s.trim());
 
-    if (failMatch || passMatch) {
-      const status = failMatch ? 'fail' : 'pass';
-      const name = (failMatch || passMatch)[1].trim();
-      let remark = '';
-      let j = i + 1;
-      while (j < lines.length && j <= i + 3) {
-        const next = lines[j].trim();
-        if (!next) { j++; continue; }
-        const remarkMatch = next.match(/^(?:REMARK|Remark|Note|Comment)\s*[-–:]\s*(.+)/i);
-        if (remarkMatch) { remark = remarkMatch[1].trim(); break; }
-        if (!next.match(/^(?:FAIL|PASS|Failed|Passed|✗|✘|✓|✔|X)\s*[-–:]/i) && !next.match(/[-–:]\s*(?:FAIL|PASS|Failed|Passed)$/i)) {
-          remark = next;
-          break;
-        }
-        j++;
+  for (const chunk of chunks) {
+    // Parse each chunk
+    const headMatch = chunk.match(/^(Fail|Pass)\s+ITEM:\s+(.*?)(?:\s{2,}REMARK:\s+(.*?))?(?:\s{2,}RESULT:\s+(.*?))?\s{2,}CODE:\s/i);
+    if (!headMatch) {
+      // Try alternate: "RESULT:" without CODE (Wizard's Edge Notes/Life Safety items)
+      const altMatch = chunk.match(/^(?:.*?:)?\s*ITEM:\s+(.*?)\s{2,}RESULT:\s+(.*?)(?:\s{2,}|$)/i);
+      if (altMatch) {
+        // These are informational items (Pass-type from RESULT)
+        const charIdx = cleanText.indexOf(chunk);
+        items.push({
+          item_id: 'i_' + (idCounter++),
+          name: altMatch[1].trim(),
+          status: 'pass',
+          remark: altMatch[2].trim().substring(0, 200),
+          page: getPage(charIdx),
+          room: '',
+          _create: true
+        });
       }
+      continue;
+    }
 
-      items.push({
-        item_id: 'i_' + (idCounter++),
-        name,
-        status,
-        remark,
-        page: currentPage,
-        room: '',
-        _create: true
-      });
+    const status = headMatch[1].toLowerCase();
+    const name = headMatch[2].trim();
+    const remark = (headMatch[3] || headMatch[4] || '').trim().replace(/\s*\d+\s*\/\s*\d+\s*$/, '');
+    const charIdx = cleanText.indexOf(chunk);
+
+    items.push({
+      item_id: 'i_' + (idCounter++),
+      name,
+      status,
+      remark,
+      page: getPage(charIdx),
+      room: '',
+      _create: true
+    });
+  }
+
+  // ── Fallback: line-by-line parser for manually pasted text ──
+  if (!items.length) {
+    const lines = text.split('\n');
+    let pg = 1;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      const pgM = line.match(/page\s+(\d+)/i) || line.match(/^(\d+)\s*of\s*\d+$/i);
+      if (pgM) { pg = parseInt(pgM[1]); continue; }
+      const failM = line.match(/^(?:FAIL|Failed|✗|✘|X)\s*[-–:]\s*(.+)/i) || line.match(/^(.+?)\s*[-–:]\s*(?:FAIL|Failed)$/i);
+      const passM = line.match(/^(?:PASS|Passed|✓|✔)\s*[-–:]\s*(.+)/i) || line.match(/^(.+?)\s*[-–:]\s*(?:PASS|Passed)$/i);
+      if (failM || passM) {
+        const st = failM ? 'fail' : 'pass';
+        const nm = (failM || passM)[1].trim();
+        let rem = '';
+        for (let j = i + 1; j < lines.length && j <= i + 3; j++) {
+          const nx = lines[j].trim();
+          if (!nx) continue;
+          const rm = nx.match(/^(?:REMARK|Remark|Note|Comment)\s*[-–:]\s*(.+)/i);
+          if (rm) { rem = rm[1].trim(); break; }
+          if (!nx.match(/^(?:FAIL|PASS|Failed|Passed|✗|✘|✓|✔|X)\s*[-–:]/i)) { rem = nx; break; }
+        }
+        items.push({ item_id: 'i_' + (idCounter++), name: nm, status: st, remark: rem, page: pg, room: '', _create: true });
+      }
     }
   }
+
   return { items, inspector, inspDate, reinspDate };
 }
 
