@@ -721,29 +721,111 @@ function updateBulkBar(){
 
 // ── Bulk actions ──
 function _getSelectedTasks(){return tasks.filter(t=>_selectedTasks.has(t.id));}
+let _bulkCalProp=null;  // property ID for calendar view in bulk schedule
+let _bulkSelectedDate='';
+
+function _openBulkModal(title,bodyHtml){
+  document.getElementById('bulk-modal-title').textContent=title;
+  document.getElementById('bulk-modal-body').innerHTML=bodyHtml;
+  document.getElementById('bulk-modal').classList.add('open');
+}
 
 function bulkSchedule(){
   const sel=_getSelectedTasks();if(!sel.length){showToast('No tasks selected');return;}
-  const date=prompt('Enter date for '+sel.length+' task(s)\nFormat: YYYY-MM-DD');
-  if(!date)return;
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){showToast('Invalid date format','err');return;}
+  // Detect if all selected tasks share one property → show that property's calendar
+  const propSet=new Set(sel.map(t=>t.property));
+  _bulkCalProp=propSet.size===1?[...propSet][0]:null;
+  _bulkSelectedDate='';
+  const propNote=_bulkCalProp?getProp(_bulkCalProp)?.name||_bulkCalProp:'multiple properties';
+
+  _openBulkModal('Schedule '+sel.length+' Task'+(sel.length!==1?'s':''),`
+    <div style="font-size:.82rem;color:var(--text2);margin-bottom:12px">
+      Set a date for <strong>${sel.length}</strong> task${sel.length!==1?'s':''} across <strong>${propNote}</strong>.
+    </div>
+    <div class="fgr full" style="margin-bottom:12px">
+      <label>Scheduled Fix Date</label>
+      <div class="dp-wrap" id="b-dp-wrap">
+        <button type="button" class="dp-trigger" id="b-dp-btn" onclick="toggleDP('b')">
+          <span id="b-dp-display" class="dp-ph">Select a date...</span>
+          <span style="color:var(--text3);font-size:.8rem">&#x25BC;</span>
+        </button>
+        <input type="hidden" id="b-date" value="">
+        <div class="dp-popup" id="b-dp-popup" style="display:none"></div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
+      <button class="btn" onclick="closeModal('bulk-modal')">Cancel</button>
+      <button class="btn btn-g" onclick="bulkApplySchedule()">Apply Date</button>
+    </div>`);
+  // Auto-open the calendar if we have a property
+  if(_bulkCalProp)setTimeout(()=>toggleDP('b'),100);
+}
+
+function bulkApplySchedule(){
+  const date=_bulkSelectedDate||document.getElementById('b-date').value;
+  if(!date){showToast('Please select a date');return;}
+  const sel=_getSelectedTasks();
   sel.forEach(t=>{t.date=date;if(t.status==='open')t.status='scheduled';});
   saveTasks();renderAll();updateBulkBar();
-  showToast(sel.length+' task'+(sel.length!==1?'s':'')+' scheduled for '+date);
+  closeModal('bulk-modal');
+  showToast(sel.length+' task'+(sel.length!==1?'s':'')+' scheduled for '+fmtDate(date));
 }
 
 function bulkAssignVendor(){
   const sel=_getSelectedTasks();if(!sel.length){showToast('No tasks selected');return;}
-  const vendor=prompt('Assign vendor to '+sel.length+' task(s):');
-  if(vendor===null)return;
-  sel.forEach(t=>{t.vendor=vendor.trim();});
+  // Build vendor list grouped by category
+  let vHtml='';
+  const cats={};
+  vendors.forEach(v=>{
+    (v.categories||['']).forEach(c=>{
+      if(!cats[c])cats[c]=[];
+      cats[c].push(v);
+    });
+  });
+  const catLabels={handyman:'Handyman',plumbing:'Plumbing',hvac:'HVAC',electrical:'Electrical',pest:'Pest Control',landscaping:'Landscaping',hot_tub:'Hot Tub',pool:'Pool',cleaning:'Cleaning',septic:'Septic',water:'Water Filtration',arcade:'Arcade / Billiards','':'General'};
+  Object.keys(cats).sort().forEach(cat=>{
+    vHtml+=`<div style="font-size:.68rem;text-transform:uppercase;letter-spacing:1px;color:var(--green);font-weight:700;padding:8px 0 4px">${catLabels[cat]||cat}</div>`;
+    cats[cat].forEach(v=>{
+      vHtml+=`<div class="bulk-vendor-row" onclick="bulkPickVendor('${v.name.replace(/'/g,"\\'")}')">
+        <span style="font-weight:500">${v.name}</span>
+        <span style="font-size:.72rem;color:var(--text3)">${v.role||''}</span>
+      </div>`;
+    });
+  });
+
+  _openBulkModal('Assign Vendor — '+sel.length+' Task'+(sel.length!==1?'s':''),`
+    <div style="font-size:.82rem;color:var(--text2);margin-bottom:10px">
+      Choose a vendor for <strong>${sel.length}</strong> selected task${sel.length!==1?'s':''}.
+    </div>
+    <div class="fgr full" style="margin-bottom:10px">
+      <input type="text" id="bulk-vendor-search" placeholder="Search vendors..." oninput="bulkFilterVendors(this.value)" style="font-size:.82rem">
+    </div>
+    <div id="bulk-vendor-list" style="max-height:45vh;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius)">
+      ${vHtml}
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
+      <button class="btn" onclick="closeModal('bulk-modal')">Cancel</button>
+    </div>`);
+}
+
+function bulkFilterVendors(q){
+  q=q.toLowerCase();
+  document.querySelectorAll('#bulk-vendor-list .bulk-vendor-row').forEach(row=>{
+    const txt=row.textContent.toLowerCase();
+    row.style.display=txt.includes(q)?'':'none';
+  });
+}
+
+function bulkPickVendor(name){
+  const sel=_getSelectedTasks();
+  sel.forEach(t=>{t.vendor=name;});
   saveTasks();renderAll();updateBulkBar();
-  showToast(sel.length+' task'+(sel.length!==1?'s':'')+' assigned to '+vendor.trim());
+  closeModal('bulk-modal');
+  showToast(sel.length+' task'+(sel.length!==1?'s':'')+' assigned to '+name);
 }
 
 function bulkToggleUrgent(){
   const sel=_getSelectedTasks();if(!sel.length){showToast('No tasks selected');return;}
-  // If any are not urgent, make all urgent; otherwise clear all
   const anyNotUrgent=sel.some(t=>!t.urgent);
   sel.forEach(t=>{t.urgent=anyNotUrgent;});
   saveTasks();renderAll();updateBulkBar();
@@ -907,7 +989,7 @@ async function toggleDP(px){
   const popup=document.getElementById(px+'-dp-popup');
   if(popup.style.display!=='none'){popup.style.display='none';return;}
   document.querySelectorAll('.dp-popup').forEach(p=>p.style.display='none');
-  const pid=px==='f'?document.getElementById('f-property').value:(tasks.find(t=>t.id===detailId)||{}).property;
+  const pid=px==='f'?document.getElementById('f-property').value:px==='b'?_bulkCalProp:(tasks.find(t=>t.id===detailId)||{}).property;
   if(!pid){popup.innerHTML='<div class="dp-noprop">Please select a property first.</div>';popup.style.display='block';return;}
   // Only clear cache if it previously errored, so we retry on failure but reuse good data
   if(icalCache[pid]==='error')delete icalCache[pid];
@@ -1044,7 +1126,7 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
 }
 async function dpNav(px,dir,y,m){
   const nd=new Date(y,m+dir,1);
-  const pid=px==='f'?document.getElementById('f-property').value:(tasks.find(t=>t.id===detailId)||{}).property;
+  const pid=px==='f'?document.getElementById('f-property').value:px==='b'?_bulkCalProp:(tasks.find(t=>t.id===detailId)||{}).property;
   // If cache is missing or errored, try to fetch rather than showing empty calendar
   let evs=icalCache[pid];
   if(!evs||evs==='error'){
@@ -1074,6 +1156,7 @@ function applyDate(px,ds){
   document.getElementById(px+'-dp-btn').classList.add('has-val');
   document.getElementById(px+'-dp-popup').style.display='none';
   if(px==='d'){updateField('date',ds);checkCombine();}
+  if(px==='b'){_bulkSelectedDate=ds;}
 }
 function confirmBookedDate(px){
   if(pendingBookedDate.px===px)applyDate(px,pendingBookedDate.ds);

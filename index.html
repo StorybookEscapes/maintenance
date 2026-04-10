@@ -103,6 +103,16 @@
           <button class="btn bulk-sm" onclick="exitSelectMode()">✕ Done</button>
         </div>
       </div>
+      <!-- Bulk Action Modal -->
+      <div class="mo" id="bulk-modal">
+        <div class="modal" style="max-width:520px">
+          <div class="mhdr">
+            <div class="mtitle" id="bulk-modal-title">Bulk Action</div>
+            <button class="mclose" onclick="closeModal('bulk-modal')">&#x2715;</button>
+          </div>
+          <div id="bulk-modal-body"></div>
+        </div>
+      </div>
     </div>
 
     <!-- Hidden: keep cal-title for compatibility but it's no longer shown -->

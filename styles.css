@@ -94,6 +94,8 @@ main{flex:1;padding:22px;max-width:1440px;margin:0 auto;width:100%}
 .bulk-count{font-size:.82rem;font-weight:600;color:var(--green)}
 .bulk-actions{display:flex;gap:6px;flex-wrap:wrap}
 .bulk-sm{font-size:.7rem!important;padding:3px 8px!important}
+.bulk-vendor-row{display:flex;justify-content:space-between;align-items:center;padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--green-light);transition:background .1s}
+.bulk-vendor-row:hover{background:var(--green-light)}
 
 /* PROPERTY GROUP (group-by-property mode) */
 .prop-group{margin-bottom:5px}
