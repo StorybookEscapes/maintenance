@@ -461,6 +461,10 @@ let groupMode='property'; // 'status' | 'property'
 const _collapsedProps=new Set();
 const _collapsedNbs=new Set();
 let _propGroupSeeded=false; // true after first auto-collapse seed on load
+
+// ── Multi-select mode ──
+let _selectMode=false;
+const _selectedTasks=new Set();
 function overdueBadge(t){
   if(!t.date||isDone(t))return'';
   const today=new Date();today.setHours(0,0,0,0);
@@ -476,8 +480,11 @@ function taskCard(t){
   const propRow=groupMode==='property'?'':`<div class="tprop ${plcls}">${p?p.name:t.property}</div>`;
   const isSched=t.status==='scheduled'||t.status==='in_progress'||!!t.date;
   const unschedCls=groupMode==='property'&&!isSched?' tc-unsched':'';
-  return`<div class="tc ${nbcls}${unschedCls} ${t.status==='complete'?'done':''}" onclick="openDetail('${t.id}')">
-    <div class="tc-top">${dot}<div class="tmain">
+  const selChecked=_selectedTasks.has(t.id)?'checked':'';
+  const selCb=_selectMode?`<label class="bulk-cb-wrap" onclick="event.stopPropagation()"><input type="checkbox" class="bulk-cb" ${selChecked} onchange="toggleTaskSelect('${t.id}',this.checked)"></label>`:'';
+  const selClass=_selectMode&&_selectedTasks.has(t.id)?' tc-selected':'';
+  return`<div class="tc ${nbcls}${unschedCls}${selClass} ${t.status==='complete'?'done':''}" onclick="${_selectMode?`toggleTaskSelect('${t.id}');renderTasks()`:`openDetail('${t.id}')`}">
+    <div class="tc-top">${selCb}${dot}<div class="tmain">
       ${propRow}
       <div class="tprob">${t.problem}</div>
       <div class="tmeta">
@@ -513,7 +520,7 @@ function renderTasks(){
 
   // Render toolbar
   const tb=document.getElementById('task-toolbar');
-  if(tb) tb.innerHTML=`<div class="task-tb"><button class="tb-btn${groupMode==='property'?' active':''}" onclick="toggleGroupMode()">${groupMode==='property'?'All Tasks':'Group by Property'}</button></div>`;
+  if(tb) tb.innerHTML=`<div class="task-tb"><button class="tb-btn${groupMode==='property'?' active':''}" onclick="toggleGroupMode()">${groupMode==='property'?'All Tasks':'Group by Property'}</button><button class="tb-btn${_selectMode?' active':''}" onclick="toggleSelectMode()">${_selectMode?'Exit Select':'Select'}</button></div>`;
 
   // Sort within each group: urgent first, then by status, then by date
   const sortTasks=arr=>arr.sort((a,b)=>{
@@ -675,6 +682,91 @@ function populatePropFilter(){
   sel.value=prev||'all';
 }
 function setFilter(f,btn){} // kept for compatibility
+
+// ── MULTI-SELECT MODE ──────────────────────────────────────
+function toggleSelectMode(){_selectMode=!_selectMode;if(!_selectMode)_selectedTasks.clear();updateBulkBar();renderTasks();}
+function exitSelectMode(){_selectMode=false;_selectedTasks.clear();updateBulkBar();renderTasks();}
+function toggleTaskSelect(tid,checked){
+  if(typeof checked==='undefined'){
+    // Toggle — called from card click in select mode
+    if(_selectedTasks.has(tid))_selectedTasks.delete(tid);else _selectedTasks.add(tid);
+  } else {
+    if(checked)_selectedTasks.add(tid);else _selectedTasks.delete(tid);
+  }
+  updateBulkBar();renderTasks();
+}
+function bulkSelectAll(){
+  // Select all currently visible (filtered) tasks
+  const q=document.getElementById('search-input').value.toLowerCase();
+  const active=tasks.filter(t=>!isDone(t));
+  const _hiddenPids=typeof projects!=='undefined'?new Set(projects.filter(p=>p.visible===false).map(p=>p.id)):new Set();
+  active.forEach(t=>{
+    if(t.project_id&&_hiddenPids.has(t.project_id))return;
+    if(propFilter!=='all'&&t.property!==propFilter)return;
+    if(catFilter==='urgent'&&!t.urgent)return;
+    if(catFilter!=='all'&&catFilter!=='urgent'){const cats=t.category?t.category.split(',').map(x=>x.trim()):[''];if(!cats.includes(catFilter))return;}
+    if(q){const p=getProp(t.property);const n=p?p.name.toLowerCase():'';if(!(n.includes(q)||t.problem.toLowerCase().includes(q)||(t.guest||'').toLowerCase().includes(q)||(t.vendor||'').toLowerCase().includes(q)||(t.category||'').toLowerCase().includes(q)))return;}
+    _selectedTasks.add(t.id);
+  });
+  updateBulkBar();renderTasks();
+}
+function bulkDeselectAll(){_selectedTasks.clear();updateBulkBar();renderTasks();}
+function updateBulkBar(){
+  const bar=document.getElementById('bulk-bar');
+  if(!bar)return;
+  bar.style.display=_selectMode?'':'none';
+  const ct=document.getElementById('bulk-count');
+  if(ct)ct.textContent=_selectedTasks.size+' selected';
+}
+
+// ── Bulk actions ──
+function _getSelectedTasks(){return tasks.filter(t=>_selectedTasks.has(t.id));}
+
+function bulkSchedule(){
+  const sel=_getSelectedTasks();if(!sel.length){showToast('No tasks selected');return;}
+  const date=prompt('Enter date for '+sel.length+' task(s)\nFormat: YYYY-MM-DD');
+  if(!date)return;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){showToast('Invalid date format','err');return;}
+  sel.forEach(t=>{t.date=date;if(t.status==='open')t.status='scheduled';});
+  saveTasks();renderAll();updateBulkBar();
+  showToast(sel.length+' task'+(sel.length!==1?'s':'')+' scheduled for '+date);
+}
+
+function bulkAssignVendor(){
+  const sel=_getSelectedTasks();if(!sel.length){showToast('No tasks selected');return;}
+  const vendor=prompt('Assign vendor to '+sel.length+' task(s):');
+  if(vendor===null)return;
+  sel.forEach(t=>{t.vendor=vendor.trim();});
+  saveTasks();renderAll();updateBulkBar();
+  showToast(sel.length+' task'+(sel.length!==1?'s':'')+' assigned to '+vendor.trim());
+}
+
+function bulkToggleUrgent(){
+  const sel=_getSelectedTasks();if(!sel.length){showToast('No tasks selected');return;}
+  // If any are not urgent, make all urgent; otherwise clear all
+  const anyNotUrgent=sel.some(t=>!t.urgent);
+  sel.forEach(t=>{t.urgent=anyNotUrgent;});
+  saveTasks();renderAll();updateBulkBar();
+  showToast(sel.length+' task'+(sel.length!==1?'s':'')+' marked '+(anyNotUrgent?'urgent':'not urgent'));
+}
+
+function bulkMarkComplete(){
+  const sel=_getSelectedTasks();if(!sel.length){showToast('No tasks selected');return;}
+  if(!confirm('Mark '+sel.length+' task(s) as complete?'))return;
+  sel.forEach(t=>{t.status='complete';});
+  _selectedTasks.clear();
+  saveTasks();renderAll();updateBulkBar();
+  showToast(sel.length+' task'+(sel.length!==1?'s':'')+' marked complete');
+}
+
+function bulkDelete(){
+  const sel=_getSelectedTasks();if(!sel.length){showToast('No tasks selected');return;}
+  if(!confirm('Permanently delete '+sel.length+' task(s)? This cannot be undone.'))return;
+  sel.forEach(t=>{const idx=tasks.indexOf(t);if(idx!==-1)tasks.splice(idx,1);});
+  _selectedTasks.clear();
+  saveTasks();renderAll();updateBulkBar();
+  showToast(sel.length+' task'+(sel.length!==1?'s':'')+' deleted');
+}
 
 // ── HOSPITABLE API INTEGRATION ──────────────────────────────
 // Replaces the old iCal fetch + parse pipeline.

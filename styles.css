@@ -85,6 +85,16 @@ main{flex:1;padding:22px;max-width:1440px;margin:0 auto;width:100%}
 .tprop{font-size:.65rem;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:2px}
 .tprob{font-size:.88rem;font-weight:500;line-height:1.35}
 .tmeta{display:flex;gap:8px;margin-top:5px;flex-wrap:wrap;align-items:center}
+/* Multi-select mode */
+.tc.tc-selected{background:var(--green-light);border-color:var(--green)}
+.bulk-cb-wrap{display:flex;align-items:center;flex-shrink:0;margin-top:2px;cursor:pointer}
+.bulk-cb{width:16px;height:16px;accent-color:var(--green);cursor:pointer}
+.bulk-bar{position:sticky;bottom:0;left:0;right:0;background:var(--white);border-top:2px solid var(--green);padding:10px 16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;z-index:90;box-shadow:0 -4px 12px rgba(0,0,0,.1)}
+.bulk-left{display:flex;align-items:center;gap:8px}
+.bulk-count{font-size:.82rem;font-weight:600;color:var(--green)}
+.bulk-actions{display:flex;gap:6px;flex-wrap:wrap}
+.bulk-sm{font-size:.7rem!important;padding:3px 8px!important}
+
 /* PROPERTY GROUP (group-by-property mode) */
 .prop-group{margin-bottom:5px}
 .prop-group-hdr{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:var(--surface);border:1px solid var(--border);border-left-width:3px;border-radius:var(--radius);cursor:pointer;transition:all .15s;user-select:none}

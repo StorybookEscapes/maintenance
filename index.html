@@ -87,6 +87,22 @@
       <input type="hidden" id="search-input" value="">
       <div id="task-toolbar"></div>
       <div id="task-list"></div>
+      <!-- Bulk Action Bar (multi-select) -->
+      <div id="bulk-bar" class="bulk-bar" style="display:none">
+        <div class="bulk-left">
+          <span id="bulk-count" class="bulk-count">0 selected</span>
+          <button class="btn bulk-sm" onclick="bulkSelectAll()">All</button>
+          <button class="btn bulk-sm" onclick="bulkDeselectAll()">None</button>
+        </div>
+        <div class="bulk-actions">
+          <button class="btn" onclick="bulkSchedule()">📅 Schedule</button>
+          <button class="btn" onclick="bulkAssignVendor()">👤 Vendor</button>
+          <button class="btn" onclick="bulkToggleUrgent()">🔴 Urgent</button>
+          <button class="btn btn-g" onclick="bulkMarkComplete()">✓ Complete</button>
+          <button class="btn btn-red" onclick="bulkDelete()">Delete</button>
+          <button class="btn bulk-sm" onclick="exitSelectMode()">✕ Done</button>
+        </div>
+      </div>
     </div>
 
     <!-- Hidden: keep cal-title for compatibility but it's no longer shown -->
