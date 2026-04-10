@@ -7116,11 +7116,22 @@ function ppRenderInventory() {
     return;
   }
 
-  // Portfolio-wide calculations
+  // Build ordered cabin list (by neighborhood) with nb metadata
+  const ordered = [];
+  NBS.forEach((nb) => {
+    const cabinsInNb = nb.props.filter((pid) => PP[pid]);
+    cabinsInNb.forEach((pid) => ordered.push({ pid, nb }));
+  });
+  const orderedIds = new Set(ordered.map((o) => o.pid));
+  Object.keys(PP).forEach((pid) => {
+    if (!orderedIds.has(pid)) ordered.push({ pid, nb: null });
+  });
+
+  // Portfolio-wide calculations using canonical sizes
   const allSizes = new Set();
   let confirmedSlots = 0, totalSlots = 0, outOfStock = 0;
-  Object.values(PP).forEach((p) => {
-    const inv = (p.hvac && p.hvac.filter_supply && p.hvac.filter_supply.current_inventory) || {};
+  ordered.forEach(({ pid }) => {
+    const inv = fsReadInv(PP[pid]);
     Object.keys(inv).forEach((s) => {
       allSizes.add(s);
       totalSlots++;
@@ -7130,24 +7141,7 @@ function ppRenderInventory() {
     });
   });
   const sizes = Array.from(allSizes).sort();
-  const cabinCount = Object.keys(PP).length;
-
-  // Build ordered cabin list (by neighborhood) with nb metadata
-  const ordered = [];
-  const nbRuns = [];
-  NBS.forEach((nb) => {
-    const cabinsInNb = nb.props.filter((pid) => PP[pid]);
-    if (!cabinsInNb.length) return;
-    nbRuns.push({ nb, count: cabinsInNb.length });
-    cabinsInNb.forEach((pid) => ordered.push({ pid, nb }));
-  });
-  // Include any cabins not in NBS
-  const orderedIds = new Set(ordered.map((o) => o.pid));
-  const orphans = Object.keys(PP).filter((pid) => !orderedIds.has(pid));
-  if (orphans.length) {
-    nbRuns.push({ nb: null, count: orphans.length });
-    orphans.forEach((pid) => ordered.push({ pid, nb: null }));
-  }
+  const cabinCount = ordered.length;
 
   // Key-status stats (admin only)
   const canSeeKey = ppCanSee('admin');
@@ -7181,60 +7175,51 @@ function ppRenderInventory() {
   }
   h += `</div></section>`;
 
-  // ── Filter Inventory Matrix ──
+  // ── Filter Inventory Matrix (cabins as rows, sizes as columns) ──
   h += `<section class="inv-panel"><header><h2>Filter Inventory Matrix</h2></header>`;
-  h += `<div class="inv-hint">Click any cell to enter or update its count. Unmeasured cells show as red 0 until a vendor confirms on-site. Click the <b style="color:var(--inv-text)">📍 Filter storage</b> row to record where filters are stashed at each cabin — you can fill this in even if you don't have a count yet.</div>`;
-  h += `<div class="inv-matrix-wrap"><table class="inv-matrix"><thead>`;
-
-  // Neighborhood header row (colspan per nb group)
-  h += `<tr><th class="size-head" style="background:var(--inv-panel)"></th>`;
-  nbRuns.forEach(({ nb, count }) => {
-    if (nb) {
-      h += `<th class="nb-head nb-${nb.cls}" colspan="${count}">${ppEsc(nb.name)}</th>`;
-    } else {
-      h += `<th class="nb-head" colspan="${count}">Other</th>`;
-    }
-  });
-  h += `</tr>`;
-
-  // Cabin name row (rotated)
-  h += `<tr><th class="size-head">Filter size</th>`;
-  ordered.forEach(({ pid }) => {
-    const p = PP[pid];
-    const name = p.property_name || pid;
-    h += `<th class="cabin" onclick="ppInvEditLocation('${pid}')" title="${ppEsc(name)} — click to edit filter storage">${ppEsc(name)}</th>`;
+  h += `<div class="inv-hint">Click any cell to enter or update its count. Unmeasured cells show as red <b>0</b> until a vendor confirms on-site. Click the <b>📍</b> column to record where filters are stashed at a cabin — you can fill this in even if you don't have a count yet.</div>`;
+  h += `<div class="inv-matrix-wrap"><table class="inv-matrix"><thead><tr>`;
+  h += `<th class="cabin-head">Cabin</th>`;
+  h += `<th class="loc-head" title="Filter storage location">📍</th>`;
+  sizes.forEach((sz) => {
+    h += `<th class="size-col">${ppEsc(sz.replace('x','×'))}</th>`;
   });
   h += `</tr></thead><tbody>`;
 
-  // Filter storage row (always present; set-or-missing indicator)
-  h += `<tr class="loc-row"><td class="size-head">📍 Filter storage</td>`;
-  ordered.forEach(({ pid }) => {
-    const p = PP[pid];
-    const fs = (p.hvac && p.hvac.filter_supply) || null;
-    const hasInv = fs && fs.current_inventory && Object.keys(fs.current_inventory).length;
-    const loc = ppInvGetLocation(p);
-    if (!hasInv && !loc && !(fs && fs.stash_id)) {
-      h += `<td class="na" title="No filter tracking for this cabin">—</td>`;
-      return;
+  let lastNbCls = '__none__';
+  ordered.forEach(({ pid, nb }) => {
+    const nbCls = nb ? nb.cls : '__other__';
+    if (nbCls !== lastNbCls) {
+      const nbName = nb ? nb.name : 'Other';
+      const nbClass = nb ? `nb-${nb.cls}` : '';
+      h += `<tr class="nb-row ${nbClass}"><th colspan="${sizes.length + 2}">${ppEsc(nbName)}</th></tr>`;
+      lastNbCls = nbCls;
     }
-    const isSet = !!loc;
-    const display = isSet ? '✓' : 'set…';
-    const cls = isSet ? 'set' : 'missing';
-    const title = isSet ? `Stored: ${loc}` : 'Click to record storage location';
-    h += `<td class="${cls}" onclick="ppInvEditLocation('${pid}')" title="${ppEsc(title)}">${display}</td>`;
-  });
-  h += `</tr>`;
+    const p = PP[pid];
+    const name = p.property_name || pid;
+    const fs = (p.hvac && p.hvac.filter_supply) || null;
+    const inv = fsReadInv(p);
+    const hasInv = Object.keys(inv).length > 0;
+    const tracked = hasInv || (fs && (fs.on_site_location || fs.stash_id));
+    const loc = ppInvGetLocation(p);
 
-  // Size rows
-  sizes.forEach((size) => {
-    h += `<tr><td class="size-head">${ppEsc(size.replace('x','×'))}</td>`;
-    ordered.forEach(({ pid }) => {
-      const inv = (PP[pid].hvac && PP[pid].hvac.filter_supply && PP[pid].hvac.filter_supply.current_inventory) || {};
-      if (!(size in inv)) {
-        h += `<td class="count na" title="size not used at this cabin">—</td>`;
+    h += `<tr class="cabin-row${tracked ? '' : ' untracked'}">`;
+    h += `<th class="cabin-name" onclick="ppInvEditLocation('${pid}',event)" title="Click to edit filter storage">${ppEsc(name)}</th>`;
+    if (!tracked) {
+      h += `<td class="loc-cell na">—</td>`;
+    } else {
+      const isSet = !!loc;
+      const display = isSet ? '✓' : 'set…';
+      const cls = isSet ? 'loc-cell set' : 'loc-cell missing';
+      const title = isSet ? `Stored: ${loc}` : 'Click to record storage location';
+      h += `<td class="${cls}" onclick="ppInvEditLocation('${pid}',event)" title="${ppEsc(title)}">${display}</td>`;
+    }
+    sizes.forEach((sz) => {
+      if (!(sz in inv)) {
+        h += `<td class="count na">—</td>`;
         return;
       }
-      const v = inv[size];
+      const v = inv[sz];
       const confirmed = v != null;
       const count = v == null ? 0 : v;
       let cls;
@@ -7242,7 +7227,7 @@ function ppRenderInventory() {
       else if (count <= 2) cls = 'low';
       else cls = 'ok';
       const title = confirmed ? `Confirmed: ${count} on hand` : 'Unmeasured — assumed 0 until vendor confirms';
-      h += `<td class="count ${cls}" onclick="ppInvEditCell(event,'${pid}','${ppEsc(size)}')" title="${ppEsc(title)}">${count}</td>`;
+      h += `<td class="count ${cls}" onclick="ppInvEditCell(event,'${pid}','${ppEsc(sz)}')" title="${ppEsc(title)}">${count}</td>`;
     });
     h += `</tr>`;
   });
@@ -7262,7 +7247,15 @@ function ppRenderInventory() {
     h += `<section class="inv-panel"><header><h2>Cabins · Exterior Backup Key Status</h2></header>`;
     h += `<div class="inv-hint">Click any status pill to change it. Unknown renders red under the "assume worst" rule — distinct label, same urgency.</div>`;
     h += `<ul class="inv-cabins">`;
-    ordered.forEach(({ pid }) => {
+    let lastK = '__none__';
+    ordered.forEach(({ pid, nb }) => {
+      const nbCls = nb ? nb.cls : '__other__';
+      if (nbCls !== lastK) {
+        const nbName = nb ? nb.name : 'Other';
+        const nbClass = nb ? `nb-${nb.cls}` : '';
+        h += `<li class="inv-cabins-nb ${nbClass}">${ppEsc(nbName)}</li>`;
+        lastK = nbCls;
+      }
       const p = PP[pid];
       const name = p.property_name || pid;
       const k = p && p.access && p.access.exterior_backup_key;
@@ -7398,12 +7391,12 @@ async function ppInvSavePopover(pid, size) {
         if (typeof showToast === 'function') showToast('❌ Invalid count');
         return;
       }
-      if (!fs.current_inventory) fs.current_inventory = {};
-      const prev = fs.current_inventory[size];
+      const canon = fsCanonSize(size);
+      const prev = fsReadInv(p)[canon];
       if (prev !== newCount) {
-        fs.current_inventory[size] = newCount;
+        fsWriteInv(p, size, newCount);
         entries.push({
-          path: 'hvac.filter_supply.current_inventory.' + size,
+          path: 'hvac.filter_supply.current_inventory.' + canon,
           prev_value: prev == null ? null : prev,
           new_value: newCount,
         });
@@ -7742,15 +7735,62 @@ function fsRenderBundlerInline() {
   wrap.innerHTML = h;
 }
 
+// Size canonicalization: all filters are 1" deep, so strip trailing "x1".
+// "14x14x1" → "14x14", "20x25X1" → "20x25", "14x20" → "14x20".
+function fsCanonSize(s) {
+  if (!s) return s;
+  return String(s).replace(/[xX]1$/, '');
+}
+
+// Read a cabin's current_inventory with keys collapsed to canonical form.
+// If both "14x14" and "14x14x1" happen to exist, the confirmed (non-null)
+// value wins; if both are confirmed, we take the max.
+function fsReadInv(profile) {
+  const raw = (profile && profile.hvac && profile.hvac.filter_supply && profile.hvac.filter_supply.current_inventory) || {};
+  const out = {};
+  Object.keys(raw).forEach((k) => {
+    const c = fsCanonSize(k);
+    const v = raw[k];
+    if (!(c in out)) { out[c] = v; return; }
+    // Collision — merge
+    if (out[c] == null) { out[c] = v; return; }
+    if (v == null) return;
+    if (v > out[c]) out[c] = v;
+  });
+  return out;
+}
+
+// Write a count to current_inventory using the canonical key, and purge
+// any non-canonical variants of that size at the same time.
+function fsWriteInv(profile, size, value) {
+  if (!profile.hvac) profile.hvac = {};
+  if (!profile.hvac.filter_supply) profile.hvac.filter_supply = {};
+  if (!profile.hvac.filter_supply.current_inventory) profile.hvac.filter_supply.current_inventory = {};
+  const inv = profile.hvac.filter_supply.current_inventory;
+  const canon = fsCanonSize(size);
+  let prev = inv[canon];
+  // Purge non-canonical duplicates of the same physical size
+  Object.keys(inv).forEach((k) => {
+    if (k !== canon && fsCanonSize(k) === canon) {
+      if (prev == null && inv[k] != null) prev = inv[k];
+      delete inv[k];
+    }
+  });
+  inv[canon] = value;
+  return prev == null ? null : prev;
+}
+
 // Required filters per size for a single visit. Respects quantity_per_change.
 // ALL filters are replaced on a visit ("change one, change all" rule).
+// Sizes are canonicalized so "14x14" and "14x14x1" collapse.
 function fsRequiredBySize(profile) {
   const out = {};
   const hvac = (profile && profile.hvac) || {};
   (hvac.disposable_filters || []).forEach((f) => {
     if (!f.size) return;
+    const c = fsCanonSize(f.size);
     const n = Number(f.quantity_per_change) || 1;
-    out[f.size] = (out[f.size] || 0) + n;
+    out[c] = (out[c] || 0) + n;
   });
   return out;
 }
@@ -7961,14 +8001,15 @@ async function fsRecountSave() {
   const by = (typeof getCurrentUserName === 'function' && getCurrentUserName()) || task.vendor || 'vendor';
 
   Object.keys(counts).forEach((size) => {
-    const prev = p.hvac.filter_supply.current_inventory[size];
+    const canon = fsCanonSize(size);
+    const prev = fsReadInv(p)[canon];
     const newVal = counts[size];
     if (prev !== newVal) {
-      p.hvac.filter_supply.current_inventory[size] = newVal;
+      fsWriteInv(p, size, newVal);
       PP_LOG.push({
         id: 'chg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
         ts, user: by, property_id: task.property,
-        path: 'hvac.filter_supply.current_inventory.' + size,
+        path: 'hvac.filter_supply.current_inventory.' + canon,
         old_value: prev == null ? null : prev,
         new_value: newVal,
         source: 'filter_task_recount',
