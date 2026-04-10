@@ -591,45 +591,21 @@ function pjRenderVendorsPanel(p, pid) {
   </div>`;
 }
 
-function pjOpenVendorPicker(pid) {
-  const existing = (projects.find(x => x.id === pid) || {}).vendors || [];
-  const existingNames = existing.map(v => v.name.toLowerCase());
-  const opts = vendors
-    .filter(v => !existingNames.includes(v.name.toLowerCase()))
-    .map(v => `<div class="pj-picker-row" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--green-light);font-size:.82rem" onclick="pjAddVendor('${pid}','${v.id}')">
-      <strong>${v.name}</strong> <span style="color:var(--text3);font-size:.74rem">— ${v.role || ''}</span>
-    </div>`)
-    .join('');
+let pjVendorPid = null; // tracks which project the picker is open for
 
-  const modal = document.getElementById('pj-vendor-picker-modal');
-  if (!modal) {
-    // Create modal if it doesn't exist
-    const m = document.createElement('div');
-    m.id = 'pj-vendor-picker-modal';
-    m.className = 'modal-overlay';
-    m.innerHTML = `<div class="modal" style="max-width:420px;max-height:80vh;display:flex;flex-direction:column">
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--border)">
-        <div style="font-weight:600;font-size:.88rem">Add Vendor to Project</div>
-        <button class="modal-close" onclick="closeModal('pj-vendor-picker-modal')">✕</button>
-      </div>
-      <div style="padding:10px 12px;border-bottom:1px solid var(--border)">
-        <input type="text" id="pj-vendor-search" placeholder="Search vendors..." style="width:100%;font-size:.82rem" oninput="pjFilterVendorPicker(this.value,'${pid}')">
-      </div>
-      <div id="pj-vendor-picker-list" style="overflow-y:auto;flex:1">${opts || '<div style="padding:14px;font-size:.8rem;color:var(--text3)">All vendors already added.</div>'}</div>
-    </div>`;
-    document.body.appendChild(m);
-    m.classList.add('open');
-  } else {
-    document.getElementById('pj-vendor-picker-list').innerHTML = opts || '<div style="padding:14px;font-size:.8rem;color:var(--text3)">All vendors already added.</div>';
-    document.getElementById('pj-vendor-search').oninput = (e) => pjFilterVendorPicker(e.target.value, pid);
-    modal.classList.add('open');
-  }
+function pjOpenVendorPicker(pid) {
+  pjVendorPid = pid;
+  const searchEl = document.getElementById('pj-vendor-search');
+  if (searchEl) searchEl.value = '';
+  pjFilterVendorPicker('');
+  document.getElementById('pj-vendor-picker-modal').classList.add('open');
 }
 
-function pjFilterVendorPicker(query, pid) {
+function pjFilterVendorPicker(query) {
+  const pid = pjVendorPid;
   const existing = (projects.find(x => x.id === pid) || {}).vendors || [];
   const existingNames = existing.map(v => v.name.toLowerCase());
-  const q = query.toLowerCase();
+  const q = (query || '').toLowerCase();
   const filtered = vendors
     .filter(v => !existingNames.includes(v.name.toLowerCase()))
     .filter(v => !q || v.name.toLowerCase().includes(q) || (v.role || '').toLowerCase().includes(q));

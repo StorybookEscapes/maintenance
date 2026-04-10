@@ -213,6 +213,20 @@
       </div>
     </div>
 
+    <!-- Project Vendor Picker Modal -->
+    <div class="mo" id="pj-vendor-picker-modal">
+      <div class="modal" style="max-width:420px;max-height:80vh;display:flex;flex-direction:column">
+        <div class="mhdr">
+          <div class="mtitle">Add Vendor to Project</div>
+          <button class="mclose" onclick="closeModal('pj-vendor-picker-modal')">&#x2715;</button>
+        </div>
+        <div style="padding:10px 12px;border-bottom:1px solid var(--border)">
+          <input type="text" id="pj-vendor-search" placeholder="Search vendors..." style="width:100%;font-size:.82rem" oninput="pjFilterVendorPicker(this.value)">
+        </div>
+        <div id="pj-vendor-picker-list" style="overflow-y:auto;flex:1"></div>
+      </div>
+    </div>
+
     <!-- Project Import Modal -->
     <div class="mo" id="pj-import-modal">
       <div class="modal" style="max-width:760px">
