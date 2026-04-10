@@ -646,7 +646,7 @@ function pjRemoveVendor(pid, idx) {
 
 // ── VENDOR SHARE LINKS ──────────────────────────────────────
 function pjProjectShareUrl(token) {
-  return 'https://storybook-webhook.vercel.app/api/vendor-page?token=' + token;
+  return 'https://storybookescapes.github.io/maintenance/#pv/' + token;
 }
 
 async function pjShareVendor(pid, idx, btnEl) {
