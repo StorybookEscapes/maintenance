@@ -19,6 +19,20 @@
     }
   }
 
+  // ── Project Vendor mode ──
+  // URL: #pv/{token} — skip auth, show vendor-facing project sheet
+  if (_hash.startsWith('#pv/')) {
+    const _pvtoken = _hash.slice(4);
+    if (_pvtoken.length >= 6) {
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('app').style.display = 'none';
+      document.getElementById('project-vendor-sheet').style.display = 'block';
+      window._projectVendorToken = _pvtoken;
+      window._projectVendorMode = true;
+      return;
+    }
+  }
+
   // ── Cleaner View mode ──
   // URL: #cv/{token} — skip auth, show read-only cleaning performance view
   if (_hash.startsWith('#cv/')) {

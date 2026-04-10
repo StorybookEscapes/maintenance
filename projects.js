@@ -676,13 +676,22 @@ async function pjShareVendor(pid, idx, btnEl) {
     }
 
     const url = pjProjectShareUrl(token);
-    await navigator.clipboard.writeText(url);
-    btnEl.textContent = '✓ Link Copied!';
-    btnEl.disabled = false;
-    setTimeout(() => {
-      btnEl.textContent = '&#128279; Copy Link';
+    const body = `Hi ${v.name.split(' ')[0]}, here's your project link for "${p.title}":\n${url}`;
+
+    if (v.phone) {
+      // Open Messages app with pre-composed text
+      const tel = v.phone.replace(/\D/g, '');
+      window.location.href = `sms:${tel}?body=${encodeURIComponent(body)}`;
+      btnEl.textContent = '&#128279; Share Project';
       btnEl.disabled = false;
-    }, 2500);
+    } else {
+      // No phone on file — fall back to clipboard
+      await navigator.clipboard.writeText(url);
+      btnEl.textContent = '✓ Link Copied!';
+      btnEl.disabled = false;
+      setTimeout(() => { btnEl.textContent = '&#128279; Share Project'; btnEl.disabled = false; }, 2500);
+      showToast(`${v.name} has no phone — link copied to clipboard instead`);
+    }
   } catch (e) {
     console.error('[pj-share] Error:', e);
     btnEl.textContent = orig;
@@ -1185,3 +1194,132 @@ function pjCreateProject() {
   const failTasks = finalItems.filter(i => i.status === 'fail').length;
   showToast(`Project created — ${failTasks} task${failTasks !== 1 ? 's' : ''} added`);
 }
+
+// ── PROJECT VENDOR VIEW ──────────────────────────────────────
+// Runs when the page is opened via a #pv/{token} link.
+// No admin auth — access controlled by the token.
+(function () {
+  if (!window._projectVendorMode) return;
+
+  const API = 'https://storybook-webhook.vercel.app/api/project-vendor';
+  const token = window._projectVendorToken;
+  const root = document.getElementById('pvs-root');
+  let pvData = null; // loaded project data
+
+  function pvsRender() {
+    if (!pvData) {
+      root.innerHTML = '<div class="pvs-loading">Loading project...</div>';
+      return;
+    }
+
+    const { title, vendor_name, items, done, total, source } = pvData;
+    const pct = total ? Math.round(done / total * 100) : 0;
+    const circumference = 2 * Math.PI * 28;
+    const offset = circumference - (pct / 100) * circumference;
+
+    const sorted = [...items].sort((a, b) => {
+      if (a.status === 'fail' && b.status !== 'fail') return -1;
+      if (a.status !== 'fail' && b.status === 'fail') return 1;
+      return 0;
+    });
+
+    let itemsHtml = '';
+    sorted.forEach(item => {
+      const isComplete = item.task_status === 'complete' || item.task_status === 'resolved_by_guest';
+      const hasTask = !!item.task_id;
+      const completedBy = item.task_completed_by ? `Completed by ${item.task_completed_by}` : 'Complete';
+
+      let actionHtml = '';
+      if (hasTask) {
+        actionHtml = isComplete
+          ? `<button class="pvs-undo-btn" onclick="pvsToggle('${item.item_id}', true)">↩ Undo</button>`
+          : `<button class="pvs-done-btn" onclick="pvsToggle('${item.item_id}', false)">Mark Complete</button>`;
+      }
+
+      itemsHtml += `<div class="pvs-item ${isComplete ? 'pvs-item-done' : ''}" id="pvs-item-${item.item_id}">
+        <div class="pvs-item-top">
+          <span class="pvs-pill ${item.status}">${item.status.toUpperCase()}</span>
+          <span class="pvs-item-name ${isComplete ? 'pvs-strikethrough' : ''}">${item.name}</span>
+        </div>
+        ${item.remark ? `<div class="pvs-remark">${item.remark}</div>` : ''}
+        ${isComplete ? `<div class="pvs-completed-label">✓ ${completedBy}</div>` : ''}
+        ${actionHtml ? `<div class="pvs-item-action">${actionHtml}</div>` : ''}
+      </div>`;
+    });
+
+    root.innerHTML = `
+      <div class="pvs-header">
+        <div class="pvs-header-brand">MAINTENANCE</div>
+        <div class="pvs-header-title">${title}</div>
+        <div class="pvs-header-vendor">Hi, ${vendor_name.split(' ')[0]} 👋</div>
+      </div>
+
+      <div class="pvs-progress-bar-wrap">
+        <div class="pvs-progress-ring-row">
+          <svg width="68" height="68" viewBox="0 0 68 68">
+            <circle cx="34" cy="34" r="28" fill="none" stroke="var(--green-light,#c8e6c9)" stroke-width="5"/>
+            <circle cx="34" cy="34" r="28" fill="none" stroke="#2d6a3f" stroke-width="5"
+              stroke-dasharray="${circumference.toFixed(1)}" stroke-dashoffset="${offset.toFixed(1)}"
+              stroke-linecap="round" transform="rotate(-90 34 34)" style="transition:stroke-dashoffset .5s"/>
+            <text x="34" y="39" text-anchor="middle" fill="#2d6a3f" font-size="15" font-weight="700">${pct}%</text>
+          </svg>
+          <div class="pvs-progress-text">
+            <div class="pvs-progress-label">${done} of ${total} items complete</div>
+            ${pct === 100 ? '<div class="pvs-all-done">🎉 All done!</div>' : ''}
+          </div>
+        </div>
+      </div>
+
+      <div class="pvs-items-wrap">
+        ${itemsHtml || '<div class="pvs-empty">No inspection items.</div>'}
+      </div>
+
+      <div class="pvs-footer">Storybook Escapes Maintenance</div>
+    `;
+  }
+
+  async function pvsToggle(item_id, undo) {
+    const action = undo ? 'undoDone' : 'markDone';
+    // Optimistic update
+    const item = pvData.items.find(i => i.item_id === item_id);
+    if (!item) return;
+
+    const btn = document.querySelector(`#pvs-item-${item_id} ${undo ? '.pvs-undo-btn' : '.pvs-done-btn'}`);
+    if (btn) { btn.disabled = true; btn.textContent = '...'; }
+
+    try {
+      const r = await fetch(API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, action, item_id })
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'Failed');
+
+      item.task_status = j.task_status;
+      if (action === 'markDone') item.task_completed_by = pvData.vendor_name;
+      else item.task_completed_by = null;
+
+      // Recount
+      pvData.done = pvData.items.filter(i =>
+        i.task_status === 'complete' || i.task_status === 'resolved_by_guest'
+      ).length;
+      pvsRender();
+    } catch (e) {
+      if (btn) { btn.disabled = false; btn.textContent = undo ? '↩ Undo' : 'Mark Complete'; }
+      alert('Could not save. Please check your connection and try again.');
+    }
+  }
+  window.pvsToggle = pvsToggle;
+
+  // Initial load
+  root.innerHTML = '<div class="pvs-loading">Loading project...</div>';
+  fetch(`${API}?token=${token}`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) { root.innerHTML = `<div class="pvs-error">${data.error}</div>`; return; }
+      pvData = data;
+      pvsRender();
+    })
+    .catch(() => { root.innerHTML = '<div class="pvs-error">Could not load project. Check your connection.</div>'; });
+})();
