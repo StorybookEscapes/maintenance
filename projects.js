@@ -15,6 +15,18 @@ async function pjLoad() {
     if (r && r.value) projects = JSON.parse(r.value);
     else projects = [];
   } catch (e) { projects = []; }
+  // Rehydrate blob URLs from stored base64 PDF data
+  projects.forEach(p => {
+    if (p._pdf_data && p.source) {
+      try {
+        const byteStr = atob(p._pdf_data.split(',')[1]);
+        const bytes = new Uint8Array(byteStr.length);
+        for (let i = 0; i < byteStr.length; i++) bytes[i] = byteStr.charCodeAt(i);
+        const blob = new Blob([bytes], { type: 'application/pdf' });
+        p.source.pdf_url = URL.createObjectURL(blob);
+      } catch (e) { /* if base64 is bad, leave pdf_url as-is */ }
+    }
+  });
 }
 
 // ── LIST VIEW ───────────────────────────────────────────────
@@ -307,14 +319,29 @@ function pjRenderStep() {
     if (pjImportData.property) document.getElementById('pji-property').value = pjImportData.property;
   }
 
-  // ── STEP 2: Paste report text ──
+  // ── STEP 2: Upload PDF or paste text ──
   if (step === 2) {
+    const hasFile = pjImportData._pdfFileName || '';
     body.innerHTML = `<div class="pj-step-indicator">${dots}</div>
       <div style="font-size:.72rem;color:var(--text2);margin-bottom:14px;font-weight:600;text-transform:uppercase;letter-spacing:1px">Step 2 — Import Report</div>
-      <p style="font-size:.82rem;color:var(--text2);margin-bottom:12px;line-height:1.4">Paste the inspection report text below. The parser will auto-detect <strong>items, inspector name, dates, and page numbers</strong>.</p>
+
+      <!-- Upload zone -->
+      <div id="pji-upload-zone" style="border:2px dashed var(--border);border-radius:var(--radius);padding:24px;text-align:center;margin-bottom:14px;cursor:pointer;transition:all .15s;background:var(--surface2)" onclick="document.getElementById('pji-file-input').click()" ondragover="event.preventDefault();this.style.borderColor='var(--green)';this.style.background='var(--green-light)'" ondragleave="this.style.borderColor='var(--border)';this.style.background='var(--surface2)'" ondrop="event.preventDefault();this.style.borderColor='var(--border)';this.style.background='var(--surface2)';pjHandleFileDrop(event)">
+        <input type="file" id="pji-file-input" accept=".pdf" style="display:none" onchange="pjHandleFileSelect(this)">
+        <div style="font-size:1.6rem;margin-bottom:6px">📄</div>
+        <div id="pji-upload-label" style="font-size:.84rem;color:var(--text);font-weight:500">${hasFile ? '✓ ' + hasFile : 'Drop a PDF here or click to upload'}</div>
+        <div style="font-size:.72rem;color:var(--text3);margin-top:4px">${hasFile ? 'Text extracted — click to replace' : 'Text will be extracted automatically'}</div>
+      </div>
+      <div id="pji-extract-status" style="display:none;font-size:.76rem;color:var(--green);margin-bottom:10px;font-weight:500"></div>
+
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+        <div style="flex:1;height:1px;background:var(--border)"></div>
+        <span style="font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px">or paste text</span>
+        <div style="flex:1;height:1px;background:var(--border)"></div>
+      </div>
+
       <div class="fgr full" style="margin-bottom:14px">
-        <label>Paste Report Text</label>
-        <textarea id="pji-paste" rows="12" placeholder="Paste the full inspection report text here..." style="font-size:.78rem;font-family:monospace">${pjImportData._rawText || ''}</textarea>
+        <textarea id="pji-paste" rows="8" placeholder="Paste the inspection report text here..." style="font-size:.78rem;font-family:monospace">${pjImportData._rawText || ''}</textarea>
       </div>
       <div style="display:flex;justify-content:space-between">
         <button class="btn" onclick="pjImportData.step=1;pjRenderStep()">← Back</button>
@@ -425,6 +452,66 @@ function pjAddManualItem() {
     _create: true
   });
   pjRenderStep();  // stays on step 3
+}
+
+// ── PDF UPLOAD & TEXT EXTRACTION ─────────────────────────────
+function pjHandleFileDrop(event) {
+  const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
+  if (file && file.type === 'application/pdf') pjExtractPdf(file);
+  else showToast('Please drop a PDF file');
+}
+
+function pjHandleFileSelect(input) {
+  const file = input.files && input.files[0];
+  if (file) pjExtractPdf(file);
+}
+
+async function pjExtractPdf(file) {
+  if (!window.pdfjsLib) { showToast('PDF library not loaded — please paste text instead'); return; }
+
+  const statusEl = document.getElementById('pji-extract-status');
+  const labelEl = document.getElementById('pji-upload-label');
+  const textarea = document.getElementById('pji-paste');
+  if (statusEl) { statusEl.style.display = ''; statusEl.textContent = 'Extracting text from PDF...'; }
+  if (labelEl) labelEl.textContent = '⏳ Processing ' + file.name + '...';
+
+  try {
+    // Store the PDF as a persistent blob URL for the inline viewer
+    // (We keep a session-level blob URL for the viewer and also stash
+    //  the base64 so it survives KV round-trips.)
+    const blobUrl = URL.createObjectURL(file);
+    pjImportData._pdfBlobUrl = blobUrl;
+    pjImportData.pdfUrl = blobUrl;
+    pjImportData._pdfFileName = file.name;
+
+    // Also read as base64 for KV persistence
+    const reader = new FileReader();
+    reader.onload = () => { pjImportData._pdfDataUrl = reader.result; };
+    reader.readAsDataURL(file);
+
+    // Extract text page by page with PDF.js
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const totalPages = pdf.numPages;
+    let fullText = '';
+
+    for (let pg = 1; pg <= totalPages; pg++) {
+      const page = await pdf.getPage(pg);
+      const content = await page.getTextContent();
+      const pageText = content.items.map(item => item.str).join(' ');
+      fullText += `\n--- Page ${pg} ---\n${pageText}\n`;
+    }
+
+    pjImportData._rawText = fullText;
+    if (textarea) textarea.value = fullText;
+    if (labelEl) labelEl.textContent = '✓ ' + file.name;
+    if (statusEl) statusEl.textContent = `✓ Extracted ${totalPages} page${totalPages !== 1 ? 's' : ''} — review the text below or click Parse & Review`;
+
+  } catch (e) {
+    console.error('[pj] PDF extract error', e);
+    if (labelEl) labelEl.textContent = '✗ Could not read PDF';
+    if (statusEl) { statusEl.style.display = ''; statusEl.textContent = 'Error extracting text — try pasting manually'; statusEl.style.color = 'var(--red)'; }
+  }
 }
 
 // ── REPORT PARSER ───────────────────────────────────────────
@@ -563,8 +650,11 @@ function pjCreateProject() {
       inspector: d.inspector || null,
       inspection_date: d.inspDate || null,
       reinspection_date: d.reinspDate || null,
-      pdf_url: d.pdfUrl || null
+      pdf_url: d.pdfUrl || null,
+      pdf_filename: d._pdfFileName || null
     },
+    // If uploaded PDF, store base64 for persistence (viewer reconstructs blob)
+    _pdf_data: d._pdfDataUrl || null,
     items: finalItems,
     notes: []
   };

@@ -1588,3 +1588,4 @@ textarea{resize:vertical;min-height:76px}
 .pj-review-tbl td{padding:6px 10px;border-bottom:1px solid var(--green-light);vertical-align:top}
 .pj-review-tbl tr.fail-row{background:var(--red-bg)}
 .pj-review-tbl input[type="checkbox"]{width:15px;height:15px;accent-color:var(--green)}
+#pji-upload-zone:hover{border-color:var(--green);background:var(--green-light)}
