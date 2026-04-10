@@ -5399,6 +5399,39 @@ async function rpImportFromReview(rv) {
     wrap.innerHTML=html;
   }
 
+  // Render the read-only filter panel that sits inside vs-card-detail when
+  // a task has filter_context attached (see vendor.js buildFilterContext).
+  // Chunk 2: display-only — recount inputs and save button land in Chunk 3.
+  function vsFilterPanel(t){
+    const ctx=t&&t.filter_context;
+    if(!ctx||!Array.isArray(ctx.sizes)||ctx.sizes.length===0)return'';
+    const esc=s=>String(s==null?'':s).replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const storage=ctx.storage_location
+      ?`<div class="vs-filter-storage"><span class="vs-filter-storage-label">Filter storage at cabin:</span> ${esc(ctx.storage_location)}</div>`
+      :`<div class="vs-filter-storage vs-filter-storage-missing">Filter storage location not yet recorded &mdash; please note where you find them.</div>`;
+    const rows=ctx.sizes.map(sz=>{
+      const sizeLabel=esc(sz.size).replace('x','&times;');
+      const locs=Array.isArray(sz.locations)&&sz.locations.length
+        ?sz.locations.map(esc).join(', ')
+        :'Location not recorded';
+      const installLine=`<div class="vs-filter-install">Install <strong>${sz.required_per_change}&times; ${sizeLabel}</strong> &mdash; ${locs}</div>`;
+      const onHandLine=sz.confirmed
+        ?`<div class="vs-filter-onhand">On hand: <strong>${sz.on_hand}</strong></div>`
+        :`<div class="vs-filter-onhand vs-filter-onhand-unknown">On hand: <strong>unknown</strong> &mdash; please count when you arrive</div>`;
+      const rowCls=sz.confirmed?'vs-filter-row':'vs-filter-row vs-filter-row-needs-count';
+      return`<div class="${rowCls}">${installLine}${onHandLine}</div>`;
+    }).join('');
+    return`<div class="vs-filter">
+      <div class="vs-filter-icon">&#x1F32C;&#xFE0F;</div>
+      <div class="vs-filter-content">
+        <div class="vs-filter-label">HVAC Filter Service</div>
+        <div class="vs-filter-rule">Replace ALL filters &mdash; change one, change all.</div>
+        ${storage}
+        <div class="vs-filter-rows">${rows}</div>
+      </div>
+    </div>`;
+  }
+
   function vsCard(t){
     const done=!!t.vendorDone;
     const nbCls=t.neighborhoodCls||'';
@@ -5433,6 +5466,7 @@ async function rpImportFromReview(rv) {
             <div class="vs-purchase-text">${t.purchaseNote.replace(/</g,'&lt;')}</div>
           </div>
         </div>`:''}
+        ${vsFilterPanel(t)}
         ${photos.length?`<div class="vs-photos">${photos.map(p=>`<div><img src="${p.url}" onclick="window.open('${p.url}','_blank')" title="Tap to view full size"><div class="vs-photo-label">${p.label}</div></div>`).join('')}</div>`:''}
         <div class="vs-fb-upload-row">
           <div class="vs-fb-upload-btn" onclick="document.getElementById('vpi-${t.id}').click()">&#x1F4F7; Photo<input type="file" id="vpi-${t.id}" accept="image/*" multiple style="display:none" onchange="window._vsUploadPhotos('${t.id}',this.files)"></div>
