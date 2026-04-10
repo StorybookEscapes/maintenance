@@ -251,6 +251,8 @@ async function load() {
   // views. Load it on boot so those views show purchase tags without
   // requiring a trip through Properties first.
   try{if(typeof ppLoadIfNeeded==='function')await ppLoadIfNeeded();}catch(e){}
+  // Projects
+  try{if(typeof pjLoad==='function')await pjLoad();}catch(e){}
 }
 async function save(k,v){try{await S.set(k,JSON.stringify(v));}catch(e){}}
 const saveTasks=()=>save('se_t',tasks);
@@ -281,6 +283,8 @@ function switchView(name,btn){
   if (name === 'replacements') renderReplacements();
   // Property Bible (Deploy 1) — lazy load on first open
   if (name === 'properties' && typeof ppLoadIfNeeded === 'function') ppLoadIfNeeded();
+  // Projects — refresh list
+  if (name === 'projects' && typeof pjRenderList === 'function') pjRenderList();
 }
 // Navigate to Recurring view without a nav button (it's been removed from the main nav)
 function goToRecurring(){switchView('recurring');window.scrollTo(0,0);}
@@ -306,7 +310,7 @@ function populatePropMulti(id){
   });
 }
 
-function renderAll(){renderVR();renderVD();renderUB();renderTasks();renderCalendar();renderRecurring();renderHistory();renderVendors();}
+function renderAll(){renderVR();renderVD();renderUB();renderTasks();renderCalendar();renderRecurring();renderHistory();renderVendors();if(typeof pjRenderList==='function')pjRenderList();}
 
 // URGENT BANNER
 function renderUB(){
@@ -484,6 +488,7 @@ function taskCard(t){
         ${t.vendor?`<span class="tmi">${t.vendor}</span>`:''}${t.vendorDone?'<span class="vd-badge">Vendor Done</span>':''}
         ${taskEffectivePurchaseNote(t)?`<span style="font-size:.62rem;color:#e65100;font-weight:600;background:#fff3e0;padding:1px 6px;border-radius:10px;border:1px solid #ffcc80">&#x1F6D2; ${t.purchaseStatus==='delivered'?'Delivered':t.purchaseStatus==='purchased'?'Purchased — deliver':'Buy'}${taskEffectivePurchaser(t)==='vendor'?' (vendor)':''}</span>`:''}
         ${t.guest?`<span class="tmi">Reported by ${t.guest}</span>`:''}
+        ${t.project_title?`<span style="font-size:.62rem;color:var(--green);font-weight:600;background:var(--green-light);padding:1px 6px;border-radius:10px;border:1px solid var(--border)">📋 ${t.project_title}</span>`:''}
       </div>
     </div></div>
   </div>`;
@@ -491,7 +496,10 @@ function taskCard(t){
 function renderTasks(){
   const q=document.getElementById('search-input').value.toLowerCase();
   const active=tasks.filter(t=>!isDone(t));
+  // Hide tasks from hidden projects
+  const _hiddenPids=typeof projects!=='undefined'?new Set(projects.filter(p=>p.visible===false).map(p=>p.id)):new Set();
   let f=active.filter(t=>{
+    if(t.project_id&&_hiddenPids.has(t.project_id))return false;
     // Property filter
     if(propFilter!=='all'&&t.property!==propFilter)return false;
     // Category/urgent filter
