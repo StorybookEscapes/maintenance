@@ -647,7 +647,7 @@ function pjRemoveVendor(pid, idx) {
 
 // ── VENDOR SHARE LINKS ──────────────────────────────────────
 function pjProjectShareUrl(token) {
-  return 'https://storybookescapes.github.io/maintenance/#pv/' + token;
+  return 'https://storybook-webhook.vercel.app/api/vendor-page?token=' + token;
 }
 
 async function pjShareVendor(pid, idx, btnEl) {
@@ -677,7 +677,7 @@ async function pjShareVendor(pid, idx, btnEl) {
     }
 
     const url = pjProjectShareUrl(token);
-    const body = `Hi ${v.name.split(' ')[0]}, here's your project link for "${p.title}":\n${url}`;
+    const body = `${v.name}: ${p.title}\n${url}`;
 
     if (v.phone) {
       // Open Messages app with pre-composed text
@@ -1303,9 +1303,10 @@ function pjCreateProject() {
 
     root.innerHTML = `
       <div class="pvs-header">
-        <div class="pvs-header-brand">MAINTENANCE</div>
+        <div class="pvs-header-brand">Storybook Escapes</div>
+        <div class="pvs-header-rule"></div>
         <div class="pvs-header-title">${title}</div>
-        <div class="pvs-header-vendor">Hi, ${vendor_name.split(' ')[0]} 👋</div>
+        <div class="pvs-header-vendor">${vendor_name}</div>
       </div>
 
       <div class="pvs-body">

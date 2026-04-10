@@ -1687,10 +1687,11 @@ textarea{resize:vertical;min-height:76px}
 .pvs-error{color:#c0392b}
 
 /* Header */
-.pvs-header{background:#1a3a25;color:#fff;padding:20px 20px 18px;text-align:center}
-.pvs-header-brand{font-size:.62rem;letter-spacing:2.5px;text-transform:uppercase;color:#a5c9a8;font-weight:600;margin-bottom:6px}
-.pvs-header-title{font-family:'Cormorant Garamond',serif;font-size:1.4rem;font-weight:600;line-height:1.25;margin-bottom:6px}
-.pvs-header-vendor{font-size:.84rem;color:#c8dfc9;font-weight:500}
+.pvs-header{background:linear-gradient(165deg,#1a3a25 0%,#0f2a1a 100%);color:#fff;padding:28px 24px 24px;text-align:center}
+.pvs-header-brand{font-family:'Cormorant Garamond',serif;font-size:1.1rem;font-weight:600;color:#c8dfc9;letter-spacing:1px}
+.pvs-header-rule{width:40px;height:1px;background:#4a7a55;margin:10px auto}
+.pvs-header-title{font-family:'Cormorant Garamond',serif;font-size:1.35rem;font-weight:600;line-height:1.3;color:#fff;margin-bottom:8px}
+.pvs-header-vendor{font-size:.82rem;color:#a5c9a8;font-weight:500;letter-spacing:.3px}
 
 /* Body padding */
 .pvs-body{padding:14px 12px 0}
