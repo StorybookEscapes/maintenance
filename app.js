@@ -241,8 +241,33 @@ function updateSyncStatus(state){
   dot.title=titles[state]||'';
 }
 
+// ── Data-safety flags ──
+// tasksLoadedOk is ONLY set true when se_t is successfully read from KV.
+// If the initial load fails, saveTasks() is blocked to prevent background
+// processes (HostBuddy auto-import, migrations) from overwriting the real
+// task list with a small/empty array.  2026-04-11 post-mortem fix.
+let tasksLoadedOk = false;
+let _tasksLoadedCount = 0; // how many tasks were in KV at boot
+
 async function load() {
-  try{const r=await S.get('se_t');if(r)tasks=JSON.parse(r.value);}catch(e){tasks=[];}
+  try {
+    const r = await S.get('se_t');
+    if (r) {
+      tasks = JSON.parse(r.value);
+      tasksLoadedOk = true;
+      _tasksLoadedCount = tasks.length;
+    } else {
+      // Key exists but is empty/null — treat as valid empty state
+      tasks = [];
+      tasksLoadedOk = true;
+      _tasksLoadedCount = 0;
+    }
+  } catch(e) {
+    // Load FAILED — do NOT set tasksLoadedOk, block all writes
+    console.error('[SAFETY] se_t load failed — task writes are BLOCKED until page reload with working connection:', e);
+    tasks = [];
+    tasksLoadedOk = false;
+  }
   try{const r=await S.get('se_v');if(r)vendors=JSON.parse(r.value);else{vendors=JSON.parse(JSON.stringify(DEF_VENDORS));await save('se_v',vendors);}}catch(e){vendors=JSON.parse(JSON.stringify(DEF_VENDORS));}
   try{const r=await S.get('se_r');if(r)recurring=JSON.parse(r.value);else{recurring=JSON.parse(JSON.stringify(DEF_RECURRING));await save('se_r',recurring);}}catch(e){recurring=JSON.parse(JSON.stringify(DEF_RECURRING));}
   // Property Bible (se_pp) is normally lazy-loaded when Chip opens the
@@ -253,11 +278,70 @@ async function load() {
   try{if(typeof ppLoadIfNeeded==='function')await ppLoadIfNeeded();}catch(e){}
   // Projects
   try{if(typeof pjLoad==='function')await pjLoad();}catch(e){}
+  // Task change log
+  try{await loadTaskLog();}catch(e){}
 }
 async function save(k,v){try{await S.set(k,JSON.stringify(v));}catch(e){}}
-const saveTasks=()=>save('se_t',tasks);
+
+// ── Safe task save with shrinkage guard ──
+// Prevents catastrophic overwrites: if the task array shrank by more than
+// 50% compared to what was loaded, require explicit confirmation.
+const saveTasks = async () => {
+  if (!tasksLoadedOk) {
+    console.error('[SAFETY] saveTasks() BLOCKED — initial load failed. Reload the page with a working connection.');
+    showToast('\u26a0\ufe0f Task save blocked — data did not load properly. Please reload.','','',8000);
+    return;
+  }
+  // Shrinkage guard: if we loaded N tasks and now have much fewer, warn
+  if (_tasksLoadedCount > 5 && tasks.length < _tasksLoadedCount * 0.5) {
+    console.error(`[SAFETY] saveTasks() BLOCKED — drastic shrinkage detected (${_tasksLoadedCount} → ${tasks.length}). This looks like accidental data loss.`);
+    showToast(`\u26a0\ufe0f Save blocked: task count dropped from ${_tasksLoadedCount} to ${tasks.length}. This may be a bug — reload to recover.`,'','',10000);
+    return;
+  }
+  await save('se_t', tasks);
+};
 const saveVendors=()=>save('se_v',vendors);
 const saveRec=()=>save('se_r',recurring);
+
+// ── Task Change Log ──────────────────────────────────────────
+// Persistent audit trail stored in se_t_log (separate from task data).
+// Each entry: { ts, action, taskId, property, vendor, date, problem, by }
+// Kept trimmed to last 500 entries to stay within free-tier KV limits.
+let _taskLog = [];
+let _taskLogLoaded = false;
+
+async function loadTaskLog() {
+  try {
+    const r = await S.get('se_t_log');
+    if (r) _taskLog = JSON.parse(r.value);
+    else _taskLog = [];
+    _taskLogLoaded = true;
+  } catch(e) { _taskLog = []; _taskLogLoaded = true; }
+}
+
+async function saveTaskLog() {
+  if (!_taskLogLoaded) return;
+  // Trim to most recent 500 entries
+  if (_taskLog.length > 500) _taskLog = _taskLog.slice(-500);
+  await save('se_t_log', _taskLog);
+}
+
+function logTaskChange(action, t) {
+  if (!t) return;
+  const entry = {
+    ts: new Date().toISOString(),
+    action,               // 'created','completed','deleted','updated','bulk_complete','bulk_delete'
+    taskId: t.id || '',
+    property: t.property || '',
+    vendor: t.vendor || '',
+    date: t.date || '',
+    problem: (t.problem || '').slice(0, 120),
+    by: (typeof getCurrentUserName === 'function' ? getCurrentUserName() : 'admin')
+  };
+  _taskLog.push(entry);
+  // Fire-and-forget save — don't block the UI
+  saveTaskLog();
+}
 
 // HELPERS
 // Lookup maps — O(1) instead of linear search on every call
@@ -416,7 +500,7 @@ async function vrImport(id){
     created:new Date().toISOString()
   };
   if(r.photoUrl){if(Array.isArray(r.photoUrl))newTask.photos.push(...r.photoUrl);else newTask.photos.push(r.photoUrl);}
-  tasks.push(newTask);
+  tasks.push(newTask);logTaskChange('created',newTask);
   r.status='imported';
   await saveTasks();await saveVendorReports();
   renderAll();showToast('Imported as task.');
@@ -835,7 +919,7 @@ function bulkToggleUrgent(){
 function bulkMarkComplete(){
   const sel=_getSelectedTasks();if(!sel.length){showToast('No tasks selected');return;}
   if(!confirm('Mark '+sel.length+' task(s) as complete?'))return;
-  sel.forEach(t=>{t.status='complete';});
+  sel.forEach(t=>{t.status='complete';logTaskChange('bulk_complete',t);});
   _selectedTasks.clear();
   saveTasks();renderAll();updateBulkBar();
   showToast(sel.length+' task'+(sel.length!==1?'s':'')+' marked complete');
@@ -844,7 +928,7 @@ function bulkMarkComplete(){
 function bulkDelete(){
   const sel=_getSelectedTasks();if(!sel.length){showToast('No tasks selected');return;}
   if(!confirm('Permanently delete '+sel.length+' task(s)? This cannot be undone.'))return;
-  sel.forEach(t=>{const idx=tasks.indexOf(t);if(idx!==-1)tasks.splice(idx,1);});
+  sel.forEach(t=>{logTaskChange('bulk_delete',t);const idx=tasks.indexOf(t);if(idx!==-1)tasks.splice(idx,1);});
   _selectedTasks.clear();
   saveTasks();renderAll();updateBulkBar();
   showToast(sel.length+' task'+(sel.length!==1?'s':'')+' deleted');
@@ -1660,7 +1744,7 @@ async function saveTask(){
   if(fCat==='replacement'){t.purchaseNote=prob;t.purchaseStatus='needed';t.purchaser='owner';}
   // Deploy 2: bundle filter service into this task if the user checked the bundler
   if(typeof fsMaybeStampTask==='function')fsMaybeStampTask(t);
-  tasks.unshift(t);await saveTasks();closeModal('task-modal');renderAll();renderReplacements();showToast('Task created.');
+  tasks.unshift(t);logTaskChange('created',t);await saveTasks();closeModal('task-modal');renderAll();renderReplacements();showToast('Task created.');
 }
 
 // DETAIL
@@ -3107,7 +3191,7 @@ async function markComplete(){
   }
   t.status='complete';document.getElementById('d-status').value='complete';
   document.getElementById('complete-btn').style.display='none';
-  await saveTasks();closeModal('detail-modal');renderAll();showToast('Task marked complete.');
+  logTaskChange('completed',t);await saveTasks();closeModal('detail-modal');renderAll();showToast('Task marked complete.');
   // Deploy 2: if this task carried filter service, writeback profile last_service_date
   if(typeof fsOnTaskComplete==='function')fsOnTaskComplete(t);
   // Check if this completes a payment group where vendor requested payment
@@ -3123,7 +3207,7 @@ async function vdQuickComplete(id,e){
     const ok=await fsPromptRecount(t);
     if(!ok)return;
   }
-  t.status='complete';
+  t.status='complete';logTaskChange('completed',t);
   await saveTasks();renderAll();showToast('Task marked complete.');
   if(typeof fsOnTaskComplete==='function')fsOnTaskComplete(t);
   checkAdminPaymentPrompt(t);
@@ -3311,6 +3395,7 @@ async function assignToGuest(){
 async function deleteTask(){
   const deleted=tasks.find(x=>x.id===detailId);if(!deleted)return;
   const idx=tasks.indexOf(deleted);
+  logTaskChange('deleted',deleted);
   tasks=tasks.filter(x=>x.id!==detailId);await saveTasks();
   closeModal('detail-modal');renderAll();
   showToast('Task deleted.','',async()=>{tasks.splice(idx,0,deleted);await saveTasks();renderAll();showToast('Task restored.');});
@@ -3328,7 +3413,7 @@ async function saveHistTask(){
   const vendor=document.getElementById('h-vendor').value.trim();
   if(!date||!pid||!desc){showToast('Date, property, and description are required.','err');return;}
   const t={id:Date.now().toString(),property:pid,guest:'',problem:desc,category:cat,status:'complete',date,vendor,urgent:false,recurring:false,notes:[{text:'Added as historical record.',type:'admin',time:new Date().toISOString()}],vendorNotes:'',created:new Date().toISOString()};
-  tasks.unshift(t);await saveTasks();
+  tasks.unshift(t);logTaskChange('created',t);await saveTasks();
   histFormOpen=false;renderAll();showToast('Historical task added.');
 }
 function buildHistForm(){
@@ -3870,7 +3955,7 @@ async function hbImport(id) {
     vendorNotes: '',
     created: item.receivedAt || new Date().toISOString(),
   };
-  tasks.unshift(t);
+  tasks.unshift(t);logTaskChange('created',t);
   await saveTasks();
   // Remove from incoming queue on server
   await hbRemoveFromServer(id);
@@ -4056,7 +4141,7 @@ async function clImportHistorical() {
       vendorNotes: '',
       created: item.date,
     };
-    tasks.unshift(t);
+    tasks.unshift(t);logTaskChange('created',t);
     imported++;
   }
 
@@ -5043,8 +5128,14 @@ async function rvFetch() {
     if (!rvIsMaintRelevant(rv)) continue;
 
     // Auto-route purchase items as Replacement tasks
+    // SAFETY: only auto-import if tasks loaded successfully (2026-04-11 fix)
     const problem = rvBuildProblem(rv);
     if (rvIsPurchaseItem(problem)) {
+      if (!tasksLoadedOk) {
+        console.warn('[SAFETY] Skipping auto-import of review item — tasks did not load');
+        rvItems.push(rv); // show in review list instead so nothing is lost
+        continue;
+      }
       await rpImportFromReviewSilent(rv);
       rvDismissed.push(rv.id);
       purchaseCount++;
@@ -5328,6 +5419,11 @@ async function loadReplacements() {
     const r = await S.get('se_purchases');
     if (r) rpData = JSON.parse(r.value);
   } catch (e) { rpData = []; }
+  // SAFETY: only run migration if tasks loaded successfully (2026-04-11 fix)
+  if (rpData.length && !tasksLoadedOk) {
+    console.warn('[SAFETY] Skipping replacements migration — tasks did not load');
+    return;
+  }
   if (rpData.length) {
     let migrated = 0;
     for (const item of rpData) {
@@ -5359,7 +5455,7 @@ async function loadReplacements() {
         vendorNotes: '',
         created: item.created || new Date().toISOString(),
       };
-      tasks.unshift(t);
+      tasks.unshift(t);logTaskChange('created',t);
       migrated++;
     }
     if (migrated) {
@@ -5536,7 +5632,7 @@ async function rpQuickPurchased(id) {
 async function rpQuickDelivered(id) {
   const t = tasks.find(x => x.id === id); if (!t) return;
   t.purchaseStatus = 'delivered';
-  t.status = 'complete';
+  t.status = 'complete';logTaskChange('completed',t);
   await saveTasks(); renderReplacements(); renderAll();
   showToast('Delivered \u2014 task complete.');
 }
@@ -5580,7 +5676,7 @@ async function rpImportFromReviewSilent(rv) {
     vendorNotes: '',
     created: rv.reviewed_at || new Date().toISOString(),
   };
-  tasks.unshift(t);
+  tasks.unshift(t);logTaskChange('created',t);
   await saveTasks();
 }
 
@@ -7500,7 +7596,7 @@ async function ppPromoteIssue(pid, issueId) {
     photos: [],
     created: new Date().toISOString(),
   };
-  tasks.push(newTask);
+  tasks.push(newTask);logTaskChange('created',newTask);
   iss.status = 'promoted';
   iss.promoted_task_id = newTaskId;
   PP_LOG.push({

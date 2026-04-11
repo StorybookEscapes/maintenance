@@ -227,9 +227,10 @@ function pjShowDetail(pid) {
       return 0;
     });
 
+    const orphanCount = (p.items || []).filter(i => i.status === 'fail' && i.task_id && !tasks.find(t => t.id === i.task_id)).length;
     html += `<div class="pj-items-panel"><div class="pj-items-hdr">
       <span>Inspection Items (${p.items.length})</span>
-      <span>${failCount} fail · ${p.items.length - failCount} pass</span>
+      <span>${orphanCount ? `<button class="btn" style="font-size:.62rem;padding:2px 8px;margin-right:8px;background:var(--error-bg,#fee);color:var(--error,#c33);border:1px solid var(--error,#c33)" onclick="event.stopPropagation();pjRelinkAll('${pid}')">⚠ Re-link ${orphanCount} lost tasks</button>` : ''}${failCount} fail · ${p.items.length - failCount} pass</span>
     </div>
     <table class="pj-tbl"><thead><tr>
       <th style="width:55px">Result</th><th>Item</th><th style="width:110px">Room</th><th>Remark</th><th style="width:155px">Task</th>
@@ -252,6 +253,9 @@ function pjShowDetail(pid) {
             ? `<button class="pj-inspect-btn ready" onclick="event.stopPropagation();pjToggleTask('${task.id}','${pid}')">✓ Ready for Inspection</button>`
             : `<button class="pj-inspect-btn not-done" onclick="event.stopPropagation();pjToggleTask('${task.id}','${pid}')">Not Complete</button>`;
         }
+      } else if (item.task_id && item.status === 'fail') {
+        // Orphaned: task_id exists but task was lost — offer to recreate
+        taskCell = `<button class="pj-inspect-btn not-done" style="background:var(--error-bg,#fee);color:var(--error,#c33);font-size:.62rem" onclick="event.stopPropagation();pjRecreateTask('${pid}','${item.item_id}')">⚠ Recreate</button>`;
       }
 
       const pdfUrl = p.source && p.source.pdf_url ? p.source.pdf_url : '';
@@ -335,6 +339,74 @@ function pjToggleTask(taskId, pid) {
   saveTasks();
   pjShowDetail(pid);
   showToast(task.status === 'complete' ? 'Marked ready for inspection' : 'Marked not complete');
+}
+
+// Recreate a single orphaned task for a project item whose task was lost
+async function pjRecreateTask(pid, itemId) {
+  const p = projects.find(x => x.id === pid);
+  if (!p) return;
+  const item = (p.items || []).find(i => i.item_id === itemId);
+  if (!item) return;
+  const tid = 'pt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+  const t = {
+    id: tid,
+    property: p.property || '',
+    problem: item.remark || item.name,
+    category: 'General',
+    status: 'open',
+    date: '',
+    vendor: '',
+    guest: '',
+    urgent: false,
+    created: new Date().toISOString(),
+    notes: [{ text: 'Recreated from project (original task was lost).', type: 'admin', time: new Date().toISOString() }],
+    project_id: pid,
+    project_title: p.title
+  };
+  tasks.push(t); if (typeof logTaskChange === 'function') logTaskChange('created', t);
+  item.task_id = tid;
+  await saveTasks(); savePJ();
+  pjShowDetail(pid);
+  showToast('Task recreated and re-linked.');
+}
+
+// Bulk re-create all orphaned tasks in a project
+async function pjRelinkAll(pid) {
+  const p = projects.find(x => x.id === pid);
+  if (!p) return;
+  let count = 0;
+  for (const item of (p.items || [])) {
+    if (item.status !== 'fail') continue;
+    if (!item.task_id) continue;
+    const existing = tasks.find(t => t.id === item.task_id);
+    if (existing) continue; // task still exists
+    const tid = 'pt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) + count;
+    const t = {
+      id: tid,
+      property: p.property || '',
+      problem: item.remark || item.name,
+      category: 'General',
+      status: 'open',
+      date: '',
+      vendor: '',
+      guest: '',
+      urgent: false,
+      created: new Date().toISOString(),
+      notes: [{ text: 'Recreated from project (original task was lost).', type: 'admin', time: new Date().toISOString() }],
+      project_id: pid,
+      project_title: p.title
+    };
+    tasks.push(t); if (typeof logTaskChange === 'function') logTaskChange('created', t);
+    item.task_id = tid;
+    count++;
+  }
+  if (count) {
+    await saveTasks(); savePJ();
+    pjShowDetail(pid);
+    showToast(`${count} task(s) recreated and re-linked.`);
+  } else {
+    showToast('No orphaned items found.');
+  }
 }
 
 function pjToggleVisibility(pid) {
@@ -579,7 +651,7 @@ function pjSaveNewTask(pid) {
     project_title: p.title
   };
   if (cat === 'replacement') { t.purchaseNote = prob; t.purchaseStatus = 'needed'; t.purchaser = 'owner'; }
-  tasks.unshift(t);
+  tasks.unshift(t);if(typeof logTaskChange==='function')logTaskChange('created',t);
   saveTasks();
   closeModal('pj-import-modal');
   pjShowDetail(pid);
@@ -1174,7 +1246,7 @@ function pjCreateProject() {
   finalItems.forEach(item => {
     if (item.status === 'fail') {
       const tid = 'pt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
-      tasks.push({
+      const _pjNewTask = {
         id: tid,
         property: d.property,
         problem: item.remark || item.name,
@@ -1188,7 +1260,8 @@ function pjCreateProject() {
         notes: [],
         project_id: pid,
         project_title: d.title
-      });
+      };
+      tasks.push(_pjNewTask);if(typeof logTaskChange==='function')logTaskChange('created',_pjNewTask);
       item.task_id = tid;
     }
   });
