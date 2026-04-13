@@ -837,7 +837,11 @@ function pjOpenImport() {
 function pjRenderStep() {
   const body = document.getElementById('pj-import-body');
   const step = pjImportData.step;
-  const dots = [1, 2, 3].map(n => `<span class="pj-step-dot${n <= step ? ' active' : ''}"></span>`).join('');
+  // Determine total steps based on project type
+  const _typeConf = (typeof PROJECT_TYPES !== 'undefined' ? PROJECT_TYPES : []).find(pt => pt.id === pjImportData.type);
+  const _hasReport = _typeConf ? _typeConf.hasReport : (pjImportData.type === 'inspection');
+  const totalSteps = _hasReport ? 3 : 2;
+  const dots = Array.from({length: totalSteps}, (_, i) => `<span class="pj-step-dot${(i + 1) <= step ? ' active' : ''}"></span>`).join('');
 
   // ── STEP 1: Just the basics ──
   if (step === 1) {
@@ -847,10 +851,9 @@ function pjRenderStep() {
         <div class="fgr full"><label>Project Title</label><input type="text" id="pji-title" value="${pjImportData.title}" placeholder="e.g. Fire Inspection - Bearadise Lodge - 2026"></div>
         <div class="fgr"><label>Property <span style="font-weight:400;color:var(--text3);font-size:.68rem">(optional for multi-property projects)</span></label><select id="pji-property"></select></div>
         <div class="fgr"><label>Project Type</label><select id="pji-type">
-          <option value="inspection"${pjImportData.type === 'inspection' ? ' selected' : ''}>Inspection</option>
-          <option value="renovation"${pjImportData.type === 'renovation' ? ' selected' : ''}>Renovation</option>
-          <option value="compliance"${pjImportData.type === 'compliance' ? ' selected' : ''}>Compliance</option>
-          <option value="other"${pjImportData.type === 'other' ? ' selected' : ''}>Other</option>
+          ${(typeof PROJECT_TYPES!=='undefined'?PROJECT_TYPES:[{id:'inspection',label:'Inspection'},{id:'renovation',label:'Renovation'},{id:'compliance',label:'Compliance'},{id:'other',label:'Other'}]).map(pt =>
+            `<option value="${pt.id}"${pjImportData.type === pt.id ? ' selected' : ''}>${pt.label}</option>`
+          ).join('')}
         </select></div>
       </div>
       <div style="display:flex;justify-content:flex-end;margin-top:18px"><button class="btn btn-g" onclick="pjStep1Next()">Next →</button></div>`;
@@ -896,19 +899,36 @@ function pjRenderStep() {
     const items = d.items;
     const failCount = items.filter(i => i.status === 'fail').length;
 
-    // Auto-detected details bar (editable)
-    let detectedHtml = `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px">
-      <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:1px;color:var(--green);font-weight:700;margin-bottom:10px">Auto-Detected Details <span style="font-weight:400;color:var(--text3);text-transform:none;letter-spacing:0">(edit if needed)</span></div>
-      <div class="fg">
-        <div class="fgr"><label>Inspector</label><input type="text" id="pji-inspector" value="${d.inspector}" placeholder="Not detected"></div>
-        <div class="fgr"><label>Phone</label><input type="text" id="pji-inspphone" value="${d.inspPhone || ''}" placeholder="Not detected"></div>
-        <div class="fgr"><label>Email</label><input type="text" id="pji-inspemail" value="${d.inspEmail || ''}" placeholder="Not detected"></div>
-        <div class="fgr"><label>Inspection Date</label><input type="date" id="pji-inspdate" value="${d.inspDate}"></div>
-        <div class="fgr"><label>Re-inspection / Due Date</label><input type="date" id="pji-due" value="${d.due}"></div>
-        <div class="fgr"><label>Next Annual</label><input type="date" id="pji-nextannual" value="${d.nextAnnual || ''}"></div>
-        <div class="fgr full"><label>Address</label><input type="text" id="pji-address" value="${d.address || ''}" placeholder="Not detected"></div>
-      </div>
-    </div>`;
+    // Determine if this type has a report (inspection-style details)
+    const typeConfig = (typeof PROJECT_TYPES !== 'undefined' ? PROJECT_TYPES : []).find(pt => pt.id === d.type);
+    const hasReport = typeConfig ? typeConfig.hasReport : (d.type === 'inspection');
+
+    // Details bar — adapts based on project type
+    let detectedHtml = '';
+    if (hasReport) {
+      // Inspection-style: full auto-detected details
+      detectedHtml = `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px">
+        <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:1px;color:var(--green);font-weight:700;margin-bottom:10px">Auto-Detected Details <span style="font-weight:400;color:var(--text3);text-transform:none;letter-spacing:0">(edit if needed)</span></div>
+        <div class="fg">
+          <div class="fgr"><label>Inspector</label><input type="text" id="pji-inspector" value="${d.inspector}" placeholder="Not detected"></div>
+          <div class="fgr"><label>Phone</label><input type="text" id="pji-inspphone" value="${d.inspPhone || ''}" placeholder="Not detected"></div>
+          <div class="fgr"><label>Email</label><input type="text" id="pji-inspemail" value="${d.inspEmail || ''}" placeholder="Not detected"></div>
+          <div class="fgr"><label>Inspection Date</label><input type="date" id="pji-inspdate" value="${d.inspDate}"></div>
+          <div class="fgr"><label>Re-inspection / Due Date</label><input type="date" id="pji-due" value="${d.due}"></div>
+          <div class="fgr"><label>Next Annual</label><input type="date" id="pji-nextannual" value="${d.nextAnnual || ''}"></div>
+          <div class="fgr full"><label>Address</label><input type="text" id="pji-address" value="${d.address || ''}" placeholder="Not detected"></div>
+        </div>
+      </div>`;
+    } else {
+      // Non-inspection: simpler fields — just due date and optional notes
+      detectedHtml = `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px">
+        <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:1px;color:var(--green);font-weight:700;margin-bottom:10px">Project Details</div>
+        <div class="fg">
+          <div class="fgr"><label>Due Date</label><input type="date" id="pji-due" value="${d.due}"></div>
+          <div class="fgr full"><label>Notes</label><textarea id="pji-address" rows="2" placeholder="Optional project notes..." style="font-size:.78rem">${d.address || ''}</textarea></div>
+        </div>
+      </div>`;
+    }
 
     // Items table
     let rows = '';
@@ -922,14 +942,18 @@ function pjRenderStep() {
       </tr>`;
     });
 
+    // Back button goes to step 2 if this type has report, step 1 otherwise
+    const backStep = hasReport ? 2 : 1;
+    const itemLabel = hasReport ? `${items.length} items found (${failCount} fail, ${items.length - failCount} pass). Tasks auto-created for checked <strong>FAIL</strong> items.` : `${items.length} item${items.length !== 1 ? 's' : ''}. Tasks will be created for checked items.`;
+
     body.innerHTML = `<div class="pj-step-indicator">${dots}</div>
-      <div style="font-size:.72rem;color:var(--text2);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:1px">Step 3 — Review & Create</div>
+      <div style="font-size:.72rem;color:var(--text2);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:1px">Step ${hasReport ? '3' : '2'} — Review & Create</div>
       ${detectedHtml}
-      <p style="font-size:.82rem;color:var(--text2);margin-bottom:10px">${items.length} items found (${failCount} fail, ${items.length - failCount} pass). Tasks auto-created for checked <strong>FAIL</strong> items.</p>
-      ${items.length ? `<table class="pj-review-tbl"><thead><tr><th style="width:30px">✓</th><th style="width:50px">Result</th><th>Item</th><th>Remark</th><th style="width:55px">Page</th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="empty" style="margin:10px 0">No items detected. Add items manually below.</div>'}
+      <p style="font-size:.82rem;color:var(--text2);margin-bottom:10px">${itemLabel}</p>
+      ${items.length ? `<table class="pj-review-tbl"><thead><tr><th style="width:30px">✓</th><th style="width:50px">Result</th><th>Item</th><th>Remark</th><th style="width:55px">Page</th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="empty" style="margin:10px 0">No items yet. Add items manually below.</div>'}
       <div style="margin-top:8px"><button class="btn" onclick="pjAddManualItem()" style="font-size:.74rem">+ Add Item Manually</button></div>
       <div style="display:flex;justify-content:space-between;margin-top:18px">
-        <button class="btn" onclick="pjImportData.step=2;pjRenderStep()">← Back</button>
+        <button class="btn" onclick="pjImportData.step=${backStep};pjRenderStep()">← Back</button>
         <button class="btn btn-g" onclick="pjSaveReviewFields();pjCreateProject()">Create Project</button>
       </div>`;
   }
@@ -940,7 +964,15 @@ function pjStep1Next() {
   pjImportData.property = document.getElementById('pji-property').value;
   pjImportData.type = document.getElementById('pji-type').value;
   if (!pjImportData.title) { showToast('Please enter a project title'); return; }
-  pjImportData.step = 2;
+  // Check if the selected type has a report/import step
+  const typeConfig = (typeof PROJECT_TYPES !== 'undefined' ? PROJECT_TYPES : []).find(pt => pt.id === pjImportData.type);
+  if (typeConfig && typeConfig.hasReport) {
+    pjImportData.step = 2; // PDF import step
+  } else {
+    // Skip import — go straight to review with empty items
+    pjImportData.items = [];
+    pjImportData.step = 3;
+  }
   pjRenderStep();
 }
 

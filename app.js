@@ -91,7 +91,7 @@ const DEF_RECURRING = [
   {id:'rc7',name:'Smoke & CO Detector Battery Replacement',properties:['all'],category:'electrical',frequency:'annual',vendor:'',notes:'Replace batteries in all smoke and CO detectors.',nextDue:'2026-10-01'},
   {id:'rc8',name:'Bed Bug Prevention — Bearadise Lodge',properties:['bearadise'],category:'bed_bugs',frequency:'monthly',vendor:'All About Bugs',notes:'Bearadise Lodge had bed bugs twice (2023, 2025). Monthly prevention treatment.',nextDue:'2026-05-01'},
 ];
-const VCAT = [
+const DEFAULT_VCAT = [
   {id:'cleaning',label:'Cleaning'},{id:'handyman',label:'Handyman'},
   {id:'plumbing',label:'Plumbing'},{id:'hvac',label:'HVAC / Electrical'},
   {id:'pest',label:'Pest Control'},{id:'landscaping',label:'Landscaping'},
@@ -100,6 +100,257 @@ const VCAT = [
   {id:'water',label:'Water Filtration'},{id:'bed_bugs',label:'Bed Bugs'},
   {id:'other',label:'Other'},
 ];
+let VCAT = [...DEFAULT_VCAT];
+
+const DEFAULT_PROJECT_TYPES = [
+  {id:'inspection',label:'Inspection',hasReport:true},
+  {id:'renovation',label:'Renovation',hasReport:false},
+  {id:'compliance',label:'Compliance',hasReport:false},
+  {id:'other',label:'Other',hasReport:false},
+];
+let PROJECT_TYPES = [...DEFAULT_PROJECT_TYPES];
+
+// ── App Settings (persisted to KV as se_settings) ──────────────
+let appSettings = {
+  vendorCategories: null,      // null = use DEFAULT_VCAT
+  projectTypes: null,          // null = use DEFAULT_PROJECT_TYPES
+  guestAlert: {
+    mode: 'all',               // 'all' | 'tagged' — 'all' = current behavior, 'tagged' = only tasks with guestAlert flag
+    lookAhead: 2,              // days ahead to check for arrivals
+    excludeCategories: [],     // categories to exclude from alerts
+  },
+  vendorSheetFields: ['address','doorCode'],  // which fields to show on vendor task sheets
+  vendorSheetFieldOptions: [
+    {id:'address',label:'Address',default:true},
+    {id:'doorCode',label:'Door Code',default:true},
+    {id:'wifi_name',label:'WiFi Network',default:false},
+    {id:'wifi_password',label:'WiFi Password',default:false},
+    {id:'checkout_time',label:'Checkout Time',default:false},
+    {id:'checkin_time',label:'Check-in Time',default:false},
+    {id:'parking',label:'Parking Info',default:false},
+    {id:'lockbox',label:'Lockbox Location',default:false},
+    {id:'trash_day',label:'Trash Day',default:false},
+    {id:'special_notes',label:'Special Notes',default:false},
+  ],
+};
+
+async function loadSettings() {
+  try {
+    const raw = await S.get('se_settings');
+    if (raw) {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      // Merge with defaults (so new fields don't break old saved settings)
+      if (parsed.vendorCategories) appSettings.vendorCategories = parsed.vendorCategories;
+      if (parsed.projectTypes) appSettings.projectTypes = parsed.projectTypes;
+      if (parsed.guestAlert) appSettings.guestAlert = { ...appSettings.guestAlert, ...parsed.guestAlert };
+      if (parsed.vendorSheetFields) appSettings.vendorSheetFields = parsed.vendorSheetFields;
+    }
+  } catch (e) { console.warn('Failed to load settings:', e.message); }
+
+  // Apply dynamic categories
+  if (appSettings.vendorCategories && appSettings.vendorCategories.length) {
+    VCAT = appSettings.vendorCategories;
+  }
+  // Apply dynamic project types
+  if (appSettings.projectTypes && appSettings.projectTypes.length) {
+    PROJECT_TYPES = appSettings.projectTypes;
+  }
+  // Rebuild CAT_LABELS from VCAT
+  rebuildCatLabels();
+  // Populate dynamic dropdowns
+  populateCategoryDropdowns();
+}
+
+function rebuildCatLabels() {
+  // Clear and rebuild from VCAT (keep replacement and uncategorized as system entries)
+  const keys = Object.keys(CAT_LABELS);
+  keys.forEach(k => { if (k !== 'replacement' && k !== '') delete CAT_LABELS[k]; });
+  VCAT.forEach(c => { CAT_LABELS[c.id] = c.label; });
+  if (!CAT_LABELS['']) CAT_LABELS[''] = 'Uncategorized';
+  if (!CAT_LABELS['replacement']) CAT_LABELS['replacement'] = 'Replacement';
+}
+
+function populateCategoryDropdowns() {
+  // Populate all category <select> elements with current VCAT
+  ['f-category', 'd-category'].forEach(selId => {
+    const sel = document.getElementById(selId);
+    if (!sel) return;
+    const currentVal = sel.value;
+    const firstOpt = selId === 'f-category' ? '<option value="">Select category</option>' : '<option value="">No category</option>';
+    sel.innerHTML = firstOpt + '<option value="replacement">Replacement</option>' +
+      VCAT.map(c => `<option value="${c.id}">${c.label}</option>`).join('');
+    sel.value = currentVal; // restore selection
+  });
+}
+
+async function saveSettings() {
+  try {
+    await S.set('se_settings', JSON.stringify(appSettings));
+    showToast('Settings saved');
+  } catch (e) {
+    console.error('Failed to save settings:', e.message);
+    showToast('Failed to save settings');
+  }
+}
+
+// ── Settings Panel Renderers ──────────────────────────────────
+
+function renderSettingsOnSwitch() {
+  renderGuestAlertSettings();
+  renderVendorSheetFieldSettings();
+  renderCategorySettings();
+  renderProjectTypeSettings();
+}
+
+// -- Guest Alert Settings --
+function renderGuestAlertSettings() {
+  const ga = appSettings.guestAlert || {};
+  const modeEl = document.getElementById('set-ga-mode');
+  const laEl = document.getElementById('set-ga-lookahead');
+  if (modeEl) modeEl.value = ga.mode || 'all';
+  if (laEl) laEl.value = ga.lookAhead || 2;
+  // Render exclude category checkboxes
+  const wrap = document.getElementById('set-ga-exclude-cats');
+  if (!wrap) return;
+  const excluded = ga.excludeCategories || [];
+  wrap.innerHTML = VCAT.map(c =>
+    `<label style="font-size:.74rem;color:var(--text2);display:flex;align-items:center;gap:4px;padding:4px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer">
+      <input type="checkbox" data-cat="${c.id}" ${excluded.includes(c.id) ? 'checked' : ''}> ${c.label}
+    </label>`
+  ).join('');
+}
+
+function settingsUpdateGA() {
+  // Live preview — updates appSettings but doesn't save
+}
+
+function saveGuestAlertSettings() {
+  const mode = document.getElementById('set-ga-mode').value;
+  const lookAhead = parseInt(document.getElementById('set-ga-lookahead').value) || 2;
+  const excludeCategories = [];
+  document.querySelectorAll('#set-ga-exclude-cats input[type=checkbox]:checked').forEach(cb => {
+    excludeCategories.push(cb.dataset.cat);
+  });
+  appSettings.guestAlert = { mode, lookAhead, excludeCategories };
+  saveSettings();
+  gaFetch(); // re-run to apply changes
+}
+
+// -- Vendor Task Sheet Field Settings --
+function renderVendorSheetFieldSettings() {
+  const wrap = document.getElementById('set-vs-fields');
+  if (!wrap) return;
+  const active = appSettings.vendorSheetFields || ['address', 'doorCode'];
+  const options = appSettings.vendorSheetFieldOptions || [];
+  wrap.innerHTML = options.map(opt =>
+    `<label style="font-size:.78rem;color:var(--text);display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer">
+      <input type="checkbox" data-field="${opt.id}" ${active.includes(opt.id) ? 'checked' : ''}> ${opt.label}
+    </label>`
+  ).join('');
+}
+
+function saveVendorSheetFieldSettings() {
+  const fields = [];
+  document.querySelectorAll('#set-vs-fields input[type=checkbox]:checked').forEach(cb => {
+    fields.push(cb.dataset.field);
+  });
+  appSettings.vendorSheetFields = fields;
+  saveSettings();
+}
+
+// -- Vendor Category Settings --
+function renderCategorySettings() {
+  const wrap = document.getElementById('set-vcat-list');
+  if (!wrap) return;
+  wrap.innerHTML = VCAT.map((c, i) =>
+    `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px">
+      <span style="font-size:.72rem;color:var(--text3);width:100px;font-family:monospace">${c.id}</span>
+      <input type="text" value="${c.label}" data-cat-idx="${i}" style="flex:1;padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-size:.78rem;font-family:inherit" onchange="settingsUpdateCatLabel(${i},this.value)">
+      <button class="btn btn-red" onclick="settingsRemoveCategory(${i})" style="padding:2px 8px;font-size:.68rem">Remove</button>
+    </div>`
+  ).join('');
+}
+
+function settingsUpdateCatLabel(idx, label) {
+  if (VCAT[idx]) VCAT[idx].label = label;
+}
+
+function settingsRemoveCategory(idx) {
+  if (VCAT.length <= 1) { showToast('Must keep at least one category'); return; }
+  const cat = VCAT[idx];
+  if (!confirm(`Remove category "${cat.label}"? Existing tasks with this category will keep it but it won't appear in dropdowns.`)) return;
+  VCAT.splice(idx, 1);
+  renderCategorySettings();
+}
+
+function settingsAddCategory() {
+  const idEl = document.getElementById('set-vcat-new-id');
+  const labelEl = document.getElementById('set-vcat-new-label');
+  const id = idEl.value.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+  const label = labelEl.value.trim();
+  if (!id || !label) { showToast('Both ID and label are required'); return; }
+  if (VCAT.some(c => c.id === id)) { showToast('Category ID already exists'); return; }
+  VCAT.push({ id, label });
+  idEl.value = ''; labelEl.value = '';
+  renderCategorySettings();
+}
+
+function saveCategorySettings() {
+  appSettings.vendorCategories = [...VCAT];
+  rebuildCatLabels();
+  populateCategoryDropdowns();
+  saveSettings();
+  renderVendors();
+}
+
+// -- Project Type Settings --
+function renderProjectTypeSettings() {
+  const wrap = document.getElementById('set-ptype-list');
+  if (!wrap) return;
+  wrap.innerHTML = PROJECT_TYPES.map((pt, i) =>
+    `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px">
+      <span style="font-size:.72rem;color:var(--text3);width:100px;font-family:monospace">${pt.id}</span>
+      <input type="text" value="${pt.label}" data-ptype-idx="${i}" style="flex:1;padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-size:.78rem;font-family:inherit" onchange="settingsUpdatePTypeLabel(${i},this.value)">
+      <label style="font-size:.72rem;color:var(--text2);display:flex;align-items:center;gap:4px;white-space:nowrap"><input type="checkbox" ${pt.hasReport ? 'checked' : ''} onchange="settingsUpdatePTypeReport(${i},this.checked)"> Report</label>
+      <button class="btn btn-red" onclick="settingsRemoveProjectType(${i})" style="padding:2px 8px;font-size:.68rem">Remove</button>
+    </div>`
+  ).join('');
+}
+
+function settingsUpdatePTypeLabel(idx, label) {
+  if (PROJECT_TYPES[idx]) PROJECT_TYPES[idx].label = label;
+}
+
+function settingsUpdatePTypeReport(idx, hasReport) {
+  if (PROJECT_TYPES[idx]) PROJECT_TYPES[idx].hasReport = hasReport;
+}
+
+function settingsRemoveProjectType(idx) {
+  if (PROJECT_TYPES.length <= 1) { showToast('Must keep at least one project type'); return; }
+  const pt = PROJECT_TYPES[idx];
+  if (!confirm(`Remove project type "${pt.label}"?`)) return;
+  PROJECT_TYPES.splice(idx, 1);
+  renderProjectTypeSettings();
+}
+
+function settingsAddProjectType() {
+  const idEl = document.getElementById('set-ptype-new-id');
+  const labelEl = document.getElementById('set-ptype-new-label');
+  const reportEl = document.getElementById('set-ptype-new-report');
+  const id = idEl.value.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+  const label = labelEl.value.trim();
+  const hasReport = reportEl.checked;
+  if (!id || !label) { showToast('Both ID and label are required'); return; }
+  if (PROJECT_TYPES.some(pt => pt.id === id)) { showToast('Project type ID already exists'); return; }
+  PROJECT_TYPES.push({ id, label, hasReport });
+  idEl.value = ''; labelEl.value = ''; reportEl.checked = false;
+  renderProjectTypeSettings();
+}
+
+function saveProjectTypeSettings() {
+  appSettings.projectTypes = [...PROJECT_TYPES];
+  saveSettings();
+}
 
 // STATE
 let tasks=[], vendors=[], recurring=[], filter='all', detailId=null, selProp=null, histCat='all';
@@ -369,6 +620,8 @@ function switchView(name,btn){
   if (name === 'properties' && typeof ppLoadIfNeeded === 'function') ppLoadIfNeeded();
   // Projects — refresh list
   if (name === 'projects' && typeof pjRenderList === 'function') pjRenderList();
+  // Settings — render dynamic settings panels
+  if (name === 'settings' && typeof renderSettingsOnSwitch === 'function') renderSettingsOnSwitch();
 }
 // Navigate to Recurring view without a nav button (it's been removed from the main nav)
 function goToRecurring(){switchView('recurring');window.scrollTo(0,0);}
@@ -1781,6 +2034,14 @@ async function openDetail(id){
   if(pSaved)pSaved.style.display=t.purchaseNote?'':'none';
   renderPurchaseWorkflow(t);
   renderUrgentToggle(t);
+  // Guest Alert toggle — show when mode is 'tagged'
+  const gaWrap=document.getElementById('d-guest-alert-wrap');
+  const gaCb=document.getElementById('d-guest-alert');
+  if(gaWrap&&gaCb){
+    const gaMode=(appSettings.guestAlert||{}).mode||'all';
+    gaWrap.style.display=(gaMode==='tagged')?'':'none';
+    gaCb.checked=!!t.guestAlert;
+  }
   showTaskPhoto(t);
   showVendorPhotos(t);
   renderDetailVendors(t,p);renderNotes(t);checkCombine();
@@ -2855,6 +3116,40 @@ async function autoInjectSheetLink(vendorName,task){
   }catch(e){console.error('[vendor-sheet] Auto-inject error:',e);}
 }
 
+// ── Vendor Multi-Day Schedule Link ─────────────────────────────
+// Creates a persistent, bookmarkable link showing ALL upcoming tasks for a vendor
+async function createVendorAgenda(vendorName){
+  const raw=vendorName.toLowerCase().replace(/\s+/g,'');
+  let hash=0;for(let i=0;i<raw.length;i++){hash=((hash<<5)-hash)+raw.charCodeAt(i);hash|=0;}
+  const token='va'+Math.abs(hash).toString(36);
+  const key='se_vs_'+token;
+  const existing=await S.get(key);
+  if(!existing||!existing.value){
+    const sheet={vendor:vendorName,type:'agenda',created:new Date().toISOString()};
+    await S.set(key,JSON.stringify(sheet));
+  }
+  return token;
+}
+
+function vendorAgendaUrl(token){
+  return'https://storybook-webhook.vercel.app/api/vendor-page?token='+token;
+}
+
+async function generateVendorAgendaLink(vendorName){
+  try{
+    const token=await createVendorAgenda(vendorName);
+    const url=vendorAgendaUrl(token);
+    // Copy to clipboard
+    await navigator.clipboard.writeText(url);
+    showToast(`Schedule link for ${vendorName} copied to clipboard!`);
+    return url;
+  }catch(e){
+    console.error('[vendor-agenda] Error:',e);
+    showToast('Failed to generate schedule link');
+    return null;
+  }
+}
+
 function buildSMS(t,p,v){
   const pn=p?p.name:t.property,addr=p?p.address:'',door=p?p.door:'';
   const urg=t.urgent?'\n\nThis is URGENT — same-day response needed if possible.':'';
@@ -3611,6 +3906,7 @@ function renderVendors(){
       </div><div class="vc-actions">
         <a href="sms:${v.phone.replace(/\D/g,'')}" class="btn">Text</a>
         ${v.email?`<a href="mailto:${v.email}" class="btn">Email</a>`:''}
+        <button class="btn" onclick="generateVendorAgendaLink('${v.name.replace(/'/g,"\\'")}')">Schedule Link</button>
         <button class="btn" onclick="openEditVendor('${v.id}')">Edit</button>
       </div></div></div>`;
     });
@@ -5721,6 +6017,10 @@ async function rpImportFromReview(rv) {
   // Set default logo initially (will be overridden by KV logo from API if available)
   try{document.getElementById('vs-logo').src=DEFAULT_LOGO;}catch(e){}
 
+  let vIsAgenda=false; // true when showing multi-day schedule
+  let vByDate={}; // grouped tasks by date (agenda mode)
+  let vSheetFields=[]; // custom fields from settings
+
   async function vsLoad(){
     try{
       const r=await fetch(VAPI+'?token='+encodeURIComponent(token));
@@ -5731,13 +6031,21 @@ async function rpImportFromReview(rv) {
       vDate=data.date||'';
       vGuestAlerts=data.guestAlerts||{};
       vPayMethods=data.paymentMethods||['venmo','cashapp'];
+      vSheetFields=data.sheetFields||['address','doorCode'];
+      vIsAgenda=(data.type==='agenda');
+      vByDate=data.byDate||{};
       // Apply logo from API (KV-stored custom logo) if available
       if(data.logo){try{document.getElementById('vs-logo').src=data.logo;}catch(e){}}
-      document.getElementById('vs-subtitle').textContent=
-        vVendor+' — Jobs for '+new Date(vDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+      if(vIsAgenda){
+        document.getElementById('vs-subtitle').textContent=
+          vVendor+' — Upcoming Schedule';
+      }else{
+        document.getElementById('vs-subtitle').textContent=
+          vVendor+' — Jobs for '+new Date(vDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+      }
       document.getElementById('vs-loading').style.display='none';
       document.getElementById('vs-tasks').style.display='block';
-      vsRender();
+      if(vIsAgenda) vsRenderAgenda(); else vsRender();
       // Auto-expand the first task after a short delay to teach vendors that cards are tappable
       if(vTasks.length){
         setTimeout(()=>{
@@ -5791,9 +6099,21 @@ async function rpImportFromReview(rv) {
             return `<div class="vs-guest-alert vs-guest-alert-${a.type}">${icon} ${label}</div>`;
           }).join('')+'</div>';
         }
+        // Build property meta from settings-driven fields
+        let metaParts=[];
+        if(t.address)metaParts.push('<a href="https://maps.google.com/?q='+encodeURIComponent(t.address)+'" target="_blank">'+t.address+'</a>');
+        if(t.doorCode)metaParts.push('Code: '+t.doorCode);
+        if(t.wifiName)metaParts.push('WiFi: '+t.wifiName);
+        if(t.wifiPassword)metaParts.push('WiFi Pass: '+t.wifiPassword);
+        if(t.checkoutTime)metaParts.push('Checkout: '+t.checkoutTime);
+        if(t.checkinTime)metaParts.push('Check-in: '+t.checkinTime);
+        if(t.parking)metaParts.push('Parking: '+t.parking);
+        if(t.lockbox)metaParts.push('Lockbox: '+t.lockbox);
+        if(t.trashDay)metaParts.push('Trash: '+t.trashDay);
+        if(t.specialNotes)metaParts.push(t.specialNotes);
         html+=`<div class="vs-prop-header" style="border-left-color:var(--${nbCls||'green'})">
           <div class="vs-prop-name">${shortName}</div>
-          <div class="vs-prop-meta">${t.address?'<a href="https://maps.google.com/?q='+encodeURIComponent(t.address)+'" target="_blank">'+t.address+'</a>':''}${t.doorCode?' &middot; Code: '+t.doorCode:''}</div>
+          <div class="vs-prop-meta">${metaParts.join(' &middot; ')}</div>
           ${alertHtml}
         </div>`;
         html+='<div class="vs-prop-group">';
@@ -5805,6 +6125,41 @@ async function rpImportFromReview(rv) {
       html+=vsCard(t);
     });
     if(propGroupOpen){html+=vsReportBtn(lastPropId,lastPropShort);html+='</div>';}
+    wrap.innerHTML=html;
+  }
+
+  // ── Agenda Render: multi-day schedule grouped by date ──
+  function vsRenderAgenda(){
+    const wrap=document.getElementById('vs-tasks');
+    if(!vTasks.length){wrap.innerHTML='<div style="text-align:center;padding:30px;color:var(--text2)">No upcoming tasks scheduled.</div>';return;}
+    const dates=Object.keys(vByDate).sort();
+    let html='';
+    dates.forEach(dateStr=>{
+      const dayTasks=vByDate[dateStr]||[];
+      if(!dayTasks.length)return;
+      const d=new Date(dateStr+'T12:00:00');
+      const dayLabel=d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+      html+=`<div style="margin-top:16px;margin-bottom:6px;padding:8px 12px;background:var(--green);color:#fff;border-radius:8px;font-family:'Cormorant Garamond',serif;font-size:1.1rem;font-weight:600">${dayLabel} <span style="font-size:.78rem;opacity:.8;font-family:'DM Sans',sans-serif;font-weight:400">(${dayTasks.length} task${dayTasks.length!==1?'s':''})</span></div>`;
+      // Group by property within each day
+      let lastProp='';
+      dayTasks.forEach(t=>{
+        if(t.propertyName!==lastProp){
+          const shortName=t.propertyName.replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
+          const nbCls=t.neighborhoodCls||'';
+          let metaParts=[];
+          if(t.address)metaParts.push('<a href="https://maps.google.com/?q='+encodeURIComponent(t.address)+'" target="_blank">'+t.address+'</a>');
+          if(t.doorCode)metaParts.push('Code: '+t.doorCode);
+          if(t.wifiName)metaParts.push('WiFi: '+t.wifiName);
+          if(t.wifiPassword)metaParts.push('WiFi Pass: '+t.wifiPassword);
+          html+=`<div class="vs-prop-header" style="border-left-color:var(--${nbCls||'green'})">
+            <div class="vs-prop-name">${shortName}</div>
+            <div class="vs-prop-meta">${metaParts.join(' &middot; ')}</div>
+          </div>`;
+          lastProp=t.propertyName;
+        }
+        html+=vsCard(t);
+      });
+    });
     wrap.innerHTML=html;
   }
 
@@ -6450,13 +6805,25 @@ async function gaFetch(){
   // Populate gaDismissed from persisted rvDismissed array
   rvDismissed.forEach(id=>gaDismissed.add(id));
   const today=new Date();today.setHours(0,0,0,0);
-  const lookAhead=2; // days to look ahead for arrivals
+  const gaSettings = appSettings.guestAlert || {};
+  const lookAhead = gaSettings.lookAhead || 2; // days to look ahead for arrivals
   const alerts=[];
 
   // Find open/scheduled tasks (not complete, not resolved_by_guest)
   // Exclude routine recurring items that don't affect guest experience (HVAC filters, etc.)
   const GA_EXCLUDE=/hvac\s*filter|filter\s*replace/i;
-  const activeTasks=tasks.filter(t=>!isDone(t)&&!GA_EXCLUDE.test(t.problem||'')&&!t.assignedToGuest);
+  const excludeCats = gaSettings.excludeCategories || [];
+  const gaMode = gaSettings.mode || 'all'; // 'all' or 'tagged'
+  const activeTasks=tasks.filter(t=>{
+    if(isDone(t)) return false;
+    if(GA_EXCLUDE.test(t.problem||'')) return false;
+    if(t.assignedToGuest) return false;
+    // If 'tagged' mode, only include tasks explicitly flagged for guest alert
+    if(gaMode==='tagged' && !t.guestAlert) return false;
+    // Exclude categories from settings
+    if(excludeCats.length && excludeCats.includes(t.category)) return false;
+    return true;
+  });
   if(!activeTasks.length){document.getElementById('ga-wrap').innerHTML='';gaItems=[];return;}
 
   // Group active tasks by property
@@ -6677,6 +7044,7 @@ async function renderGuestContext(t,p){
 async function initApp(){
   startExpiryWatcher();
   await load();
+  await loadSettings();
   await loadReplacements();
   await loadSmsTemplate();
   await loadCombinedSmsTemplate();

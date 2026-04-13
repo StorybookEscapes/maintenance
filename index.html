@@ -307,6 +307,74 @@
           <button class="btn" onclick="rmAddSection()">+ Section</button>
         </div>
       </div>
+
+      <!-- ── Guest Heads-Up Alert Settings ── -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px">
+        <h3 style="font-size:.88rem;font-weight:600;color:var(--green);margin-bottom:4px">Guest Heads-Up Alerts</h3>
+        <p style="font-size:.76rem;color:var(--text2);margin-bottom:14px;line-height:1.5">Control when incoming guest alerts are generated for open tasks. You can alert on all tasks or only tasks you've specifically tagged.</p>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div>
+            <label style="font-size:.76rem;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Alert Mode</label>
+            <select id="set-ga-mode" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.82rem;font-family:inherit" onchange="settingsUpdateGA()">
+              <option value="all">All open tasks (current behavior)</option>
+              <option value="tagged">Only tasks tagged "Notify Next Guest"</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:.76rem;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Look-Ahead (days before arrival)</label>
+            <input type="number" id="set-ga-lookahead" min="0" max="14" value="2" style="width:80px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.82rem;font-family:inherit" onchange="settingsUpdateGA()">
+          </div>
+          <div>
+            <label style="font-size:.76rem;font-weight:600;color:var(--text);display:block;margin-bottom:6px">Exclude Categories</label>
+            <div id="set-ga-exclude-cats" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:14px">
+          <button class="btn btn-g" onclick="saveGuestAlertSettings()">Save Alert Settings</button>
+        </div>
+      </div>
+
+      <!-- ── Vendor Task Sheet Fields ── -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px">
+        <h3 style="font-size:.88rem;font-weight:600;color:var(--green);margin-bottom:4px">Vendor Task Sheet — Property Info</h3>
+        <p style="font-size:.76rem;color:var(--text2);margin-bottom:14px;line-height:1.5">Choose which property details are shown at the top of vendor task sheets. Additional fields are pulled from Property Bible profiles.</p>
+        <div id="set-vs-fields" style="display:flex;flex-direction:column;gap:8px"></div>
+        <div style="display:flex;justify-content:flex-end;margin-top:14px">
+          <button class="btn btn-g" onclick="saveVendorSheetFieldSettings()">Save Field Settings</button>
+        </div>
+      </div>
+
+      <!-- ── Vendor Categories ── -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px">
+        <h3 style="font-size:.88rem;font-weight:600;color:var(--green);margin-bottom:4px">Vendor Categories</h3>
+        <p style="font-size:.76rem;color:var(--text2);margin-bottom:14px;line-height:1.5">Manage the categories used to organize vendors and tasks. Changes update all dropdowns throughout the app.</p>
+        <div id="set-vcat-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="text" id="set-vcat-new-id" placeholder="ID (e.g. roofing)" style="width:140px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.78rem;font-family:inherit">
+          <input type="text" id="set-vcat-new-label" placeholder="Label (e.g. Roofing)" style="width:180px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.78rem;font-family:inherit">
+          <button class="btn btn-g" onclick="settingsAddCategory()" style="font-size:.76rem">+ Add</button>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:14px">
+          <button class="btn btn-g" onclick="saveCategorySettings()">Save Categories</button>
+        </div>
+      </div>
+
+      <!-- ── Project Types ── -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px">
+        <h3 style="font-size:.88rem;font-weight:600;color:var(--green);margin-bottom:4px">Project Types</h3>
+        <p style="font-size:.76rem;color:var(--text2);margin-bottom:14px;line-height:1.5">Manage the types available when creating projects. Types with "Has Report" enabled will show the PDF import wizard; others skip straight to manual item entry.</p>
+        <div id="set-ptype-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="text" id="set-ptype-new-id" placeholder="ID (e.g. turnover)" style="width:140px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.78rem;font-family:inherit">
+          <input type="text" id="set-ptype-new-label" placeholder="Label (e.g. Turnover)" style="width:180px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.78rem;font-family:inherit">
+          <label style="font-size:.74rem;color:var(--text2);display:flex;align-items:center;gap:4px"><input type="checkbox" id="set-ptype-new-report"> Has Report</label>
+          <button class="btn btn-g" onclick="settingsAddProjectType()" style="font-size:.76rem">+ Add</button>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:14px">
+          <button class="btn btn-g" onclick="saveProjectTypeSettings()">Save Project Types</button>
+        </div>
+      </div>
+
     </div>
   </main>
 </div>
@@ -480,6 +548,13 @@
           <div class="vd-dropdown" id="vd-dropdown" style="display:none"></div>
         </div>
       </div>
+    </div>
+    <div id="d-guest-alert-wrap" class="fgr full" style="margin-bottom:8px;display:none">
+      <label style="display:flex;align-items:center;gap:8px;font-size:.78rem;color:var(--text2);cursor:pointer">
+        <input type="checkbox" id="d-guest-alert" onchange="updateField('guestAlert',this.checked)">
+        <span>Notify Next Guest</span>
+        <span style="font-size:.68rem;color:var(--text3);font-weight:400">— include in Guest Heads-Up alerts for arriving guests</span>
+      </label>
     </div>
     <div class="fgr full" id="d-purchase-wrap" style="margin-bottom:12px">
       <label style="display:flex;align-items:center;gap:6px">
