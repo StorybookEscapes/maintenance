@@ -137,8 +137,8 @@ let appSettings = {
 async function loadSettings() {
   try {
     const raw = await S.get('se_settings');
-    if (raw) {
-      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (raw && raw.value) {
+      const parsed = typeof raw.value === 'string' ? JSON.parse(raw.value) : raw.value;
       // Merge with defaults (so new fields don't break old saved settings)
       if (parsed.vendorCategories) appSettings.vendorCategories = parsed.vendorCategories;
       if (parsed.projectTypes) appSettings.projectTypes = parsed.projectTypes;
@@ -159,6 +159,8 @@ async function loadSettings() {
   rebuildCatLabels();
   // Populate dynamic dropdowns
   populateCategoryDropdowns();
+  // Render settings panels if they exist in the DOM (handles page refresh while on Settings tab)
+  if (document.getElementById('set-ga-mode')) renderSettingsOnSwitch();
 }
 
 function rebuildCatLabels() {
