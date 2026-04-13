@@ -6142,20 +6142,47 @@ async function rpImportFromReview(rv) {
       const d=new Date(dateStr+'T12:00:00');
       const dayLabel=d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
       html+=`<div style="margin-top:16px;margin-bottom:6px;padding:8px 12px;background:var(--green);color:#fff;border-radius:8px;font-family:'Cormorant Garamond',serif;font-size:1.1rem;font-weight:600">${dayLabel} <span style="font-size:.78rem;opacity:.8;font-family:'DM Sans',sans-serif;font-weight:400">(${dayTasks.length} task${dayTasks.length!==1?'s':''})</span></div>`;
-      // Group by property within each day
+      // Group by neighborhood, then property within each day
+      let lastNb='';
       let lastProp='';
       dayTasks.forEach(t=>{
+        const nb=t.neighborhood||'Other';
+        const nbCls=t.neighborhoodCls||'';
+        if(nb!==lastNb){
+          html+=`<div class="vs-nb-header" style="color:var(--${nbCls||'green'})">${nb}</div>`;
+          lastNb=nb;lastProp='';
+        }
         if(t.propertyName!==lastProp){
           const shortName=t.propertyName.replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
-          const nbCls=t.neighborhoodCls||'';
+          // Guest alerts for this property on this date
+          const dayAlerts=(vGuestAlerts[dateStr]||{})[t.property]||[];
+          let alertHtml='';
+          if(dayAlerts.length){
+            alertHtml='<div class="vs-alert-row">'+dayAlerts.map(a=>{
+              const icon=a.type==='checkout'?'&#x1F6AA;':a.type==='inhouse'?'&#x1F6A8;':'&#x1F3E0;';
+              const label=a.type==='checkout'
+                ?'Guests checking out this morning'
+                :a.type==='inhouse'
+                ?'Guests in house — announce yourself'
+                :'Guests checking in this afternoon';
+              return `<div class="vs-guest-alert vs-guest-alert-${a.type}">${icon} ${label}</div>`;
+            }).join('')+'</div>';
+          }
           let metaParts=[];
           if(t.address)metaParts.push('<a href="https://maps.google.com/?q='+encodeURIComponent(t.address)+'" target="_blank">'+t.address+'</a>');
           if(t.doorCode)metaParts.push('Code: '+t.doorCode);
           if(t.wifiName)metaParts.push('WiFi: '+t.wifiName);
           if(t.wifiPassword)metaParts.push('WiFi Pass: '+t.wifiPassword);
+          if(t.checkoutTime)metaParts.push('Checkout: '+t.checkoutTime);
+          if(t.checkinTime)metaParts.push('Check-in: '+t.checkinTime);
+          if(t.parking)metaParts.push('Parking: '+t.parking);
+          if(t.lockbox)metaParts.push('Lockbox: '+t.lockbox);
+          if(t.trashDay)metaParts.push('Trash: '+t.trashDay);
+          if(t.specialNotes)metaParts.push(t.specialNotes);
           html+=`<div class="vs-prop-header" style="border-left-color:var(--${nbCls||'green'})">
             <div class="vs-prop-name">${shortName}</div>
             <div class="vs-prop-meta">${metaParts.join(' &middot; ')}</div>
+            ${alertHtml}
           </div>`;
           lastProp=t.propertyName;
         }
