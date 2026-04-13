@@ -44,7 +44,7 @@ const PROPS = [
   {id:'prc4',name:'PRC - 4 - Snuggle Shack',address:'1627 Paradise Ridge Dr. Unit 4',door:'1474'},
   {id:'prc5',name:'PRC - 5 - Pink Paradise',address:'1627 Paradise Ridge Dr. Unit 5',door:'1475'},
   {id:'prc6',name:"PRC - 6 - Ringbearer's Roost",address:'1627 Paradise Ridge Dr. Unit 6',door:'1476'},
-  {id:'umc10',name:'UMC - 10: The Whispering Wand',address:'1181 Upper Middle Creek Rd., Cabin 10',door:'5582'},
+  {id:'umc10',name:'UMC - 10 - The Whispering Wand',address:'1181 Upper Middle Creek Rd., Cabin 10',door:'5582'},
   {id:'umc20',name:'UMC - 20 - Honey Haven',address:'1181 Upper Middle Creek Rd., Cabin 20',door:'5583'},
   {id:'umc30',name:'UMC - 30 - Rebel Refuge',address:'1181 Upper Middle Creek Rd., Cabin 30',door:'5584'},
   {id:'umc40',name:'UMC - 40 - Lookout on the Roadside',address:'1181 Upper Middle Creek Rd., Cabin 40',door:'5581'},
