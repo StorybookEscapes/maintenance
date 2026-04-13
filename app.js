@@ -289,15 +289,65 @@ function switchView(name,btn){
 // Navigate to Recurring view without a nav button (it's been removed from the main nav)
 function goToRecurring(){switchView('recurring');window.scrollTo(0,0);}
 
-function populatePropSel(id){
-  const s=document.getElementById(id);
-  s.innerHTML='<option value="">Select property...</option>';
+/**
+ * Shared property dropdown builder. One function, every callsite.
+ * @param {string|HTMLElement} el - element ID or element
+ * @param {Object} opts
+ *   placeholder  {string}  first option text (default "Select property...")
+ *   allOption    {boolean} prepend "All Properties" option with value "all"
+ *   neighborhoods {boolean} add selectable "▶ All <name>" per group
+ *   scope        {string[]} limit to these property IDs (null = all)
+ *   selected     {string}  value to pre-select after building
+ *   countFn      {function(pid)=>number} append count to label if > 0
+ *   showSub      {boolean} append " — <sub>" to group label
+ */
+function buildPropSelect(el,opts={}){
+  const s=typeof el==='string'?document.getElementById(el):el;
+  if(!s)return;
+  const {placeholder='Select property...',allOption=false,neighborhoods=false,scope=null,selected=null,countFn=null,showSub=false}=opts;
+  const prev=selected!==undefined&&selected!==null?selected:s.value;
+  s.innerHTML='';
+  if(allOption)s.innerHTML='<option value="all">All Properties</option>';
+  else if(placeholder)s.innerHTML=`<option value="">${placeholder}</option>`;
   NBS.forEach(nb=>{
+    const nbProps=scope?nb.props.filter(pid=>scope.includes(pid)):nb.props;
+    if(!nbProps.length)return;
     const og=document.createElement('optgroup');
-    og.label=nb.name+' — '+nb.sub;
-    nb.props.forEach(pid=>{const p=getProp(pid);if(p){const o=document.createElement('option');o.value=p.id;o.textContent=p.name;og.appendChild(o);}});
+    og.label=showSub?nb.name+' — '+nb.sub:nb.name;
+    if(neighborhoods&&nbProps.length>1){
+      const nbo=document.createElement('option');
+      nbo.value='nb:'+nb.id;
+      nbo.textContent='\u25B6 All '+nb.name+' ('+nbProps.length+')';
+      nbo.style.fontWeight='600';
+      og.appendChild(nbo);
+    }
+    nbProps.forEach(pid=>{
+      const p=getProp(pid);if(!p)return;
+      const o=document.createElement('option');
+      o.value=pid;
+      const cnt=countFn?countFn(pid):0;
+      o.textContent=p.name+(cnt?' ('+cnt+')':'');
+      og.appendChild(o);
+    });
     s.appendChild(og);
   });
+  if(prev){const exists=Array.from(s.options).some(o=>o.value===prev);if(exists)s.value=prev;}
+}
+
+/** Expand a property select value — if nb: prefix, returns array of pids; otherwise single-element array */
+function expandPropValue(val,scope){
+  if(!val)return[];
+  if(val.startsWith('nb:')){
+    const nbId=val.slice(3);
+    const nb=NBS.find(n=>n.id===nbId);
+    if(!nb)return[];
+    return scope?nb.props.filter(pid=>scope.includes(pid)):nb.props;
+  }
+  return[val];
+}
+
+function populatePropSel(id){
+  buildPropSelect(id,{showSub:true,neighborhoods:true});
 }
 
 function populatePropMulti(id){
@@ -454,9 +504,17 @@ function renderStats(){
 
 // TASKS
 const CAT_LABELS={replacement:'Replacement',handyman:'Handyman',plumbing:'Plumbing',hvac:'HVAC',electrical:'Electrical',hot_tub:'Hot Tub',pool:'Pool',pest:'Pest Control',cleaning:'Cleaning',landscaping:'Landscaping',arcade:'Arcade / Billiards',septic:'Septic',water:'Water Filtration',bed_bugs:'Bed Bugs',other:'Other','':`Uncategorized`};
-/** Build <option> HTML for all real categories (excludes '' uncategorized and 'replacement') */
-function buildCatOptions(selected){
-  return Object.entries(CAT_LABELS).filter(([k])=>k&&k!=='replacement').map(([k,v])=>`<option value="${k}"${k===selected?' selected':''}>${v}</option>`).join('');
+/** Build vendor datalist <option> HTML from vendors array */
+function buildVendorOpts(){return vendors.map(v=>`<option value="${v.name}">${v.name} — ${v.role}</option>`).join('');}
+/** Build <option> HTML for categories from CAT_LABELS.
+ *  @param {string} selected - value to pre-select
+ *  @param {Object} opts - {includeReplacement:bool, placeholder:string|null}
+ */
+function buildCatOptions(selected,opts={}){
+  const {includeReplacement=false,placeholder=null}=opts;
+  let h=placeholder!==null?`<option value="">${placeholder}</option>`:'';
+  h+=Object.entries(CAT_LABELS).filter(([k])=>k&&(includeReplacement||k!=='replacement')).map(([k,v])=>`<option value="${k}"${k===selected?' selected':''}>${v}</option>`).join('');
+  return h;
 }
 let catFilter='all';
 let propFilter='all';
@@ -672,18 +730,7 @@ function toggleGroupMode(){
 function togglePropCollapse(pid){if(_collapsedProps.has(pid))_collapsedProps.delete(pid);else _collapsedProps.add(pid);renderTasks();}
 function toggleNbCollapse(nbId){if(_collapsedNbs.has(nbId))_collapsedNbs.delete(nbId);else _collapsedNbs.add(nbId);renderTasks();}
 function populatePropFilter(){
-  const sel=document.getElementById('prop-filter');if(!sel)return;
-  const prev=sel.value;
-  sel.innerHTML='<option value="all">All Properties</option>';
-  NBS.forEach(nb=>{
-    const group=document.createElement('optgroup');group.label=nb.name;
-    PROPS.filter(p=>nb.props.includes(p.id)).forEach(p=>{
-      const opt=document.createElement('option');opt.value=p.id;opt.textContent=p.name.split(' - ').pop();
-      group.appendChild(opt);
-    });
-    sel.appendChild(group);
-  });
-  sel.value=prev||'all';
+  buildPropSelect('prop-filter',{allOption:true,placeholder:null,selected:document.getElementById('prop-filter')?.value||'all'});
 }
 function setFilter(f,btn){} // kept for compatibility
 
@@ -993,7 +1040,9 @@ async function toggleDP(px){
   const popup=document.getElementById(px+'-dp-popup');
   if(popup.style.display!=='none'){popup.style.display='none';return;}
   document.querySelectorAll('.dp-popup').forEach(p=>p.style.display='none');
-  const pid=px==='f'?document.getElementById('f-property').value:px==='b'?_bulkCalProp:(tasks.find(t=>t.id===detailId)||{}).property;
+  let pid=px==='f'?document.getElementById('f-property').value:px==='b'?_bulkCalProp:(tasks.find(t=>t.id===detailId)||{}).property;
+  // If neighborhood selected, use first property for calendar preview
+  if(pid&&pid.startsWith('nb:')){const pids=expandPropValue(pid);pid=pids.length?pids[0]:null;}
   if(!pid){popup.innerHTML='<div class="dp-noprop">Please select a property first.</div>';popup.style.display='block';return;}
   // Only clear cache if it previously errored, so we retry on failure but reuse good data
   if(icalCache[pid]==='error')delete icalCache[pid];
@@ -1130,7 +1179,8 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
 }
 async function dpNav(px,dir,y,m){
   const nd=new Date(y,m+dir,1);
-  const pid=px==='f'?document.getElementById('f-property').value:px==='b'?_bulkCalProp:(tasks.find(t=>t.id===detailId)||{}).property;
+  let pid=px==='f'?document.getElementById('f-property').value:px==='b'?_bulkCalProp:(tasks.find(t=>t.id===detailId)||{}).property;
+  if(pid&&pid.startsWith('nb:')){const pids=expandPropValue(pid);pid=pids.length?pids[0]:null;}
   // If cache is missing or errored, try to fetch rather than showing empty calendar
   let evs=icalCache[pid];
   if(!evs||evs==='error'){
@@ -1567,57 +1617,46 @@ function openLogService(id){
   _logSvcRecId=id;
   document.getElementById('log-svc-title').textContent='Log Service';
   document.getElementById('log-svc-name').textContent=r.name;
-  // Property dropdown — scoped to this recurring task's properties
-  const sel=document.getElementById('log-svc-prop');
-  sel.innerHTML='<option value="">Select property...</option>';
+  // Property dropdown — scoped to this recurring task's properties, with neighborhood shortcuts
   const ps=r.properties.includes('all')?PROPS.map(p=>p.id):r.properties;
-  NBS.forEach(nb=>{
-    const nbProps=nb.props.filter(pid=>ps.includes(pid));
-    if(!nbProps.length)return;
-    const og=document.createElement('optgroup');og.label=nb.name;
-    nbProps.forEach(pid=>{const p=getProp(pid);if(p){const o=document.createElement('option');o.value=pid;o.textContent=p.name.split(' - ').pop();og.appendChild(o);}});
-    sel.appendChild(og);
-  });
-  // If only one property, auto-select it
-  if(ps.length===1)sel.value=ps[0];
+  buildPropSelect('log-svc-prop',{neighborhoods:true,scope:ps,selected:ps.length===1?ps[0]:null});
   // Date defaults to today
   document.getElementById('log-svc-date').value=new Date().toISOString().slice(0,10);
   // Vendor datalist + pre-fill default vendor
-  const dl=document.getElementById('log-svc-vendor-list');
-  dl.innerHTML=vendors.map(v=>`<option value="${v.name}">${v.name} — ${v.role}</option>`).join('');
+  document.getElementById('log-svc-vendor-list').innerHTML=buildVendorOpts();
   document.getElementById('log-svc-vendor').value=r.vendor||'';
   document.getElementById('log-svc-modal').classList.add('open');
 }
 async function saveLogService(){
   const r=recurring.find(x=>x.id===_logSvcRecId);if(!r){showToast('Error: recurring task not found.','err');return;}
-  const pid=document.getElementById('log-svc-prop').value;
+  const sel=document.getElementById('log-svc-prop').value;
   const date=document.getElementById('log-svc-date').value;
   const vendor=document.getElementById('log-svc-vendor').value.trim();
-  if(!pid){showToast('Property is required.','err');return;}
+  if(!sel){showToast('Property is required.','err');return;}
   if(!date){showToast('Date is required.','err');return;}
-  // Build completed task
-  const t={
-    id:Date.now().toString()+Math.random().toString(36).slice(2,6),
-    property:pid,guest:'',problem:r.name,category:r.category||'',
-    status:'complete',date,vendor,urgent:false,recurring:true,
-    notes:[{text:'Logged via Log Service.',type:'admin',time:new Date().toISOString()}],
-    vendorNotes:'',created:new Date().toISOString()
-  };
-  // For HVAC filter tasks, set the filter flag so writeback fires
-  if(r.category==='hvac'&&/filter/i.test(r.name)){
-    t.filter_service_bundled=true;
+  const allowed=r.properties.includes('all')?PROPS.map(p=>p.id):r.properties;
+  const pids=expandPropValue(sel,allowed);
+  if(!pids.length){showToast('No properties found.','err');return;}
+  const isFilter=r.category==='hvac'&&/filter/i.test(r.name);
+  const now=new Date().toISOString();
+  for(const pid of pids){
+    const t={
+      id:Date.now().toString()+Math.random().toString(36).slice(2,6)+pid,
+      property:pid,guest:'',problem:r.name,category:r.category||'',
+      status:'complete',date,vendor,urgent:false,recurring:true,
+      notes:[{text:'Logged via Log Service.',type:'admin',time:now}],
+      vendorNotes:'',created:now
+    };
+    if(isFilter)t.filter_service_bundled=true;
+    tasks.unshift(t);
+    if(t.filter_service_bundled)await fsOnTaskComplete(t);
   }
-  tasks.unshift(t);
   await saveTasks();
-  // Fire filter writeback if applicable
-  if(t.filter_service_bundled){
-    await fsOnTaskComplete(t);
-  }
   closeModal('log-svc-modal');
   _logSvcRecId=null;
   renderAll();
-  const pName=getProp(pid);
-  showToast(`Service logged: ${pName?pName.name.split(' - ').pop():pid}`);
+  if(pids.length===1){const p=getProp(pids[0]);showToast(`Service logged: ${p?p.name:pids[0]}`);}
+  else showToast(`Service logged: ${pids.length} properties`);
 }
 
 async function genFromRec(id){
@@ -1713,20 +1752,31 @@ function openAddTask(propId){
   else document.getElementById('f-property').value='';
 }
 async function saveTask(){
-  const pid=document.getElementById('f-property').value;const prob=document.getElementById('f-problem').value.trim();
-  if(!pid||!prob){showToast('Property and problem are required.','err');return;}
+  const propVal=document.getElementById('f-property').value;const prob=document.getElementById('f-problem').value.trim();
+  if(!propVal||!prob){showToast('Property and problem are required.','err');return;}
+  const pids=expandPropValue(propVal);
+  if(!pids.length){showToast('No properties found.','err');return;}
   const nt=document.getElementById('f-notes').value.trim();
   const fDate=document.getElementById('f-date').value;
   let fStatus=document.getElementById('f-status').value;
   // Auto-advance: if a date is set and status is still open, mark as scheduled
   if(fDate&&fStatus==='open')fStatus='scheduled';
   const fCat=document.getElementById('f-category').value;
-  const t={id:Date.now().toString(),property:pid,guest:document.getElementById('f-guest').value.trim(),problem:prob,category:fCat,status:fStatus,date:fDate,vendor:document.getElementById('f-vendor').value.trim(),urgent:document.getElementById('f-urgent').checked,recurring:false,notes:nt?[{text:nt,type:'admin',time:new Date().toISOString()}]:[],vendorNotes:'',created:new Date().toISOString()};
-  // Auto-init purchase tracking for replacement tasks
-  if(fCat==='replacement'){t.purchaseNote=prob;t.purchaseStatus='needed';t.purchaser='owner';}
-  // Deploy 2: bundle filter service into this task if the user checked the bundler
-  if(typeof fsMaybeStampTask==='function')fsMaybeStampTask(t);
-  tasks.unshift(t);await saveTasks();closeModal('task-modal');renderAll();renderReplacements();showToast('Task created.');
+  const guest=document.getElementById('f-guest').value.trim();
+  const vendor=document.getElementById('f-vendor').value.trim();
+  const urgent=document.getElementById('f-urgent').checked;
+  const now=new Date().toISOString();
+  for(const pid of pids){
+    const t={id:Date.now().toString()+Math.random().toString(36).slice(2,6)+pid,property:pid,guest,problem:prob,category:fCat,status:fStatus,date:fDate,vendor,urgent,recurring:false,notes:nt?[{text:nt,type:'admin',time:now}]:[],vendorNotes:'',created:now};
+    // Auto-init purchase tracking for replacement tasks
+    if(fCat==='replacement'){t.purchaseNote=prob;t.purchaseStatus='needed';t.purchaser='owner';}
+    // Deploy 2: bundle filter service into this task if the user checked the bundler
+    if(typeof fsMaybeStampTask==='function')fsMaybeStampTask(t);
+    tasks.unshift(t);
+  }
+  await saveTasks();closeModal('task-modal');renderAll();renderReplacements();
+  if(pids.length===1)showToast('Task created.');
+  else showToast(`${pids.length} tasks created.`);
 }
 
 // DETAIL
@@ -1738,7 +1788,7 @@ async function openDetail(id){
   document.getElementById('d-prop').style.display='';
   // Populate property dropdown
   const propSel=document.getElementById('d-prop-select');
-  propSel.innerHTML=PROPS.map(pr=>`<option value="${pr.id}"${pr.id===t.property?' selected':''}>${pr.name}</option>`).join('');
+  buildPropSelect(propSel,{placeholder:null,selected:t.property});
   propSel.style.display='none';
   document.getElementById('d-title').textContent=t.problem;
   document.getElementById('d-status').value=t.status;
@@ -3388,21 +3438,26 @@ let histFormOpen=false;
 function toggleHistForm(){histFormOpen=!histFormOpen;renderHistory();}
 async function saveHistTask(){
   const date=document.getElementById('h-date').value;
-  const pid=document.getElementById('h-prop').value;
+  const propVal=document.getElementById('h-prop').value;
   const cat=document.getElementById('h-cat').value;
   const desc=document.getElementById('h-desc').value.trim();
   const vendor=document.getElementById('h-vendor').value.trim();
-  if(!date||!pid||!desc){showToast('Date, property, and description are required.','err');return;}
-  const t={id:Date.now().toString(),property:pid,guest:'',problem:desc,category:cat,status:'complete',date,vendor,urgent:false,recurring:false,notes:[{text:'Added as historical record.',type:'admin',time:new Date().toISOString()}],vendorNotes:'',created:new Date().toISOString()};
-  tasks.unshift(t);await saveTasks();
-  histFormOpen=false;renderAll();showToast('Historical task added.');
+  if(!date||!propVal||!desc){showToast('Date, property, and description are required.','err');return;}
+  const pids=expandPropValue(propVal);
+  if(!pids.length){showToast('No properties found.','err');return;}
+  const now=new Date().toISOString();
+  for(const pid of pids){
+    const t={id:Date.now().toString()+Math.random().toString(36).slice(2,6)+pid,property:pid,guest:'',problem:desc,category:cat,status:'complete',date,vendor,urgent:false,recurring:false,notes:[{text:'Added as historical record.',type:'admin',time:now}],vendorNotes:'',created:now};
+    tasks.unshift(t);
+  }
+  await saveTasks();
+  histFormOpen=false;renderAll();
+  if(pids.length===1)showToast('Historical task added.');
+  else showToast(`${pids.length} historical tasks added.`);
 }
 function buildHistForm(){
-  const propOpts=NBS.map(nb=>{
-    const opts=nb.props.map(pid=>{const p=getProp(pid);return p?`<option value="${pid}">${p.name.split(' - ').pop()}</option>`:''}).join('');
-    return`<optgroup label="${nb.name}">${opts}</optgroup>`;
-  }).join('');
-  const vendorOpts=vendors.map(v=>`<option value="${v.name}">${v.name} — ${v.role}</option>`).join('');
+  const vendorOpts=buildVendorOpts();
+  setTimeout(()=>buildPropSelect('h-prop',{neighborhoods:true}),0);
   return`<div style="background:var(--gold-pale);border:1px solid var(--gold-light);border-radius:var(--radius);padding:16px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--green)">Add Historical Record</div>
@@ -3410,7 +3465,7 @@ function buildHistForm(){
     </div>
     <div style="display:grid;grid-template-columns:140px 1fr 140px;gap:10px;margin-bottom:10px">
       <div><label style="font-size:.68rem;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:3px">Date</label><input type="date" id="h-date" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:.8rem"></div>
-      <div><label style="font-size:.68rem;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:3px">Property</label><select id="h-prop" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:.8rem"><option value="">Select...</option>${propOpts}</select></div>
+      <div><label style="font-size:.68rem;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:3px">Property</label><select id="h-prop" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:.8rem"></select></div>
       <div><label style="font-size:.68rem;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:3px">Category</label><select id="h-cat" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:.8rem">${buildCatOptions('handyman')}</select></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 200px;gap:10px;margin-bottom:12px">
@@ -4276,23 +4331,7 @@ async function clFetch() {
 }
 
 function populateClPropFilter() {
-  const sel = document.getElementById('cl-prop-filter');
-  if (!sel) return;
-  sel.innerHTML = '<option value="all">All Properties</option>';
-  NBS.forEach(nb => {
-    const og = document.createElement('optgroup');
-    og.label = nb.name;
-    nb.props.forEach(pid => {
-      const p = getProp(pid);
-      if (!p) return;
-      const count = clData.filter(e => e.pid === pid).length;
-      const o = document.createElement('option');
-      o.value = pid;
-      o.textContent = p.name + (count ? ` (${count})` : '');
-      og.appendChild(o);
-    });
-    sel.appendChild(og);
-  });
+  buildPropSelect('cl-prop-filter',{allOption:true,placeholder:null,countFn:pid=>clData.filter(e=>e.pid===pid).length});
 }
 
 // Track whether we're in property detail view (null = overview, string = pid)
@@ -5449,25 +5488,8 @@ function rpSetPhase(phase) {
 }
 
 function populateRpPropFilter() {
-  const sel = document.getElementById('rp-prop-filter');
-  if (!sel) return;
-  const current = sel.value;
-  sel.innerHTML = '<option value="all">All Properties</option>';
   const repTasks = getReplacementTasks();
-  NBS.forEach(nb => {
-    const og = document.createElement('optgroup');
-    og.label = nb.name;
-    nb.props.forEach(pid => {
-      const p = getProp(pid); if (!p) return;
-      const count = repTasks.filter(t => t.property === pid && (t.purchaseStatus === 'needed' || !t.purchaseStatus)).length;
-      const o = document.createElement('option');
-      o.value = pid;
-      o.textContent = p.name + (count ? ` (${count})` : '');
-      og.appendChild(o);
-    });
-    sel.appendChild(og);
-  });
-  sel.value = current || 'all';
+  buildPropSelect('rp-prop-filter',{allOption:true,placeholder:null,selected:document.getElementById('rp-prop-filter')?.value||'all',countFn:pid=>repTasks.filter(t=>t.property===pid&&(t.purchaseStatus==='needed'||!t.purchaseStatus)).length});
 }
 
 // ── Open the new-task modal pre-filled for a replacement ──
@@ -6655,6 +6677,9 @@ async function initApp(){
   populatePropSel('f-property');
   populatePropMulti('r-props');
   populatePropFilter();
+  // Populate category dropdowns from CAT_LABELS (single source of truth)
+  document.getElementById('f-category').innerHTML=buildCatOptions('',{includeReplacement:true,placeholder:'Select category'});
+  document.getElementById('d-category').innerHTML=buildCatOptions('',{includeReplacement:true,placeholder:'No category'});
   renderAll();
   hbStartPolling();
   await loadVendorReports(); // load vendor field reports
@@ -8239,8 +8264,12 @@ function fsRenderPanel(profile) {
 function fsRenderBundlerInline() {
   const wrap = document.getElementById('f-fs-bundler');
   if (!wrap) return;
-  const pid = document.getElementById('f-property').value;
-  if (!pid || !PP || !PP[pid]) { wrap.innerHTML = ''; return; }
+  const val = document.getElementById('f-property').value;
+  if (!val || !PP) { wrap.innerHTML = ''; return; }
+  // If neighborhood selected, show bundler for first property as preview (task fan-out handles all)
+  const pids = expandPropValue(val);
+  const pid = pids.length ? pids[0] : null;
+  if (!pid || !PP[pid]) { wrap.innerHTML = ''; return; }
   const s = fsStatus(PP[pid]);
   if (s.state !== 'bundle' && s.state !== 'extreme') { wrap.innerHTML = ''; return; }
   const lab = fsStateLabel(s.state);
@@ -8437,7 +8466,7 @@ async function fsOnTaskComplete(task) {
       property_id: task.property,
       path: 'hvac.filter_service.last_service_date',
       old_value: prev,
-      new_value: today,
+      new_value: serviceDate,
       source: 'task_complete',
       task_id: task.id,
     });
