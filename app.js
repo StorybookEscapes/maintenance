@@ -187,8 +187,12 @@ function populateCategoryDropdowns() {
 
 async function saveSettings() {
   try {
-    await S.set('se_settings', JSON.stringify(appSettings));
-    showToast('Settings saved');
+    const ok = await S.set('se_settings', JSON.stringify(appSettings));
+    if (ok) {
+      showToast('Settings saved');
+    } else {
+      showToast('⚠️ Settings may not have saved — try again');
+    }
   } catch (e) {
     console.error('Failed to save settings:', e.message);
     showToast('Failed to save settings');
@@ -274,7 +278,7 @@ function renderCategorySettings() {
 }
 
 function settingsUpdateCatLabel(idx, label) {
-  if (VCAT[idx]) VCAT[idx].label = label;
+  if (VCAT[idx]) { VCAT[idx].label = label; saveCategorySettings(); }
 }
 
 function settingsRemoveCategory(idx) {
@@ -283,6 +287,7 @@ function settingsRemoveCategory(idx) {
   if (!confirm(`Remove category "${cat.label}"? Existing tasks with this category will keep it but it won't appear in dropdowns.`)) return;
   VCAT.splice(idx, 1);
   renderCategorySettings();
+  saveCategorySettings(); // auto-save on remove
 }
 
 function settingsAddCategory() {
@@ -295,6 +300,7 @@ function settingsAddCategory() {
   VCAT.push({ id, label });
   idEl.value = ''; labelEl.value = '';
   renderCategorySettings();
+  saveCategorySettings(); // auto-save on add
 }
 
 function saveCategorySettings() {
@@ -320,11 +326,11 @@ function renderProjectTypeSettings() {
 }
 
 function settingsUpdatePTypeLabel(idx, label) {
-  if (PROJECT_TYPES[idx]) PROJECT_TYPES[idx].label = label;
+  if (PROJECT_TYPES[idx]) { PROJECT_TYPES[idx].label = label; saveProjectTypeSettings(); }
 }
 
 function settingsUpdatePTypeReport(idx, hasReport) {
-  if (PROJECT_TYPES[idx]) PROJECT_TYPES[idx].hasReport = hasReport;
+  if (PROJECT_TYPES[idx]) { PROJECT_TYPES[idx].hasReport = hasReport; saveProjectTypeSettings(); }
 }
 
 function settingsRemoveProjectType(idx) {
@@ -333,6 +339,7 @@ function settingsRemoveProjectType(idx) {
   if (!confirm(`Remove project type "${pt.label}"?`)) return;
   PROJECT_TYPES.splice(idx, 1);
   renderProjectTypeSettings();
+  saveProjectTypeSettings(); // auto-save on remove
 }
 
 function settingsAddProjectType() {
@@ -347,6 +354,7 @@ function settingsAddProjectType() {
   PROJECT_TYPES.push({ id, label, hasReport });
   idEl.value = ''; labelEl.value = ''; reportEl.checked = false;
   renderProjectTypeSettings();
+  saveProjectTypeSettings(); // auto-save on add
 }
 
 function saveProjectTypeSettings() {
