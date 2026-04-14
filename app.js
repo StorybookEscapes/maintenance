@@ -44,7 +44,7 @@ const PROPS = [
   {id:'prc4',name:'PRC - 4 - Snuggle Shack',address:'1627 Paradise Ridge Dr. Unit 4',door:'1474'},
   {id:'prc5',name:'PRC - 5 - Pink Paradise',address:'1627 Paradise Ridge Dr. Unit 5',door:'1475'},
   {id:'prc6',name:"PRC - 6 - Ringbearer's Roost",address:'1627 Paradise Ridge Dr. Unit 6',door:'1476'},
-  {id:'umc10',name:'UMC - 10 - The Whispering Wand',address:'1181 Upper Middle Creek Rd., Cabin 10',door:'5582'},
+  {id:'umc10',name:'UMC - 10: The Whispering Wand',address:'1181 Upper Middle Creek Rd., Cabin 10',door:'5582'},
   {id:'umc20',name:'UMC - 20 - Honey Haven',address:'1181 Upper Middle Creek Rd., Cabin 20',door:'5583'},
   {id:'umc30',name:'UMC - 30 - Rebel Refuge',address:'1181 Upper Middle Creek Rd., Cabin 30',door:'5584'},
   {id:'umc40',name:'UMC - 40 - Lookout on the Roadside',address:'1181 Upper Middle Creek Rd., Cabin 40',door:'5581'},
@@ -91,7 +91,7 @@ const DEF_RECURRING = [
   {id:'rc7',name:'Smoke & CO Detector Battery Replacement',properties:['all'],category:'electrical',frequency:'annual',vendor:'',notes:'Replace batteries in all smoke and CO detectors.',nextDue:'2026-10-01'},
   {id:'rc8',name:'Bed Bug Prevention — Bearadise Lodge',properties:['bearadise'],category:'bed_bugs',frequency:'monthly',vendor:'All About Bugs',notes:'Bearadise Lodge had bed bugs twice (2023, 2025). Monthly prevention treatment.',nextDue:'2026-05-01'},
 ];
-const VCAT = [
+const DEFAULT_VCAT = [
   {id:'cleaning',label:'Cleaning'},{id:'handyman',label:'Handyman'},
   {id:'plumbing',label:'Plumbing'},{id:'hvac',label:'HVAC / Electrical'},
   {id:'pest',label:'Pest Control'},{id:'landscaping',label:'Landscaping'},
@@ -100,6 +100,267 @@ const VCAT = [
   {id:'water',label:'Water Filtration'},{id:'bed_bugs',label:'Bed Bugs'},
   {id:'other',label:'Other'},
 ];
+let VCAT = [...DEFAULT_VCAT];
+
+const DEFAULT_PROJECT_TYPES = [
+  {id:'inspection',label:'Inspection',hasReport:true},
+  {id:'renovation',label:'Renovation',hasReport:false},
+  {id:'compliance',label:'Compliance',hasReport:false},
+  {id:'other',label:'Other',hasReport:false},
+];
+let PROJECT_TYPES = [...DEFAULT_PROJECT_TYPES];
+
+// ── App Settings (persisted to KV as se_settings) ──────────────
+let appSettings = {
+  vendorCategories: null,      // null = use DEFAULT_VCAT
+  projectTypes: null,          // null = use DEFAULT_PROJECT_TYPES
+  guestAlert: {
+    mode: 'all',               // 'all' | 'tagged' — 'all' = current behavior, 'tagged' = only tasks with guestAlert flag
+    lookAhead: 2,              // days ahead to check for arrivals
+    excludeCategories: [],     // categories to exclude from alerts
+  },
+  vendorSheetFields: ['address','doorCode'],  // which fields to show on vendor task sheets
+  vendorSheetFieldOptions: [
+    {id:'address',label:'Address',default:true},
+    {id:'doorCode',label:'Door Code',default:true},
+    {id:'wifi_name',label:'WiFi Network',default:false},
+    {id:'wifi_password',label:'WiFi Password',default:false},
+    {id:'checkout_time',label:'Checkout Time',default:false},
+    {id:'checkin_time',label:'Check-in Time',default:false},
+    {id:'parking',label:'Parking Info',default:false},
+    {id:'lockbox',label:'Lockbox Location',default:false},
+    {id:'trash_day',label:'Trash Day',default:false},
+    {id:'special_notes',label:'Special Notes',default:false},
+  ],
+};
+
+async function loadSettings() {
+  try {
+    const raw = await S.get('se_settings');
+    if (raw && raw.value) {
+      const parsed = typeof raw.value === 'string' ? JSON.parse(raw.value) : raw.value;
+      // Merge with defaults (so new fields don't break old saved settings)
+      if (parsed.vendorCategories) appSettings.vendorCategories = parsed.vendorCategories;
+      if (parsed.projectTypes) appSettings.projectTypes = parsed.projectTypes;
+      if (parsed.guestAlert) appSettings.guestAlert = { ...appSettings.guestAlert, ...parsed.guestAlert };
+      if (parsed.vendorSheetFields) appSettings.vendorSheetFields = parsed.vendorSheetFields;
+    }
+  } catch (e) { console.warn('Failed to load settings:', e.message); }
+
+  // Apply dynamic categories
+  if (appSettings.vendorCategories && appSettings.vendorCategories.length) {
+    VCAT = appSettings.vendorCategories;
+  }
+  // Apply dynamic project types
+  if (appSettings.projectTypes && appSettings.projectTypes.length) {
+    PROJECT_TYPES = appSettings.projectTypes;
+  }
+  // Rebuild CAT_LABELS from VCAT
+  rebuildCatLabels();
+  // Populate dynamic dropdowns
+  populateCategoryDropdowns();
+  // Render settings panels if they exist in the DOM (handles page refresh while on Settings tab)
+  if (document.getElementById('set-ga-mode')) renderSettingsOnSwitch();
+}
+
+function rebuildCatLabels() {
+  // Clear and rebuild from VCAT (keep replacement and uncategorized as system entries)
+  const keys = Object.keys(CAT_LABELS);
+  keys.forEach(k => { if (k !== 'replacement' && k !== '') delete CAT_LABELS[k]; });
+  VCAT.forEach(c => { CAT_LABELS[c.id] = c.label; });
+  if (!CAT_LABELS['']) CAT_LABELS[''] = 'Uncategorized';
+  if (!CAT_LABELS['replacement']) CAT_LABELS['replacement'] = 'Replacement';
+}
+
+function populateCategoryDropdowns() {
+  // Populate all category <select> elements with current VCAT
+  ['f-category', 'd-category'].forEach(selId => {
+    const sel = document.getElementById(selId);
+    if (!sel) return;
+    const currentVal = sel.value;
+    const firstOpt = selId === 'f-category' ? '<option value="">Select category</option>' : '<option value="">No category</option>';
+    sel.innerHTML = firstOpt + '<option value="replacement">Replacement</option>' +
+      VCAT.map(c => `<option value="${c.id}">${c.label}</option>`).join('');
+    sel.value = currentVal; // restore selection
+  });
+}
+
+async function saveSettings() {
+  try {
+    const ok = await S.set('se_settings', JSON.stringify(appSettings));
+    if (ok) {
+      showToast('Settings saved');
+    } else {
+      showToast('⚠️ Settings may not have saved — try again');
+    }
+  } catch (e) {
+    console.error('Failed to save settings:', e.message);
+    showToast('Failed to save settings');
+  }
+}
+
+// ── Settings Panel Renderers ──────────────────────────────────
+
+function renderSettingsOnSwitch() {
+  renderGuestAlertSettings();
+  renderVendorSheetFieldSettings();
+  renderCategorySettings();
+  renderProjectTypeSettings();
+}
+
+// -- Guest Alert Settings --
+function renderGuestAlertSettings() {
+  const ga = appSettings.guestAlert || {};
+  const modeEl = document.getElementById('set-ga-mode');
+  const laEl = document.getElementById('set-ga-lookahead');
+  if (modeEl) modeEl.value = ga.mode || 'all';
+  if (laEl) laEl.value = ga.lookAhead || 2;
+  // Render exclude category checkboxes
+  const wrap = document.getElementById('set-ga-exclude-cats');
+  if (!wrap) return;
+  const excluded = ga.excludeCategories || [];
+  wrap.innerHTML = VCAT.map(c =>
+    `<label style="font-size:.74rem;color:var(--text2);display:flex;align-items:center;gap:4px;padding:4px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer">
+      <input type="checkbox" data-cat="${c.id}" ${excluded.includes(c.id) ? 'checked' : ''}> ${c.label}
+    </label>`
+  ).join('');
+}
+
+function settingsUpdateGA() {
+  // Live preview — updates appSettings but doesn't save
+}
+
+function saveGuestAlertSettings() {
+  const mode = document.getElementById('set-ga-mode').value;
+  const lookAhead = parseInt(document.getElementById('set-ga-lookahead').value) || 2;
+  const excludeCategories = [];
+  document.querySelectorAll('#set-ga-exclude-cats input[type=checkbox]:checked').forEach(cb => {
+    excludeCategories.push(cb.dataset.cat);
+  });
+  appSettings.guestAlert = { mode, lookAhead, excludeCategories };
+  saveSettings();
+  gaFetch(); // re-run to apply changes
+}
+
+// -- Vendor Task Sheet Field Settings --
+function renderVendorSheetFieldSettings() {
+  const wrap = document.getElementById('set-vs-fields');
+  if (!wrap) return;
+  const active = appSettings.vendorSheetFields || ['address', 'doorCode'];
+  const options = appSettings.vendorSheetFieldOptions || [];
+  wrap.innerHTML = options.map(opt =>
+    `<label style="font-size:.78rem;color:var(--text);display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer">
+      <input type="checkbox" data-field="${opt.id}" ${active.includes(opt.id) ? 'checked' : ''}> ${opt.label}
+    </label>`
+  ).join('');
+}
+
+function saveVendorSheetFieldSettings() {
+  const fields = [];
+  document.querySelectorAll('#set-vs-fields input[type=checkbox]:checked').forEach(cb => {
+    fields.push(cb.dataset.field);
+  });
+  appSettings.vendorSheetFields = fields;
+  saveSettings();
+}
+
+// -- Vendor Category Settings --
+function renderCategorySettings() {
+  const wrap = document.getElementById('set-vcat-list');
+  if (!wrap) return;
+  wrap.innerHTML = VCAT.map((c, i) =>
+    `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px">
+      <span style="font-size:.72rem;color:var(--text3);width:100px;font-family:monospace">${c.id}</span>
+      <input type="text" value="${c.label}" data-cat-idx="${i}" style="flex:1;padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-size:.78rem;font-family:inherit" onchange="settingsUpdateCatLabel(${i},this.value)">
+      <button class="btn btn-red" onclick="settingsRemoveCategory(${i})" style="padding:2px 8px;font-size:.68rem">Remove</button>
+    </div>`
+  ).join('');
+}
+
+function settingsUpdateCatLabel(idx, label) {
+  if (VCAT[idx]) { VCAT[idx].label = label; saveCategorySettings(); }
+}
+
+function settingsRemoveCategory(idx) {
+  if (VCAT.length <= 1) { showToast('Must keep at least one category'); return; }
+  const cat = VCAT[idx];
+  if (!confirm(`Remove category "${cat.label}"? Existing tasks with this category will keep it but it won't appear in dropdowns.`)) return;
+  VCAT.splice(idx, 1);
+  renderCategorySettings();
+  saveCategorySettings(); // auto-save on remove
+}
+
+function settingsAddCategory() {
+  const idEl = document.getElementById('set-vcat-new-id');
+  const labelEl = document.getElementById('set-vcat-new-label');
+  const id = idEl.value.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+  const label = labelEl.value.trim();
+  if (!id || !label) { showToast('Both ID and label are required'); return; }
+  if (VCAT.some(c => c.id === id)) { showToast('Category ID already exists'); return; }
+  VCAT.push({ id, label });
+  idEl.value = ''; labelEl.value = '';
+  renderCategorySettings();
+  saveCategorySettings(); // auto-save on add
+}
+
+function saveCategorySettings() {
+  appSettings.vendorCategories = [...VCAT];
+  rebuildCatLabels();
+  populateCategoryDropdowns();
+  saveSettings();
+  renderVendors();
+}
+
+// -- Project Type Settings --
+function renderProjectTypeSettings() {
+  const wrap = document.getElementById('set-ptype-list');
+  if (!wrap) return;
+  wrap.innerHTML = PROJECT_TYPES.map((pt, i) =>
+    `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px">
+      <span style="font-size:.72rem;color:var(--text3);width:100px;font-family:monospace">${pt.id}</span>
+      <input type="text" value="${pt.label}" data-ptype-idx="${i}" style="flex:1;padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-size:.78rem;font-family:inherit" onchange="settingsUpdatePTypeLabel(${i},this.value)">
+      <label style="font-size:.72rem;color:var(--text2);display:flex;align-items:center;gap:4px;white-space:nowrap"><input type="checkbox" ${pt.hasReport ? 'checked' : ''} onchange="settingsUpdatePTypeReport(${i},this.checked)"> Report</label>
+      <button class="btn btn-red" onclick="settingsRemoveProjectType(${i})" style="padding:2px 8px;font-size:.68rem">Remove</button>
+    </div>`
+  ).join('');
+}
+
+function settingsUpdatePTypeLabel(idx, label) {
+  if (PROJECT_TYPES[idx]) { PROJECT_TYPES[idx].label = label; saveProjectTypeSettings(); }
+}
+
+function settingsUpdatePTypeReport(idx, hasReport) {
+  if (PROJECT_TYPES[idx]) { PROJECT_TYPES[idx].hasReport = hasReport; saveProjectTypeSettings(); }
+}
+
+function settingsRemoveProjectType(idx) {
+  if (PROJECT_TYPES.length <= 1) { showToast('Must keep at least one project type'); return; }
+  const pt = PROJECT_TYPES[idx];
+  if (!confirm(`Remove project type "${pt.label}"?`)) return;
+  PROJECT_TYPES.splice(idx, 1);
+  renderProjectTypeSettings();
+  saveProjectTypeSettings(); // auto-save on remove
+}
+
+function settingsAddProjectType() {
+  const idEl = document.getElementById('set-ptype-new-id');
+  const labelEl = document.getElementById('set-ptype-new-label');
+  const reportEl = document.getElementById('set-ptype-new-report');
+  const id = idEl.value.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+  const label = labelEl.value.trim();
+  const hasReport = reportEl.checked;
+  if (!id || !label) { showToast('Both ID and label are required'); return; }
+  if (PROJECT_TYPES.some(pt => pt.id === id)) { showToast('Project type ID already exists'); return; }
+  PROJECT_TYPES.push({ id, label, hasReport });
+  idEl.value = ''; labelEl.value = ''; reportEl.checked = false;
+  renderProjectTypeSettings();
+  saveProjectTypeSettings(); // auto-save on add
+}
+
+function saveProjectTypeSettings() {
+  appSettings.projectTypes = [...PROJECT_TYPES];
+  saveSettings();
+}
 
 // STATE
 let tasks=[], vendors=[], recurring=[], filter='all', detailId=null, selProp=null, histCat='all';
@@ -241,8 +502,33 @@ function updateSyncStatus(state){
   dot.title=titles[state]||'';
 }
 
+// ── Data-safety flags ──
+// tasksLoadedOk is ONLY set true when se_t is successfully read from KV.
+// If the initial load fails, saveTasks() is blocked to prevent background
+// processes (HostBuddy auto-import, migrations) from overwriting the real
+// task list with a small/empty array.  2026-04-11 post-mortem fix.
+let tasksLoadedOk = false;
+let _tasksLoadedCount = 0; // how many tasks were in KV at boot
+
 async function load() {
-  try{const r=await S.get('se_t');if(r)tasks=JSON.parse(r.value);}catch(e){tasks=[];}
+  try {
+    const r = await S.get('se_t');
+    if (r) {
+      tasks = JSON.parse(r.value);
+      tasksLoadedOk = true;
+      _tasksLoadedCount = tasks.length;
+    } else {
+      // Key exists but is empty/null — treat as valid empty state
+      tasks = [];
+      tasksLoadedOk = true;
+      _tasksLoadedCount = 0;
+    }
+  } catch(e) {
+    // Load FAILED — do NOT set tasksLoadedOk, block all writes
+    console.error('[SAFETY] se_t load failed — task writes are BLOCKED until page reload with working connection:', e);
+    tasks = [];
+    tasksLoadedOk = false;
+  }
   try{const r=await S.get('se_v');if(r)vendors=JSON.parse(r.value);else{vendors=JSON.parse(JSON.stringify(DEF_VENDORS));await save('se_v',vendors);}}catch(e){vendors=JSON.parse(JSON.stringify(DEF_VENDORS));}
   try{const r=await S.get('se_r');if(r)recurring=JSON.parse(r.value);else{recurring=JSON.parse(JSON.stringify(DEF_RECURRING));await save('se_r',recurring);}}catch(e){recurring=JSON.parse(JSON.stringify(DEF_RECURRING));}
   // Property Bible (se_pp) is normally lazy-loaded when Chip opens the
@@ -253,11 +539,70 @@ async function load() {
   try{if(typeof ppLoadIfNeeded==='function')await ppLoadIfNeeded();}catch(e){}
   // Projects
   try{if(typeof pjLoad==='function')await pjLoad();}catch(e){}
+  // Task change log
+  try{await loadTaskLog();}catch(e){}
 }
 async function save(k,v){try{await S.set(k,JSON.stringify(v));}catch(e){}}
-const saveTasks=()=>save('se_t',tasks);
+
+// ── Safe task save with shrinkage guard ──
+// Prevents catastrophic overwrites: if the task array shrank by more than
+// 50% compared to what was loaded, require explicit confirmation.
+const saveTasks = async () => {
+  if (!tasksLoadedOk) {
+    console.error('[SAFETY] saveTasks() BLOCKED — initial load failed. Reload the page with a working connection.');
+    showToast('\u26a0\ufe0f Task save blocked — data did not load properly. Please reload.','','',8000);
+    return;
+  }
+  // Shrinkage guard: if we loaded N tasks and now have much fewer, warn
+  if (_tasksLoadedCount > 5 && tasks.length < _tasksLoadedCount * 0.5) {
+    console.error(`[SAFETY] saveTasks() BLOCKED — drastic shrinkage detected (${_tasksLoadedCount} → ${tasks.length}). This looks like accidental data loss.`);
+    showToast(`\u26a0\ufe0f Save blocked: task count dropped from ${_tasksLoadedCount} to ${tasks.length}. This may be a bug — reload to recover.`,'','',10000);
+    return;
+  }
+  await save('se_t', tasks);
+};
 const saveVendors=()=>save('se_v',vendors);
 const saveRec=()=>save('se_r',recurring);
+
+// ── Task Change Log ──────────────────────────────────────────
+// Persistent audit trail stored in se_t_log (separate from task data).
+// Each entry: { ts, action, taskId, property, vendor, date, problem, by }
+// Kept trimmed to last 500 entries to stay within free-tier KV limits.
+let _taskLog = [];
+let _taskLogLoaded = false;
+
+async function loadTaskLog() {
+  try {
+    const r = await S.get('se_t_log');
+    if (r) _taskLog = JSON.parse(r.value);
+    else _taskLog = [];
+    _taskLogLoaded = true;
+  } catch(e) { _taskLog = []; _taskLogLoaded = true; }
+}
+
+async function saveTaskLog() {
+  if (!_taskLogLoaded) return;
+  // Trim to most recent 500 entries
+  if (_taskLog.length > 500) _taskLog = _taskLog.slice(-500);
+  await save('se_t_log', _taskLog);
+}
+
+function logTaskChange(action, t) {
+  if (!t) return;
+  const entry = {
+    ts: new Date().toISOString(),
+    action,               // 'created','completed','deleted','updated','bulk_complete','bulk_delete'
+    taskId: t.id || '',
+    property: t.property || '',
+    vendor: t.vendor || '',
+    date: t.date || '',
+    problem: (t.problem || '').slice(0, 120),
+    by: (typeof getCurrentUserName === 'function' ? getCurrentUserName() : 'admin')
+  };
+  _taskLog.push(entry);
+  // Fire-and-forget save — don't block the UI
+  saveTaskLog();
+}
 
 // HELPERS
 // Lookup maps — O(1) instead of linear search on every call
@@ -285,69 +630,21 @@ function switchView(name,btn){
   if (name === 'properties' && typeof ppLoadIfNeeded === 'function') ppLoadIfNeeded();
   // Projects — refresh list
   if (name === 'projects' && typeof pjRenderList === 'function') pjRenderList();
+  // Settings — render dynamic settings panels
+  if (name === 'settings' && typeof renderSettingsOnSwitch === 'function') renderSettingsOnSwitch();
 }
 // Navigate to Recurring view without a nav button (it's been removed from the main nav)
 function goToRecurring(){switchView('recurring');window.scrollTo(0,0);}
 
-/**
- * Shared property dropdown builder. One function, every callsite.
- * @param {string|HTMLElement} el - element ID or element
- * @param {Object} opts
- *   placeholder  {string}  first option text (default "Select property...")
- *   allOption    {boolean} prepend "All Properties" option with value "all"
- *   neighborhoods {boolean} add selectable "▶ All <name>" per group
- *   scope        {string[]} limit to these property IDs (null = all)
- *   selected     {string}  value to pre-select after building
- *   countFn      {function(pid)=>number} append count to label if > 0
- *   showSub      {boolean} append " — <sub>" to group label
- */
-function buildPropSelect(el,opts={}){
-  const s=typeof el==='string'?document.getElementById(el):el;
-  if(!s)return;
-  const {placeholder='Select property...',allOption=false,neighborhoods=false,scope=null,selected=null,countFn=null,showSub=false}=opts;
-  const prev=selected!==undefined&&selected!==null?selected:s.value;
-  s.innerHTML='';
-  if(allOption)s.innerHTML='<option value="all">All Properties</option>';
-  else if(placeholder)s.innerHTML=`<option value="">${placeholder}</option>`;
+function populatePropSel(id){
+  const s=document.getElementById(id);
+  s.innerHTML='<option value="">Select property...</option>';
   NBS.forEach(nb=>{
-    const nbProps=scope?nb.props.filter(pid=>scope.includes(pid)):nb.props;
-    if(!nbProps.length)return;
     const og=document.createElement('optgroup');
-    og.label=showSub?nb.name+' — '+nb.sub:nb.name;
-    if(neighborhoods&&nbProps.length>1){
-      const nbo=document.createElement('option');
-      nbo.value='nb:'+nb.id;
-      nbo.textContent='\u25B6 All '+nb.name+' ('+nbProps.length+')';
-      nbo.style.fontWeight='600';
-      og.appendChild(nbo);
-    }
-    nbProps.forEach(pid=>{
-      const p=getProp(pid);if(!p)return;
-      const o=document.createElement('option');
-      o.value=pid;
-      const cnt=countFn?countFn(pid):0;
-      o.textContent=p.name+(cnt?' ('+cnt+')':'');
-      og.appendChild(o);
-    });
+    og.label=nb.name+' — '+nb.sub;
+    nb.props.forEach(pid=>{const p=getProp(pid);if(p){const o=document.createElement('option');o.value=p.id;o.textContent=p.name;og.appendChild(o);}});
     s.appendChild(og);
   });
-  if(prev){const exists=Array.from(s.options).some(o=>o.value===prev);if(exists)s.value=prev;}
-}
-
-/** Expand a property select value — if nb: prefix, returns array of pids; otherwise single-element array */
-function expandPropValue(val,scope){
-  if(!val)return[];
-  if(val.startsWith('nb:')){
-    const nbId=val.slice(3);
-    const nb=NBS.find(n=>n.id===nbId);
-    if(!nb)return[];
-    return scope?nb.props.filter(pid=>scope.includes(pid)):nb.props;
-  }
-  return[val];
-}
-
-function populatePropSel(id){
-  buildPropSelect(id,{showSub:true,neighborhoods:true});
 }
 
 function populatePropMulti(id){
@@ -466,7 +763,7 @@ async function vrImport(id){
     created:new Date().toISOString()
   };
   if(r.photoUrl){if(Array.isArray(r.photoUrl))newTask.photos.push(...r.photoUrl);else newTask.photos.push(r.photoUrl);}
-  tasks.push(newTask);
+  tasks.push(newTask);logTaskChange('created',newTask);
   r.status='imported';
   await saveTasks();await saveVendorReports();
   renderAll();showToast('Imported as task.');
@@ -504,18 +801,6 @@ function renderStats(){
 
 // TASKS
 const CAT_LABELS={replacement:'Replacement',handyman:'Handyman',plumbing:'Plumbing',hvac:'HVAC',electrical:'Electrical',hot_tub:'Hot Tub',pool:'Pool',pest:'Pest Control',cleaning:'Cleaning',landscaping:'Landscaping',arcade:'Arcade / Billiards',septic:'Septic',water:'Water Filtration',bed_bugs:'Bed Bugs',other:'Other','':`Uncategorized`};
-/** Build vendor datalist <option> HTML from vendors array */
-function buildVendorOpts(){return vendors.map(v=>`<option value="${v.name}">${v.name} — ${v.role}</option>`).join('');}
-/** Build <option> HTML for categories from CAT_LABELS.
- *  @param {string} selected - value to pre-select
- *  @param {Object} opts - {includeReplacement:bool, placeholder:string|null}
- */
-function buildCatOptions(selected,opts={}){
-  const {includeReplacement=false,placeholder=null}=opts;
-  let h=placeholder!==null?`<option value="">${placeholder}</option>`:'';
-  h+=Object.entries(CAT_LABELS).filter(([k])=>k&&(includeReplacement||k!=='replacement')).map(([k,v])=>`<option value="${k}"${k===selected?' selected':''}>${v}</option>`).join('');
-  return h;
-}
 let catFilter='all';
 let propFilter='all';
 let dateSort=false;
@@ -730,7 +1015,18 @@ function toggleGroupMode(){
 function togglePropCollapse(pid){if(_collapsedProps.has(pid))_collapsedProps.delete(pid);else _collapsedProps.add(pid);renderTasks();}
 function toggleNbCollapse(nbId){if(_collapsedNbs.has(nbId))_collapsedNbs.delete(nbId);else _collapsedNbs.add(nbId);renderTasks();}
 function populatePropFilter(){
-  buildPropSelect('prop-filter',{allOption:true,placeholder:null,selected:document.getElementById('prop-filter')?.value||'all'});
+  const sel=document.getElementById('prop-filter');if(!sel)return;
+  const prev=sel.value;
+  sel.innerHTML='<option value="all">All Properties</option>';
+  NBS.forEach(nb=>{
+    const group=document.createElement('optgroup');group.label=nb.name;
+    PROPS.filter(p=>nb.props.includes(p.id)).forEach(p=>{
+      const opt=document.createElement('option');opt.value=p.id;opt.textContent=p.name.split(' - ').pop();
+      group.appendChild(opt);
+    });
+    sel.appendChild(group);
+  });
+  sel.value=prev||'all';
 }
 function setFilter(f,btn){} // kept for compatibility
 
@@ -886,7 +1182,7 @@ function bulkToggleUrgent(){
 function bulkMarkComplete(){
   const sel=_getSelectedTasks();if(!sel.length){showToast('No tasks selected');return;}
   if(!confirm('Mark '+sel.length+' task(s) as complete?'))return;
-  sel.forEach(t=>{t.status='complete';});
+  sel.forEach(t=>{t.status='complete';logTaskChange('bulk_complete',t);});
   _selectedTasks.clear();
   saveTasks();renderAll();updateBulkBar();
   showToast(sel.length+' task'+(sel.length!==1?'s':'')+' marked complete');
@@ -895,7 +1191,7 @@ function bulkMarkComplete(){
 function bulkDelete(){
   const sel=_getSelectedTasks();if(!sel.length){showToast('No tasks selected');return;}
   if(!confirm('Permanently delete '+sel.length+' task(s)? This cannot be undone.'))return;
-  sel.forEach(t=>{const idx=tasks.indexOf(t);if(idx!==-1)tasks.splice(idx,1);});
+  sel.forEach(t=>{logTaskChange('bulk_delete',t);const idx=tasks.indexOf(t);if(idx!==-1)tasks.splice(idx,1);});
   _selectedTasks.clear();
   saveTasks();renderAll();updateBulkBar();
   showToast(sel.length+' task'+(sel.length!==1?'s':'')+' deleted');
@@ -1040,9 +1336,7 @@ async function toggleDP(px){
   const popup=document.getElementById(px+'-dp-popup');
   if(popup.style.display!=='none'){popup.style.display='none';return;}
   document.querySelectorAll('.dp-popup').forEach(p=>p.style.display='none');
-  let pid=px==='f'?document.getElementById('f-property').value:px==='b'?_bulkCalProp:(tasks.find(t=>t.id===detailId)||{}).property;
-  // If neighborhood selected, use first property for calendar preview
-  if(pid&&pid.startsWith('nb:')){const pids=expandPropValue(pid);pid=pids.length?pids[0]:null;}
+  const pid=px==='f'?document.getElementById('f-property').value:px==='b'?_bulkCalProp:(tasks.find(t=>t.id===detailId)||{}).property;
   if(!pid){popup.innerHTML='<div class="dp-noprop">Please select a property first.</div>';popup.style.display='block';return;}
   // Only clear cache if it previously errored, so we retry on failure but reuse good data
   if(icalCache[pid]==='error')delete icalCache[pid];
@@ -1179,8 +1473,7 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
 }
 async function dpNav(px,dir,y,m){
   const nd=new Date(y,m+dir,1);
-  let pid=px==='f'?document.getElementById('f-property').value:px==='b'?_bulkCalProp:(tasks.find(t=>t.id===detailId)||{}).property;
-  if(pid&&pid.startsWith('nb:')){const pids=expandPropValue(pid);pid=pids.length?pids[0]:null;}
+  const pid=px==='f'?document.getElementById('f-property').value:px==='b'?_bulkCalProp:(tasks.find(t=>t.id===detailId)||{}).property;
   // If cache is missing or errored, try to fetch rather than showing empty calendar
   let evs=icalCache[pid];
   if(!evs||evs==='error'){
@@ -1520,7 +1813,6 @@ function renderRecurring(){
         ${r.nextDue?`<div class="rc-next">Next due: <strong>${r.nextDue}</strong></div>`:''}
       </div><div class="rc-actions">
         <span class="freq-b">${FL[r.frequency]||r.frequency}</span>
-        <button class="btn btn-g" style="font-size:.7rem" onclick="openLogService('${r.id}')">Log Service</button>
         <button class="btn" onclick="genFromRec('${r.id}')">Generate Task</button>
         <button class="btn" style="font-size:.7rem" onclick="editRec('${r.id}')">Edit</button>
         <button class="btn btn-red" style="font-size:.7rem" onclick="delRec('${r.id}')">Remove</button>
@@ -1570,7 +1862,7 @@ function openAddRecurring(){
   editRecId=null;
   document.getElementById('rec-modal-title').textContent='New Recurring Task';
   ['r-name','r-next','r-vendor-custom','r-notes'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('r-cat').innerHTML=buildCatOptions('hvac');document.getElementById('r-freq').value='monthly';
+  document.getElementById('r-cat').value='hvac';document.getElementById('r-freq').value='monthly';
   // Clear property selection
   const sel=document.getElementById('r-props');Array.from(sel.options).forEach(o=>o.selected=false);
   populateRecVendor('');
@@ -1581,7 +1873,7 @@ function editRec(id){
   editRecId=id;
   document.getElementById('rec-modal-title').textContent='Edit Recurring Task';
   document.getElementById('r-name').value=r.name||'';
-  document.getElementById('r-cat').innerHTML=buildCatOptions(r.category||'hvac');
+  document.getElementById('r-cat').value=r.category||'hvac';
   document.getElementById('r-freq').value=r.frequency||'monthly';
   document.getElementById('r-next').value=r.nextDue||'';
   populateRecVendor(r.vendor||'');
@@ -1609,56 +1901,6 @@ async function delRec(id){
   recurring=recurring.filter(r=>r.id!==id);await saveRec();renderRecurring();
   showToast('Recurring task removed.','',async()=>{recurring.splice(idx,0,deleted);await saveRec();renderRecurring();showToast('Recurring task restored.');});
 }
-
-/* ── Log Service — quick-stamp a completed task from a recurring template ── */
-let _logSvcRecId=null;
-function openLogService(id){
-  const r=recurring.find(x=>x.id===id);if(!r)return;
-  _logSvcRecId=id;
-  document.getElementById('log-svc-title').textContent='Log Service';
-  document.getElementById('log-svc-name').textContent=r.name;
-  // Property dropdown — scoped to this recurring task's properties, with neighborhood shortcuts
-  const ps=r.properties.includes('all')?PROPS.map(p=>p.id):r.properties;
-  buildPropSelect('log-svc-prop',{neighborhoods:true,scope:ps,selected:ps.length===1?ps[0]:null});
-  // Date defaults to today
-  document.getElementById('log-svc-date').value=new Date().toISOString().slice(0,10);
-  // Vendor datalist + pre-fill default vendor
-  document.getElementById('log-svc-vendor-list').innerHTML=buildVendorOpts();
-  document.getElementById('log-svc-vendor').value=r.vendor||'';
-  document.getElementById('log-svc-modal').classList.add('open');
-}
-async function saveLogService(){
-  const r=recurring.find(x=>x.id===_logSvcRecId);if(!r){showToast('Error: recurring task not found.','err');return;}
-  const sel=document.getElementById('log-svc-prop').value;
-  const date=document.getElementById('log-svc-date').value;
-  const vendor=document.getElementById('log-svc-vendor').value.trim();
-  if(!sel){showToast('Property is required.','err');return;}
-  if(!date){showToast('Date is required.','err');return;}
-  const allowed=r.properties.includes('all')?PROPS.map(p=>p.id):r.properties;
-  const pids=expandPropValue(sel,allowed);
-  if(!pids.length){showToast('No properties found.','err');return;}
-  const isFilter=r.category==='hvac'&&/filter/i.test(r.name);
-  const now=new Date().toISOString();
-  for(const pid of pids){
-    const t={
-      id:Date.now().toString()+Math.random().toString(36).slice(2,6)+pid,
-      property:pid,guest:'',problem:r.name,category:r.category||'',
-      status:'complete',date,vendor,urgent:false,recurring:true,
-      notes:[{text:'Logged via Log Service.',type:'admin',time:now}],
-      vendorNotes:'',created:now
-    };
-    if(isFilter)t.filter_service_bundled=true;
-    tasks.unshift(t);
-    if(t.filter_service_bundled)await fsOnTaskComplete(t);
-  }
-  await saveTasks();
-  closeModal('log-svc-modal');
-  _logSvcRecId=null;
-  renderAll();
-  if(pids.length===1){const p=getProp(pids[0]);showToast(`Service logged: ${p?p.name:pids[0]}`);}
-  else showToast(`Service logged: ${pids.length} properties`);
-}
-
 async function genFromRec(id){
   const r=recurring.find(x=>x.id===id);if(!r)return;
   const ps=r.properties.includes('all')?PROPS.map(p=>p.id):r.properties;let n=0;let skipped=0;
@@ -1752,31 +1994,20 @@ function openAddTask(propId){
   else document.getElementById('f-property').value='';
 }
 async function saveTask(){
-  const propVal=document.getElementById('f-property').value;const prob=document.getElementById('f-problem').value.trim();
-  if(!propVal||!prob){showToast('Property and problem are required.','err');return;}
-  const pids=expandPropValue(propVal);
-  if(!pids.length){showToast('No properties found.','err');return;}
+  const pid=document.getElementById('f-property').value;const prob=document.getElementById('f-problem').value.trim();
+  if(!pid||!prob){showToast('Property and problem are required.','err');return;}
   const nt=document.getElementById('f-notes').value.trim();
   const fDate=document.getElementById('f-date').value;
   let fStatus=document.getElementById('f-status').value;
   // Auto-advance: if a date is set and status is still open, mark as scheduled
   if(fDate&&fStatus==='open')fStatus='scheduled';
   const fCat=document.getElementById('f-category').value;
-  const guest=document.getElementById('f-guest').value.trim();
-  const vendor=document.getElementById('f-vendor').value.trim();
-  const urgent=document.getElementById('f-urgent').checked;
-  const now=new Date().toISOString();
-  for(const pid of pids){
-    const t={id:Date.now().toString()+Math.random().toString(36).slice(2,6)+pid,property:pid,guest,problem:prob,category:fCat,status:fStatus,date:fDate,vendor,urgent,recurring:false,notes:nt?[{text:nt,type:'admin',time:now}]:[],vendorNotes:'',created:now};
-    // Auto-init purchase tracking for replacement tasks
-    if(fCat==='replacement'){t.purchaseNote=prob;t.purchaseStatus='needed';t.purchaser='owner';}
-    // Deploy 2: bundle filter service into this task if the user checked the bundler
-    if(typeof fsMaybeStampTask==='function')fsMaybeStampTask(t);
-    tasks.unshift(t);
-  }
-  await saveTasks();closeModal('task-modal');renderAll();renderReplacements();
-  if(pids.length===1)showToast('Task created.');
-  else showToast(`${pids.length} tasks created.`);
+  const t={id:Date.now().toString(),property:pid,guest:document.getElementById('f-guest').value.trim(),problem:prob,category:fCat,status:fStatus,date:fDate,vendor:document.getElementById('f-vendor').value.trim(),urgent:document.getElementById('f-urgent').checked,recurring:false,notes:nt?[{text:nt,type:'admin',time:new Date().toISOString()}]:[],vendorNotes:'',created:new Date().toISOString()};
+  // Auto-init purchase tracking for replacement tasks
+  if(fCat==='replacement'){t.purchaseNote=prob;t.purchaseStatus='needed';t.purchaser='owner';}
+  // Deploy 2: bundle filter service into this task if the user checked the bundler
+  if(typeof fsMaybeStampTask==='function')fsMaybeStampTask(t);
+  tasks.unshift(t);logTaskChange('created',t);await saveTasks();closeModal('task-modal');renderAll();renderReplacements();showToast('Task created.');
 }
 
 // DETAIL
@@ -1788,7 +2019,7 @@ async function openDetail(id){
   document.getElementById('d-prop').style.display='';
   // Populate property dropdown
   const propSel=document.getElementById('d-prop-select');
-  buildPropSelect(propSel,{placeholder:null,selected:t.property});
+  propSel.innerHTML=PROPS.map(pr=>`<option value="${pr.id}"${pr.id===t.property?' selected':''}>${pr.name}</option>`).join('');
   propSel.style.display='none';
   document.getElementById('d-title').textContent=t.problem;
   document.getElementById('d-status').value=t.status;
@@ -1813,6 +2044,14 @@ async function openDetail(id){
   if(pSaved)pSaved.style.display=t.purchaseNote?'':'none';
   renderPurchaseWorkflow(t);
   renderUrgentToggle(t);
+  // Guest Alert toggle — show when mode is 'tagged'
+  const gaWrap=document.getElementById('d-guest-alert-wrap');
+  const gaCb=document.getElementById('d-guest-alert');
+  if(gaWrap&&gaCb){
+    const gaMode=(appSettings.guestAlert||{}).mode||'all';
+    gaWrap.style.display=(gaMode==='tagged')?'':'none';
+    gaCb.checked=!!t.guestAlert;
+  }
   showTaskPhoto(t);
   showVendorPhotos(t);
   renderDetailVendors(t,p);renderNotes(t);checkCombine();
@@ -2887,6 +3126,40 @@ async function autoInjectSheetLink(vendorName,task){
   }catch(e){console.error('[vendor-sheet] Auto-inject error:',e);}
 }
 
+// ── Vendor Multi-Day Schedule Link ─────────────────────────────
+// Creates a persistent, bookmarkable link showing ALL upcoming tasks for a vendor
+async function createVendorAgenda(vendorName){
+  const raw=vendorName.toLowerCase().replace(/\s+/g,'');
+  let hash=0;for(let i=0;i<raw.length;i++){hash=((hash<<5)-hash)+raw.charCodeAt(i);hash|=0;}
+  const token='va'+Math.abs(hash).toString(36);
+  const key='se_vs_'+token;
+  const existing=await S.get(key);
+  if(!existing||!existing.value){
+    const sheet={vendor:vendorName,type:'agenda',created:new Date().toISOString()};
+    await S.set(key,JSON.stringify(sheet));
+  }
+  return token;
+}
+
+function vendorAgendaUrl(token){
+  return'https://storybook-webhook.vercel.app/api/vendor-page?token='+token;
+}
+
+async function generateVendorAgendaLink(vendorName){
+  try{
+    const token=await createVendorAgenda(vendorName);
+    const url=vendorAgendaUrl(token);
+    // Copy to clipboard
+    await navigator.clipboard.writeText(url);
+    showToast(`Schedule link for ${vendorName} copied to clipboard!`);
+    return url;
+  }catch(e){
+    console.error('[vendor-agenda] Error:',e);
+    showToast('Failed to generate schedule link');
+    return null;
+  }
+}
+
 function buildSMS(t,p,v){
   const pn=p?p.name:t.property,addr=p?p.address:'',door=p?p.door:'';
   const urg=t.urgent?'\n\nThis is URGENT — same-day response needed if possible.':'';
@@ -3223,7 +3496,7 @@ async function markComplete(){
   }
   t.status='complete';document.getElementById('d-status').value='complete';
   document.getElementById('complete-btn').style.display='none';
-  await saveTasks();closeModal('detail-modal');renderAll();showToast('Task marked complete.');
+  logTaskChange('completed',t);await saveTasks();closeModal('detail-modal');renderAll();showToast('Task marked complete.');
   // Deploy 2: if this task carried filter service, writeback profile last_service_date
   if(typeof fsOnTaskComplete==='function')fsOnTaskComplete(t);
   // Check if this completes a payment group where vendor requested payment
@@ -3239,7 +3512,7 @@ async function vdQuickComplete(id,e){
     const ok=await fsPromptRecount(t);
     if(!ok)return;
   }
-  t.status='complete';
+  t.status='complete';logTaskChange('completed',t);
   await saveTasks();renderAll();showToast('Task marked complete.');
   if(typeof fsOnTaskComplete==='function')fsOnTaskComplete(t);
   checkAdminPaymentPrompt(t);
@@ -3427,6 +3700,7 @@ async function assignToGuest(){
 async function deleteTask(){
   const deleted=tasks.find(x=>x.id===detailId);if(!deleted)return;
   const idx=tasks.indexOf(deleted);
+  logTaskChange('deleted',deleted);
   tasks=tasks.filter(x=>x.id!==detailId);await saveTasks();
   closeModal('detail-modal');renderAll();
   showToast('Task deleted.','',async()=>{tasks.splice(idx,0,deleted);await saveTasks();renderAll();showToast('Task restored.');});
@@ -3438,26 +3712,21 @@ let histFormOpen=false;
 function toggleHistForm(){histFormOpen=!histFormOpen;renderHistory();}
 async function saveHistTask(){
   const date=document.getElementById('h-date').value;
-  const propVal=document.getElementById('h-prop').value;
+  const pid=document.getElementById('h-prop').value;
   const cat=document.getElementById('h-cat').value;
   const desc=document.getElementById('h-desc').value.trim();
   const vendor=document.getElementById('h-vendor').value.trim();
-  if(!date||!propVal||!desc){showToast('Date, property, and description are required.','err');return;}
-  const pids=expandPropValue(propVal);
-  if(!pids.length){showToast('No properties found.','err');return;}
-  const now=new Date().toISOString();
-  for(const pid of pids){
-    const t={id:Date.now().toString()+Math.random().toString(36).slice(2,6)+pid,property:pid,guest:'',problem:desc,category:cat,status:'complete',date,vendor,urgent:false,recurring:false,notes:[{text:'Added as historical record.',type:'admin',time:now}],vendorNotes:'',created:now};
-    tasks.unshift(t);
-  }
-  await saveTasks();
-  histFormOpen=false;renderAll();
-  if(pids.length===1)showToast('Historical task added.');
-  else showToast(`${pids.length} historical tasks added.`);
+  if(!date||!pid||!desc){showToast('Date, property, and description are required.','err');return;}
+  const t={id:Date.now().toString(),property:pid,guest:'',problem:desc,category:cat,status:'complete',date,vendor,urgent:false,recurring:false,notes:[{text:'Added as historical record.',type:'admin',time:new Date().toISOString()}],vendorNotes:'',created:new Date().toISOString()};
+  tasks.unshift(t);logTaskChange('created',t);await saveTasks();
+  histFormOpen=false;renderAll();showToast('Historical task added.');
 }
 function buildHistForm(){
-  const vendorOpts=buildVendorOpts();
-  setTimeout(()=>buildPropSelect('h-prop',{neighborhoods:true}),0);
+  const propOpts=NBS.map(nb=>{
+    const opts=nb.props.map(pid=>{const p=getProp(pid);return p?`<option value="${pid}">${p.name.split(' - ').pop()}</option>`:''}).join('');
+    return`<optgroup label="${nb.name}">${opts}</optgroup>`;
+  }).join('');
+  const vendorOpts=vendors.map(v=>`<option value="${v.name}">${v.name} — ${v.role}</option>`).join('');
   return`<div style="background:var(--gold-pale);border:1px solid var(--gold-light);border-radius:var(--radius);padding:16px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--green)">Add Historical Record</div>
@@ -3465,8 +3734,8 @@ function buildHistForm(){
     </div>
     <div style="display:grid;grid-template-columns:140px 1fr 140px;gap:10px;margin-bottom:10px">
       <div><label style="font-size:.68rem;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:3px">Date</label><input type="date" id="h-date" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:.8rem"></div>
-      <div><label style="font-size:.68rem;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:3px">Property</label><select id="h-prop" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:.8rem"></select></div>
-      <div><label style="font-size:.68rem;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:3px">Category</label><select id="h-cat" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:.8rem">${buildCatOptions('handyman')}</select></div>
+      <div><label style="font-size:.68rem;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:3px">Property</label><select id="h-prop" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:.8rem"><option value="">Select...</option>${propOpts}</select></div>
+      <div><label style="font-size:.68rem;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:3px">Category</label><select id="h-cat" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:.8rem"><option value="handyman">Handyman</option><option value="plumbing">Plumbing</option><option value="hvac">HVAC</option><option value="electrical">Electrical</option><option value="pest">Pest Control</option><option value="hot_tub">Hot Tub</option><option value="pool">Pool</option><option value="landscaping">Landscaping</option><option value="arcade">Arcade</option><option value="septic">Septic</option><option value="water">Water Filtration</option><option value="cleaning">Cleaning</option><option value="other">Other</option></select></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 200px;gap:10px;margin-bottom:12px">
       <div><label style="font-size:.68rem;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:3px">Description</label><input type="text" id="h-desc" placeholder="What was done?" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:.8rem"></div>
@@ -3647,6 +3916,7 @@ function renderVendors(){
       </div><div class="vc-actions">
         <a href="sms:${v.phone.replace(/\D/g,'')}" class="btn">Text</a>
         ${v.email?`<a href="mailto:${v.email}" class="btn">Email</a>`:''}
+        <button class="btn" onclick="generateVendorAgendaLink('${v.name.replace(/'/g,"\\'")}')">Schedule Link</button>
         <button class="btn" onclick="openEditVendor('${v.id}')">Edit</button>
       </div></div></div>`;
     });
@@ -3991,7 +4261,7 @@ async function hbImport(id) {
     vendorNotes: '',
     created: item.receivedAt || new Date().toISOString(),
   };
-  tasks.unshift(t);
+  tasks.unshift(t);logTaskChange('created',t);
   await saveTasks();
   // Remove from incoming queue on server
   await hbRemoveFromServer(id);
@@ -4177,7 +4447,7 @@ async function clImportHistorical() {
       vendorNotes: '',
       created: item.date,
     };
-    tasks.unshift(t);
+    tasks.unshift(t);logTaskChange('created',t);
     imported++;
   }
 
@@ -4331,7 +4601,23 @@ async function clFetch() {
 }
 
 function populateClPropFilter() {
-  buildPropSelect('cl-prop-filter',{allOption:true,placeholder:null,countFn:pid=>clData.filter(e=>e.pid===pid).length});
+  const sel = document.getElementById('cl-prop-filter');
+  if (!sel) return;
+  sel.innerHTML = '<option value="all">All Properties</option>';
+  NBS.forEach(nb => {
+    const og = document.createElement('optgroup');
+    og.label = nb.name;
+    nb.props.forEach(pid => {
+      const p = getProp(pid);
+      if (!p) return;
+      const count = clData.filter(e => e.pid === pid).length;
+      const o = document.createElement('option');
+      o.value = pid;
+      o.textContent = p.name + (count ? ` (${count})` : '');
+      og.appendChild(o);
+    });
+    sel.appendChild(og);
+  });
 }
 
 // Track whether we're in property detail view (null = overview, string = pid)
@@ -5148,8 +5434,14 @@ async function rvFetch() {
     if (!rvIsMaintRelevant(rv)) continue;
 
     // Auto-route purchase items as Replacement tasks
+    // SAFETY: only auto-import if tasks loaded successfully (2026-04-11 fix)
     const problem = rvBuildProblem(rv);
     if (rvIsPurchaseItem(problem)) {
+      if (!tasksLoadedOk) {
+        console.warn('[SAFETY] Skipping auto-import of review item — tasks did not load');
+        rvItems.push(rv); // show in review list instead so nothing is lost
+        continue;
+      }
       await rpImportFromReviewSilent(rv);
       rvDismissed.push(rv.id);
       purchaseCount++;
@@ -5433,6 +5725,11 @@ async function loadReplacements() {
     const r = await S.get('se_purchases');
     if (r) rpData = JSON.parse(r.value);
   } catch (e) { rpData = []; }
+  // SAFETY: only run migration if tasks loaded successfully (2026-04-11 fix)
+  if (rpData.length && !tasksLoadedOk) {
+    console.warn('[SAFETY] Skipping replacements migration — tasks did not load');
+    return;
+  }
   if (rpData.length) {
     let migrated = 0;
     for (const item of rpData) {
@@ -5464,7 +5761,7 @@ async function loadReplacements() {
         vendorNotes: '',
         created: item.created || new Date().toISOString(),
       };
-      tasks.unshift(t);
+      tasks.unshift(t);logTaskChange('created',t);
       migrated++;
     }
     if (migrated) {
@@ -5488,8 +5785,25 @@ function rpSetPhase(phase) {
 }
 
 function populateRpPropFilter() {
+  const sel = document.getElementById('rp-prop-filter');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="all">All Properties</option>';
   const repTasks = getReplacementTasks();
-  buildPropSelect('rp-prop-filter',{allOption:true,placeholder:null,selected:document.getElementById('rp-prop-filter')?.value||'all',countFn:pid=>repTasks.filter(t=>t.property===pid&&(t.purchaseStatus==='needed'||!t.purchaseStatus)).length});
+  NBS.forEach(nb => {
+    const og = document.createElement('optgroup');
+    og.label = nb.name;
+    nb.props.forEach(pid => {
+      const p = getProp(pid); if (!p) return;
+      const count = repTasks.filter(t => t.property === pid && (t.purchaseStatus === 'needed' || !t.purchaseStatus)).length;
+      const o = document.createElement('option');
+      o.value = pid;
+      o.textContent = p.name + (count ? ` (${count})` : '');
+      og.appendChild(o);
+    });
+    sel.appendChild(og);
+  });
+  sel.value = current || 'all';
 }
 
 // ── Open the new-task modal pre-filled for a replacement ──
@@ -5624,7 +5938,7 @@ async function rpQuickPurchased(id) {
 async function rpQuickDelivered(id) {
   const t = tasks.find(x => x.id === id); if (!t) return;
   t.purchaseStatus = 'delivered';
-  t.status = 'complete';
+  t.status = 'complete';logTaskChange('completed',t);
   await saveTasks(); renderReplacements(); renderAll();
   showToast('Delivered \u2014 task complete.');
 }
@@ -5668,7 +5982,7 @@ async function rpImportFromReviewSilent(rv) {
     vendorNotes: '',
     created: rv.reviewed_at || new Date().toISOString(),
   };
-  tasks.unshift(t);
+  tasks.unshift(t);logTaskChange('created',t);
   await saveTasks();
 }
 
@@ -5713,6 +6027,10 @@ async function rpImportFromReview(rv) {
   // Set default logo initially (will be overridden by KV logo from API if available)
   try{document.getElementById('vs-logo').src=DEFAULT_LOGO;}catch(e){}
 
+  let vIsAgenda=false; // true when showing multi-day schedule
+  let vByDate={}; // grouped tasks by date (agenda mode)
+  let vSheetFields=[]; // custom fields from settings
+
   async function vsLoad(){
     try{
       const r=await fetch(VAPI+'?token='+encodeURIComponent(token));
@@ -5723,13 +6041,21 @@ async function rpImportFromReview(rv) {
       vDate=data.date||'';
       vGuestAlerts=data.guestAlerts||{};
       vPayMethods=data.paymentMethods||['venmo','cashapp'];
+      vSheetFields=data.sheetFields||['address','doorCode'];
+      vIsAgenda=(data.type==='agenda');
+      vByDate=data.byDate||{};
       // Apply logo from API (KV-stored custom logo) if available
       if(data.logo){try{document.getElementById('vs-logo').src=data.logo;}catch(e){}}
-      document.getElementById('vs-subtitle').textContent=
-        vVendor+' — Jobs for '+new Date(vDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+      if(vIsAgenda){
+        document.getElementById('vs-subtitle').textContent=
+          vVendor+' — Upcoming Schedule';
+      }else{
+        document.getElementById('vs-subtitle').textContent=
+          vVendor+' — Jobs for '+new Date(vDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+      }
       document.getElementById('vs-loading').style.display='none';
       document.getElementById('vs-tasks').style.display='block';
-      vsRender();
+      if(vIsAgenda) vsRenderAgenda(); else vsRender();
       // Auto-expand the first task after a short delay to teach vendors that cards are tappable
       if(vTasks.length){
         setTimeout(()=>{
@@ -5783,9 +6109,21 @@ async function rpImportFromReview(rv) {
             return `<div class="vs-guest-alert vs-guest-alert-${a.type}">${icon} ${label}</div>`;
           }).join('')+'</div>';
         }
+        // Build property meta from settings-driven fields
+        let metaParts=[];
+        if(t.address)metaParts.push('<a href="https://maps.google.com/?q='+encodeURIComponent(t.address)+'" target="_blank">'+t.address+'</a>');
+        if(t.doorCode)metaParts.push('Code: '+t.doorCode);
+        if(t.wifiName)metaParts.push('WiFi: '+t.wifiName);
+        if(t.wifiPassword)metaParts.push('WiFi Pass: '+t.wifiPassword);
+        if(t.checkoutTime)metaParts.push('Checkout: '+t.checkoutTime);
+        if(t.checkinTime)metaParts.push('Check-in: '+t.checkinTime);
+        if(t.parking)metaParts.push('Parking: '+t.parking);
+        if(t.lockbox)metaParts.push('Lockbox: '+t.lockbox);
+        if(t.trashDay)metaParts.push('Trash: '+t.trashDay);
+        if(t.specialNotes)metaParts.push(t.specialNotes);
         html+=`<div class="vs-prop-header" style="border-left-color:var(--${nbCls||'green'})">
           <div class="vs-prop-name">${shortName}</div>
-          <div class="vs-prop-meta">${t.address?'<a href="https://maps.google.com/?q='+encodeURIComponent(t.address)+'" target="_blank">'+t.address+'</a>':''}${t.doorCode?' &middot; Code: '+t.doorCode:''}</div>
+          <div class="vs-prop-meta">${metaParts.join(' &middot; ')}</div>
           ${alertHtml}
         </div>`;
         html+='<div class="vs-prop-group">';
@@ -5797,6 +6135,68 @@ async function rpImportFromReview(rv) {
       html+=vsCard(t);
     });
     if(propGroupOpen){html+=vsReportBtn(lastPropId,lastPropShort);html+='</div>';}
+    wrap.innerHTML=html;
+  }
+
+  // ── Agenda Render: multi-day schedule grouped by date ──
+  function vsRenderAgenda(){
+    const wrap=document.getElementById('vs-tasks');
+    if(!vTasks.length){wrap.innerHTML='<div style="text-align:center;padding:30px;color:var(--text2)">No upcoming tasks scheduled.</div>';return;}
+    const dates=Object.keys(vByDate).sort();
+    let html='';
+    dates.forEach(dateStr=>{
+      const dayTasks=vByDate[dateStr]||[];
+      if(!dayTasks.length)return;
+      const d=new Date(dateStr+'T12:00:00');
+      const dayLabel=d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+      html+=`<div style="margin-top:16px;margin-bottom:6px;padding:8px 12px;background:var(--green);color:#fff;border-radius:8px;font-family:'Cormorant Garamond',serif;font-size:1.1rem;font-weight:600">${dayLabel} <span style="font-size:.78rem;opacity:.8;font-family:'DM Sans',sans-serif;font-weight:400">(${dayTasks.length} task${dayTasks.length!==1?'s':''})</span></div>`;
+      // Group by neighborhood, then property within each day
+      let lastNb='';
+      let lastProp='';
+      dayTasks.forEach(t=>{
+        const nb=t.neighborhood||'Other';
+        const nbCls=t.neighborhoodCls||'';
+        if(nb!==lastNb){
+          html+=`<div class="vs-nb-header" style="color:var(--${nbCls||'green'})">${nb}</div>`;
+          lastNb=nb;lastProp='';
+        }
+        if(t.propertyName!==lastProp){
+          const shortName=t.propertyName.replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
+          // Guest alerts for this property on this date
+          const dayAlerts=(vGuestAlerts[dateStr]||{})[t.property]||[];
+          let alertHtml='';
+          if(dayAlerts.length){
+            alertHtml='<div class="vs-alert-row">'+dayAlerts.map(a=>{
+              const icon=a.type==='checkout'?'&#x1F6AA;':a.type==='inhouse'?'&#x1F6A8;':'&#x1F3E0;';
+              const label=a.type==='checkout'
+                ?'Guests checking out this morning'
+                :a.type==='inhouse'
+                ?'Guests in house — announce yourself'
+                :'Guests checking in this afternoon';
+              return `<div class="vs-guest-alert vs-guest-alert-${a.type}">${icon} ${label}</div>`;
+            }).join('')+'</div>';
+          }
+          let metaParts=[];
+          if(t.address)metaParts.push('<a href="https://maps.google.com/?q='+encodeURIComponent(t.address)+'" target="_blank">'+t.address+'</a>');
+          if(t.doorCode)metaParts.push('Code: '+t.doorCode);
+          if(t.wifiName)metaParts.push('WiFi: '+t.wifiName);
+          if(t.wifiPassword)metaParts.push('WiFi Pass: '+t.wifiPassword);
+          if(t.checkoutTime)metaParts.push('Checkout: '+t.checkoutTime);
+          if(t.checkinTime)metaParts.push('Check-in: '+t.checkinTime);
+          if(t.parking)metaParts.push('Parking: '+t.parking);
+          if(t.lockbox)metaParts.push('Lockbox: '+t.lockbox);
+          if(t.trashDay)metaParts.push('Trash: '+t.trashDay);
+          if(t.specialNotes)metaParts.push(t.specialNotes);
+          html+=`<div class="vs-prop-header" style="border-left-color:var(--${nbCls||'green'})">
+            <div class="vs-prop-name">${shortName}</div>
+            <div class="vs-prop-meta">${metaParts.join(' &middot; ')}</div>
+            ${alertHtml}
+          </div>`;
+          lastProp=t.propertyName;
+        }
+        html+=vsCard(t);
+      });
+    });
     wrap.innerHTML=html;
   }
 
@@ -6442,13 +6842,25 @@ async function gaFetch(){
   // Populate gaDismissed from persisted rvDismissed array
   rvDismissed.forEach(id=>gaDismissed.add(id));
   const today=new Date();today.setHours(0,0,0,0);
-  const lookAhead=2; // days to look ahead for arrivals
+  const gaSettings = appSettings.guestAlert || {};
+  const lookAhead = gaSettings.lookAhead || 2; // days to look ahead for arrivals
   const alerts=[];
 
   // Find open/scheduled tasks (not complete, not resolved_by_guest)
   // Exclude routine recurring items that don't affect guest experience (HVAC filters, etc.)
   const GA_EXCLUDE=/hvac\s*filter|filter\s*replace/i;
-  const activeTasks=tasks.filter(t=>!isDone(t)&&!GA_EXCLUDE.test(t.problem||'')&&!t.assignedToGuest);
+  const excludeCats = gaSettings.excludeCategories || [];
+  const gaMode = gaSettings.mode || 'all'; // 'all' or 'tagged'
+  const activeTasks=tasks.filter(t=>{
+    if(isDone(t)) return false;
+    if(GA_EXCLUDE.test(t.problem||'')) return false;
+    if(t.assignedToGuest) return false;
+    // If 'tagged' mode, only include tasks explicitly flagged for guest alert
+    if(gaMode==='tagged' && !t.guestAlert) return false;
+    // Exclude categories from settings
+    if(excludeCats.length && excludeCats.includes(t.category)) return false;
+    return true;
+  });
   if(!activeTasks.length){document.getElementById('ga-wrap').innerHTML='';gaItems=[];return;}
 
   // Group active tasks by property
@@ -6669,6 +7081,7 @@ async function renderGuestContext(t,p){
 async function initApp(){
   startExpiryWatcher();
   await load();
+  await loadSettings();
   await loadReplacements();
   await loadSmsTemplate();
   await loadCombinedSmsTemplate();
@@ -6677,9 +7090,6 @@ async function initApp(){
   populatePropSel('f-property');
   populatePropMulti('r-props');
   populatePropFilter();
-  // Populate category dropdowns from CAT_LABELS (single source of truth)
-  document.getElementById('f-category').innerHTML=buildCatOptions('',{includeReplacement:true,placeholder:'Select category'});
-  document.getElementById('d-category').innerHTML=buildCatOptions('',{includeReplacement:true,placeholder:'No category'});
   renderAll();
   hbStartPolling();
   await loadVendorReports(); // load vendor field reports
@@ -7591,7 +8001,7 @@ async function ppPromoteIssue(pid, issueId) {
     photos: [],
     created: new Date().toISOString(),
   };
-  tasks.push(newTask);
+  tasks.push(newTask);logTaskChange('created',newTask);
   iss.status = 'promoted';
   iss.promoted_task_id = newTaskId;
   PP_LOG.push({
@@ -8264,12 +8674,8 @@ function fsRenderPanel(profile) {
 function fsRenderBundlerInline() {
   const wrap = document.getElementById('f-fs-bundler');
   if (!wrap) return;
-  const val = document.getElementById('f-property').value;
-  if (!val || !PP) { wrap.innerHTML = ''; return; }
-  // If neighborhood selected, show bundler for first property as preview (task fan-out handles all)
-  const pids = expandPropValue(val);
-  const pid = pids.length ? pids[0] : null;
-  if (!pid || !PP[pid]) { wrap.innerHTML = ''; return; }
+  const pid = document.getElementById('f-property').value;
+  if (!pid || !PP || !PP[pid]) { wrap.innerHTML = ''; return; }
   const s = fsStatus(PP[pid]);
   if (s.state !== 'bundle' && s.state !== 'extreme') { wrap.innerHTML = ''; return; }
   const lab = fsStateLabel(s.state);
@@ -8451,9 +8857,7 @@ async function fsOnTaskComplete(task) {
   if (!p.hvac.filter_service) p.hvac.filter_service = {};
   const prev = p.hvac.filter_service.last_service_date || null;
   const today = fsTodayISO();
-  // Use the task's date if set (supports backdated Log Service entries), otherwise today
-  const serviceDate = task.date || today;
-  p.hvac.filter_service.last_service_date = serviceDate;
+  p.hvac.filter_service.last_service_date = today;
   p.last_updated = today;
   p.last_updated_by = getCurrentUserName ? (getCurrentUserName() || 'user') : 'user';
   // Append change log
@@ -8466,7 +8870,7 @@ async function fsOnTaskComplete(task) {
       property_id: task.property,
       path: 'hvac.filter_service.last_service_date',
       old_value: prev,
-      new_value: serviceDate,
+      new_value: today,
       source: 'task_complete',
       task_id: task.id,
     });
