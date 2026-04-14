@@ -608,9 +608,16 @@ function logTaskChange(action, t) {
 // Lookup maps — O(1) instead of linear search on every call
 const _propMap=Object.fromEntries(PROPS.map(p=>[p.id,p]));
 const _nbMap={};NBS.forEach(n=>n.props.forEach(pid=>{_nbMap[pid]=n;}));
-const getNb=id=>_nbMap[id]||null;
-const getProp=id=>_propMap[id]||null;
-const getNbCls=id=>{const n=_nbMap[id];return n?n.cls:'other';};
+const _nbById=Object.fromEntries(NBS.map(n=>[n.id,n]));
+// Virtual "neighborhood-level" properties for log entries covering an entire resort
+const _nbVirtualProps={
+  umc:{id:'umc',name:'UMC — Resort (All Cabins)'},
+  prc:{id:'prc',name:'PRC — Resort (All Cabins)'},
+  hillside:{id:'hillside',name:'Hillside Haven (Both)'},
+};
+const getNb=id=>_nbMap[id]||_nbById[id]||null;
+const getProp=id=>_propMap[id]||_nbVirtualProps[id]||null;
+const getNbCls=id=>{if(_nbById[id])return _nbById[id].cls;const n=_nbMap[id];return n?n.cls:'other';};
 const DONE_STATUSES=['complete','resolved_by_guest'];
 const isDone=t=>DONE_STATUSES.includes(t.status);
 const fmtDate=ds=>{if(!ds)return'';const d=new Date(ds+'T12:00:00');return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});};
@@ -1813,7 +1820,8 @@ function renderRecurring(){
         ${r.nextDue?`<div class="rc-next">Next due: <strong>${r.nextDue}</strong></div>`:''}
       </div><div class="rc-actions">
         <span class="freq-b">${FL[r.frequency]||r.frequency}</span>
-        <button class="btn" onclick="genFromRec('${r.id}')">Generate Task</button>
+        <button class="btn btn-g" onclick="openLogTask('${r.id}')">Log Task</button>
+        <button class="btn" style="font-size:.7rem" onclick="genFromRec('${r.id}')">Generate Task</button>
         <button class="btn" style="font-size:.7rem" onclick="editRec('${r.id}')">Edit</button>
         <button class="btn btn-red" style="font-size:.7rem" onclick="delRec('${r.id}')">Remove</button>
       </div></div>`;
@@ -1823,33 +1831,37 @@ function renderRecurring(){
   c.innerHTML=h;
 }
 let editRecId=null;
-function populateRecVendor(selectedVendor){
-  const cat=document.getElementById('r-cat').value;
-  const sel=document.getElementById('r-vendor');
+// ── SHARED VENDOR DROPDOWN BUILDER ──────────────────────────────────────────
+// Used by recurring task edit modal, log task modal, and any future modal that
+// needs a vendor select with optional category-based "Recommended" grouping.
+// selId       — id of the <select> element to populate
+// selectedVendor — vendor name to pre-select (pass '' for none)
+// catFilter   — category string for Recommended / Other grouping (pass null to skip grouping)
+// customWrapId / customInputId — ids of the custom-vendor row + input
+function populateVendorSelect(selId,selectedVendor,catFilter,customWrapId,customInputId){
+  const sel=document.getElementById(selId);
   const prev=selectedVendor!==undefined?selectedVendor:sel.value;
   sel.innerHTML='<option value="">— None —</option>';
-  // Add vendors matching this category first, then all others
-  const matched=vendors.filter(v=>v.categories.includes(cat));
-  const others=vendors.filter(v=>!v.categories.includes(cat));
-  if(matched.length){
-    const og1=document.createElement('optgroup');og1.label='Recommended';
-    matched.forEach(v=>{const o=document.createElement('option');o.value=v.name;o.textContent=v.name+' — '+v.role;og1.appendChild(o);});
-    sel.appendChild(og1);
-  }
-  if(others.length){
-    const og2=document.createElement('optgroup');og2.label='Other Vendors';
-    others.forEach(v=>{const o=document.createElement('option');o.value=v.name;o.textContent=v.name+' — '+v.role;og2.appendChild(o);});
-    sel.appendChild(og2);
+  if(catFilter){
+    const matched=vendors.filter(v=>v.categories.includes(catFilter));
+    const others=vendors.filter(v=>!v.categories.includes(catFilter));
+    if(matched.length){const og=document.createElement('optgroup');og.label='Recommended';matched.forEach(v=>{const o=document.createElement('option');o.value=v.name;o.textContent=v.name+' — '+v.role;og.appendChild(o);});sel.appendChild(og);}
+    if(others.length){const og=document.createElement('optgroup');og.label='Other Vendors';others.forEach(v=>{const o=document.createElement('option');o.value=v.name;o.textContent=v.name+' — '+v.role;og.appendChild(o);});sel.appendChild(og);}
+  }else{
+    vendors.forEach(v=>{const o=document.createElement('option');o.value=v.name;o.textContent=v.name+' — '+v.role;sel.appendChild(o);});
   }
   sel.appendChild(Object.assign(document.createElement('option'),{value:'__custom__',textContent:'✎ Custom...'}));
-  // Restore previous selection if it exists
   if(prev&&prev!=='__custom__'){
     const exists=Array.from(sel.options).some(o=>o.value===prev);
     sel.value=exists?prev:'__custom__';
-    if(!exists&&prev){document.getElementById('r-vendor-custom').value=prev;document.getElementById('r-vendor-custom-wrap').style.display='';}
-    else{document.getElementById('r-vendor-custom-wrap').style.display='none';}
-  } else if(prev==='__custom__'){sel.value='__custom__';document.getElementById('r-vendor-custom-wrap').style.display='';}
-  else{document.getElementById('r-vendor-custom-wrap').style.display='none';}
+    if(!exists&&prev){document.getElementById(customInputId).value=prev;document.getElementById(customWrapId).style.display='';}
+    else{document.getElementById(customWrapId).style.display='none';}
+  }else if(prev==='__custom__'){sel.value='__custom__';document.getElementById(customWrapId).style.display='';}
+  else{document.getElementById(customWrapId).style.display='none';}
+}
+// Thin wrappers kept for backward-compat with existing onclick="populateRecVendor()" calls
+function populateRecVendor(selectedVendor){
+  populateVendorSelect('r-vendor',selectedVendor,document.getElementById('r-cat').value,'r-vendor-custom-wrap','r-vendor-custom');
 }
 function onRecVendorChange(){
   document.getElementById('r-vendor-custom-wrap').style.display=document.getElementById('r-vendor').value==='__custom__'?'':'none';
@@ -1901,6 +1913,107 @@ async function delRec(id){
   recurring=recurring.filter(r=>r.id!==id);await saveRec();renderRecurring();
   showToast('Recurring task removed.','',async()=>{recurring.splice(idx,0,deleted);await saveRec();renderRecurring();showToast('Recurring task restored.');});
 }
+// ── LOG TASK (record a completed service from a recurring template) ──────────
+let _logTaskRecId=null;
+
+// Property dropdown for log modal: neighborhood shortcuts (where applicable) +
+// per-neighborhood grouped individual cabins — mirrors populatePropSel structure.
+const NB_LOG_SHORTCUTS=[
+  {value:'umc',label:'UMC — Resort (All 6 Cabins)',nb:'umc'},
+  {value:'prc',label:'PRC — Resort (All 6 Cabins)',nb:'prc'},
+  {value:'hillside',label:'Hillside Haven (Both)',nb:'hillside'},
+];
+function populateLogTaskProp(selId,taskProps){
+  const sel=document.getElementById(selId);sel.innerHTML='';
+  // Neighborhood shortcuts — only shown when task covers at least one cabin in that neighborhood
+  const nbGrp=document.createElement('optgroup');nbGrp.label='Neighborhoods / Resorts';
+  NB_LOG_SHORTCUTS.forEach(s=>{
+    const nb=NBS.find(n=>n.id===s.nb);if(!nb)return;
+    if(!nb.props.some(pid=>taskProps.includes(pid)))return;
+    const o=document.createElement('option');o.value=s.value;o.textContent=s.label;nbGrp.appendChild(o);
+  });
+  if(nbGrp.children.length)sel.appendChild(nbGrp);
+  // Individual cabins grouped by neighborhood — same structure as populatePropSel
+  NBS.forEach(nb=>{
+    const nbProps=nb.props.filter(pid=>taskProps.includes(pid));if(!nbProps.length)return;
+    const og=document.createElement('optgroup');og.label=nb.name+' — '+nb.sub;
+    nbProps.forEach(pid=>{
+      const p=getProp(pid);if(!p)return;
+      const o=document.createElement('option');o.value=p.id;
+      o.textContent=p.name.replace(/^(PRC|UMC)\s*-\s*\d+\s*[-:]\s*/,'');
+      og.appendChild(o);
+    });
+    sel.appendChild(og);
+  });
+}
+
+function openLogTask(id){
+  const r=recurring.find(x=>x.id===id);if(!r)return;
+  _logTaskRecId=id;
+  document.getElementById('lt-service-name').textContent=r.name;
+  document.getElementById('log-task-title').textContent='Log: '+r.name;
+  const taskProps=r.properties.includes('all')?PROPS.map(p=>p.id):r.properties;
+  populateLogTaskProp('lt-prop',taskProps);
+  document.getElementById('lt-date').value=new Date().toISOString().slice(0,10);
+  // Vendor uses shared builder with category filter so "Recommended" group matches the service type
+  populateVendorSelect('lt-vendor',r.vendor||'',r.category,'lt-vendor-custom-wrap','lt-vendor-custom');
+  document.getElementById('lt-notes').value='';
+  document.getElementById('log-task-modal').classList.add('open');
+}
+function onLogTaskVendorChange(){
+  document.getElementById('lt-vendor-custom-wrap').style.display=document.getElementById('lt-vendor').value==='__custom__'?'':'none';
+}
+function getLogTaskVendorValue(){
+  const v=document.getElementById('lt-vendor').value;
+  return v==='__custom__'?document.getElementById('lt-vendor-custom').value.trim():v;
+}
+
+async function saveLogTask(){
+  const r=recurring.find(x=>x.id===_logTaskRecId);if(!r){showToast('Recurring task not found.','err');return;}
+  const prop=document.getElementById('lt-prop').value;
+  if(!prop){showToast('Please select a property.','err');return;}
+  const date=document.getElementById('lt-date').value;
+  if(!date){showToast('Please select a date.','err');return;}
+  const vendor=getLogTaskVendorValue();
+  const notes=document.getElementById('lt-notes').value.trim();
+  const isFilterTask=r.category==='hvac'&&/filter/i.test(r.name);
+
+  const task={
+    id:Date.now().toString()+Math.random().toString(36).slice(2,6),
+    property:prop,guest:'',problem:r.name,category:r.category,
+    status:'complete',date,vendor,urgent:false,recurring:true,
+    notes:notes?[{text:notes,type:'admin',time:new Date().toISOString()}]:[],
+    vendorNotes:'',created:new Date().toISOString(),_loggedService:true,
+  };
+  if(isFilterTask)task.filter_service_bundled=true;
+
+  tasks.unshift(task);
+  await saveTasks();
+  if(typeof logTaskChange==='function')logTaskChange('log_service',task);
+
+  // For filter tasks logged against a specific cabin: reset filter clock to logged date (supports backdating)
+  if(isFilterTask&&typeof PP!=='undefined'&&PP&&PP[prop]){
+    const p=PP[prop];
+    if(!p.hvac)p.hvac={};if(!p.hvac.filter_service)p.hvac.filter_service={};
+    const prev=p.hvac.filter_service.last_service_date||null;
+    p.hvac.filter_service.last_service_date=date;
+    p.last_updated=date;
+    p.last_updated_by=typeof getCurrentUserName==='function'?(getCurrentUserName()||'user'):'user';
+    try{
+      if(!Array.isArray(PP_LOG))PP_LOG=[];
+      PP_LOG.push({id:'chg_'+Date.now()+'_'+Math.random().toString(36).slice(2,8),ts:new Date().toISOString(),
+        user:p.last_updated_by,property_id:prop,path:'hvac.filter_service.last_service_date',
+        old_value:prev,new_value:date,source:'log_service',task_id:task.id});
+      await ppSave('se_pp_log',PP_LOG);
+    }catch(e){console.warn('[log-task] log save failed',e);}
+    try{await ppSave('se_pp',PP);}catch(e){console.warn('[log-task] profile save failed',e);}
+  }
+
+  renderAll();
+  closeModal('log-task-modal');
+  showToast('Service logged.');
+}
+
 async function genFromRec(id){
   const r=recurring.find(x=>x.id===id);if(!r)return;
   const ps=r.properties.includes('all')?PROPS.map(p=>p.id):r.properties;let n=0;let skipped=0;

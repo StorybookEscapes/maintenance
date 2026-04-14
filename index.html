@@ -660,6 +660,31 @@
   </div>
 </div>
 
+<!-- LOG TASK MODAL -->
+<div class="mo" id="log-task-modal">
+  <div class="modal">
+    <div class="mhdr">
+      <div class="mtitle" id="log-task-title">Log Completed Service</div>
+      <button class="mclose" onclick="closeModal('log-task-modal')">&#x2715;</button>
+    </div>
+    <div class="fg">
+      <div class="fgr full">
+        <label>Service</label>
+        <div id="lt-service-name" style="font-weight:600;padding:5px 0;color:var(--text1);font-size:.95rem"></div>
+      </div>
+      <div class="fgr full"><label>Property / Location</label><select id="lt-prop"></select></div>
+      <div class="fgr"><label>Date Completed</label><input type="date" id="lt-date"></div>
+      <div class="fgr"><label>Vendor / Who Did It</label><select id="lt-vendor" onchange="onLogTaskVendorChange()"><option value="">— None —</option></select></div>
+      <div class="fgr" id="lt-vendor-custom-wrap" style="display:none"><label>Custom Vendor Name</label><input type="text" id="lt-vendor-custom" placeholder="Enter vendor name"></div>
+      <div class="fgr full"><label>Notes (optional)</label><textarea id="lt-notes" rows="2" placeholder="Any details about this service visit..."></textarea></div>
+    </div>
+    <div style="display:flex;gap:9px;margin-top:20px;justify-content:flex-end">
+      <button class="btn" onclick="closeModal('log-task-modal')">Cancel</button>
+      <button class="btn btn-g" onclick="saveLogTask()">Log Service</button>
+    </div>
+  </div>
+</div>
+
 <!-- VENDOR MODAL -->
 <div class="mo" id="vendor-modal">
   <div class="modal">
