@@ -6466,10 +6466,12 @@ async function rpImportFromReview(rv) {
             :`<div class="pvs-check" onclick="vsProjectToggle('${project_id}','${item.item_id}',false)" title="Mark complete"></div>`;
         }
         const roomLabel=item.room&&item.room.trim()?`<span class="pvs-room-tag">${item.room}</span>`:'';
+        // PDF page link — opens report to the specific page for this item
+        const pdfHint=(has_pdf&&item.page&&!isComplete)?` <span class="pvs-pdf-hint" onclick="vsProjectPdf('${project_id}',${item.page})">pg ${item.page}</span>`:'';
         html+=`<div class="pvs-row ${item.status==='fail'?'pvs-row-fail':'pvs-row-pass'} ${isComplete?'pvs-row-done':''}" id="vsp-${project_id}-${item.item_id}">
           <div class="pvs-row-banner">${checkHtml}
             <div class="pvs-row-info">
-              <div class="pvs-row-remark ${isComplete?'pvs-strikethrough':''}">${remarkText}</div>
+              <div class="pvs-row-remark ${isComplete?'pvs-strikethrough':''}">${remarkText}${pdfHint}</div>
               <div class="pvs-row-meta">
                 <span class="pvs-pill ${item.status}">${item.status.toUpperCase()}</span>
                 ${roomLabel}
@@ -6486,21 +6488,89 @@ async function rpImportFromReview(rv) {
     wrap.insertAdjacentHTML('beforeend',html);
   }
 
-  // ── Project PDF lazy-load ──
-  window.vsProjectPdf=async function(projectId){
+  // ── Project PDF viewer (mirrors pvsOpenPdf from standalone project view) ──
+  let _vsPdfLib=null;
+  const _vsPdfCache={}; // {projectId: {bytes, doc}}
+
+  function _vsLoadPdfLib(){
+    if(_vsPdfLib)return Promise.resolve(_vsPdfLib);
+    return new Promise((resolve,reject)=>{
+      const s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      s.onload=()=>{const lib=window.pdfjsLib;lib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';_vsPdfLib=lib;resolve(lib);};
+      s.onerror=()=>reject(new Error('Failed to load pdf.js'));
+      document.head.appendChild(s);
+    });
+  }
+
+  async function _vsRenderPdfPage(canvas,doc,pageNum){
+    const pg=await doc.getPage(pageNum);
+    const wrap=canvas.parentElement;
+    const wrapWidth=wrap.clientWidth-32;
+    const unscaledVp=pg.getViewport({scale:1});
+    const scale=wrapWidth/unscaledVp.width;
+    const viewport=pg.getViewport({scale});
+    const dpr=window.devicePixelRatio||1;
+    canvas.width=viewport.width*dpr;canvas.height=viewport.height*dpr;
+    canvas.style.width=viewport.width+'px';canvas.style.height=viewport.height+'px';
+    const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);
+    await pg.render({canvasContext:ctx,viewport}).promise;
+  }
+
+  window.vsProjectPdf=async function(projectId,page){
+    // Create modal if it doesn't exist (reuses same CSS as standalone pvs-pdf-modal)
+    let modal=document.getElementById('pvs-pdf-modal');
+    if(!modal){
+      modal=document.createElement('div');modal.id='pvs-pdf-modal';modal.className='pvs-pdf-modal';
+      modal.innerHTML=`<div class="pvs-pdf-inner">
+        <div class="pvs-pdf-header">
+          <span id="pvs-pdf-title" class="pvs-pdf-title">Document</span>
+          <span id="pvs-pdf-page" class="pvs-pdf-page-badge"></span>
+          <button class="pvs-pdf-close" onclick="document.getElementById('pvs-pdf-modal').classList.remove('open')">&#10005;</button>
+        </div>
+        <div class="pvs-pdf-frame-wrap" id="pvs-pdf-wrap" style="overflow:auto;-webkit-overflow-scrolling:touch;padding:16px;background:#525659"></div>
+      </div>`;
+      document.body.appendChild(modal);
+    }
+    document.getElementById('pvs-pdf-title').textContent=page?'Source Document':'Full Report';
+    document.getElementById('pvs-pdf-page').textContent=page?'Page '+page:'Full Report';
+    modal.classList.add('open');
+    const wrap=document.getElementById('pvs-pdf-wrap');
+    wrap.innerHTML='<div style="text-align:center;padding:40px;color:#ccc">Loading PDF...</div>';
     try{
-      const r=await fetch(VAPI+'?token='+encodeURIComponent(token)+'&projectPdf='+encodeURIComponent(projectId));
-      if(!r.ok)throw new Error('Failed');
-      const data=await r.json();
-      if(!data.pdf_data)throw new Error('No PDF');
-      const byteStr=atob(data.pdf_data.split(',')[1]);
-      const bytes=new Uint8Array(byteStr.length);
-      for(let i=0;i<byteStr.length;i++)bytes[i]=byteStr.charCodeAt(i);
-      const url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));
-      window.open(url,'_blank');
+      // Fetch + cache PDF bytes per project
+      let cached=_vsPdfCache[projectId];
+      if(!cached){
+        const r=await fetch(VAPI+'?token='+encodeURIComponent(token)+'&projectPdf='+encodeURIComponent(projectId));
+        if(!r.ok)throw new Error('Failed to fetch');
+        const data=await r.json();
+        if(!data.pdf_data)throw new Error('No PDF');
+        const byteStr=atob(data.pdf_data.split(',')[1]);
+        const bytes=new Uint8Array(byteStr.length);
+        for(let i=0;i<byteStr.length;i++)bytes[i]=byteStr.charCodeAt(i);
+        cached={bytes,doc:null};_vsPdfCache[projectId]=cached;
+      }
+      const lib=await _vsLoadPdfLib();
+      if(!cached.doc)cached.doc=await lib.getDocument({data:cached.bytes}).promise;
+      const doc=cached.doc;
+      // Render requested page or all pages
+      wrap.innerHTML='';
+      if(page&&page<=doc.numPages){
+        const canvas=document.createElement('canvas');canvas.style.display='block';canvas.style.margin='0 auto';
+        wrap.appendChild(canvas);
+        await _vsRenderPdfPage(canvas,doc,page);
+        // Scroll to top
+        wrap.scrollTop=0;
+      }else{
+        for(let i=1;i<=doc.numPages;i++){
+          const canvas=document.createElement('canvas');canvas.style.display='block';canvas.style.margin='0 auto 12px';
+          wrap.appendChild(canvas);
+          await _vsRenderPdfPage(canvas,doc,i);
+        }
+      }
     }catch(e){
       console.error('[vs-project-pdf]',e);
-      alert('Could not load the report. Please check your connection and try again.');
+      wrap.innerHTML='<div style="text-align:center;padding:40px;color:#f88">Could not load PDF. Please try again.</div>';
     }
   };
 
