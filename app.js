@@ -3273,6 +3273,20 @@ async function generateVendorAgendaLink(vendorName){
   }
 }
 
+// Opens SMS with the all-in-one agenda link (tasks + projects for all upcoming days)
+async function sendAllTasksLink(vendorName,tel){
+  try{
+    const token=await createVendorAgenda(vendorName);
+    const url=vendorAgendaUrl(token);
+    const firstName=vendorName.split(' ')[0];
+    const body=`Hi ${firstName}, here's your Storybook Escapes link — all your upcoming tasks and projects in one place:\n\n${url}`;
+    window.location.href='sms:'+tel+'?body='+encodeURIComponent(body);
+  }catch(e){
+    console.error('[send-all-tasks] Error:',e);
+    showToast('Failed to generate link','err');
+  }
+}
+
 function buildSMS(t,p,v){
   const pn=p?p.name:t.property,addr=p?p.address:'',door=p?p.door:'';
   const urg=t.urgent?'\n\nThis is URGENT — same-day response needed if possible.':'';
@@ -3392,15 +3406,19 @@ function combinedVendorCard(v,taskList,sheetUrl){
   // Build send row + collapsible message preview
   const escapedSms=sms.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const sendHtml=`
-    <div class="cg-send-row">
+    <div class="cg-send-row" style="flex-direction:column;align-items:stretch;gap:8px">
+      <button class="cg-send-btn" style="justify-content:center;width:100%;font-size:.82rem;padding:9px 14px" onclick="sendAllTasksLink('${v.name.replace(/'/g,"\\'")}','${tel}')">
+        <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg>
+        Send All Tasks
+      </button>
       <div class="cg-send-main">
-        <a id="${smsId}-link" href="sms:${tel}?body=${encodeURIComponent(sms)}" class="cg-send-btn" onclick="updateSmsLink('${smsId}','${tel}')">
-          <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg>
+        <a id="${smsId}-link" href="sms:${tel}?body=${encodeURIComponent(sms)}" class="cg-send-btn" style="background:var(--surface2);color:var(--green);border:1.5px solid var(--green);font-size:.74rem" onclick="updateSmsLink('${smsId}','${tel}')">
+          <svg viewBox="0 0 24 24" style="fill:var(--green)"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg>
           Send Job Sheet
         </a>
         <span class="cg-send-status">Not yet sent</span>
+        <button class="cg-send-edit" onclick="const b=this.closest('.combined-sms-banner');const m=b.querySelector('.cg-msg-body');const t=b.querySelector('.cg-msg-toggle');m.classList.toggle('open');t.classList.toggle('open')">Preview & edit</button>
       </div>
-      <button class="cg-send-edit" onclick="const b=this.closest('.combined-sms-banner');const m=b.querySelector('.cg-msg-body');const t=b.querySelector('.cg-msg-toggle');m.classList.toggle('open');t.classList.toggle('open')">Preview & edit</button>
     </div>
     <button class="cg-msg-toggle" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
       <span class="cg-msg-toggle-label">Message Preview</span>
