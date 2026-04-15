@@ -1456,11 +1456,11 @@ function pjCreateProject() {
     });
 
     root.innerHTML = `
-      <div class="pvs-header">
-        <img class="pvs-logo" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAQFUlEQVR4nO1ba3RUVZb+9rlVlfdDMLx8jA8abKK97BZblMakgAZEZ+xe3VWtJqlKoiQSfLSiPTO9ZtbNnbWc1lFRIFWheAYEnalqxx4dAUlVbiIRUdHWRrK6ZRBGRh7hEZKQVFJ179l7fxxSpYYQwjMof+pb61b9c+t839n7u/v7DoD/R/cCM8ChI1d/9gsnTHrRlXKq9uL8DwnAIVUFMCP+0rGCufSOuaFo4t7J8Z0SIB/1goiYpcl8AqKJe/1z/M4Ioqt5Nqf2YNRWFc7IGpI2EyQaE9/U99vvOyFAMOhSnFqDUVt7r7HbbatO2PSMBGIkTmsalpaM6WmKtSMV9VwzNWrqnuf2BaY+dem39kgeHzJi17PBJ+/es//nIl3RCbLjQOFMLIFZVqs9pSo2aSc4rcjLePNTSqU6es/KfrAZ6VUW6VKLXS1OOVATSGBwnokOGoeyc9ujyPVY7qy54sYQ4IwHUOne33p73wMTszJSNMcOodj68ck59oPhWELnZ5Lsk43qABTN3E6EDTAyCgwgAqFkQRSBpeX7F8j8CiaCKkFvAFZIX0h1OWwArldWrvCPsyconzPgi2mXMS02x/b1h8M2S5edM9B+m5LBdpn3ufMR/tG//Bl/xVQZhkiLwcyHE7WBuYpgv5JWv2mC1sTZZLldQJlaaAYyrZ5d4uuKdlgDMIFSqVI9dDh7BepLDPqG72/hMUeh7DPrQNI21gsQR0+QcUjCcmbLBYBLUyiz3SMlb0xX67I7Zq762iI5oSZ8LQpEQ1GaYWGMIen3qrGX7j/9dVdRX1otvvPkRAlzB4y1m7fxHk1J+MMR0OgeWRZ6OAKSriY1LxOd5LT016b62zu7ujFRHUkc0FmdGqxCUwRImCPvBfIiBViReh8kAkA3GMCGEA4zDIGwm0Jr82SveAIDGpaVO05SzhBBjTEN+yeDauJSN9uavtp8qM9SrXOmGSB9mSDMlZtgP/s3jVx4gGlhMGbAAVj2v1lf0THZ6ym+7YgZSkuxo7+g+xMQ6kahDXL4PdP6X85HQ0W97xjurCtMcR3Etk3IbQNOJeCKB7AAiRFiYV16zCQAaAp5pUoppknk0wEwk9kHy/zCjGQq3ksndUBSY0kwGC5sQFCPwlwejnU3uuaHoQDkNWICeXN7YsLCwJCMteXl3zOgGsMWU8A+/vOP3N7pDsdP50b6o95f+ECTvh6ApLAFA1oMRclas3Gy12bCwdJRDiQ+XJFJJSDIlxRwKH+lsdxycMbd3uV07vyDT4VAyUodGD9/hHpgQpxTACnrvLPDclZKsvC2EoO7u+EbJFCCmZggkEyFZgiUxTGbJColjJmsyTAAQxFISS5aCFWGyNBVpU9AlJbdHY0bUrtgvsztovABmMOFWZs5k4M+Q/KEgfMqsbGc2D0o7t7NiN+xx0yEhsqQpR5LCKWxSVBE4EIvadk5/clnLQINhvwL0kOc6n3emzS6WS0ayYZgAEYiRJgQpkhkASwb1vPoCgNgESBIgmTnxFzCRuAyATIANEJkEmGA2mChKQAtLbiMiIsJQACmSQSCOAdRJ4BYp0SYUdDBTTBCxhDSJqcmEsT0mk/ZCdLWl7f+6faA7ygG5QG2g6Oohit3Y1RIzsrKTCAkW8bR49JjK7XE6VuhIUbIkcAAZ9svkHgBdR1s4py2Vo0My+eqR+7hpG3DdqMu4fcxIPnCgiV0XeO3vi8FVXu4BA1SpqlQJINTURHAl7rv6/AOEVYzJ2dZM+ciXqNQYBJyX3aR13sfMdPyFM7vQe+H464LjfwGt4mD6pZ1APgAAAABJRU5ErkJggg==" alt="Storybook Escapes">
-        <div class="pvs-header-text">
-          <div class="pvs-header-title">MAINTENANCE</div>
-          <div class="pvs-header-sub">${vendor_name} — ${title}</div>
+      <div class="vs-header">
+        <img class="vs-logo" src="${typeof DEFAULT_LOGO !== 'undefined' ? DEFAULT_LOGO : ''}" alt="Storybook Escapes">
+        <div class="vs-header-text">
+          <h1 class="vs-title">MAINTENANCE</h1>
+          <p class="vs-subtitle">${vendor_name} — ${title}</p>
         </div>
       </div>
 
