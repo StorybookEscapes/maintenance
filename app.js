@@ -6223,6 +6223,7 @@ async function rpImportFromReview(rv) {
   let vIsAgenda=false; // true when showing multi-day schedule
   let vByDate={}; // grouped tasks by date (agenda mode)
   let vSheetFields=[]; // custom fields from settings
+  let vProjects=[]; // active projects this vendor is assigned to (agenda mode)
 
   async function vsLoad(){
     try{
@@ -6237,6 +6238,7 @@ async function rpImportFromReview(rv) {
       vSheetFields=data.sheetFields||['address','doorCode'];
       vIsAgenda=(data.type==='agenda');
       vByDate=data.byDate||{};
+      vProjects=data.projects||[];
       // Apply logo from API (KV-stored custom logo) if available
       if(data.logo){try{document.getElementById('vs-logo').src=data.logo;}catch(e){}}
       if(vIsAgenda){
@@ -6249,6 +6251,8 @@ async function rpImportFromReview(rv) {
       document.getElementById('vs-loading').style.display='none';
       document.getElementById('vs-tasks').style.display='block';
       if(vIsAgenda) vsRenderAgenda(); else vsRender();
+      // Render embedded projects (agenda mode only)
+      if(vIsAgenda&&vProjects.length) vsRenderProjects();
       // Auto-expand the first task after a short delay to teach vendors that cards are tappable
       if(vTasks.length){
         setTimeout(()=>{
@@ -6392,6 +6396,155 @@ async function rpImportFromReview(rv) {
     });
     wrap.innerHTML=html;
   }
+
+  // ── EMBEDDED PROJECTS (rendered below agenda tasks) ─────────────────────────
+  function vsRenderProjects(){
+    const wrap=document.getElementById('vs-tasks');
+    if(!vProjects.length)return;
+    let html='<div style="margin-top:28px">';
+    vProjects.forEach(proj=>{
+      const {project_id,title,source,items,total,done,has_pdf}=proj;
+      const failCount=items.filter(i=>i.status==='fail').length;
+      const pct=total?Math.round(done/total*100):0;
+      const circ=2*Math.PI*26;
+      const off=circ-(pct/100)*circ;
+      // ── Project header ──
+      html+=`<div style="margin-bottom:6px;padding:10px 14px;background:linear-gradient(135deg,#1a3a25,#0f2a1a);color:#fff;border-radius:8px;font-family:'Cormorant Garamond',serif;font-size:1.1rem;font-weight:600">&#x1F4CB; ${title}</div>`;
+      // ── Source document card ──
+      if(source){
+        const cParts=[];
+        if(source.inspector_phone)cParts.push(source.inspector_phone);
+        if(source.inspector_email)cParts.push(source.inspector_email);
+        let dateBxs='';
+        if(source.inspection_date)dateBxs+=`<div class="pvs-date-box"><div class="pvs-date-lbl">Inspection</div><div class="pvs-date-val">${source.inspection_date}</div></div>`;
+        if(source.reinspection_date)dateBxs+=`<div class="pvs-date-box pvs-date-urgent"><div class="pvs-date-lbl">Re-Inspection</div><div class="pvs-date-val">${source.reinspection_date}</div></div>`;
+        if(source.next_annual)dateBxs+=`<div class="pvs-date-box"><div class="pvs-date-lbl">Next Annual</div><div class="pvs-date-val">${source.next_annual}</div></div>`;
+        html+=`<div class="pvs-source-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <div class="pvs-source-label" style="margin-bottom:0">Source Document</div>
+            ${has_pdf?`<button class="pvs-report-btn" onclick="vsProjectPdf('${project_id}')">&#128196; View Full Report</button>`:''}
+          </div>
+          <div class="pvs-source-body">
+            <div class="pvs-source-person">
+              ${source.inspector?`<div class="pvs-source-name">${source.inspector}</div>`:''}
+              ${cParts.length?`<div class="pvs-source-contact">${cParts.join(' &middot; ')}</div>`:''}
+              ${source.address?`<div class="pvs-source-address">&#128205; ${source.address}</div>`:''}
+            </div>
+            ${dateBxs?`<div class="pvs-date-row">${dateBxs}</div>`:''}
+          </div>
+        </div>`;
+      }
+      // ── Progress ring ──
+      html+=`<div class="pvs-ring-wrap">
+        <svg width="64" height="64" viewBox="0 0 64 64">
+          <circle cx="32" cy="32" r="26" fill="none" stroke="#c8e6c9" stroke-width="5"/>
+          <circle cx="32" cy="32" r="26" fill="none" stroke="#2d6a3f" stroke-width="5"
+            stroke-dasharray="${circ.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"
+            stroke-linecap="round" transform="rotate(-90 32 32)" style="transition:stroke-dashoffset .5s"/>
+          <text x="32" y="36" text-anchor="middle" fill="#2d6a3f" font-size="14" font-weight="700">${pct}%</text>
+        </svg>
+        <div>
+          <div class="pvs-ring-label">${done} of ${total} tasks complete</div>
+          <div class="pvs-ring-sub">${failCount} fail items &middot; ${items.length} total items</div>
+          ${pct===100?'<div class="pvs-all-done">&#127881; All items complete!</div>':''}
+        </div>
+      </div>`;
+      // ── Item rows ──
+      const sorted=[...items].sort((a,b)=>{
+        if(a.status==='fail'&&b.status!=='fail')return -1;
+        if(a.status!=='fail'&&b.status==='fail')return 1;return 0;
+      });
+      html+=`<div class="pvs-items-panel"><div class="pvs-items-hdr"><span>Items (${items.length})</span><span>${failCount} fail &middot; ${items.length-failCount} pass</span></div>`;
+      sorted.forEach(item=>{
+        const isComplete=item.task_status==='complete'||item.task_status==='resolved_by_guest';
+        const hasTask=!!item.task_id;
+        const remarkText=item.remark||item.name;
+        let checkHtml='';
+        if(item.status==='fail'&&hasTask){
+          checkHtml=isComplete
+            ?`<div class="pvs-check pvs-checked" onclick="vsProjectToggle('${project_id}','${item.item_id}',true)" title="Tap to undo">&#x2713;</div>`
+            :`<div class="pvs-check" onclick="vsProjectToggle('${project_id}','${item.item_id}',false)" title="Mark complete"></div>`;
+        }
+        const roomLabel=item.room&&item.room.trim()?`<span class="pvs-room-tag">${item.room}</span>`:'';
+        html+=`<div class="pvs-row ${item.status==='fail'?'pvs-row-fail':'pvs-row-pass'} ${isComplete?'pvs-row-done':''}" id="vsp-${project_id}-${item.item_id}">
+          <div class="pvs-row-banner">${checkHtml}
+            <div class="pvs-row-info">
+              <div class="pvs-row-remark ${isComplete?'pvs-strikethrough':''}">${remarkText}</div>
+              <div class="pvs-row-meta">
+                <span class="pvs-pill ${item.status}">${item.status.toUpperCase()}</span>
+                ${roomLabel}
+                ${isComplete&&item.task_completed_by?`<span class="pvs-completed-by">Done by ${item.task_completed_by}</span>`:''}
+              </div>
+            </div>
+          </div>
+        </div>`;
+      });
+      html+=`</div>`; // close pvs-items-panel
+    });
+    html+=`</div>`;
+    // Append below existing tasks (don't replace)
+    wrap.insertAdjacentHTML('beforeend',html);
+  }
+
+  // ── Project PDF lazy-load ──
+  window.vsProjectPdf=async function(projectId){
+    try{
+      const r=await fetch(VAPI+'?token='+encodeURIComponent(token)+'&projectPdf='+encodeURIComponent(projectId));
+      if(!r.ok)throw new Error('Failed');
+      const data=await r.json();
+      if(!data.pdf_data)throw new Error('No PDF');
+      const byteStr=atob(data.pdf_data.split(',')[1]);
+      const bytes=new Uint8Array(byteStr.length);
+      for(let i=0;i<byteStr.length;i++)bytes[i]=byteStr.charCodeAt(i);
+      const url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));
+      window.open(url,'_blank');
+    }catch(e){
+      console.error('[vs-project-pdf]',e);
+      alert('Could not load the report. Please check your connection and try again.');
+    }
+  };
+
+  // ── Project item toggle (mark done / undo) ──
+  window.vsProjectToggle=async function(projectId,itemId,undo){
+    const action=undo?'undoProjectDone':'markProjectDone';
+    // Find item in local state for optimistic update
+    const proj=vProjects.find(p=>p.project_id===projectId);
+    const item=proj?proj.items.find(i=>i.item_id===itemId):null;
+    // Disable check while saving
+    const rowEl=document.getElementById('vsp-'+projectId+'-'+itemId);
+    const checkEl=rowEl?rowEl.querySelector('.pvs-check'):null;
+    if(checkEl){checkEl.style.opacity='.4';checkEl.style.pointerEvents='none';}
+    try{
+      const r=await fetch(VAPI+'?token='+encodeURIComponent(token),{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({token,action,project_id:projectId,item_id:itemId})
+      });
+      const j=await r.json();
+      if(!r.ok)throw new Error(j.error||'Failed');
+      // Update local state
+      if(item){
+        item.task_status=j.task_status;
+        if(action==='markProjectDone')item.task_completed_by=vVendor;
+        else item.task_completed_by=null;
+        // Recount
+        const taskItems=proj.items.filter(i=>!!i.task_id);
+        proj.total=taskItems.length;
+        proj.done=taskItems.filter(i=>i.task_status==='complete'||i.task_status==='resolved_by_guest').length;
+      }
+      // Re-render projects section (clear old, re-append)
+      document.querySelectorAll('.pvs-source-card,.pvs-ring-wrap,.pvs-items-panel,[id^="vsp-"]').forEach(el=>{
+        if(el.closest('#vs-tasks'))el.remove();
+      });
+      // Remove the project wrapper div too
+      const vsT=document.getElementById('vs-tasks');
+      const lastDiv=vsT.lastElementChild;
+      if(lastDiv&&!lastDiv.classList.contains('vs-card')&&!lastDiv.classList.contains('vs-nb-header')&&!lastDiv.classList.contains('vs-prop-header'))lastDiv.remove();
+      vsRenderProjects();
+    }catch(e){
+      if(checkEl){checkEl.style.opacity='1';checkEl.style.pointerEvents='auto';}
+      alert('Could not save. Please check your connection and try again.');
+    }
+  };
 
   // Read-only filter service panel shown inside vs-card-detail. Tells the
   // vendor what to install and where the filters live. Does NOT ask for
