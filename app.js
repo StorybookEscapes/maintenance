@@ -4009,31 +4009,111 @@ function selPropFn(id){if(selProp===id){selProp=null;histCat='all';}else{selProp
 window.setHistCat=cat=>{histCat=cat;if(selProp)renderPropDetail(selProp);else renderHistory();};
 
 // VENDORS
+// ── VENDOR DIRECTORY — collapse state, drag-to-rank ─────────────────────────
+let _vCatCollapsed=null;
+function _getVCatCollapsed(){
+  if(_vCatCollapsed)return _vCatCollapsed;
+  const stored=sessionStorage.getItem('vcat_collapsed');
+  if(stored!==null){
+    _vCatCollapsed=new Set(JSON.parse(stored));
+  }else{
+    // First visit: start all collapsed
+    _vCatCollapsed=new Set(VCAT.map(c=>c.id));
+    sessionStorage.setItem('vcat_collapsed',JSON.stringify([..._vCatCollapsed]));
+  }
+  return _vCatCollapsed;
+}
+function toggleVCat(catId){
+  const s=_getVCatCollapsed();
+  if(s.has(catId))s.delete(catId);else s.add(catId);
+  sessionStorage.setItem('vcat_collapsed',JSON.stringify([...s]));
+  renderVendors();
+}
+
+let _dragVid=null;
+function vendorDragStart(e,vid){
+  // Don't drag when clicking action buttons
+  if(e.target.closest('button')||e.target.closest('a')){e.preventDefault();return;}
+  _dragVid=vid;
+  e.dataTransfer.effectAllowed='move';
+  e.dataTransfer.setData('text/plain',vid);
+  requestAnimationFrame(()=>e.currentTarget.classList.add('vc-dragging'));
+}
+function vendorDragEnd(e){
+  e.currentTarget.classList.remove('vc-dragging');
+  document.querySelectorAll('.vc-drag-over').forEach(el=>el.classList.remove('vc-drag-over'));
+}
+function vendorDragOver(e,vid){
+  if(vid===_dragVid)return;
+  e.preventDefault();e.dataTransfer.dropEffect='move';
+  document.querySelectorAll('.vc-drag-over').forEach(el=>el.classList.remove('vc-drag-over'));
+  e.currentTarget.classList.add('vc-drag-over');
+}
+async function vendorDrop(e,targetVid){
+  e.preventDefault();
+  document.querySelectorAll('.vc-drag-over').forEach(el=>el.classList.remove('vc-drag-over'));
+  if(!_dragVid||_dragVid===targetVid){_dragVid=null;return;}
+  const from=vendors.findIndex(v=>v.id===_dragVid);
+  if(from<0){_dragVid=null;return;}
+  const [moved]=vendors.splice(from,1);
+  const to=vendors.findIndex(v=>v.id===targetVid); // re-find after splice
+  if(to<0){vendors.splice(from,0,moved);_dragVid=null;return;}
+  vendors.splice(to,0,moved);
+  _dragVid=null;
+  await saveVendors();
+  renderVendors();
+  showToast('Vendor order saved.');
+}
+
 function renderVendors(){
   const c=document.getElementById('vendor-dir');let h='';
-  VCAT.forEach(cat=>{
+  const collapsed=_getVCatCollapsed();
+  // Display copy only — alphabetized for directory; does not affect VCAT source or other dropdowns
+  const sortedCats=[...VCAT].sort((a,b)=>a.label.localeCompare(b.label));
+  sortedCats.forEach(cat=>{
     const cv=vendors.filter(v=>v.categories.includes(cat.id));if(!cv.length)return;
-    h+=`<div class="vs"><div class="vs-hdr"><h3>${cat.label}</h3></div><div class="vc-list">`;
+    const isCollapsed=collapsed.has(cat.id);
+    h+=`<div class="vs${isCollapsed?' vs-collapsed':''}">`;
+    h+=`<div class="vs-hdr" onclick="toggleVCat('${cat.id}')">`;
+    h+=`<h3>${cat.label}<span class="vs-cat-count">${cv.length}</span></h3>`;
+    h+=`<span class="vs-cat-chevron">&#x25BE;</span></div>`;
+    h+=`<div class="vc-list">`;
     cv.forEach(v=>{
-      h+=`<div class="vc"><div class="vc-top"><div class="vc-info">
-        <div class="vc-name">${v.name}</div><div class="vc-role">${v.role}</div>
-        <div class="vc-contact"><span class="vc-phone">${v.phone}</span>${v.email?`<span class="vc-email">${v.email}</span>`:''}</div>
-        ${!v.email?`<span class="add-email" onclick="showEmailForm('${v.id}')">+ Add email</span>`:''}
-        <div id="ef-${v.id}" style="display:none" class="email-form">
-          <input type="email" placeholder="vendor@email.com" id="ei-${v.id}">
-          <button class="btn btn-g" onclick="saveEmail('${v.id}')">Save</button>
-          <button class="btn" onclick="document.getElementById('ef-${v.id}').style.display='none'">Cancel</button>
-        </div>
-        ${v.note?`<div class="vc-note">${v.note}</div>`:''}
-        ${v.invoices&&v.invoices.length?`<div class="vc-inv-toggle" onclick="toggleVendorInvoices('${v.id}')">Invoices (${v.invoices.length})</div><div class="vc-inv-list" id="vinv-${v.id}" style="display:none">${v.invoices.slice().reverse().map(inv=>{const d=inv.createdAt?new Date(inv.createdAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'';return`<div class="vc-inv-row"><span class="vc-inv-id">${inv.id}</span><span class="vc-inv-date">${d}</span><span class="vc-inv-total">${inv.total>0?'$'+inv.total.toFixed(2):'—'}</span><button class="btn" style="padding:2px 8px;font-size:.68rem" onclick="regenInvoice('${inv.vendor.replace(/'/g,"\\'")}','${inv.method}','${inv.date}',${JSON.stringify(inv.taskIds).replace(/"/g,'&quot;')})">View</button></div>`;}).join('')}</div>`:''}
-      </div><div class="vc-actions">
-        <a href="sms:${v.phone.replace(/\D/g,'')}" class="btn">Text</a>
-        ${v.email?`<a href="mailto:${v.email}" class="btn">Email</a>`:''}
-        <button class="btn" onclick="generateVendorAgendaLink('${v.name.replace(/'/g,"\\'")}')">Schedule Link</button>
-        <button class="btn" onclick="openEditVendor('${v.id}')">Edit</button>
-      </div></div></div>`;
+      const phone=v.phone.replace(/\D/g,'');
+      const safeName=v.name.replace(/'/g,"\\'");
+      h+=`<div class="vc" draggable="true" data-vid="${v.id}"
+        ondragstart="vendorDragStart(event,'${v.id}')"
+        ondragend="vendorDragEnd(event)"
+        ondragover="vendorDragOver(event,'${v.id}')"
+        ondrop="vendorDrop(event,'${v.id}')">`;
+      h+=`<div class="vc-top">`;
+      h+=`<div class="vc-drag-handle" title="Drag to reorder">&#x2807;</div>`;
+      h+=`<div class="vc-info">`;
+      h+=`<div class="vc-name">${v.name}</div><div class="vc-role">${v.role}</div>`;
+      h+=`<div class="vc-contact"><span class="vc-phone">${v.phone}</span>${v.email?`<span class="vc-email">${v.email}</span>`:''}</div>`;
+      h+=!v.email?`<span class="add-email" onclick="showEmailForm('${v.id}')">+ Add email</span>`:'';
+      h+=`<div id="ef-${v.id}" style="display:none" class="email-form">
+        <input type="email" placeholder="vendor@email.com" id="ei-${v.id}">
+        <button class="btn btn-g" onclick="saveEmail('${v.id}')">Save</button>
+        <button class="btn" onclick="document.getElementById('ef-${v.id}').style.display='none'">Cancel</button>
+      </div>`;
+      h+=v.note?`<div class="vc-note">${v.note}</div>`:'';
+      h+=v.invoices&&v.invoices.length?`<div class="vc-inv-toggle" onclick="toggleVendorInvoices('${v.id}')">Invoices (${v.invoices.length})</div><div class="vc-inv-list" id="vinv-${v.id}" style="display:none">${v.invoices.slice().reverse().map(inv=>{const d=inv.createdAt?new Date(inv.createdAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'';return`<div class="vc-inv-row"><span class="vc-inv-id">${inv.id}</span><span class="vc-inv-date">${d}</span><span class="vc-inv-total">${inv.total>0?'$'+inv.total.toFixed(2):'—'}</span><button class="btn" style="padding:2px 8px;font-size:.68rem" onclick="regenInvoice('${inv.vendor.replace(/'/g,"\\'")}','${inv.method}','${inv.date}',${JSON.stringify(inv.taskIds).replace(/"/g,'&quot;')})">View</button></div>`;}).join('')}</div>`:'';
+      h+=`</div></div>`; // close vc-info, vc-top
+      // Action button row: Text | Call | Schedule Link | Edit
+      h+=`<div class="vc-btn-row">`;
+      if(phone){
+        h+=`<a href="sms:${phone}" class="btn btn-g" onclick="event.stopPropagation()">Text</a>`;
+        h+=`<a href="tel:${phone}" class="btn btn-call" onclick="event.stopPropagation()">Call</a>`;
+      }else{
+        h+=`<span class="btn" style="opacity:.4;cursor:default">Text</span>`;
+        h+=`<span class="btn btn-call" style="opacity:.4;cursor:default">Call</span>`;
+      }
+      h+=`<button class="btn" onclick="generateVendorAgendaLink('${safeName}')">Schedule Link</button>`;
+      h+=`<button class="btn" onclick="openEditVendor('${v.id}')">Edit</button>`;
+      h+=`</div></div>`; // close vc-btn-row, vc
     });
-    h+='</div></div>';
+    h+=`</div></div>`; // close vc-list, vs
   });
   document.getElementById('vendor-dir').innerHTML=h||'<div class="empty">No vendors yet.</div>';
 }
