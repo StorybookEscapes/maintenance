@@ -6468,6 +6468,21 @@ async function rpImportFromReview(rv) {
         const roomLabel=item.room&&item.room.trim()?`<span class="pvs-room-tag">${item.room}</span>`:'';
         // PDF page link — opens report to the specific page for this item
         const pdfHint=(has_pdf&&item.page&&!isComplete)?` <span class="pvs-pdf-hint" onclick="vsProjectPdf('${project_id}',${item.page})">pg ${item.page}</span>`:'';
+        // Notes — filter out system/auto notes, same logic as standalone project view
+        const visibleNotes=(item.task_notes||[]).filter(n=>{
+          if(!n.text)return false;
+          if(/^Combined with/i.test(n.text))return false;
+          if(/Imported from Hostbuddy/i.test(n.text))return false;
+          if(/Marked complete by.*via project/i.test(n.text))return false;
+          if(/Completion undone by/i.test(n.text))return false;
+          if(n.type==='system'||n.type==='admin_log')return false;
+          return true;
+        });
+        const notesHtml=visibleNotes.length?`<div class="pvs-notes">${visibleNotes.map(n=>{
+          const who=n.by||'Storybook Escapes';
+          const when=n.time?new Date(n.time).toLocaleDateString():'';
+          return `<div class="pvs-note"><span class="pvs-note-who">${who}${when?' · '+when:''}</span> ${n.text.replace(/</g,'&lt;')}</div>`;
+        }).join('')}</div>`:'';
         html+=`<div class="pvs-row ${item.status==='fail'?'pvs-row-fail':'pvs-row-pass'} ${isComplete?'pvs-row-done':''}" id="vsp-${project_id}-${item.item_id}">
           <div class="pvs-row-banner">${checkHtml}
             <div class="pvs-row-info">
@@ -6477,6 +6492,7 @@ async function rpImportFromReview(rv) {
                 ${roomLabel}
                 ${isComplete&&item.task_completed_by?`<span class="pvs-completed-by">Done by ${item.task_completed_by}</span>`:''}
               </div>
+              ${notesHtml}
             </div>
           </div>
         </div>`;
