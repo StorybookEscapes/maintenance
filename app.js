@@ -6491,6 +6491,9 @@ async function rpImportFromReview(rv) {
   // ── Project PDF viewer (mirrors pvsOpenPdf from standalone project view) ──
   let _vsPdfLib=null;
   const _vsPdfCache={}; // {projectId: {bytes, doc}}
+  let _vsPdfCurrentPage=0;
+  let _vsPdfTotalPages=0;
+  let _vsPdfCurrentProject=null;
 
   function _vsLoadPdfLib(){
     if(_vsPdfLib)return Promise.resolve(_vsPdfLib);
@@ -6517,28 +6520,59 @@ async function rpImportFromReview(rv) {
     await pg.render({canvasContext:ctx,viewport}).promise;
   }
 
+  function _vsUpdatePdfNav(){
+    const badge=document.getElementById('pvs-pdf-page');
+    const prevBtn=document.getElementById('pvs-pdf-prev');
+    const nextBtn=document.getElementById('pvs-pdf-next');
+    if(badge)badge.textContent='Page '+_vsPdfCurrentPage+' of '+_vsPdfTotalPages;
+    if(prevBtn)prevBtn.style.opacity=_vsPdfCurrentPage<=1?'.3':'1';
+    if(prevBtn)prevBtn.style.pointerEvents=_vsPdfCurrentPage<=1?'none':'auto';
+    if(nextBtn)nextBtn.style.opacity=_vsPdfCurrentPage>=_vsPdfTotalPages?'.3':'1';
+    if(nextBtn)nextBtn.style.pointerEvents=_vsPdfCurrentPage>=_vsPdfTotalPages?'none':'auto';
+  }
+
+  async function _vsGoToPage(delta){
+    const newPage=_vsPdfCurrentPage+delta;
+    if(newPage<1||newPage>_vsPdfTotalPages||!_vsPdfCurrentProject)return;
+    const cached=_vsPdfCache[_vsPdfCurrentProject];
+    if(!cached||!cached.doc)return;
+    _vsPdfCurrentPage=newPage;
+    _vsUpdatePdfNav();
+    const wrap=document.getElementById('pvs-pdf-wrap');
+    wrap.innerHTML='';
+    const canvas=document.createElement('canvas');canvas.style.display='block';canvas.style.margin='0 auto';
+    wrap.appendChild(canvas);
+    await _vsRenderPdfPage(canvas,cached.doc,newPage);
+    wrap.scrollTop=0;
+  }
+  window.vsPdfPrev=function(){_vsGoToPage(-1);};
+  window.vsPdfNext=function(){_vsGoToPage(1);};
+
   window.vsProjectPdf=async function(projectId,page){
-    // Create modal if it doesn't exist (reuses same CSS as standalone pvs-pdf-modal)
+    _vsPdfCurrentProject=projectId;
+    // Create modal if it doesn't exist
     let modal=document.getElementById('pvs-pdf-modal');
     if(!modal){
       modal=document.createElement('div');modal.id='pvs-pdf-modal';modal.className='pvs-pdf-modal';
       modal.innerHTML=`<div class="pvs-pdf-inner">
         <div class="pvs-pdf-header">
-          <span id="pvs-pdf-title" class="pvs-pdf-title">Document</span>
-          <span id="pvs-pdf-page" class="pvs-pdf-page-badge"></span>
+          <span id="pvs-pdf-title" class="pvs-pdf-title">Source Document</span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <button id="pvs-pdf-prev" onclick="vsPdfPrev()" style="background:none;border:1px solid #c8e6c9;color:#2d6a3f;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:.82rem;font-weight:700">&#x25C0;</button>
+            <span id="pvs-pdf-page" class="pvs-pdf-page-badge"></span>
+            <button id="pvs-pdf-next" onclick="vsPdfNext()" style="background:none;border:1px solid #c8e6c9;color:#2d6a3f;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:.82rem;font-weight:700">&#x25B6;</button>
+          </div>
           <button class="pvs-pdf-close" onclick="document.getElementById('pvs-pdf-modal').classList.remove('open')">&#10005;</button>
         </div>
         <div class="pvs-pdf-frame-wrap" id="pvs-pdf-wrap" style="overflow:auto;-webkit-overflow-scrolling:touch;padding:16px;background:#525659"></div>
       </div>`;
       document.body.appendChild(modal);
     }
-    document.getElementById('pvs-pdf-title').textContent=page?'Source Document':'Full Report';
-    document.getElementById('pvs-pdf-page').textContent=page?'Page '+page:'Full Report';
+    document.getElementById('pvs-pdf-title').textContent='Source Document';
     modal.classList.add('open');
     const wrap=document.getElementById('pvs-pdf-wrap');
     wrap.innerHTML='<div style="text-align:center;padding:40px;color:#ccc">Loading PDF...</div>';
     try{
-      // Fetch + cache PDF bytes per project
       let cached=_vsPdfCache[projectId];
       if(!cached){
         const r=await fetch(VAPI+'?token='+encodeURIComponent(token)+'&projectPdf='+encodeURIComponent(projectId));
@@ -6553,21 +6587,15 @@ async function rpImportFromReview(rv) {
       const lib=await _vsLoadPdfLib();
       if(!cached.doc)cached.doc=await lib.getDocument({data:cached.bytes}).promise;
       const doc=cached.doc;
-      // Render requested page or all pages
+      _vsPdfTotalPages=doc.numPages;
+      _vsPdfCurrentPage=page&&page<=doc.numPages?page:1;
+      _vsUpdatePdfNav();
+      // Render single page with nav
       wrap.innerHTML='';
-      if(page&&page<=doc.numPages){
-        const canvas=document.createElement('canvas');canvas.style.display='block';canvas.style.margin='0 auto';
-        wrap.appendChild(canvas);
-        await _vsRenderPdfPage(canvas,doc,page);
-        // Scroll to top
-        wrap.scrollTop=0;
-      }else{
-        for(let i=1;i<=doc.numPages;i++){
-          const canvas=document.createElement('canvas');canvas.style.display='block';canvas.style.margin='0 auto 12px';
-          wrap.appendChild(canvas);
-          await _vsRenderPdfPage(canvas,doc,i);
-        }
-      }
+      const canvas=document.createElement('canvas');canvas.style.display='block';canvas.style.margin='0 auto';
+      wrap.appendChild(canvas);
+      await _vsRenderPdfPage(canvas,doc,_vsPdfCurrentPage);
+      wrap.scrollTop=0;
     }catch(e){
       console.error('[vs-project-pdf]',e);
       wrap.innerHTML='<div style="text-align:center;padding:40px;color:#f88">Could not load PDF. Please try again.</div>';
