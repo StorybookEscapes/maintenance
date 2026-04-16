@@ -848,15 +848,16 @@ textarea{resize:vertical;min-height:76px}
   .wk-hcell .wd{font-size:.55rem}
   .wk-hcell .wdt{font-size:.8rem}
   .wk-day{padding:3px;min-height:60px}
-  .de{font-size:.68rem;padding:4px 6px}
-  .de-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-  .de-prop{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .de{font-size:.56rem;padding:2px 4px;line-height:1.2}
+  .de-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-size:.58rem}
+  .de-prop{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.5rem}
+  .de-cat{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.5rem}
   .de-prop{font-size:.53rem}
-  .vg-week-hdr{padding:5px 8px}
-  .vg-week-name{font-size:.72rem}
-  .vg-week-count{font-size:.62rem}
+  .vg-week-hdr{padding:2px 4px}
+  .vg-week-name{font-size:.58rem;letter-spacing:0}
+  .vg-week-count{font-size:.5rem}
   /* Mobile compact: show property summary, hide task detail rows */
-  .vg-week-mobile-summary{display:block;padding:4px 8px 6px;font-size:.72rem;color:rgba(255,255,255,.85);font-weight:500;background:rgba(0,0,0,.12)}
+  .vg-week-mobile-summary{display:block;padding:2px 4px 3px;font-size:.56rem;color:rgba(255,255,255,.9);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .vg-week-nb-hdr,.vg-week-task{display:none}
   /* 3-week mobile */
   .tw-week-hdr{margin-bottom:4px}
