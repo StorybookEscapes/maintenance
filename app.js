@@ -2699,16 +2699,10 @@ async function renderDetailVendors(t,p){
   if(assignedVendor){
     titleEl.textContent='';
     let h='';
-    // Check for same-vendor same-day grouping → show combined SMS banner
+    // Always use the combined card layout — fall back to [t] if no date is set
     const sameDayTasks=getVendorDayTasks(assignedVendor.name,t.date);
-    if(sameDayTasks.length>=2){
-      h+=combinedCard(assignedVendor,sameDayTasks);
-      h+=`<details style="margin-top:10px"><summary style="font-size:.78rem;color:var(--text2);cursor:pointer;padding:6px 0">Single-task message for this job only</summary>`;
-      h+=vendorCard(assignedVendor,false);
-      h+=`</details>`;
-    } else {
-      h+=vendorCard(assignedVendor,false);
-    }
+    const taskListForCard=sameDayTasks.length?sameDayTasks:[t];
+    h+=combinedCard(assignedVendor,taskListForCard);
     // Show other vendors in a collapsible section
     const others=m.filter(v=>v.id!==assignedVendor.id).slice(0,3);
     if(others.length){
