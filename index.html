@@ -593,7 +593,7 @@
     </div>
     <div id="d-next-co" style="font-size:.7rem;color:var(--text2);margin:2px 0 6px"></div>
     <div id="d-guest-context"></div>
-    <div class="stitle" id="d-vendors-title">Assigned Vendor</div>
+    <div class="stitle" id="d-vendors-title"></div>
     <div id="d-vendors"></div>
     <div id="d-vnotes-section" style="display:none"><div class="stitle">Vendor Completion Notes</div>
     <textarea id="d-vnotes" rows="3" placeholder="Vendor fills this out after completing work..." onchange="updateField('vendorNotes',this.value)" oninput="clearTimeout(this._debounce);this._debounce=setTimeout(()=>updateField('vendorNotes',this.value),800)"></textarea></div>
@@ -605,7 +605,11 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-red" onclick="deleteTask()">Delete Task</button>
-      <div style="display:flex;gap:7px">
+      <div style="display:flex;gap:7px;align-items:center">
+        <div style="position:relative">
+          <button class="btn" onclick="toggleAddToProject(this)" id="add-to-project-btn">+ Project</button>
+          <div id="atp-dropdown" style="display:none;position:absolute;bottom:calc(100% + 6px);left:0;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-md);min-width:220px;z-index:200;padding:6px 0;max-height:240px;overflow-y:auto"></div>
+        </div>
         <button class="btn" onclick="closeModal('detail-modal')">Close</button>
         <button class="btn btn-g" onclick="markComplete()" id="complete-btn">Mark Complete</button>
       </div>

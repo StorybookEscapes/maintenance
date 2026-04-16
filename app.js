@@ -2620,7 +2620,7 @@ async function renderDetailVendors(t,p){
 
   // Completed tasks: just show who did it, no SMS or suggestions
   if(isDone(t)){
-    titleEl.textContent='Vendor';
+    titleEl.textContent='';
     if(t.vendor){
       area.innerHTML=`<div style="font-size:.82rem;color:var(--text2);padding:6px 0">Completed by <strong>${t.vendor}</strong></div>`;
     } else {
@@ -2680,12 +2680,12 @@ async function renderDetailVendors(t,p){
 
   function combinedCard(v,taskList){
     // Reuse the global combinedVendorCard with the same redesigned layout
-    return combinedVendorCard(v,taskList,sheetUrl);
+    return combinedVendorCard(v,taskList,sheetUrl,false); // task detail: hide list
   }
 
   // If a vendor is assigned and they're in our list
   if(assignedVendor){
-    titleEl.textContent='Assigned Vendor';
+    titleEl.textContent='';
     let h='';
     // Check for same-vendor same-day grouping → show combined SMS banner
     const sameDayTasks=getVendorDayTasks(assignedVendor.name,t.date);
@@ -2710,7 +2710,7 @@ async function renderDetailVendors(t,p){
 
   // If vendor is assigned but not in our list
   if(t.vendor){
-    titleEl.textContent='Assigned Vendor';
+    titleEl.textContent='';
     let h=`<div style="font-size:.82rem;color:var(--text2);padding:6px 0;margin-bottom:8px">Assigned to <strong>${t.vendor}</strong> (not in vendor list)</div>`;
     if(m.length){
       h+=`<details><summary style="font-size:.78rem;color:var(--text2);cursor:pointer;padding:6px 0">Suggested vendors for this category (${m.length})</summary>`;
@@ -3368,7 +3368,7 @@ function buildMultiSMS(taskList,v,sheetUrlParam){
   return sms;
 }
 /* Render combined SMS card for a vendor with multiple same-day tasks (redesigned) */
-function combinedVendorCard(v,taskList,sheetUrl){
+function combinedVendorCard(v,taskList,sheetUrl,showTaskList=true){
   // Sort tasks by neighborhood then property for grouped display
   const sorted=[...taskList].sort((a,b)=>{
     const nbA=getNb(a.property),nbB=getNb(b.property);
@@ -3379,29 +3379,29 @@ function combinedVendorCard(v,taskList,sheetUrl){
   const sms=buildMultiSMS(sorted,v,sheetUrl||'');const tel=v.phone.replace(/\D/g,'');
   const smsId='sms-combined-'+v.id;
 
-  // Group tasks by property
-  const propGroups={};const propOrder=[];
-  sorted.forEach(t=>{
-    if(!propGroups[t.property]){propGroups[t.property]=[];propOrder.push(t.property);}
-    propGroups[t.property].push(t);
-  });
-
-  // Build property-grouped task cards
+  // Build property-grouped task cards (only shown in vendor-day modal, not task detail)
   let taskHtml='';
-  propOrder.forEach(pid=>{
-    const p=getProp(pid);const nc=getNbCls(pid);
-    const shortName=p?p.name.split(' - ').pop():pid;
-    taskHtml+=`<div class="cg-prop-group">`;
-    taskHtml+=`<div class="cg-prop-hdr" style="color:var(--${nc})">${shortName}</div>`;
-    propGroups[pid].forEach(t=>{
-      const isRoutine=!!t.recurring;
-      taskHtml+=`<div class="cg-task${isRoutine?' routine':''}" onclick="closeModal('vendor-day-modal');openDetail('${t.id}')">`;
-      taskHtml+=`<div class="cg-task-desc">${t.problem}${t.urgent?' <span style="color:var(--red);font-weight:700;font-size:.7rem">URGENT</span>':''}</div>`;
-      {const _ep=taskEffectivePurchaseNote(t);if(_ep)taskHtml+=`<span class="cg-task-purchase">Buy: ${_ep}</span>`;}
+  if(showTaskList){
+    const propGroups={};const propOrder=[];
+    sorted.forEach(t=>{
+      if(!propGroups[t.property]){propGroups[t.property]=[];propOrder.push(t.property);}
+      propGroups[t.property].push(t);
+    });
+    propOrder.forEach(pid=>{
+      const p=getProp(pid);const nc=getNbCls(pid);
+      const shortName=p?p.name.split(' - ').pop():pid;
+      taskHtml+=`<div class="cg-prop-group">`;
+      taskHtml+=`<div class="cg-prop-hdr" style="color:var(--${nc})">${shortName}</div>`;
+      propGroups[pid].forEach(t=>{
+        const isRoutine=!!t.recurring;
+        taskHtml+=`<div class="cg-task${isRoutine?' routine':''}" onclick="closeModal('vendor-day-modal');openDetail('${t.id}')">`;
+        taskHtml+=`<div class="cg-task-desc">${t.problem}${t.urgent?' <span style="color:var(--red);font-weight:700;font-size:.7rem">URGENT</span>':''}</div>`;
+        {const _ep=taskEffectivePurchaseNote(t);if(_ep)taskHtml+=`<span class="cg-task-purchase">Buy: ${_ep}</span>`;}
+        taskHtml+=`</div>`;
+      });
       taskHtml+=`</div>`;
     });
-    taskHtml+=`</div>`;
-  });
+  }
 
   // Build send row + collapsible message preview
   const escapedSms=sms.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -3435,8 +3435,7 @@ function combinedVendorCard(v,taskList,sheetUrl){
     </div>`;
 
   return`<div class="combined-sms-banner">
-    <div class="cg-section-label">Tasks</div>
-    ${taskHtml}
+    ${showTaskList?`<div class="cg-section-label">Tasks</div>${taskHtml}`:''}
     ${sendHtml}
   </div>`;
 }
@@ -3828,6 +3827,61 @@ async function assignToGuest(){
   renderDetailVendors(t,p);renderAll();
   showToast('Task assigned to guest.');
 }
+// ── ADD TO PROJECT (from task detail modal) ─────────────────────────────────
+function toggleAddToProject(btn){
+  const dd=document.getElementById('atp-dropdown');
+  if(dd.style.display==='block'){dd.style.display='none';return;}
+  // Populate with active projects (status !== 'complete')
+  if(typeof projects==='undefined'||!projects.length){
+    dd.innerHTML='<div style="padding:10px 14px;font-size:.79rem;color:var(--text3)">No active projects.</div>';
+    dd.style.display='block';return;
+  }
+  const active=projects.filter(p=>p.status!=='complete');
+  if(!active.length){
+    dd.innerHTML='<div style="padding:10px 14px;font-size:.79rem;color:var(--text3)">No active projects.</div>';
+    dd.style.display='block';return;
+  }
+  dd.innerHTML=active.map(p=>`
+    <div style="padding:9px 14px;cursor:pointer;font-size:.81rem;color:var(--text);border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
+      onmouseover="this.style.background='var(--green-light)'" onmouseout="this.style.background=''"
+      onclick="addTaskToProject('${p.id}',${JSON.stringify(p.title).replace(/</g,'&lt;')})">
+      ${p.title}
+    </div>`).join('');
+  dd.style.display='block';
+  // Close on outside click
+  setTimeout(()=>document.addEventListener('click',function handler(e){
+    if(!document.getElementById('atp-dropdown')?.contains(e.target)&&!btn.contains(e.target)){
+      document.getElementById('atp-dropdown').style.display='none';
+      document.removeEventListener('click',handler);
+    }
+  }),0);
+}
+
+async function addTaskToProject(projectId, projectTitle){
+  document.getElementById('atp-dropdown').style.display='none';
+  const t=tasks.find(x=>x.id===detailId);if(!t){showToast('Task not found','err');return;}
+  const p=projects.find(x=>x.id===projectId);if(!p){showToast('Project not found','err');return;}
+  // Check if already linked
+  const already=(p.items||[]).some(i=>i.task_id===t.id);
+  if(already){showToast('Task is already in this project','err');return;}
+  // Create a new project item linked to this task
+  if(!p.items)p.items=[];
+  p.items.push({
+    item_id:'pi_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
+    name: t.category||'task',
+    remark: t.problem,
+    room: '',
+    status: 'fail',
+    page: null,
+    task_id: t.id,
+  });
+  await savePJ();
+  showToast(`Added to "${projectTitle}"`);
+  // Refresh the button to confirm state
+  const btn=document.getElementById('add-to-project-btn');
+  if(btn){btn.textContent='✓ In Project';btn.disabled=true;btn.style.color='var(--green)';}
+}
+
 async function deleteTask(){
   const deleted=tasks.find(x=>x.id===detailId);if(!deleted)return;
   const idx=tasks.indexOf(deleted);
