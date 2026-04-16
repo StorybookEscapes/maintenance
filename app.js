@@ -2155,20 +2155,44 @@ async function openDetail(id){
   document.getElementById('d-date').value=dv;
   if(dv){document.getElementById('d-dp-display').textContent=fmtDate(dv);document.getElementById('d-dp-display').className='';document.getElementById('d-dp-btn').classList.add('has-val');}
   else{document.getElementById('d-dp-display').textContent='Select a date...';document.getElementById('d-dp-display').className='dp-ph';document.getElementById('d-dp-btn').classList.remove('has-val');}
-  // Badges — compact: status + combined reporter/date
-  const guestFirst=t.guest?t.guest.split(' ')[0]:'';
-  const createdShort=t.created?new Date(t.created).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'';
-  const reporterBadge=(guestFirst||createdShort)?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${guestFirst}${guestFirst&&createdShort?' \u00B7 ':''}${createdShort}</span>`:'';
-  document.getElementById('d-badges').innerHTML=`
-    ${t.urgent?'<span class="badge b-urgent">Urgent</span>':''}
-    ${t.recurring?'<span class="badge b-rec">Recurring</span>':''}
-    <span class="badge b-${t.status}">${t.status.replace('_',' ')}</span>
-    ${reporterBadge}`;
+  // Interactive badge row (category + status + urgent)
+  renderDetailBadges(t);
+  // Vendor contact row
+  const contactRow=document.getElementById('d-contact-row');
+  if(contactRow){
+    const assignedV=t.vendor?vendors.find(v=>v.name===t.vendor):null;
+    if(assignedV&&assignedV.phone){
+      const tel=assignedV.phone.replace(/\D/g,'');
+      contactRow.style.display='flex';
+      contactRow.innerHTML=`
+        <a href="sms:+1${tel}" class="cg-btn-text"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg> Text</a>
+        <a href="tel:+1${tel}" class="cg-btn-call"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13 19.79 19.79 0 0 1 1.61 4.4 2 2 0 0 1 3.6 2.21h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.91a16 16 0 0 0 6.06 6.06l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"></path></svg> Call</a>`;
+    } else {
+      contactRow.style.display='none';
+      contactRow.innerHTML='';
+    }
+  }
+  // Foldout states: open if has content, closed otherwise
+  const notesCount=(t.notes||[]).length;
+  const notesFold=document.getElementById('dm-fold-notes');
+  if(notesFold){notesFold.classList.toggle('open',notesCount>0);}
+  const notesCountEl=document.getElementById('dm-notes-count');
+  if(notesCountEl){notesCountEl.textContent=notesCount>0?notesCount:'';notesCountEl.style.display=notesCount>0?'':'none';}
+  const hasPurchase=!!(t.purchaseNote);
+  const purchaseFold=document.getElementById('dm-fold-purchase');
+  if(purchaseFold){purchaseFold.classList.toggle('open',hasPurchase);}
+  const purchasePreview=document.getElementById('dm-purchase-preview');
+  if(purchasePreview){purchasePreview.textContent=hasPurchase?t.purchaseNote.substring(0,40)+(t.purchaseNote.length>40?'...':''):'';}
+  const photosFold=document.getElementById('dm-fold-photos');
+  const hasPhotos=!!(t.photos&&t.photos.length)||(document.getElementById('d-task-photos')&&document.getElementById('d-task-photos').children.length>0);
+  if(photosFold){photosFold.classList.toggle('open',false);} // photos start collapsed
+  const photoCount=t.photos?t.photos.length:0;
+  const photoCountEl=document.getElementById('dm-photo-count');
+  if(photoCountEl){photoCountEl.textContent=photoCount>0?photoCount:'';photoCountEl.style.display=photoCount>0?'':'none';}
   document.getElementById('d-purchase').value=t.purchaseNote||'';
   const pSaved=document.getElementById('d-purchase-saved');
   if(pSaved)pSaved.style.display=t.purchaseNote?'':'none';
   renderPurchaseWorkflow(t);
-  renderUrgentToggle(t);
   // Guest Alert toggle — show when mode is 'tagged'
   const gaWrap=document.getElementById('d-guest-alert-wrap');
   const gaCb=document.getElementById('d-guest-alert');
@@ -2240,6 +2264,11 @@ async function savePurchaseNote(){
   await saveTasks();
   const pSaved=document.getElementById('d-purchase-saved');
   if(pSaved){pSaved.style.display=val?'':'none';}
+  // Update purchase foldout preview
+  const purchaseFold=document.getElementById('dm-fold-purchase');
+  if(purchaseFold){purchaseFold.classList.toggle('open',!!val);}
+  const purchasePreview=document.getElementById('dm-purchase-preview');
+  if(purchasePreview){purchasePreview.textContent=val?val.substring(0,40)+(val.length>40?'...':''):'';}
   renderPurchaseWorkflow(t);
   renderAll();
   showToast(val?'Purchase note saved.':'Purchase note cleared.');
@@ -2591,12 +2620,12 @@ async function renderGuestComm(t){
     ${showResolved?`<button class="btn" onclick="markResolvedByGuest()" style="border-color:var(--green);color:var(--green);font-size:.68rem;padding:3px 10px;box-shadow:none">Resolved by Guest</button>`:''}
   </div>`:'';
   el.innerHTML=`<div class="gc-foldout">
-    <button class="gc-fold-trigger" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
+    <button class="gc-fold-trigger" onclick="this.closest('.gc-foldout').classList.toggle('open')">
       <span><svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="vertical-align:-1px;margin-right:5px"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg>Contact ${guestFirst} — current guest</span>
       <span class="gc-fold-arrow">&#x25BA;</span>
     </button>
-    <div class="gc-fold-body">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0 8px">
+    <div class="gc-fold-body"><div class="gc-fold-inner">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 0 8px">
         <div>
           <div style="font-size:.84rem;font-weight:600;color:var(--text)">${guestName}</div>
           <div style="font-size:.68rem;color:var(--text2)">${checkin} – ${checkout}${activeRes.platform?' · '+activeRes.platform:''}</div>
@@ -2608,7 +2637,7 @@ async function renderGuestComm(t){
         <textarea id="gc-msg-input" placeholder="Send a message to ${guestFirst} via Hospitable..."></textarea>
         <button class="gc-send-btn" onclick="sendGuestCommMsg('${activeRes.reservationId}','${guestFirst}')">Send</button>
       </div>
-    </div>
+    </div></div>
   </div>`;
 }
 async function sendGuestCommMsg(rid,guestFirst){
@@ -3410,13 +3439,6 @@ function combinedVendorCard(v,taskList,sheetUrl,showTaskList=true){
         <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg>
         Send All Tasks
       </button>
-      <div class="cg-send-main">
-        <a id="${smsId}-link" href="sms:${tel}?body=${encodeURIComponent(sms)}" class="cg-send-btn" style="background:var(--surface2);color:var(--green);border:1.5px solid var(--green);font-size:.74rem" onclick="updateSmsLink('${smsId}','${tel}')">
-          <svg viewBox="0 0 24 24" style="fill:var(--green)"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg>
-          Send Job Sheet
-        </a>
-        <span class="cg-send-status">Not yet sent</span>
-      </div>
     </div>`;
 
   return`<div class="combined-sms-banner">
@@ -3426,6 +3448,9 @@ function combinedVendorCard(v,taskList,sheetUrl,showTaskList=true){
 }
 function renderNotes(t){
   const el=document.getElementById('d-notes');const ns=t.notes||[];
+  // Update notes foldout count badge
+  const notesCountEl=document.getElementById('dm-notes-count');
+  if(notesCountEl){notesCountEl.textContent=ns.length>0?ns.length:'';notesCountEl.style.display=ns.length>0?'':'none';}
   if(!ns.length){el.innerHTML='<div style="color:var(--text3);font-size:.79rem">No notes yet.</div>';return;}
   el.innerHTML=ns.map((n,i)=>{
     const isAdmin=n.type!=='vendor';
@@ -3458,6 +3483,8 @@ async function updateField(f,v){
   // Auto-advance status: setting a date on an open task → scheduled
   if(f==='date'&&v&&t.status==='open'){t.status='scheduled';document.getElementById('d-status').value='scheduled';}
   await saveTasks();renderAll();
+  // Refresh badges to reflect any status/category change
+  renderDetailBadges(t);
   // Re-render vendor section when vendor or category changes
   if(f==='vendor'||f==='category'){
     const p=getProp(t.property);
@@ -3478,13 +3505,7 @@ async function assignVendor(name){
   // Refresh the modal fields to reflect the change immediately
   document.getElementById('d-vendor').value=name;
   document.getElementById('d-status').value=t.status;
-  document.getElementById('d-badges').innerHTML=`
-    ${t.urgent?'<span class="badge b-urgent">Urgent</span>':''}
-    ${t.recurring?'<span class="badge b-rec">Recurring</span>':''}
-    <span class="badge b-${t.status}">${t.status.replace('_',' ')}</span>
-    ${t.category?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${t.category.replace('_',' ')}</span>`:''}
-    ${t.guest?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">Reported by ${t.guest}</span>`:''}
-    ${t.created?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${fmtReported(t.created)}</span>`:''}`;
+  renderDetailBadges(t);
   // Hide suggested vendors — assignment is done
   document.getElementById('d-vendors').innerHTML=`<div style="font-size:.8rem;color:var(--text2);padding:6px 0">Assigned to <strong>${name}</strong>.</div>`;
   renderAll();
@@ -3492,30 +3513,69 @@ async function assignVendor(name){
   showToast(`${name} assigned to all tasks on this date.`);
 }
 
-// ─── URGENT TOGGLE (detail modal) ───────────────────────────────
-function renderUrgentToggle(task){
-  const btn=document.getElementById('d-urgent-toggle');
-  if(task.urgent){
-    btn.className='btn urg-on';
-    btn.innerHTML='&#x26A0; URGENT — click to remove';
-  } else {
-    btn.className='btn urg-off';
-    btn.textContent='Mark as Urgent';
+// ─── DETAIL MODAL: BADGE + FOLDOUT SYSTEM ───────────────────────
+function toggleDMFold(id){
+  const el=document.getElementById(id);
+  if(el)el.classList.toggle('open');
+}
+
+function renderDetailBadges(t){
+  const row=document.getElementById('d-badge-row');
+  if(!row||!t)return;
+  const catLabel=t.category?(CAT_LABELS[t.category]||t.category.replace(/_/g,' ')):'No category';
+  const catItems=[{id:'',label:'No category'},{id:'replacement',label:'Replacement'},...VCAT]
+    .map(c=>`<button class="db-picker-item${t.category===c.id?' active':''}" onclick="detailBadgeClick('category','${c.id}')">${c.label}</button>`).join('');
+  const STATUS_OPTS=[
+    {id:'open',label:'Open',cls:'db-open'},
+    {id:'scheduled',label:'Scheduled',cls:'db-scheduled'},
+    {id:'in_progress',label:'In Progress',cls:'db-inprogress'},
+    {id:'complete',label:'Complete',cls:'db-complete'}
+  ];
+  const statusOpt=STATUS_OPTS.find(s=>s.id===t.status)||STATUS_OPTS[0];
+  const statusItems=STATUS_OPTS.map(s=>`<button class="db-picker-item${t.status===s.id?' active':''}" onclick="detailBadgeClick('status','${s.id}')">${s.label}</button>`).join('');
+  const urgentHtml=t.urgent
+    ?`<button class="db-badge db-urgent" onclick="toggleDetailUrgent()">&#x26A0; Urgent</button>`
+    :`<button class="db-badge db-urgent-off" onclick="toggleDetailUrgent()">Mark as Urgent</button>`;
+  row.innerHTML=`
+    <div class="db-wrap">
+      <button class="db-badge db-cat" onclick="toggleDBPicker('db-picker-cat',event,this)">${catLabel} <span class="db-arrow">&#x25BC;</span></button>
+      <div class="db-picker" id="db-picker-cat">${catItems}</div>
+    </div>
+    <div class="db-wrap">
+      <button class="db-badge ${statusOpt.cls}" onclick="toggleDBPicker('db-picker-status',event,this)">${statusOpt.label} <span class="db-arrow">&#x25BC;</span></button>
+      <div class="db-picker" id="db-picker-status">${statusItems}</div>
+    </div>
+    ${urgentHtml}`;
+}
+
+function toggleDBPicker(id,event,btn){
+  event.stopPropagation();
+  const picker=document.getElementById(id);
+  const isOpen=picker.classList.contains('open');
+  document.querySelectorAll('.db-picker').forEach(p=>p.classList.remove('open'));
+  if(!isOpen){
+    const rect=btn.getBoundingClientRect();
+    picker.style.top=(rect.bottom+4)+'px';
+    picker.style.left=rect.left+'px';
+    picker.classList.add('open');
   }
 }
+
+async function detailBadgeClick(field,value){
+  const selId=field==='category'?'d-category':'d-status';
+  const sel=document.getElementById(selId);if(sel)sel.value=value;
+  await updateField(field,value);
+  const t=tasks.find(x=>x.id===detailId);if(t)renderDetailBadges(t);
+  document.querySelectorAll('.db-picker').forEach(p=>p.classList.remove('open'));
+}
+
+// Legacy stub — now handled by renderDetailBadges
+function renderUrgentToggle(task){ renderDetailBadges(task); }
+
 async function toggleDetailUrgent(){
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
   t.urgent=!t.urgent;
-  renderUrgentToggle(t);
-  // Re-render badges
-  const nb=getNb(t.property);
-  document.getElementById('d-badges').innerHTML=`
-    ${t.urgent?'<span class="badge b-urgent">Urgent</span>':''}
-    ${t.recurring?'<span class="badge b-rec">Recurring</span>':''}
-    <span class="badge b-${t.status}">${t.status.replace('_',' ')}</span>
-    ${t.category?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${t.category.replace('_',' ')}</span>`:''}
-    ${t.guest?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">Reported by ${t.guest}</span>`:''}
-    ${t.created?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${fmtReported(t.created)}</span>`:''}`;
+  renderDetailBadges(t);
   await saveTasks();renderAll();
   showToast(t.urgent?'Marked as urgent.':'Urgent removed.');
 }
@@ -3599,6 +3659,8 @@ async function selectVendorDD(name){
 // Close dropdown on outside click
 document.addEventListener('click',e=>{
   if(vdOpen && !document.getElementById('vd-wrap')?.contains(e.target))closeVendorDD();
+  // Close badge pickers when clicking outside
+  if(!e.target.closest('.db-wrap'))document.querySelectorAll('.db-picker').forEach(p=>p.classList.remove('open'));
 });
 
 async function markComplete(){

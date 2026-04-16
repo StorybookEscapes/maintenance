@@ -467,88 +467,76 @@
 <div class="mo" id="detail-modal">
   <div class="modal">
     <div class="modal-body">
-    <div class="mhdr">
-      <div>
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
-          <span id="d-prop" style="font-size:.64rem;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;cursor:pointer" title="Click to change property" onclick="document.getElementById('d-prop-select').style.display='';this.style.display='none'"></span>
-          <select id="d-prop-select" style="display:none;font-size:.72rem;font-family:inherit;padding:2px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);max-width:280px" onchange="confirmPropertyChange(this.value)"></select>
+
+    <!-- HEADER: property as title, badges, description, vendor+date -->
+    <div class="mhdr" style="align-items:flex-start">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+          <span id="d-prop" class="d-prop-hdr" title="Click to change property" onclick="document.getElementById('d-prop-select').style.display='';this.style.display='none'"></span>
+          <select id="d-prop-select" style="display:none;font-size:.82rem;font-family:inherit;padding:3px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);max-width:280px" onchange="confirmPropertyChange(this.value)"></select>
         </div>
-        <div class="mtitle" id="d-title" style="cursor:pointer" title="Click to edit description" onclick="taskStartEditTitle()"></div>
-        <textarea id="d-title-input" rows="3" style="display:none;font-family:'DM Sans',sans-serif;font-size:1.15rem;font-weight:600;color:var(--green);border:1px solid var(--gold);border-radius:var(--radius);padding:6px 10px;width:100%;background:var(--surface2);outline:none;resize:vertical;line-height:1.35" onblur="taskSaveTitle()" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();this.blur();}if(event.key==='Escape'){taskCancelEditTitle();}"></textarea>
+        <!-- Badge row: category | status | urgent — rendered by renderDetailBadges() -->
+        <div id="d-badge-row" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;position:relative"></div>
+        <!-- Description as small paragraph -->
+        <div class="d-task-desc" id="d-title" title="Click to edit description" onclick="taskStartEditTitle()"></div>
+        <textarea id="d-title-input" rows="3" style="display:none;font-family:'DM Sans',sans-serif;font-size:.85rem;color:var(--text);border:1px solid var(--gold);border-radius:var(--radius);padding:6px 10px;width:100%;background:var(--surface2);outline:none;resize:vertical;line-height:1.45" onblur="taskSaveTitle()" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();this.blur();}if(event.key==='Escape'){taskCancelEditTitle();}"></textarea>
+        <!-- Vendor + Schedule directly under description -->
+        <div style="display:flex;gap:10px;margin-top:10px">
+          <div class="fgr" style="flex:1;position:relative">
+            <label>Vendor</label>
+            <div class="vd-wrap" id="vd-wrap">
+              <input type="text" id="d-vendor" autocomplete="off" placeholder="Search or select..." oninput="filterVendorDD(this.value)" onfocus="openVendorDD()" onblur="setTimeout(validateVendorInput,150)">
+              <button type="button" class="vd-arrow" onclick="toggleVendorDD()">&#x25BC;</button>
+              <div class="vd-dropdown" id="vd-dropdown" style="display:none"></div>
+            </div>
+          </div>
+          <div class="fgr" style="flex:1">
+            <label>Schedule</label>
+            <div class="dp-wrap">
+              <button type="button" class="dp-trigger" id="d-dp-btn" onclick="toggleDP('d')">
+                <span id="d-dp-display" class="dp-ph">Select a date...</span>
+                <span style="color:var(--text3);font-size:.8rem">&#x25BC;</span>
+              </button>
+              <div class="dp-popup" id="d-dp-popup" style="display:none"></div>
+            </div>
+            <input type="hidden" id="d-date">
+          </div>
+        </div>
       </div>
       <button class="mclose" onclick="closeModal('detail-modal')">&#x2715;</button>
     </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-      <div id="d-badges" style="display:flex;gap:5px;flex-wrap:wrap;align-items:center"></div>
-      <button type="button" class="btn" id="d-urgent-toggle" onclick="toggleDetailUrgent()" style="font-size:.72rem;padding:4px 12px;border-radius:20px"></button>
-    </div>
-    <div id="d-photo-section" style="margin-bottom:14px">
-      <div id="d-photo-gallery" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px"></div>
-      <div id="d-photo-upload">
-        <div id="d-photo-dropzone" style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px dashed var(--border);border-radius:var(--radius);background:var(--surface2);transition:border-color .2s,background .2s;cursor:pointer" onclick="document.getElementById('d-photo-input').click()">
-          <span style="font-size:.9rem">&#x1F4F7;</span>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:.72rem;font-weight:500;color:var(--green)">Attach Photo</div>
-            <div style="font-size:.6rem;color:var(--text3)">Click, drag &amp; drop, or paste</div>
-          </div>
-          <input type="file" id="d-photo-input" accept="image/*" multiple style="display:none" onchange="uploadTaskPhotos(this.files)">
-        </div>
-        <span id="d-photo-status" style="font-size:.68rem;color:var(--text3);margin-left:0;display:block;margin-top:4px"></span>
-      </div>
-    </div>
-    <div id="d-combine"></div>
-    <div class="fg">
-      <div class="fgr">
-        <label>Status</label>
-        <select id="d-status" onchange="updateField('status',this.value)">
-          <option value="open">Open</option>
-          <option value="scheduled">Scheduled</option>
-          <option value="in_progress">In Progress</option>
-          <option value="complete">Complete</option>
-          <option value="resolved_by_guest">Resolved by Guest</option>
-        </select>
-      </div>
-      <div class="fgr">
-        <label>Category</label>
-        <select id="d-category" onchange="updateField('category',this.value);onDetailCatChange(this.value)">
-          <option value="">No category</option>
-          <option value="replacement">Replacement</option>
-          <option value="cleaning">Cleaning</option>
-          <option value="handyman">Handyman</option>
-          <option value="plumbing">Plumbing</option>
-          <option value="hvac">HVAC</option>
-          <option value="electrical">Electrical</option>
-          <option value="pest">Pest Control</option>
-          <option value="landscaping">Landscaping</option>
-          <option value="hot_tub">Hot Tub</option>
-          <option value="pool">Pool</option>
-          <option value="arcade">Arcade / Billiards</option>
-          <option value="septic">Septic</option>
-          <option value="water">Water Filtration</option>
-          <option value="bed_bugs">Bed Bugs</option>
-          <option value="other">Other</option>
-        </select>
-      </div>
-      <div class="fgr">
-        <label>Scheduled Fix Date</label>
-        <div class="dp-wrap">
-          <button type="button" class="dp-trigger" id="d-dp-btn" onclick="toggleDP('d')">
-            <span id="d-dp-display" class="dp-ph">Select a date...</span>
-            <span style="color:var(--text3);font-size:.8rem">&#x25BC;</span>
-          </button>
-          <div class="dp-popup" id="d-dp-popup" style="display:none"></div>
-        </div>
-        <input type="hidden" id="d-date">
-      </div>
-      <div class="fgr" style="position:relative">
-        <label>Assigned Vendor</label>
-        <div class="vd-wrap" id="vd-wrap">
-          <input type="text" id="d-vendor" autocomplete="off" placeholder="Search or select..." oninput="filterVendorDD(this.value)" onfocus="openVendorDD()" onblur="setTimeout(validateVendorInput,150)">
-          <button type="button" class="vd-arrow" onclick="toggleVendorDD()">&#x25BC;</button>
-          <div class="vd-dropdown" id="vd-dropdown" style="display:none"></div>
-        </div>
-      </div>
-    </div>
+
+    <!-- Hidden selects — backing store for all updateField logic -->
+    <select id="d-status" style="display:none" onchange="updateField('status',this.value)">
+      <option value="open">Open</option>
+      <option value="scheduled">Scheduled</option>
+      <option value="in_progress">In Progress</option>
+      <option value="complete">Complete</option>
+      <option value="resolved_by_guest">Resolved by Guest</option>
+    </select>
+    <select id="d-category" style="display:none" onchange="updateField('category',this.value);onDetailCatChange(this.value)">
+      <option value="">No category</option>
+      <option value="replacement">Replacement</option>
+      <option value="cleaning">Cleaning</option>
+      <option value="handyman">Handyman</option>
+      <option value="plumbing">Plumbing</option>
+      <option value="hvac">HVAC</option>
+      <option value="electrical">Electrical</option>
+      <option value="pest">Pest Control</option>
+      <option value="landscaping">Landscaping</option>
+      <option value="hot_tub">Hot Tub</option>
+      <option value="pool">Pool</option>
+      <option value="arcade">Arcade / Billiards</option>
+      <option value="septic">Septic</option>
+      <option value="water">Water Filtration</option>
+      <option value="bed_bugs">Bed Bugs</option>
+      <option value="other">Other</option>
+    </select>
+
+    <!-- Vendor contact row (Text / Call) — populated by openDetail -->
+    <div id="d-contact-row" style="display:none;gap:8px;margin-bottom:14px"></div>
+
+    <!-- Guest alert -->
     <div id="d-guest-alert-wrap" class="fgr full" style="margin-bottom:8px;display:none">
       <label style="display:flex;align-items:center;gap:8px;font-size:.78rem;color:var(--text2);cursor:pointer">
         <input type="checkbox" id="d-guest-alert" onchange="updateField('guestAlert',this.checked)">
@@ -556,41 +544,86 @@
         <span style="font-size:.68rem;color:var(--text3);font-weight:400">— include in Guest Heads-Up alerts for arriving guests</span>
       </label>
     </div>
-    <div class="fgr full" id="d-purchase-wrap" style="margin-bottom:12px">
-      <label style="display:flex;align-items:center;gap:6px">
-        <span>Purchase Required</span>
-        <span style="font-size:.6rem;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0">— vendor will see this prominently</span>
-      </label>
-      <div style="display:flex;gap:6px;align-items:center">
-        <input type="text" id="d-purchase" placeholder="e.g. Coffee maker, bath towels, 4x12 vent..." style="flex:1" onkeydown="if(event.key==='Enter')savePurchaseNote()" oninput="clearTimeout(this._debounce);this._debounce=setTimeout(()=>savePurchaseNote(),1200)">
-        <button class="btn btn-g" onclick="savePurchaseNote()" style="padding:5px 11px;font-size:.72rem;white-space:nowrap">Save</button>
-      </div>
-      <div id="d-purchase-saved" style="font-size:.62rem;color:var(--green-mid);margin-top:2px;display:none">Saved — vendor will be notified to purchase this.</div>
-      <!-- Purchase workflow (visible when category=replacement OR purchaseNote is set) -->
-      <div id="d-purchase-workflow" style="display:none;margin-top:10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
-          <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:1px;font-weight:700;color:#e65100">Purchase Tracking</div>
-          <div style="display:flex;gap:4px;margin-left:auto">
-            <button class="btn" id="d-purch-status-needed" onclick="setPurchaseStatus('needed')" style="padding:3px 10px;font-size:.68rem">Needs Buying</button>
-            <button class="btn" id="d-purch-status-purchased" onclick="setPurchaseStatus('purchased')" style="padding:3px 10px;font-size:.68rem">Purchased</button>
-            <button class="btn" id="d-purch-status-delivered" onclick="setPurchaseStatus('delivered')" style="padding:3px 10px;font-size:.68rem">Delivered</button>
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <div style="font-size:.72rem;color:var(--text2)">Who's buying?</div>
-          <div style="display:flex;gap:4px">
-            <button class="btn" id="d-purchaser-owner" onclick="setPurchaser('owner')" style="padding:3px 10px;font-size:.68rem">I'll buy it</button>
-            <button class="btn" id="d-purchaser-vendor" onclick="setPurchaser('vendor')" style="padding:3px 10px;font-size:.68rem">Vendor buys</button>
+
+    <div id="d-combine"></div>
+
+    <!-- Photos foldout -->
+    <div class="dm-foldout" id="dm-fold-photos">
+      <button class="dm-fold-trigger" onclick="toggleDMFold('dm-fold-photos')">
+        <span class="dm-fold-label">&#x1F4F7; Photos <span class="dm-fold-count" id="dm-photo-count" style="display:none"></span></span>
+        <span class="dm-fold-arrow">&#x25BA;</span>
+      </button>
+      <div class="dm-fold-body">
+        <div class="dm-fold-inner">
+          <div id="d-photo-section">
+            <div id="d-photo-gallery" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px"></div>
+            <div id="d-photo-upload">
+              <div id="d-photo-dropzone" style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px dashed var(--border);border-radius:var(--radius);background:var(--surface2);transition:border-color .2s,background .2s;cursor:pointer" onclick="document.getElementById('d-photo-input').click()">
+                <span style="font-size:.9rem">&#x1F4F7;</span>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:.72rem;font-weight:500;color:var(--green)">Attach Photo</div>
+                  <div style="font-size:.6rem;color:var(--text3)">Click, drag &amp; drop, or paste</div>
+                </div>
+                <input type="file" id="d-photo-input" accept="image/*" multiple style="display:none" onchange="uploadTaskPhotos(this.files)">
+              </div>
+              <span id="d-photo-status" style="font-size:.68rem;color:var(--text3);display:block;margin-top:4px"></span>
+            </div>
           </div>
         </div>
       </div>
     </div>
-    <div class="stitle">Notes</div>
-    <div class="notes" id="d-notes"></div>
-    <div class="note-row">
-      <input type="text" id="d-note-input" placeholder="Add an internal note..." onkeydown="if(event.key==='Enter')addNote('admin')">
-      <button class="btn btn-g" onclick="addNote('admin')">Add</button>
+
+    <!-- Purchase Required foldout -->
+    <div class="dm-foldout" id="dm-fold-purchase">
+      <button class="dm-fold-trigger" onclick="toggleDMFold('dm-fold-purchase')">
+        <span class="dm-fold-label">&#x1F6D2; Purchase Required <span class="dm-fold-preview" id="dm-purchase-preview"></span></span>
+        <span class="dm-fold-arrow">&#x25BA;</span>
+      </button>
+      <div class="dm-fold-body">
+        <div class="dm-fold-inner" id="d-purchase-wrap">
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+            <input type="text" id="d-purchase" placeholder="e.g. Coffee maker, bath towels, 4x12 vent..." style="flex:1" onkeydown="if(event.key==='Enter')savePurchaseNote()" oninput="clearTimeout(this._debounce);this._debounce=setTimeout(()=>savePurchaseNote(),1200)">
+            <button class="btn btn-g" onclick="savePurchaseNote()" style="padding:5px 11px;font-size:.72rem;white-space:nowrap">Save</button>
+          </div>
+          <div id="d-purchase-saved" style="font-size:.62rem;color:var(--green-mid);margin-bottom:6px;display:none">Saved — vendor will be notified to purchase this.</div>
+          <div id="d-purchase-workflow" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+              <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:1px;font-weight:700;color:#e65100">Purchase Tracking</div>
+              <div style="display:flex;gap:4px;margin-left:auto">
+                <button class="btn" id="d-purch-status-needed" onclick="setPurchaseStatus('needed')" style="padding:3px 10px;font-size:.68rem">Needs Buying</button>
+                <button class="btn" id="d-purch-status-purchased" onclick="setPurchaseStatus('purchased')" style="padding:3px 10px;font-size:.68rem">Purchased</button>
+                <button class="btn" id="d-purch-status-delivered" onclick="setPurchaseStatus('delivered')" style="padding:3px 10px;font-size:.68rem">Delivered</button>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <div style="font-size:.72rem;color:var(--text2)">Who's buying?</div>
+              <div style="display:flex;gap:4px">
+                <button class="btn" id="d-purchaser-owner" onclick="setPurchaser('owner')" style="padding:3px 10px;font-size:.68rem">I'll buy it</button>
+                <button class="btn" id="d-purchaser-vendor" onclick="setPurchaser('vendor')" style="padding:3px 10px;font-size:.68rem">Vendor buys</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
+
+    <!-- Notes foldout -->
+    <div class="dm-foldout" id="dm-fold-notes">
+      <button class="dm-fold-trigger" onclick="toggleDMFold('dm-fold-notes')">
+        <span class="dm-fold-label">&#x1F4AC; Notes <span class="dm-fold-count" id="dm-notes-count" style="display:none"></span></span>
+        <span class="dm-fold-arrow">&#x25BA;</span>
+      </button>
+      <div class="dm-fold-body">
+        <div class="dm-fold-inner">
+          <div class="notes" id="d-notes"></div>
+          <div class="note-row" style="margin-top:8px">
+            <input type="text" id="d-note-input" placeholder="Add an internal note..." onkeydown="if(event.key==='Enter')addNote('admin')">
+            <button class="btn btn-g" onclick="addNote('admin')">Add</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="d-next-co" style="font-size:.7rem;color:var(--text2);margin:2px 0 6px"></div>
     <div id="d-guest-context"></div>
     <div class="stitle" id="d-vendors-title"></div>

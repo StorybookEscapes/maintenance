@@ -343,11 +343,6 @@ textarea{resize:vertical;min-height:76px}
 .vd-item .vd-role{font-size:.68rem;color:var(--text3);flex-shrink:0;margin-left:8px}
 .vd-none{padding:10px 12px;font-size:.8rem;color:var(--text3);font-style:italic}
 
-/* URGENT TOGGLE (detail) */
-#d-urgent-toggle.urg-on{background:var(--red);color:#fff;border-color:var(--red)}
-#d-urgent-toggle.urg-on:hover{background:#a93226}
-#d-urgent-toggle.urg-off{background:var(--surface2);color:var(--text2);border-color:var(--border)}
-#d-urgent-toggle.urg-off:hover{border-color:var(--red);color:var(--red)}
 
 /* VENDOR SUGGEST */
 .vsc{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:6px}
@@ -660,10 +655,11 @@ textarea{resize:vertical;min-height:76px}
 .gc-foldout{background:#fdf0f4;border:1px solid #e8b8c8;border-radius:var(--radius);margin-bottom:14px;overflow:hidden}
 .gc-fold-trigger{display:flex;align-items:center;justify-content:space-between;width:100%;padding:8px 12px;background:none;border:none;cursor:pointer;font-family:inherit;font-size:.74rem;font-weight:600;color:#c42a52;text-align:left;gap:8px}
 .gc-fold-trigger:hover{background:rgba(196,42,82,.06)}
-.gc-fold-arrow{font-size:.5rem;color:#c42a52;transition:transform .2s;flex-shrink:0}
-.gc-fold-trigger.open .gc-fold-arrow{transform:rotate(90deg)}
-.gc-fold-body{display:none;padding:0 12px 12px;border-top:1px solid #e8b8c8}
-.gc-fold-body.open{display:block}
+.gc-fold-arrow{font-size:.5rem;color:#c42a52;transition:transform .25s cubic-bezier(.4,0,.2,1);flex-shrink:0}
+.gc-foldout.open .gc-fold-arrow{transform:rotate(90deg)}
+.gc-fold-body{max-height:0;overflow:hidden;opacity:0;transition:max-height .32s cubic-bezier(.4,0,.2,1),opacity .22s ease;border-top:0 solid #e8b8c8}
+.gc-foldout.open .gc-fold-body{max-height:300px;opacity:1;border-top:1.5px solid #e8b8c8}
+.gc-fold-inner{padding:10px 13px 13px}
 .gc-contact-row{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
 .gc-contact-btn{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:8px;font-size:.76rem;font-weight:500;font-family:inherit;cursor:pointer;transition:all .15s;text-decoration:none;border:1px solid var(--border);background:var(--white);color:var(--text)}
 .gc-contact-btn:hover{border-color:var(--green);color:var(--green)}
@@ -674,6 +670,49 @@ textarea{resize:vertical;min-height:76px}
 .gc-msg-box textarea::placeholder{color:var(--text3)}
 .gc-send-btn{padding:8px 16px;border-radius:var(--radius);border:1px solid #c42a52;background:#c42a52;color:#fff;font-family:inherit;font-size:.76rem;font-weight:600;cursor:pointer;white-space:nowrap;align-self:flex-end}
 .gc-send-btn:hover{background:#e63462}
+
+/* ── Detail Modal: Property header + task description ── */
+.d-prop-hdr{font-size:1.05rem;font-weight:700;display:block;margin-bottom:6px;letter-spacing:0;text-transform:none;line-height:1.3}
+.d-task-desc{font-size:.82rem;font-weight:400;color:var(--text2);line-height:1.5;cursor:text;min-height:1em}
+.d-task-desc:hover{color:var(--text)}
+
+/* ── Detail Modal: Foldouts (Photos / Purchase / Notes) ── */
+.dm-foldout{border:1.5px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:8px;transition:border-color .2s}
+.dm-foldout.open{border-color:#c5d8cc}
+.dm-fold-trigger{display:flex;align-items:center;justify-content:space-between;width:100%;padding:9px 13px;background:none;border:none;cursor:pointer;font-family:inherit;font-size:.78rem;font-weight:600;color:var(--text2);text-align:left;gap:8px;transition:background .15s,color .15s}
+.dm-fold-trigger:hover,.dm-foldout.open .dm-fold-trigger{background:var(--surface);color:var(--text)}
+.dm-fold-label{display:flex;align-items:center;gap:7px;flex:1;min-width:0}
+.dm-fold-count{font-size:.63rem;font-weight:700;background:var(--green-light);color:var(--green-mid);padding:1px 6px;border-radius:10px}
+.dm-fold-preview{font-size:.67rem;font-weight:400;color:var(--text3);font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
+.dm-fold-arrow{font-size:.55rem;color:var(--text3);transition:transform .25s cubic-bezier(.4,0,.2,1);flex-shrink:0}
+.dm-foldout.open .dm-fold-arrow{transform:rotate(90deg)}
+.dm-fold-body{max-height:0;overflow:hidden;transition:max-height .32s cubic-bezier(.4,0,.2,1),opacity .22s ease;opacity:0;border-top:0 solid var(--border)}
+.dm-foldout.open .dm-fold-body{max-height:600px;opacity:1;border-top:1.5px solid var(--border)}
+.dm-fold-inner{padding:12px 14px}
+
+/* ── Detail Modal: Badge system (category + status + urgent) ── */
+.db-wrap{position:relative;display:inline-flex}
+.db-badge{display:inline-flex;align-items:center;gap:4px;font-size:.63rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px;padding:3px 9px;border-radius:5px;border:1px solid transparent;cursor:pointer;font-family:inherit;transition:filter .15s,opacity .15s;white-space:nowrap}
+.db-badge:hover{filter:brightness(.9)}
+.db-arrow{font-size:.42rem;opacity:.55;margin-left:1px}
+.db-cat{background:var(--surface2);color:var(--text2);border-color:var(--border)}
+.db-open{background:rgba(192,57,43,.1);color:var(--red);border-color:rgba(192,57,43,.2)}
+.db-scheduled{background:#dbeafe;color:#1d4ed8;border-color:#bfdbfe}
+.db-inprogress{background:#f3e8ff;color:#7e22ce;border-color:#e9d5ff}
+.db-complete{background:var(--green-light);color:var(--green-mid);border-color:#a7f3d0}
+.db-urgent{background:var(--red);color:#fff;border-color:var(--red)}
+.db-urgent-off{background:none;color:var(--text2);border-color:var(--border)}
+.db-urgent-off:hover{border-color:var(--red);color:var(--red)}
+
+/* ── Detail Modal: Badge pickers (fixed-positioned dropdowns) ── */
+.db-picker{visibility:hidden;opacity:0;pointer-events:none;position:fixed;background:var(--white);border:1.5px solid var(--border);border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.12);z-index:1000;min-width:160px;padding:5px 0;transition:opacity .15s,visibility .15s}
+.db-picker.open{visibility:visible;opacity:1;pointer-events:auto}
+.db-picker-item{display:block;width:100%;text-align:left;padding:7px 14px;font-family:inherit;font-size:.78rem;font-weight:500;color:var(--text);background:none;border:none;cursor:pointer;transition:background .1s}
+.db-picker-item:hover{background:var(--surface)}
+.db-picker-item.active{font-weight:700;color:var(--green-mid)}
+
+/* ── Detail Modal: Vendor contact row ── */
+#d-contact-row{display:flex;gap:8px;margin-bottom:12px}
 
 /* ── Editable notes (task detail) ── */
 .note-actions{display:inline-flex;gap:4px;margin-left:auto}
