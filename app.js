@@ -1598,13 +1598,13 @@ function renderCalendar(){
 
     h+=`<div class="tw-week ${wk===0?'tw-current':''}" style="margin-bottom:${wk<2?'12px':'0'}">`;
     h+=`<div class="tw-week-hdr"><span class="tw-week-label">${wLabel}</span><span class="tw-week-range">${wRange}</span></div>`;
-    h+=`<div class="wk-grid"><div class="wk-hrow"><div class="wk-corner"></div>`;
+    h+=`<div class="wk-grid"><div class="wk-hrow">`;
     for(let i=0;i<7;i++){
       const d=new Date(weekStart);d.setDate(weekStart.getDate()+i);
       const isT=d.toDateString()===today.toDateString();
       h+=`<div class="wk-hcell ${isT?'tdc':''}"><div class="wd">${DOW[d.getDay()]}</div><div class="wdt">${MNS[d.getMonth()]} ${d.getDate()}</div></div>`;
     }
-    h+=`</div><div class="wk-brow"><div class="wk-lbl"></div>`;
+    h+=`</div><div class="wk-brow">`;
     for(let i=0;i<7;i++){
       const d=new Date(weekStart);d.setDate(weekStart.getDate()+i);
       const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -1756,9 +1756,9 @@ const wkStart=d=>{const s=new Date(d);s.setDate(d.getDate()-d.getDay());return s
 function buildWeek(ws){
   const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];const MNS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const today=new Date();
-  let h='<div class="wk-grid"><div class="wk-hrow"><div class="wk-corner"></div>';
+  let h='<div class="wk-grid"><div class="wk-hrow">';
   for(let i=0;i<7;i++){const d=new Date(ws);d.setDate(ws.getDate()+i);const isT=d.toDateString()===today.toDateString();h+=`<div class="wk-hcell ${isT?'tdc':''}"><div class="wd">${DOW[d.getDay()]}</div><div class="wdt">${MNS[d.getMonth()]} ${d.getDate()}</div></div>`;}
-  h+='</div><div class="wk-brow"><div class="wk-lbl">All day</div>';
+  h+='</div><div class="wk-brow">';
   for(let i=0;i<7;i++){
     const d=new Date(ws);d.setDate(ws.getDate()+i);
     const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
