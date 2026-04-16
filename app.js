@@ -2501,8 +2501,9 @@ async function openVendorDay(vendorName,date){
   const vdTasks=getVendorDayTasks(vendorName,date);
   if(!vdTasks.length)return;
   const v=vendors.find(x=>x.name.toLowerCase()===vendorName.toLowerCase());
-  // Header — just the vendor name
-  document.getElementById('vd-title').textContent=vendorName;
+  // Header — vendor name + date
+  const dateFmtHdr=date?new Date(date+'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}):'';
+  document.getElementById('vd-title').textContent=vendorName+(dateFmtHdr?' — '+dateFmtHdr:'');
   // Contact row
   const contactEl=document.getElementById('vd-contact-row');
   if(v){
