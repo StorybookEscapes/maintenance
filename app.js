@@ -1544,9 +1544,14 @@ function buildVgWeek(vg,ds){
   // Compact summary for mobile — property name (or "X properties") shown instead of task list
   const propIds=[...new Set(vg.tasks.map(t=>t.property))];
   const propLabel=propIds.length===1?(()=>{const p=getProp(propIds[0]);return p?p.name.split(' - ').pop():propIds[0];})():`${propIds.length} properties`;
+  // Use the neighborhood color when all tasks share one neighborhood
+  const nbCls=[...new Set(vg.tasks.map(t=>getNbCls(t.property)).filter(Boolean))];
+  const hdrNc=nbCls.length===1?nbCls[0]:null;
+  const _nbColorMap={prc:'var(--prc)',umc:'var(--umc)',gatlinburg:'var(--gatlinburg)',alpine:'var(--alpine)',sevierville:'var(--sevierville)',hillside:'var(--hillside)'};
+  const hdrBg=hdrNc&&_nbColorMap[hdrNc]?_nbColorMap[hdrNc]:'var(--green)';
   let h=`<div class="vg-week-wrap ${hasUrg?'urg':''}" onclick="openVendorDay('${vg.name.replace(/'/g,"\\'")}','${ds}')">`;
-  h+=`<div class="vg-week-hdr"><span class="vg-week-name">${firstName}</span><span class="vg-week-count">${vg.tasks.length} jobs</span></div>`;
-  h+=`<div class="vg-week-mobile-summary">${propLabel}</div>`;
+  h+=`<div class="vg-week-hdr" style="background:${hdrBg}"><span class="vg-week-name">${firstName}</span><span class="vg-week-count">${vg.tasks.length} job${vg.tasks.length!==1?'s':''}</span></div>`;
+  h+=`<div class="vg-week-mobile-summary" style="background:${hdrBg};filter:brightness(.85)">${propLabel}</div>`;
   let lastNbName='';
   sorted.forEach(t=>{
     const nc=getNbCls(t.property);const nb=getNb(t.property);const nbName=nb?nb.name:'Other';

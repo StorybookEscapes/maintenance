@@ -848,7 +848,9 @@ textarea{resize:vertical;min-height:76px}
   .wk-hcell .wd{font-size:.55rem}
   .wk-hcell .wdt{font-size:.8rem}
   .wk-day{padding:3px;min-height:60px}
-  .de{font-size:.62rem;padding:3px 5px}
+  .de{font-size:.68rem;padding:4px 6px}
+  .de-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  .de-prop{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .de-prop{font-size:.53rem}
   .vg-week-hdr{padding:5px 8px}
   .vg-week-name{font-size:.72rem}
