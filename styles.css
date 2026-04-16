@@ -441,6 +441,7 @@ textarea{resize:vertical;min-height:76px}
 .vg-week-hdr{display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:var(--green);color:#fff}
 .vg-week-name{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
 .vg-week-count{font-size:.62rem;opacity:.7;font-weight:500}
+.vg-week-mobile-summary{display:none}
 .vg-week-nb-hdr{padding:4px 8px;font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#fff;opacity:.85;border-bottom:1px solid rgba(255,255,255,.15)}
 .vg-week-task{padding:4px 8px;font-size:.71rem;color:#fff}
 .vg-week-task+.vg-week-task{border-top:1px solid rgba(255,255,255,.15)}
@@ -849,11 +850,12 @@ textarea{resize:vertical;min-height:76px}
   .wk-day{padding:3px;min-height:60px}
   .de{font-size:.62rem;padding:3px 5px}
   .de-prop{font-size:.53rem}
-  .vg-week-hdr{padding:3px 5px}
-  .vg-week-name{font-size:.6rem}
-  .vg-week-count{font-size:.52rem}
-  .vg-week-task{padding:3px 5px;font-size:.6rem}
-  .vg-week-task-prop{font-size:.5rem}
+  .vg-week-hdr{padding:5px 8px}
+  .vg-week-name{font-size:.72rem}
+  .vg-week-count{font-size:.62rem}
+  /* Mobile compact: show property summary, hide task detail rows */
+  .vg-week-mobile-summary{display:block;padding:4px 8px 6px;font-size:.72rem;color:rgba(255,255,255,.85);font-weight:500;background:rgba(0,0,0,.12)}
+  .vg-week-nb-hdr,.vg-week-task{display:none}
   /* 3-week mobile */
   .tw-week-hdr{margin-bottom:4px}
   .tw-week-label{font-size:.6rem;letter-spacing:1px}

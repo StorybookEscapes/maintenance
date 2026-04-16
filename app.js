@@ -1541,8 +1541,12 @@ function sortByNbProp(taskList){
 function buildVgWeek(vg,ds){
   const hasUrg=vg.tasks.some(t=>t.urgent);const firstName=vg.name.split(' ')[0];
   const sorted=sortByNbProp(vg.tasks);
+  // Compact summary for mobile — property name (or "X properties") shown instead of task list
+  const propIds=[...new Set(vg.tasks.map(t=>t.property))];
+  const propLabel=propIds.length===1?(()=>{const p=getProp(propIds[0]);return p?p.name.split(' - ').pop():propIds[0];})():`${propIds.length} properties`;
   let h=`<div class="vg-week-wrap ${hasUrg?'urg':''}" onclick="openVendorDay('${vg.name.replace(/'/g,"\\'")}','${ds}')">`;
   h+=`<div class="vg-week-hdr"><span class="vg-week-name">${firstName}</span><span class="vg-week-count">${vg.tasks.length} jobs</span></div>`;
+  h+=`<div class="vg-week-mobile-summary">${propLabel}</div>`;
   let lastNbName='';
   sorted.forEach(t=>{
     const nc=getNbCls(t.property);const nb=getNb(t.property);const nbName=nb?nb.name:'Other';
