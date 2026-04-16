@@ -2576,38 +2576,37 @@ async function renderGuestComm(t){
   // Strip country code: +1, 1, or leading 1 for US numbers (11 digits)
   const phone=rawPhone.replace(/\D/g,'').replace(/^1(\d{10})$/,'$1');
   const phoneFmt=phone?phone.replace(/^(\d{3})(\d{3})(\d{4})$/,'($1) $2-$3'):rawPhone;
-  const phoneLinks=phone?`<div class="vc-action-row" style="flex-shrink:0">
-    <a href="sms:${phone}" class="vc-action-btn vc-text"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg> Text ${phoneFmt}</a>
-    <a href="tel:${phone}" class="vc-action-btn vc-call"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg> Call</a>
-  </div>`:`<div class="vc-action-row" style="flex-shrink:0">
-    <span class="vc-action-btn vc-disabled"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg> Text</span>
-    <span class="vc-action-btn vc-disabled"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg> Call</span>
-    <span class="vc-no-phone">No phone on file</span>
-  </div>`;
+  const phoneLinks=phone?`<div style="display:flex;gap:5px;flex-shrink:0">
+    <a href="sms:${phone}" class="vc-action-btn vc-text" style="font-size:.7rem;padding:5px 10px"><svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg> Text ${phoneFmt}</a>
+    <a href="tel:${phone}" class="vc-action-btn vc-call" style="font-size:.7rem;padding:5px 10px"><svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg> Call</a>
+  </div>`:`<span style="font-size:.68rem;color:var(--text3)">No phone on file</span>`;
   // Determine if guest action buttons should show
   const tRef=tasks.find(x=>x.id===detailId);
   const gcIsDone=tRef&&isDone(tRef);
   const showAssignGuest=tRef&&!gcIsDone&&!tRef.assignedToGuest;
   const showResolved=tRef&&!gcIsDone;
-  const gcActions=`<div class="gc-hosp-actions">
-    ${showAssignGuest?`<button class="btn" onclick="assignToGuest()" style="border-color:var(--gold);color:var(--gold);font-size:.68rem;padding:2px 9px;box-shadow:none">Assign to Guest</button>`:''}
-    ${showResolved?`<button class="btn" onclick="markResolvedByGuest()" style="border-color:var(--green);color:var(--green);font-size:.68rem;padding:2px 9px;box-shadow:none">Resolved by Guest</button>`:''}
-  </div>`;
-  el.innerHTML=`<div class="guest-comm">
-    <div class="guest-comm-header">
-      <div class="gc-hosp-left"><span style="font-size:.7rem;font-weight:600;color:var(--text2)">Guest at this property</span><span class="gc-hosp-badge">Hospitable</span></div>
-      ${gcActions}
-    </div>
-    <div class="gc-top-row">
-      <div class="gc-top-left">
-        <div class="gc-guest-name">${guestName}</div>
-        <div class="gc-guest-dates">${checkin} – ${checkout}${activeRes.platform?' · '+activeRes.platform:''}</div>
+  const gcActionBtns=(showAssignGuest||showResolved)?`<div style="display:flex;gap:5px;margin-bottom:8px">
+    ${showAssignGuest?`<button class="btn" onclick="assignToGuest()" style="border-color:var(--gold);color:var(--gold);font-size:.68rem;padding:3px 10px;box-shadow:none">Assign to Guest</button>`:''}
+    ${showResolved?`<button class="btn" onclick="markResolvedByGuest()" style="border-color:var(--green);color:var(--green);font-size:.68rem;padding:3px 10px;box-shadow:none">Resolved by Guest</button>`:''}
+  </div>`:'';
+  el.innerHTML=`<div class="gc-foldout">
+    <button class="gc-fold-trigger" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
+      <span><svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="vertical-align:-1px;margin-right:5px"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg>Contact ${guestFirst} — current guest</span>
+      <span class="gc-fold-arrow">&#x25BA;</span>
+    </button>
+    <div class="gc-fold-body">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0 8px">
+        <div>
+          <div style="font-size:.84rem;font-weight:600;color:var(--text)">${guestName}</div>
+          <div style="font-size:.68rem;color:var(--text2)">${checkin} – ${checkout}${activeRes.platform?' · '+activeRes.platform:''}</div>
+        </div>
+        ${phoneLinks}
       </div>
-      ${phoneLinks}
-    </div>
-    <div class="gc-msg-box">
-      <textarea id="gc-msg-input" placeholder="Send a message to ${guestFirst} via Hospitable..."></textarea>
-      <button class="gc-send-btn" onclick="sendGuestCommMsg('${activeRes.reservationId}','${guestFirst}')">Send</button>
+      ${gcActionBtns}
+      <div class="gc-msg-box">
+        <textarea id="gc-msg-input" placeholder="Send a message to ${guestFirst} via Hospitable..."></textarea>
+        <button class="gc-send-btn" onclick="sendGuestCommMsg('${activeRes.reservationId}','${guestFirst}')">Send</button>
+      </div>
     </div>
   </div>`;
 }
@@ -2703,13 +2702,6 @@ async function renderDetailVendors(t,p){
     const sameDayTasks=getVendorDayTasks(assignedVendor.name,t.date);
     const taskListForCard=sameDayTasks.length?sameDayTasks:[t];
     h+=combinedCard(assignedVendor,taskListForCard);
-    // Show other vendors in a collapsible section
-    const others=m.filter(v=>v.id!==assignedVendor.id).slice(0,3);
-    if(others.length){
-      h+=`<details style="margin-top:10px"><summary style="font-size:.78rem;color:var(--text2);cursor:pointer;padding:6px 0">Other vendors for this category (${others.length})</summary>`;
-      h+=others.map(v=>vendorCard(v,true)).join('');
-      h+=`</details>`;
-    }
     area.innerHTML=h;
     return;
   }
@@ -3423,20 +3415,6 @@ function combinedVendorCard(v,taskList,sheetUrl,showTaskList=true){
           Send Job Sheet
         </a>
         <span class="cg-send-status">Not yet sent</span>
-        <button class="cg-send-edit" onclick="const b=this.closest('.combined-sms-banner');const m=b.querySelector('.cg-msg-body');const t=b.querySelector('.cg-msg-toggle');m.classList.toggle('open');t.classList.toggle('open')">Preview & edit</button>
-      </div>
-    </div>
-    <button class="cg-msg-toggle" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
-      <span class="cg-msg-toggle-label">Message Preview</span>
-      <span class="cg-msg-toggle-arrow">&#x25BC;</span>
-    </button>
-    <div class="cg-msg-body">
-      <div class="sms-box" style="margin-top:3px">
-        <textarea class="sms-edit" id="${smsId}" style="min-height:100px">${escapedSms}</textarea>
-        <div class="sms-acts">
-          <a href="sms:${tel}?body=${encodeURIComponent(sms)}" class="sms-btn sms-send" onclick="updateSmsLink('${smsId}','${tel}')">Send Job Sheet</a>
-          <button class="sms-btn sms-copy" onclick="copySms('${smsId}')">Copy Text</button>
-        </div>
       </div>
     </div>`;
 
