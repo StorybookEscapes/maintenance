@@ -441,7 +441,10 @@ textarea{resize:vertical;min-height:76px}
 .vg-week-hdr{display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:var(--green);color:#fff}
 .vg-week-name{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
 .vg-week-count{font-size:.62rem;opacity:.7;font-weight:500}
-.vg-week-mobile-summary{display:none}
+/* Mobile 3-line compact card — hidden on desktop */
+.vg-week-desktop{} /* always visible on desktop */
+.vg-week-mobile{display:none}
+.vgm-name,.vgm-prop,.vgm-count{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fff}
 .vg-week-nb-hdr{padding:4px 8px;font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#fff;opacity:.85;border-bottom:1px solid rgba(255,255,255,.15)}
 .vg-week-task{padding:4px 8px;font-size:.71rem;color:#fff}
 .vg-week-task+.vg-week-task{border-top:1px solid rgba(255,255,255,.15)}
@@ -853,12 +856,12 @@ textarea{resize:vertical;min-height:76px}
   .de-prop{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.5rem}
   .de-cat{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.5rem}
   .de-prop{font-size:.53rem}
-  .vg-week-hdr{padding:2px 4px}
-  .vg-week-name{font-size:.58rem;letter-spacing:0}
-  .vg-week-count{font-size:.5rem}
-  /* Mobile compact: show property summary, hide task detail rows */
-  .vg-week-mobile-summary{display:block;padding:2px 4px 3px;font-size:.56rem;color:rgba(255,255,255,.9);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .vg-week-nb-hdr,.vg-week-task{display:none}
+  /* Mobile: hide desktop task rows, show compact 3-line card */
+  .vg-week-desktop{display:none}
+  .vg-week-mobile{display:block;padding:3px 4px 4px}
+  .vgm-name{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-bottom:1px}
+  .vgm-prop{font-size:.58rem;font-weight:500;opacity:.88;margin-bottom:1px}
+  .vgm-count{font-size:.54rem;opacity:.72}
   /* 3-week mobile */
   .tw-week-hdr{margin-bottom:4px}
   .tw-week-label{font-size:.6rem;letter-spacing:1px}

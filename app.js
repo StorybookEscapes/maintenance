@@ -1541,17 +1541,17 @@ function sortByNbProp(taskList){
 function buildVgWeek(vg,ds){
   const hasUrg=vg.tasks.some(t=>t.urgent);const firstName=vg.name.split(' ')[0];
   const sorted=sortByNbProp(vg.tasks);
-  // Compact summary for mobile — property name (or "X properties") shown instead of task list
+  // Property label + neighborhood color (used by both desktop and mobile layouts)
   const propIds=[...new Set(vg.tasks.map(t=>t.property))];
-  const propLabel=propIds.length===1?(()=>{const p=getProp(propIds[0]);return p?p.name.split(' - ').pop():propIds[0];})():`${propIds.length} properties`;
-  // Use the neighborhood color when all tasks share one neighborhood
+  const propLabel=propIds.length===1?(()=>{const p=getProp(propIds[0]);return p?p.name.split(' - ').pop():propIds[0];})():`${propIds.length} prop.`;
   const nbCls=[...new Set(vg.tasks.map(t=>getNbCls(t.property)).filter(Boolean))];
   const hdrNc=nbCls.length===1?nbCls[0]:null;
   const _nbColorMap={prc:'var(--prc)',umc:'var(--umc)',gatlinburg:'var(--gatlinburg)',alpine:'var(--alpine)',sevierville:'var(--sevierville)',hillside:'var(--hillside)'};
   const hdrBg=hdrNc&&_nbColorMap[hdrNc]?_nbColorMap[hdrNc]:'var(--green)';
-  let h=`<div class="vg-week-wrap ${hasUrg?'urg':''}" onclick="openVendorDay('${vg.name.replace(/'/g,"\\'")}','${ds}')">`;
-  h+=`<div class="vg-week-hdr" style="background:${hdrBg}"><span class="vg-week-name">${firstName}</span><span class="vg-week-count">${vg.tasks.length} job${vg.tasks.length!==1?'s':''}</span></div>`;
-  h+=`<div class="vg-week-mobile-summary" style="background:${hdrBg};filter:brightness(.85)">${propLabel}</div>`;
+  let h=`<div class="vg-week-wrap ${hasUrg?'urg':''}" style="background:${hdrBg}" onclick="openVendorDay('${vg.name.replace(/'/g,"\\'")}','${ds}')">`;
+  // Desktop layout: header bar + task rows
+  h+=`<div class="vg-week-desktop">`;
+  h+=`<div class="vg-week-hdr"><span class="vg-week-name">${firstName}</span><span class="vg-week-count">${vg.tasks.length} job${vg.tasks.length!==1?'s':''}</span></div>`;
   let lastNbName='';
   sorted.forEach(t=>{
     const nc=getNbCls(t.property);const nb=getNb(t.property);const nbName=nb?nb.name:'Other';
@@ -1559,6 +1559,9 @@ function buildVgWeek(vg,ds){
     if(nbName!==lastNbName){lastNbName=nbName;h+=`<div class="vg-week-nb-hdr vg-t-${nc}">${nbName}</div>`;}
     h+=`<div class="vg-week-task vg-t-${nc}"><div class="vg-week-task-prop">${sh}</div><div class="vg-week-task-desc">${t.problem}</div></div>`;
   });
+  h+=`</div>`; // close vg-week-desktop
+  // Mobile layout: 3 compact lines — name / property / job count
+  h+=`<div class="vg-week-mobile"><div class="vgm-name">${firstName}</div><div class="vgm-prop">${propLabel}</div><div class="vgm-count">${vg.tasks.length} job${vg.tasks.length!==1?'s':''}</div></div>`;
   return h+'</div>';
 }
 /* Render a vendor group pill for the monthly view — sorted by neighborhood with color-coded sections */
