@@ -5632,7 +5632,7 @@ let rvDismissed = [];
 async function loadDismissed(){
   try{
     const r=await S.get('se_dismissed');
-    if(r&&r.value)rvDismissed=JSON.parse(r.value);
+    if(r&&r.value)rvDismissed=JSON.parse(r.value).map(x => x != null ? String(x) : x);
   }catch(e){console.warn('[dismissed] Failed to load from KV:',e.message);}
 }
 async function saveDismissed(){try{await S.set('se_dismissed',JSON.stringify(rvDismissed));}catch(e){}}
@@ -5741,7 +5741,7 @@ async function rvFetch() {
   let purchaseCount = 0;
   rvItems = [];
   for (const rv of allReviews) {
-    if (rvDismissed.includes(rv.id)) continue;
+    if (rvDismissed.includes(String(rv.id))) continue;
     if (new Date(rv.reviewed_at).getTime() < cutoff) continue;
     if (!rvIsMaintRelevant(rv)) continue;
 
@@ -5755,7 +5755,7 @@ async function rvFetch() {
         continue;
       }
       await rpImportFromReviewSilent(rv);
-      rvDismissed.push(rv.id);
+      rvDismissed.push(String(rv.id));
       purchaseCount++;
       continue;
     }
@@ -5952,7 +5952,7 @@ async function rvImportAll() {
     // Route purchase items as replacement tasks (silent for bulk import)
     if (rvIsPurchaseItem(problem)) {
       await rpImportFromReviewSilent(rv);
-      rvDismissed.push(rv.id);
+      rvDismissed.push(String(rv.id));
       nPurchases++;
       continue;
     }
@@ -5968,7 +5968,7 @@ async function rvImportAll() {
       notes: [{ text: `Imported from guest review (${new Date(rv.reviewed_at).toLocaleDateString()}).${rv.reservation?.code ? ' Reservation: ' + rv.reservation.code : ''} Private feedback from ${guest || 'guest'}.`, type: 'admin', time: new Date().toISOString() }],
       vendorNotes: '', created: rv.reviewed_at || new Date().toISOString(),
     });
-    rvDismissed.push(rv.id);
+    rvDismissed.push(String(rv.id));
     nTasks++;
   }
   await saveTasks();
@@ -5990,7 +5990,7 @@ function rvDismiss(id) {
 }
 
 function rvDismissAll() {
-  rvItems.forEach(rv => rvDismissed.push(rv.id));
+  rvItems.forEach(rv => rvDismissed.push(String(rv.id)));
   saveDismissed();
   rvItems = [];
   renderRV();
