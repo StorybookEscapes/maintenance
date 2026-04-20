@@ -979,9 +979,34 @@ function renderTasks(){
     </div>`;
   }
   if(scheduled.length){
+    // Same treatment as Needs Scheduling: grouped by property A→Z with a
+    // colored neighborhood banner at each boundary. Within each property
+    // group, tasks keep the pre-group sort order (urgent first, then date
+    // ascending) so overdue items still surface near the top of their group.
+    const scGroups={};
+    scheduled.forEach(t=>{if(!scGroups[t.property])scGroups[t.property]=[];scGroups[t.property].push(t);});
+    const scPropIds=Object.keys(scGroups).sort((a,b)=>{const pa=getProp(a);const pb=getProp(b);return(pa?pa.name:a).localeCompare(pb?pb.name:b);});
+    let scInner='';
+    let scCurNb=null,scBucket=[];
+    const scFlush=()=>{
+      if(!scBucket.length)return;
+      const nb=scCurNb,nbName=nb?nb.name:'Other',nbCls=nb?nb.cls:'other';
+      const nbTaskCount=scBucket.reduce((s,pid)=>s+scGroups[pid].length,0);
+      const cabinCount=scBucket.length;
+      const countLabel=cabinCount>1?`${nbTaskCount} task${nbTaskCount!==1?'s':''} · ${cabinCount} cabins`:`${nbTaskCount} task${nbTaskCount!==1?'s':''}`;
+      scInner+=`<div class="nb-banner nbb-${nbCls}"><span>${nbName}</span><span class="nb-banner-count">${countLabel}</span></div>`;
+      scInner+=`<div class="task-list">${scBucket.map(pid=>scGroups[pid].map(taskCard).join('')).join('')}</div>`;
+      scBucket=[];
+    };
+    scPropIds.forEach(pid=>{
+      const nb=getNb(pid),curId=scCurNb?scCurNb.id:null,newId=nb?nb.id:null;
+      if(curId!==newId){scFlush();scCurNb=nb;}
+      scBucket.push(pid);
+    });
+    scFlush();
     html+=`<div class="cat-section">
       <div class="cat-section-hdr"><span class="cat-section-title">Scheduled</span><span class="cat-section-count">${scheduled.length}</span></div>
-      <div class="task-list">${scheduled.map(taskCard).join('')}</div>
+      ${scInner}
     </div>`;
   }
   el.innerHTML=html;
