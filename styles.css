@@ -76,6 +76,17 @@ main{flex:1;padding:22px;max-width:1440px;margin:0 auto;width:100%}
 .cat-section-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid var(--border)}
 .cat-section-title{font-size:.68rem;text-transform:uppercase;letter-spacing:1.5px;color:var(--green);font-weight:700}
 .cat-section-count{font-size:.68rem;background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:20px;padding:2px 9px;font-weight:700;letter-spacing:.5px}
+/* Neighborhood divider banner — shown in status-mode "Needs Scheduling" between property groups */
+.nb-banner{display:flex;align-items:center;gap:10px;margin:10px 0 6px;padding:5px 12px;border-radius:6px;color:#fff;font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:2px}
+.cat-section-hdr + .nb-banner{margin-top:4px}
+.nb-banner-count{margin-left:auto;font-size:.62rem;opacity:.85;letter-spacing:.8px;font-weight:600}
+.nbb-prc{background:var(--prc)}
+.nbb-umc{background:var(--umc)}
+.nbb-gatlinburg{background:var(--gatlinburg)}
+.nbb-alpine{background:var(--alpine)}
+.nbb-sevierville{background:var(--sevierville)}
+.nbb-hillside{background:var(--hillside)}
+.nbb-other{background:#6b7c6e}
 .tc{background:var(--white);border:1px solid var(--border);border-left-width:3px;border-radius:var(--radius);padding:9px 12px;cursor:pointer;transition:all .15s;box-shadow:var(--shadow)}
 .tc:hover{box-shadow:var(--shadow-md)}
 .tc.done{opacity:.5}

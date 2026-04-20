@@ -811,7 +811,7 @@ const CAT_LABELS={replacement:'Replacement',handyman:'Handyman',plumbing:'Plumbi
 let catFilter='all';
 let propFilter='all';
 let dateSort=false;
-let groupMode='property'; // 'status' | 'property'
+let groupMode='status'; // 'status' | 'property'
 const _collapsedProps=new Set();
 const _collapsedNbs=new Set();
 let _propGroupSeeded=false; // true after first auto-collapse seed on load
@@ -988,9 +988,35 @@ function renderTasks(){
 
   let html='';
   if(needsScheduling.length){
+    // Urgent floats to top as flat list; non-urgent grouped by property A→Z
+    // with a colored neighborhood banner inserted at each boundary.
+    const urgentList=needsScheduling.filter(t=>t.urgent);
+    const nonUrgent=needsScheduling.filter(t=>!t.urgent);
+    const nsGroups={};
+    nonUrgent.forEach(t=>{if(!nsGroups[t.property])nsGroups[t.property]=[];nsGroups[t.property].push(t);});
+    const nsPropIds=Object.keys(nsGroups).sort((a,b)=>{const pa=getProp(a);const pb=getProp(b);return(pa?pa.name:a).localeCompare(pb?pb.name:b);});
+    let nsInner='';
+    if(urgentList.length)nsInner+=`<div class="task-list">${urgentList.map(taskCard).join('')}</div>`;
+    let nsCurNb=null,nsBucket=[];
+    const nsFlush=()=>{
+      if(!nsBucket.length)return;
+      const nb=nsCurNb,nbName=nb?nb.name:'Other',nbCls=nb?nb.cls:'other';
+      const nbTaskCount=nsBucket.reduce((s,pid)=>s+nsGroups[pid].length,0);
+      const cabinCount=nsBucket.length;
+      const countLabel=cabinCount>1?`${nbTaskCount} task${nbTaskCount!==1?'s':''} · ${cabinCount} cabins`:`${nbTaskCount} task${nbTaskCount!==1?'s':''}`;
+      nsInner+=`<div class="nb-banner nbb-${nbCls}"><span>${nbName}</span><span class="nb-banner-count">${countLabel}</span></div>`;
+      nsInner+=`<div class="task-list">${nsBucket.map(pid=>nsGroups[pid].map(taskCard).join('')).join('')}</div>`;
+      nsBucket=[];
+    };
+    nsPropIds.forEach(pid=>{
+      const nb=getNb(pid),curId=nsCurNb?nsCurNb.id:null,newId=nb?nb.id:null;
+      if(curId!==newId){nsFlush();nsCurNb=nb;}
+      nsBucket.push(pid);
+    });
+    nsFlush();
     html+=`<div class="cat-section">
       <div class="cat-section-hdr"><span class="cat-section-title">Needs Scheduling</span><span class="cat-section-count">${needsScheduling.length}</span></div>
-      <div class="task-list">${needsScheduling.map(taskCard).join('')}</div>
+      ${nsInner}
     </div>`;
   }
   if(scheduled.length){
