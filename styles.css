@@ -600,56 +600,6 @@ textarea{resize:vertical;min-height:76px}
 .hb-btn-restore{background:transparent;color:#5a7a90;border-color:rgba(90,150,210,.25);font-size:.66rem;padding:3px 9px}
 .hb-btn-restore:hover{color:#b8d8f8;border-color:#5ba3e0}
 
-/* ── Guest Feedback (Review Import) ── */
-.rv-banner{background:linear-gradient(135deg,#2a2418 0%,#3a2e1a 100%);border:1px solid #7a6530;border-radius:var(--radius);padding:14px 18px;margin-bottom:16px;box-shadow:var(--shadow-md)}
-.rv-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px}
-.rv-title{font-size:.72rem;text-transform:uppercase;letter-spacing:1.5px;color:#d4a840;font-weight:700;display:flex;align-items:center;gap:8px}
-.rv-title svg{width:16px;height:16px;fill:#d4a840;flex-shrink:0}
-.rv-count{font-size:.68rem;background:#5a4a20;color:#e8d080;border-radius:20px;padding:2px 9px;font-weight:700}
-.rv-item{background:rgba(255,255,255,.06);border:1px solid rgba(180,150,60,.25);border-radius:8px;padding:11px 14px;margin-bottom:6px;transition:border-color .15s}
-.rv-item:hover{border-color:#d4a840}
-.rv-item-top{display:flex;flex-direction:column;gap:8px}
-.rv-item-prop{font-size:.69rem;text-transform:uppercase;letter-spacing:1.2px;color:#d4a840;font-weight:700;margin-bottom:3px}
-.rv-item-prob{font-size:.84rem;font-weight:500;color:#e8dcc0;line-height:1.45;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
-.rv-item-meta{display:flex;gap:12px;margin-top:6px;flex-wrap:wrap}
-.rv-item-meta span{font-size:.69rem;color:#b0a070}
-.rv-item-snippet{font-size:.76rem;color:#c0b080;background:rgba(0,0,0,.15);border-radius:6px;padding:7px 10px;margin-top:7px;line-height:1.4;font-style:italic;border-left:2px solid #8a7030}
-.rv-item-ratings{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap}
-.rv-rating{font-size:.65rem;color:#b0a070;background:rgba(180,150,60,.12);border-radius:4px;padding:2px 6px}
-.rv-rating.low{color:#e06050;background:rgba(224,96,80,.12);font-weight:700}
-.rv-item-btns{display:flex;gap:6px;align-items:center}
-.rv-btn{padding:5px 11px;border-radius:7px;font-size:.73rem;font-family:inherit;font-weight:600;cursor:pointer;border:1px solid;transition:all .15s;white-space:nowrap}
-.rv-btn-import{background:#7a6020;color:#fff;border-color:#9a7a30}
-.rv-btn-import:hover{background:#9a7a30}
-.rv-btn-dismiss{background:transparent;color:#b0a070;border-color:rgba(180,150,60,.3)}
-.rv-btn-dismiss:hover{color:#e8d080;border-color:#d4a840}
-
-/* ── Guest Alert Banner (active issues + arriving soon) — Hospitable brand coral ── */
-.ga-banner{background:linear-gradient(135deg,#2a1520 0%,#3a1828 100%);border:1px solid #8a3050;border-radius:var(--radius);padding:14px 18px;margin-bottom:16px;box-shadow:var(--shadow-md)}
-.ga-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px}
-.ga-title{font-size:.72rem;text-transform:uppercase;letter-spacing:1.5px;color:#e63462;font-weight:700;display:flex;align-items:center;gap:8px}
-.ga-title svg{width:16px;height:16px;fill:#e63462;flex-shrink:0}
-.ga-count{font-size:.68rem;background:#5a2038;color:#f0a0b8;border-radius:20px;padding:2px 9px;font-weight:700}
-.ga-item{background:rgba(255,255,255,.06);border:1px solid rgba(230,52,98,.25);border-radius:8px;padding:12px 14px;margin-bottom:6px;transition:border-color .15s}
-.ga-item:hover{border-color:#e63462}
-.ga-item-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
-.ga-item-prop{font-size:.69rem;text-transform:uppercase;letter-spacing:1.2px;color:#e63462;font-weight:700;margin-bottom:3px}
-.ga-item-issue{font-size:.82rem;font-weight:500;color:#e8d0d8;line-height:1.4;margin-bottom:6px}
-.ga-item-guest{font-size:.76rem;color:#d8a0b0;margin-bottom:8px}
-.ga-item-guest strong{color:#f0b8c8;font-weight:600}
-.ga-msg-preview{background:rgba(0,0,0,.2);border:1px solid rgba(230,52,98,.15);border-radius:8px;padding:10px 12px;margin-bottom:8px}
-.ga-msg-text{font-size:.8rem;color:#e8d0d8;line-height:1.55;white-space:pre-wrap;word-break:break-word}
-.ga-msg-edit{width:100%;background:rgba(0,0,0,.3);border:1px solid rgba(230,52,98,.3);border-radius:8px;padding:10px 12px;font-size:.8rem;color:#f0e0e8;line-height:1.55;font-family:inherit;resize:vertical;min-height:80px;display:none}
-.ga-msg-edit:focus{outline:none;border-color:rgba(230,52,98,.5)}
-.ga-item-btns{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-.ga-btn{padding:5px 11px;border-radius:7px;font-size:.73rem;font-family:inherit;font-weight:600;cursor:pointer;border:1px solid;transition:all .15s;white-space:nowrap}
-.ga-btn-send{background:#c42a52;color:#fff;border-color:#e63462}
-.ga-btn-send:hover{background:#e63462}
-.ga-btn-edit{background:transparent;color:#d8a0b0;border-color:rgba(230,52,98,.3)}
-.ga-btn-edit:hover{color:#f0b8c8;border-color:#e63462}
-.ga-btn-dismiss{background:transparent;color:#9a6878;border-color:rgba(230,52,98,.2)}
-.ga-btn-dismiss:hover{color:#d8a0b0;border-color:rgba(230,52,98,.4)}
-.ga-sent{font-size:.72rem;color:#6abe6a;font-weight:600;display:none}
 /* Guest context in task detail */
 .gc-wrap{background:var(--green-pale);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:6px}
 .gc-guest{font-size:.82rem;font-weight:600;color:var(--text);margin-bottom:4px}

@@ -44,17 +44,6 @@
     <div class="view active" id="view-tasks">
       <!-- Alerts -->
       <div id="hb-wrap"></div>
-      <div id="rv-wrap"></div>
-      <div id="ga-wrap"></div>
-      <!-- Review Detail Modal -->
-      <div class="mo" id="rv-detail-modal">
-        <div style="position:relative;max-width:560px;width:100%;background:linear-gradient(135deg,#2a2418 0%,#3a2e1a 100%);border:1px solid #7a6530;border-radius:14px;margin:auto;padding:24px 28px;box-shadow:0 8px 32px rgba(0,0,0,.4)">
-          <button onclick="closeModal('rv-detail-modal')" style="position:absolute;top:14px;right:16px;background:none;border:none;color:#b0a070;font-size:1.5rem;cursor:pointer;padding:4px 8px;line-height:1;z-index:1">&times;</button>
-          <h3 id="rv-detail-title" style="color:#d4a840;font-family:'Cormorant Garamond',serif;font-size:1.3rem;font-weight:600;margin-bottom:16px;padding-right:30px">Guest Feedback</h3>
-          <div id="rv-detail-body" style="max-height:60vh;overflow-y:auto;margin-bottom:16px"></div>
-          <div id="rv-detail-ft" style="display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid rgba(180,150,60,.25);padding-top:14px"></div>
-        </div>
-      </div>
       <div id="vr-wrap"></div>
       <div id="vdn-wrap"></div>
       <div id="ub-wrap"></div>
@@ -308,32 +297,6 @@
         </div>
       </div>
 
-      <!-- ── Guest Heads-Up Alert Settings ── -->
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px">
-        <h3 style="font-size:.88rem;font-weight:600;color:var(--green);margin-bottom:4px">Guest Heads-Up Alerts</h3>
-        <p style="font-size:.76rem;color:var(--text2);margin-bottom:14px;line-height:1.5">Control when incoming guest alerts are generated for open tasks. You can alert on all tasks or only tasks you've specifically tagged.</p>
-        <div style="display:flex;flex-direction:column;gap:12px">
-          <div>
-            <label style="font-size:.76rem;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Alert Mode</label>
-            <select id="set-ga-mode" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.82rem;font-family:inherit" onchange="settingsUpdateGA()">
-              <option value="all">All open tasks (current behavior)</option>
-              <option value="tagged">Only tasks tagged "Notify Next Guest"</option>
-            </select>
-          </div>
-          <div>
-            <label style="font-size:.76rem;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Look-Ahead (days before arrival)</label>
-            <input type="number" id="set-ga-lookahead" min="0" max="14" value="2" style="width:80px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.82rem;font-family:inherit" onchange="settingsUpdateGA()">
-          </div>
-          <div>
-            <label style="font-size:.76rem;font-weight:600;color:var(--text);display:block;margin-bottom:6px">Exclude Categories</label>
-            <div id="set-ga-exclude-cats" style="display:flex;flex-wrap:wrap;gap:6px"></div>
-          </div>
-        </div>
-        <div style="display:flex;justify-content:flex-end;margin-top:14px">
-          <button class="btn btn-g" onclick="saveGuestAlertSettings()">Save Alert Settings</button>
-        </div>
-      </div>
-
       <!-- ── Vendor Task Sheet Fields ── -->
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px">
         <h3 style="font-size:.88rem;font-weight:600;color:var(--green);margin-bottom:4px">Vendor Task Sheet — Property Info</h3>
@@ -535,15 +498,6 @@
 
     <!-- Vendor contact row (Text / Call) — populated by openDetail -->
     <div id="d-contact-row" style="display:none;gap:8px;margin-bottom:14px"></div>
-
-    <!-- Guest alert -->
-    <div id="d-guest-alert-wrap" class="fgr full" style="margin-bottom:8px;display:none">
-      <label style="display:flex;align-items:center;gap:8px;font-size:.78rem;color:var(--text2);cursor:pointer">
-        <input type="checkbox" id="d-guest-alert" onchange="updateField('guestAlert',this.checked)">
-        <span>Notify Next Guest</span>
-        <span style="font-size:.68rem;color:var(--text3);font-weight:400">— include in Guest Heads-Up alerts for arriving guests</span>
-      </label>
-    </div>
 
     <div id="d-combine"></div>
 
