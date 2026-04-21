@@ -1878,15 +1878,11 @@ textarea{resize:vertical;min-height:76px}
 @media (max-width:900px){ .rv-sm-grid{grid-template-columns:repeat(2,1fr)} }
 @media (max-width:520px){ .rv-sm-grid{grid-template-columns:1fr} }
 
-/* Cleaning sub-section wrapper */
-.rv-sub-section{margin-top:36px;border-top:1px solid var(--border);padding-top:18px}
-.rv-sub-toggle{width:100%;display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-family:inherit;font-size:.92rem;color:var(--text);font-weight:500;text-align:left}
-.rv-sub-toggle:hover{background:var(--green-pale);border-color:var(--green)}
-.rv-sub-toggle.open{background:var(--green-pale);border-color:var(--green)}
-.rv-chev{display:inline-block;transition:transform .15s;font-size:.72rem;color:var(--text2);width:12px;text-align:center}
-.rv-chev.open{transform:rotate(90deg)}
-.rv-sub-hint{font-size:.72rem;color:var(--text2);font-weight:400;margin-left:auto}
-#rv-clean-body{padding-top:14px}
+/* Primary section tabs: Reviews | Cleaning Flags & History */
+.rv-section-tabs{display:flex;gap:4px;margin-bottom:20px;border-bottom:1px solid var(--border)}
+.rv-section-tab{border:none;background:transparent;padding:10px 18px;font-size:.92rem;font-family:inherit;color:var(--text2);cursor:pointer;font-weight:500;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s,border-color .15s}
+.rv-section-tab:hover{color:var(--text)}
+.rv-section-tab.active{color:var(--green);border-bottom-color:var(--green);font-weight:600}
 
 @media (max-width:720px){
   .rv-row{flex-wrap:wrap}

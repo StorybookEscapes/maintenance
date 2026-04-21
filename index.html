@@ -121,6 +121,14 @@
 
     <div class="view" id="view-reviews">
       <div class="rv-wrap">
+        <!-- Primary section tabs -->
+        <div class="rv-section-tabs">
+          <button class="rv-section-tab active" id="rv-sec-tab-reviews"  onclick="rvSetSection('reviews')">Property Reviews</button>
+          <button class="rv-section-tab"        id="rv-sec-tab-cleaning" onclick="rvSetSection('cleaning')">Cleaning Flags &amp; History</button>
+        </div>
+
+        <!-- Section: Property Reviews -->
+        <div id="rv-section-reviews">
         <!-- Main: sortable property list with sparklines -->
         <div id="rv-main">
           <div class="rv-header">
@@ -161,25 +169,19 @@
           <button class="btn rv-back" onclick="rvBack()">&larr; Back to all properties</button>
           <div id="rv-drill-body"></div>
         </div>
+        </div><!-- /rv-section-reviews -->
 
-        <!-- Cleaning flags sub-section (collapsible) -->
-        <div class="rv-sub-section">
-          <button class="rv-sub-toggle" onclick="rvToggleCleaning()" id="rv-clean-toggle">
-            <span class="rv-chev" id="rv-clean-chev">&#9656;</span>
-            <span>Cleaning Flags &amp; History</span>
-            <span class="rv-sub-hint">guest-flagged cleaning issues</span>
-          </button>
-          <div id="rv-clean-body" style="display:none">
-            <div class="cl-wrap">
-              <div id="cl-hero"></div>
-              <div id="cl-toolbar" style="margin-bottom:10px">
-                <span id="cl-status" style="font-size:.7rem;color:var(--text2)"></span>
-                <select id="cl-prop-filter" onchange="renderCleaningLog()" style="display:none"></select>
-              </div>
-              <div id="cl-picker"></div>
-              <div id="cl-summary"></div>
-              <div id="cl-log"></div>
+        <!-- Section: Cleaning Flags &amp; History -->
+        <div id="rv-section-cleaning" style="display:none">
+          <div class="cl-wrap">
+            <div id="cl-hero"></div>
+            <div id="cl-toolbar" style="margin-bottom:10px">
+              <span id="cl-status" style="font-size:.7rem;color:var(--text2)"></span>
+              <select id="cl-prop-filter" onchange="renderCleaningLog()" style="display:none"></select>
             </div>
+            <div id="cl-picker"></div>
+            <div id="cl-summary"></div>
+            <div id="cl-log"></div>
           </div>
         </div>
       </div>

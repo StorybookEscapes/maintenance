@@ -9120,7 +9120,8 @@ const RV_THRESH_MID  = 4.5;
 let rvData = null;
 let rvFetching = false;
 let rvDrillPid = null;
-let rvCleanOpen = false;
+let rvActiveSection = 'reviews';  // 'reviews' | 'cleaning'
+let rvCleaningLoaded = false;
 let rvPortfolioView = 'avg';   // 'avg' | 'all' | 'byNb'
 
 // Neighborhood colors (hex — SVG can't use CSS vars reliably via attributes)
@@ -9897,16 +9898,23 @@ function rvRenderPortfolioByNb() {
   return `<div class="rv-sm-grid">${cells}</div>`;
 }
 
-function rvToggleCleaning() {
-  rvCleanOpen = !rvCleanOpen;
-  const body   = document.getElementById('rv-clean-body');
-  const toggle = document.getElementById('rv-clean-toggle');
-  const chev   = document.getElementById('rv-clean-chev');
-  if (body)   body.style.display = rvCleanOpen ? '' : 'none';
-  if (toggle) toggle.classList.toggle('open', rvCleanOpen);
-  if (chev)   chev.classList.toggle('open', rvCleanOpen);
-  if (rvCleanOpen && typeof clLoaded !== 'undefined' && !clLoaded && !clFetching && typeof clFetch === 'function') {
-    clFetch();
+function rvSetSection(name) {
+  if (name !== 'reviews' && name !== 'cleaning') name = 'reviews';
+  rvActiveSection = name;
+  const secR = document.getElementById('rv-section-reviews');
+  const secC = document.getElementById('rv-section-cleaning');
+  if (secR) secR.style.display = (name === 'reviews')  ? '' : 'none';
+  if (secC) secC.style.display = (name === 'cleaning') ? '' : 'none';
+  const tabR = document.getElementById('rv-sec-tab-reviews');
+  const tabC = document.getElementById('rv-sec-tab-cleaning');
+  if (tabR) tabR.classList.toggle('active', name === 'reviews');
+  if (tabC) tabC.classList.toggle('active', name === 'cleaning');
+  // Lazy-load cleaning data on first switch
+  if (name === 'cleaning' && !rvCleaningLoaded) {
+    rvCleaningLoaded = true;
+    if (typeof clLoaded !== 'undefined' && !clLoaded && !clFetching && typeof clFetch === 'function') {
+      clFetch();
+    }
   }
 }
 
