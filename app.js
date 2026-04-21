@@ -586,10 +586,11 @@ const fmtReported=iso=>{if(!iso)return'';const d=new Date(iso);const now=new Dat
 function switchView(name,btn){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
-  document.getElementById('view-'+name).classList.add('active');
+  const el = document.getElementById('view-'+name);
+  if (el) el.classList.add('active');
   if(btn)btn.classList.add('active');
-  // Cleaning log now pre-loaded on init; this is a fallback
-  if (name === 'cleaning' && !clLoaded && !clFetching) clFetch();
+  // Reviews — load aggregated ratings (24h client-cached) + host cleaning sub-section
+  if (name === 'reviews' && typeof rvInit === 'function') rvInit();
   // Refresh replacements view when switching to it
   if (name === 'replacements') renderReplacements();
   // Property Bible (Deploy 1) — lazy load on first open
@@ -9074,3 +9075,475 @@ async function fsEditServiceDate(pid) {
   showToast('Updated');
 }
 // ═══════════════  END Filter Service  ═══════════════
+
+
+// ═══════════════════════════════════════════════════════════════
+//   REVIEWS PAGE — aggregated ratings over 52 weeks (Hospitable)
+// ═══════════════════════════════════════════════════════════════
+// Entry: switchView('reviews') → rvInit() → (cache hit?) rvRender() : rvFetchAll(false)
+//
+// Caching: localStorage key `se_rv_cache_v1` with 24-hour TTL. First visit
+// each day triggers a fresh pull (~10-20s for 18 properties); subsequent
+// loads are instant. User can force-refresh via the ↻ button.
+//
+// Data shape (rvData):
+//   { generated_at, total_reviews,
+//     weeks: [52 ISO-week-start-dates],
+//     properties: { [pid]: { overall[52], cleanliness[52], counts[52] } } }
+// Sparse weeks are null, NOT zero — excluded from averages and rendered as
+// gaps in the sparkline path.
+//
+// Bucketing: by reservation check_out date (fallback to reviewed_at),
+// Monday-start ISO weeks in UTC.
+//
+// Parent/combo Hospitable listings whose reviews fan out to multiple children
+// are listed in RV_FAN_OUT. Each entry's reviews get duplicated into every
+// child property's weekly bucket. The parent never shows as its own row.
+
+const RV_FAN_OUT = [
+  {
+    key: 'hillside_both_houses',
+    name: 'Hillside Haven - Both Houses',
+    listing_id: 1654976,          // the numeric id Chip sees in Hospitable UI
+    uuid: null,                   // TODO: need Hospitable property UUID for listing 1654976.
+                                  //       Once set, reviews fan out to hillside_big + hillside_cottage.
+    children: ['hillside_big', 'hillside_cottage'],
+  },
+];
+
+const RV_BUCKET_WEEKS = 52;
+const RV_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const RV_CACHE_KEY = 'se_rv_cache_v1';
+const RV_THRESH_GOOD = 4.8;
+const RV_THRESH_MID  = 4.5;
+
+let rvData = null;
+let rvFetching = false;
+let rvDrillPid = null;
+let rvCleanOpen = false;
+
+// Monday 00:00 UTC of the week containing d
+function rvIsoWeekStart(d) {
+  const dt = new Date(d);
+  const day = dt.getUTCDay();          // 0=Sun..6=Sat
+  const diff = (day === 0 ? -6 : 1 - day);
+  return new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate() + diff));
+}
+function rvWeekKey(d) {
+  return rvIsoWeekStart(d).toISOString().slice(0, 10);
+}
+function rvBuildWeeks() {
+  const weeks = [];
+  const thisWeek = rvIsoWeekStart(new Date());
+  for (let i = RV_BUCKET_WEEKS - 1; i >= 0; i--) {
+    const d = new Date(thisWeek);
+    d.setUTCDate(d.getUTCDate() - i * 7);
+    weeks.push(d.toISOString().slice(0, 10));
+  }
+  return weeks;
+}
+function rvAvg(arr) {
+  const v = (arr || []).filter(x => x != null && !isNaN(x));
+  if (!v.length) return null;
+  return v.reduce((s, x) => s + x, 0) / v.length;
+}
+function rvSum(arr) {
+  return (arr || []).reduce((s, x) => s + (x || 0), 0);
+}
+function rvFmt(v) { return v == null ? '—' : v.toFixed(2); }
+function rvBadgeClass(v) {
+  if (v == null) return 'rv-badge-none';
+  if (v >= RV_THRESH_GOOD) return 'rv-badge-good';
+  if (v >= RV_THRESH_MID)  return 'rv-badge-mid';
+  return 'rv-badge-bad';
+}
+
+async function rvFetchAll(force) {
+  if (rvFetching) return;
+
+  if (!force) {
+    try {
+      const raw = localStorage.getItem(RV_CACHE_KEY);
+      if (raw) {
+        const cached = JSON.parse(raw);
+        if (cached && cached.generated_at &&
+            Date.now() - new Date(cached.generated_at).getTime() < RV_CACHE_TTL_MS) {
+          rvData = cached;
+          rvRender();
+          return;
+        }
+      }
+    } catch (e) { /* ignore cache errors */ }
+  }
+
+  rvFetching = true;
+  const statusEl = document.getElementById('rv-status');
+  if (statusEl) statusEl.textContent = 'Loading reviews...';
+  const listEl = document.getElementById('rv-list');
+  if (listEl && !rvData) listEl.innerHTML = '<div class="rv-loading">Loading reviews from Hospitable... this can take 10–20 seconds on first load.</div>';
+
+  // Targets = every known property UUID + any RV_FAN_OUT entries that have a UUID set.
+  const targets = Object.entries(HOSPITABLE_IDS)
+    .filter(([, uuid]) => !!uuid)
+    .map(([pid, uuid]) => ({ pid, uuid, fanOutTo: null }));
+  for (const fo of RV_FAN_OUT) {
+    if (fo.uuid) targets.push({ pid: fo.key, uuid: fo.uuid, fanOutTo: fo.children });
+  }
+
+  const weeks = rvBuildWeeks();
+  const weekIndex = {};
+  for (let i = 0; i < weeks.length; i++) weekIndex[weeks[i]] = i;
+  const cutoff = new Date(weeks[0]);
+
+  const props = {};
+  for (const pid of Object.keys(HOSPITABLE_IDS)) {
+    props[pid] = {
+      overall_sum:   new Array(RV_BUCKET_WEEKS).fill(0),
+      overall_count: new Array(RV_BUCKET_WEEKS).fill(0),
+      clean_sum:     new Array(RV_BUCKET_WEEKS).fill(0),
+      clean_count:   new Array(RV_BUCKET_WEEKS).fill(0),
+    };
+  }
+
+  let totalReviews = 0;
+  const batchSize = 4;
+  for (let i = 0; i < targets.length; i += batchSize) {
+    const batch = targets.slice(i, i + batchSize);
+    if (statusEl) statusEl.textContent = `Loading reviews... ${Math.min(i + batchSize, targets.length)}/${targets.length} properties`;
+    const results = await Promise.allSettled(batch.map(async t => {
+      let page = 1;
+      const revs = [];
+      while (page <= 10) {
+        try {
+          const r = await fetch(
+            `${PROXY_BASE}/api/hospitable?action=reviews&pid=${t.uuid}&start=2020-01-01&end=${new Date().toISOString().slice(0,10)}&page=${page}`,
+            { signal: AbortSignal.timeout(15000) }
+          );
+          if (!r.ok) break;
+          const data = await r.json();
+          const batchR = data.data || [];
+          revs.push(...batchR);
+          if (!data.meta || page >= data.meta.last_page) break;
+          page++;
+        } catch (e) { break; }
+      }
+      return { t, revs };
+    }));
+
+    for (const res of results) {
+      if (res.status !== 'fulfilled') continue;
+      const { t, revs } = res.value;
+      for (const rv of revs) {
+        const bucketDateStr = rv.reservation?.check_out || rv.reviewed_at;
+        if (!bucketDateStr) continue;
+        const d = new Date(bucketDateStr);
+        if (isNaN(d.getTime()) || d < cutoff) continue;
+        const idx = weekIndex[rvWeekKey(d)];
+        if (idx === undefined) continue;
+
+        const overall = (rv.public?.rating != null) ? Number(rv.public.rating) : null;
+        const cleanR = (rv.private?.detailed_ratings || []).find(dr => dr.type === 'cleanliness');
+        const cleanRating = (cleanR && cleanR.rating > 0) ? Number(cleanR.rating) : null;
+
+        const attribTo = t.fanOutTo ? t.fanOutTo : [t.pid];
+        for (const apid of attribTo) {
+          if (!props[apid]) continue;
+          if (overall != null) {
+            props[apid].overall_sum[idx] += overall;
+            props[apid].overall_count[idx] += 1;
+          }
+          if (cleanRating != null) {
+            props[apid].clean_sum[idx] += cleanRating;
+            props[apid].clean_count[idx] += 1;
+          }
+        }
+        totalReviews++;
+      }
+    }
+  }
+
+  const propertiesOut = {};
+  for (const pid of Object.keys(props)) {
+    const p = props[pid];
+    propertiesOut[pid] = {
+      overall:     p.overall_count.map((c, i) => c > 0 ? +(p.overall_sum[i] / c).toFixed(3) : null),
+      cleanliness: p.clean_count.map((c, i)   => c > 0 ? +(p.clean_sum[i]   / c).toFixed(3) : null),
+      counts:      p.overall_count.slice(),
+    };
+  }
+
+  rvData = {
+    generated_at: new Date().toISOString(),
+    weeks,
+    properties: propertiesOut,
+    total_reviews: totalReviews,
+  };
+  try { localStorage.setItem(RV_CACHE_KEY, JSON.stringify(rvData)); } catch (e) { /* quota or private mode */ }
+
+  rvFetching = false;
+  if (statusEl) statusEl.textContent = `${totalReviews} reviews · updated ${new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}`;
+  rvRender();
+}
+
+function rvRender() {
+  if (rvDrillPid) { rvRenderDrill(); return; }
+  const listEl = document.getElementById('rv-list');
+  if (!listEl) return;
+  if (!rvData) {
+    listEl.innerHTML = '<div class="rv-loading">Loading reviews from Hospitable...</div>';
+    return;
+  }
+
+  const sortMode = (document.getElementById('rv-sort') || {}).value || 'drop';
+
+  const summaries = {};
+  for (const pid of Object.keys(rvData.properties)) {
+    const p = rvData.properties[pid];
+    const avg12 = rvAvg(p.overall);
+    const avg4  = rvAvg(p.overall.slice(-4));
+    const totalN = rvSum(p.counts);
+    const drop = (avg12 != null && avg4 != null) ? (avg12 - avg4) : 0;
+    summaries[pid] = { avg12, avg4, totalN, drop };
+  }
+
+  let html = '';
+  for (const nb of NBS) {
+    let ids = nb.props.filter(pid => rvData.properties[pid]);
+    if (!ids.length) continue;
+    ids = rvSortIds(ids, summaries, sortMode);
+    html += `<div class="rv-nb-banner ${nb.cls}"><span class="rv-nb-name">${escHtml(nb.name)}</span><span class="rv-nb-sub">${escHtml(nb.sub)}</span></div>`;
+    for (const pid of ids) html += rvRowHtml(pid, summaries[pid]);
+  }
+  if (!html) html = '<div class="rv-empty">No review data yet.</div>';
+  listEl.innerHTML = html;
+}
+
+function rvSortIds(ids, sums, mode) {
+  const arr = ids.slice();
+  arr.sort((a, b) => {
+    const sa = sums[a], sb = sums[b];
+    switch (mode) {
+      case 'lowAvg12': return (sa.avg12 ?? 99) - (sb.avg12 ?? 99);
+      case 'lowAvg4':  return (sa.avg4  ?? 99) - (sb.avg4  ?? 99);
+      case 'alpha': {
+        const pa = getProp(a)?.name || a;
+        const pb = getProp(b)?.name || b;
+        return pa.localeCompare(pb);
+      }
+      case 'reviews':  return (sb.totalN || 0) - (sa.totalN || 0);
+      case 'drop':
+      default:         return (sb.drop ?? -99) - (sa.drop ?? -99);
+    }
+  });
+  return arr;
+}
+
+function rvRowHtml(pid, s) {
+  const p = getProp(pid);
+  const name = p ? p.name : pid;
+  const badge = `<span class="rv-badge ${rvBadgeClass(s.avg12)}" title="12-month average">${rvFmt(s.avg12)}</span>`;
+  const series = rvData.properties[pid].overall;
+  const spark = rvSparkSvg(series);
+  const dropTxt = (s.drop != null && s.drop > 0.15)
+    ? `<span class="rv-drop">↓ ${s.drop.toFixed(2)} vs 12-mo</span>`
+    : '';
+  const sub = `
+    <span>${s.totalN} review${s.totalN === 1 ? '' : 's'}</span>
+    <span>4-wk avg: <strong>${rvFmt(s.avg4)}</strong></span>
+    ${dropTxt}`;
+  return `
+    <div class="rv-row" onclick="rvOpenDrill('${pid}')">
+      <div class="rv-row-info">
+        <div class="rv-row-name">${escHtml(name)}</div>
+        <div class="rv-row-sub">${sub}</div>
+      </div>
+      <div class="rv-row-badge">${badge}</div>
+      <div class="rv-row-spark">${spark}</div>
+      <div class="rv-row-arrow">›</div>
+    </div>`;
+}
+
+// Inline SVG sparkline. Nulls render as gaps (no line drawn across them).
+function rvSparkSvg(series, width, height) {
+  width = width || 170;
+  height = height || 34;
+  const pad = 2;
+  const n = series.length;
+  const yMin = 4.0, yMax = 5.0;
+  const y = v => {
+    const c = Math.max(yMin, Math.min(yMax, v));
+    return pad + (height - 2 * pad) * (1 - (c - yMin) / (yMax - yMin));
+  };
+  const x = i => pad + (width - 2 * pad) * (i / Math.max(1, n - 1));
+
+  // Threshold bands (subtle)
+  const bGood = `<rect x="0" y="${y(yMax).toFixed(1)}" width="${width}" height="${(y(RV_THRESH_GOOD) - y(yMax)).toFixed(1)}" fill="#d9efe0" opacity=".4"/>`;
+  const bMid  = `<rect x="0" y="${y(RV_THRESH_GOOD).toFixed(1)}" width="${width}" height="${(y(RV_THRESH_MID) - y(RV_THRESH_GOOD)).toFixed(1)}" fill="#fdf3d6" opacity=".4"/>`;
+  const bBad  = `<rect x="0" y="${y(RV_THRESH_MID).toFixed(1)}" width="${width}" height="${(y(yMin) - y(RV_THRESH_MID)).toFixed(1)}" fill="#fdf0ee" opacity=".4"/>`;
+
+  let d = '';
+  let pen = false;
+  for (let i = 0; i < n; i++) {
+    if (series[i] == null) { pen = false; continue; }
+    d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(series[i]).toFixed(1) + ' ';
+    pen = true;
+  }
+  const path = d ? `<path d="${d}" fill="none" stroke="#0d3528" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>` : '';
+
+  // Highlight the latest data point so the viewer knows where "now" is.
+  let lastDot = '';
+  for (let i = n - 1; i >= 0; i--) {
+    if (series[i] != null) {
+      lastDot = `<circle cx="${x(i).toFixed(1)}" cy="${y(series[i]).toFixed(1)}" r="2.2" fill="#0d3528"/>`;
+      break;
+    }
+  }
+
+  return `<svg class="rv-spark" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">${bGood}${bMid}${bBad}${path}${lastDot}</svg>`;
+}
+
+// ── Drill-in ──
+function rvOpenDrill(pid) {
+  rvDrillPid = pid;
+  const main = document.getElementById('rv-main');
+  const drill = document.getElementById('rv-drill');
+  if (main) main.style.display = 'none';
+  if (drill) drill.style.display = 'block';
+  rvRenderDrill();
+  window.scrollTo(0, 0);
+}
+function rvBack() {
+  rvDrillPid = null;
+  const main = document.getElementById('rv-main');
+  const drill = document.getElementById('rv-drill');
+  if (drill) drill.style.display = 'none';
+  if (main) main.style.display = 'block';
+}
+
+function rvRenderDrill() {
+  const body = document.getElementById('rv-drill-body');
+  if (!body || !rvData || !rvDrillPid) return;
+  const pid = rvDrillPid;
+  const p = getProp(pid);
+  const pd = rvData.properties[pid];
+  if (!pd) { body.innerHTML = '<div class="rv-empty">No data for this property.</div>'; return; }
+
+  const avg12 = rvAvg(pd.overall);
+  const avg4  = rvAvg(pd.overall.slice(-4));
+  const cleanAvg12 = rvAvg(pd.cleanliness);
+  const cleanAvg4  = rvAvg(pd.cleanliness.slice(-4));
+  const total = rvSum(pd.counts);
+  const recent = rvSum(pd.counts.slice(-4));
+
+  body.innerHTML = `
+    <div class="rv-drill-head">
+      <div>
+        <div class="rv-drill-name">${escHtml(p?.name || pid)}</div>
+        <div class="rv-drill-meta">${total} review${total === 1 ? '' : 's'} in last 12 months · ${recent} in last 4 weeks</div>
+      </div>
+      <span class="rv-badge ${rvBadgeClass(avg12)}" style="font-size:1rem;padding:6px 16px">${rvFmt(avg12)}</span>
+    </div>
+    <div class="rv-stats">
+      <div class="rv-stat"><div class="rv-stat-lbl">12-mo overall</div><div class="rv-stat-val">${rvFmt(avg12)}</div></div>
+      <div class="rv-stat"><div class="rv-stat-lbl">4-wk overall</div><div class="rv-stat-val">${rvFmt(avg4)}</div></div>
+      <div class="rv-stat"><div class="rv-stat-lbl">12-mo cleanliness</div><div class="rv-stat-val">${rvFmt(cleanAvg12)}</div></div>
+      <div class="rv-stat"><div class="rv-stat-lbl">4-wk cleanliness</div><div class="rv-stat-val">${rvFmt(cleanAvg4)}</div></div>
+    </div>
+    <div class="rv-chart-wrap">
+      <div class="rv-chart-legend">
+        <span><span class="dot" style="background:#0d3528"></span>Overall</span>
+        <span><span class="dot" style="background:#c9a84c"></span>Cleanliness</span>
+        <span style="margin-left:auto;color:var(--text3)">Hover a week for detail</span>
+      </div>
+      ${rvLineChartSvg(pd.overall, pd.cleanliness, pd.counts, rvData.weeks)}
+    </div>`;
+}
+
+function rvLineChartSvg(overall, clean, counts, weeks) {
+  const W = 720, H = 260;
+  const padL = 34, padR = 14, padT = 14, padB = 34;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const yMin = 4.0, yMax = 5.0;
+  const y = v => padT + innerH * (1 - (Math.max(yMin, Math.min(yMax, v)) - yMin) / (yMax - yMin));
+  const x = i => padL + innerW * (i / Math.max(1, overall.length - 1));
+
+  const bGood = `<rect x="${padL}" y="${y(yMax).toFixed(1)}" width="${innerW}" height="${(y(RV_THRESH_GOOD) - y(yMax)).toFixed(1)}" fill="#d9efe0" opacity=".35"/>`;
+  const bMid  = `<rect x="${padL}" y="${y(RV_THRESH_GOOD).toFixed(1)}" width="${innerW}" height="${(y(RV_THRESH_MID) - y(RV_THRESH_GOOD)).toFixed(1)}" fill="#fdf3d6" opacity=".35"/>`;
+  const bBad  = `<rect x="${padL}" y="${y(RV_THRESH_MID).toFixed(1)}" width="${innerW}" height="${(y(yMin) - y(RV_THRESH_MID)).toFixed(1)}" fill="#fdf0ee" opacity=".35"/>`;
+
+  const buildPath = (series, color) => {
+    let d = '', pen = false;
+    for (let i = 0; i < series.length; i++) {
+      if (series[i] == null) { pen = false; continue; }
+      d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(series[i]).toFixed(1) + ' ';
+      pen = true;
+    }
+    return d ? `<path d="${d}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` : '';
+  };
+
+  let yAxis = '';
+  for (let v = 4.0; v <= 5.001; v += 0.2) {
+    const yy = y(v);
+    yAxis += `<line x1="${padL}" y1="${yy.toFixed(1)}" x2="${W - padR}" y2="${yy.toFixed(1)}" stroke="#e3e8e4" stroke-width=".6"/>`;
+    yAxis += `<text x="${padL - 6}" y="${(yy + 3).toFixed(1)}" font-size="10" text-anchor="end" fill="#7a8a80">${v.toFixed(1)}</text>`;
+  }
+
+  let xAxis = '';
+  for (let i = 0; i < weeks.length; i += 4) {
+    const lbl = new Date(weeks[i]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    xAxis += `<text x="${x(i).toFixed(1)}" y="${H - padB + 16}" font-size="10" text-anchor="middle" fill="#7a8a80">${escHtml(lbl)}</text>`;
+  }
+
+  let ptsO = '', ptsC = '';
+  for (let i = 0; i < weeks.length; i++) {
+    if (overall[i] != null) ptsO += `<circle cx="${x(i).toFixed(1)}" cy="${y(overall[i]).toFixed(1)}" r="2.3" fill="#0d3528"/>`;
+    if (clean[i]   != null) ptsC += `<circle cx="${x(i).toFixed(1)}" cy="${y(clean[i]).toFixed(1)}"   r="2.3" fill="#c9a84c"/>`;
+  }
+
+  // Hover zones (invisible rects with <title> for native tooltip)
+  let hover = '';
+  const band = innerW / Math.max(1, weeks.length - 1);
+  for (let i = 0; i < weeks.length; i++) {
+    const dateLbl = new Date(weeks[i]).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const parts = [dateLbl];
+    parts.push(overall[i] != null ? `Overall ${overall[i].toFixed(2)}` : 'No reviews');
+    if (clean[i] != null) parts.push(`Cleanliness ${clean[i].toFixed(2)}`);
+    if (counts[i]) parts.push(`${counts[i]} review${counts[i] === 1 ? '' : 's'}`);
+    const tip = parts.join(' · ');
+    hover += `<rect x="${(x(i) - band / 2).toFixed(1)}" y="${padT}" width="${band.toFixed(1)}" height="${innerH}" fill="transparent"><title>${escHtml(tip)}</title></rect>`;
+  }
+
+  return `<svg class="rv-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+    ${yAxis}${bGood}${bMid}${bBad}
+    ${buildPath(overall, '#0d3528')}
+    ${buildPath(clean,   '#c9a84c')}
+    ${ptsO}${ptsC}
+    ${xAxis}
+    ${hover}
+  </svg>`;
+}
+
+function rvToggleCleaning() {
+  rvCleanOpen = !rvCleanOpen;
+  const body   = document.getElementById('rv-clean-body');
+  const toggle = document.getElementById('rv-clean-toggle');
+  const chev   = document.getElementById('rv-clean-chev');
+  if (body)   body.style.display = rvCleanOpen ? '' : 'none';
+  if (toggle) toggle.classList.toggle('open', rvCleanOpen);
+  if (chev)   chev.classList.toggle('open', rvCleanOpen);
+  if (rvCleanOpen && typeof clLoaded !== 'undefined' && !clLoaded && !clFetching && typeof clFetch === 'function') {
+    clFetch();
+  }
+}
+
+function rvInit() {
+  // If a drill-in was open and user navigated away and back, restore list view
+  if (rvDrillPid && document.getElementById('rv-main') &&
+      document.getElementById('rv-main').style.display === 'none') {
+    // keep drill open if they left it open — nothing to do
+  }
+  if (!rvData && !rvFetching) rvFetchAll(false);
+  else rvRender();
+}
+
+// ═══════════════  END Reviews  ═══════════════
