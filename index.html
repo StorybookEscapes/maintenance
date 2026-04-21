@@ -30,7 +30,7 @@
       <button class="nav-btn active" onclick="switchView('tasks',this)">Tasks</button>
       <button class="nav-btn" onclick="switchView('history',this)">Service History</button>
       <button class="nav-btn" onclick="switchView('vendors',this)">Vendors</button>
-      <button class="nav-btn" onclick="switchView('cleaning',this)">Cleaning</button>
+      <button class="nav-btn" onclick="switchView('reviews',this)">Reviews</button>
       <button class="nav-btn" onclick="switchView('replacements',this)">Replacements</button>
       <button class="nav-btn" onclick="switchView('properties',this)">Properties</button>
       <button class="nav-btn" onclick="switchView('projects',this)">Projects</button>
@@ -119,16 +119,55 @@
       <div id="hist-container"></div>
     </div>
 
-    <div class="view" id="view-cleaning">
-      <div class="cl-wrap">
-        <div id="cl-hero"></div>
-        <div id="cl-toolbar" style="margin-bottom:10px">
-          <span id="cl-status" style="font-size:.7rem;color:var(--text2)"></span>
-          <select id="cl-prop-filter" onchange="renderCleaningLog()" style="display:none"></select>
+    <div class="view" id="view-reviews">
+      <div class="rv-wrap">
+        <!-- Main: sortable property list with sparklines -->
+        <div id="rv-main">
+          <div class="rv-header">
+            <h2 class="rv-title">Property Reviews</h2>
+            <div class="rv-toolbar">
+              <label class="rv-sort-lbl">Sort
+                <select id="rv-sort" onchange="rvRender()">
+                  <option value="drop">Biggest 4-wk drop</option>
+                  <option value="lowAvg12">Lowest 12-mo avg</option>
+                  <option value="lowAvg4">Lowest 4-wk avg</option>
+                  <option value="alpha">Alphabetical</option>
+                  <option value="reviews">Most reviews</option>
+                </select>
+              </label>
+              <button class="btn rv-refresh" onclick="rvFetchAll(true)" title="Refresh from Hospitable">&#x21bb; Refresh</button>
+              <span id="rv-status" class="rv-status"></span>
+            </div>
+          </div>
+          <div id="rv-list"></div>
         </div>
-        <div id="cl-picker"></div>
-        <div id="cl-summary"></div>
-        <div id="cl-log"></div>
+
+        <!-- Drill-in: single property line chart -->
+        <div id="rv-drill" style="display:none">
+          <button class="btn rv-back" onclick="rvBack()">&larr; Back to all properties</button>
+          <div id="rv-drill-body"></div>
+        </div>
+
+        <!-- Cleaning flags sub-section (collapsible) -->
+        <div class="rv-sub-section">
+          <button class="rv-sub-toggle" onclick="rvToggleCleaning()" id="rv-clean-toggle">
+            <span class="rv-chev" id="rv-clean-chev">&#9656;</span>
+            <span>Cleaning Flags &amp; History</span>
+            <span class="rv-sub-hint">guest-flagged cleaning issues</span>
+          </button>
+          <div id="rv-clean-body" style="display:none">
+            <div class="cl-wrap">
+              <div id="cl-hero"></div>
+              <div id="cl-toolbar" style="margin-bottom:10px">
+                <span id="cl-status" style="font-size:.7rem;color:var(--text2)"></span>
+                <select id="cl-prop-filter" onchange="renderCleaningLog()" style="display:none"></select>
+              </div>
+              <div id="cl-picker"></div>
+              <div id="cl-summary"></div>
+              <div id="cl-log"></div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 

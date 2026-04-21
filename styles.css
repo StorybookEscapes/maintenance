@@ -1794,3 +1794,76 @@ textarea{resize:vertical;min-height:76px}
 
 /* Footer */
 .pvs-footer{text-align:center;padding:24px;font-size:.68rem;color:#aaa;letter-spacing:.5px}
+
+/* ═══════════  Reviews page (rv-*)  ═══════════ */
+.rv-wrap{padding:4px 0}
+.rv-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:14px}
+.rv-title{font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--green);font-weight:600}
+.rv-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.rv-sort-lbl{font-size:.78rem;color:var(--text2);display:flex;align-items:center;gap:6px}
+.rv-sort-lbl select{padding:5px 10px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.82rem;font-family:inherit}
+.rv-refresh{font-size:.76rem;padding:5px 12px}
+.rv-status{font-size:.72rem;color:var(--text2)}
+
+.rv-nb-banner{background:var(--green-pale);border-left:4px solid var(--green);padding:8px 14px;margin:18px 0 8px 0;border-radius:var(--radius);display:flex;align-items:baseline;gap:12px}
+.rv-nb-banner.prc{border-left-color:var(--prc)}
+.rv-nb-banner.umc{border-left-color:var(--umc)}
+.rv-nb-banner.gatlinburg{border-left-color:var(--gatlinburg)}
+.rv-nb-banner.alpine{border-left-color:var(--alpine)}
+.rv-nb-banner.sevierville{border-left-color:var(--sevierville)}
+.rv-nb-banner.hillside{border-left-color:var(--hillside)}
+.rv-nb-name{font-weight:600;color:var(--green);font-size:.92rem}
+.rv-nb-sub{font-size:.72rem;color:var(--text2)}
+
+.rv-row{display:flex;align-items:center;gap:14px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:6px;cursor:pointer;transition:border-color .15s,background .15s}
+.rv-row:hover{border-color:var(--green);background:var(--green-pale)}
+.rv-row-info{flex:1;min-width:0}
+.rv-row-name{font-weight:500;font-size:.92rem;color:var(--text)}
+.rv-row-sub{font-size:.7rem;color:var(--text2);margin-top:3px;display:flex;gap:12px;flex-wrap:wrap;align-items:baseline}
+.rv-row-spark{flex:0 0 170px}
+.rv-row-badge{flex:0 0 auto}
+.rv-row-arrow{color:var(--text3);font-size:1.15rem;flex:0 0 auto}
+.rv-drop{color:var(--red);font-weight:600}
+.rv-row-sub strong{color:var(--text);font-weight:600}
+
+.rv-badge{display:inline-block;padding:4px 12px;border-radius:12px;font-size:.82rem;font-weight:600;min-width:48px;text-align:center}
+.rv-badge-good{background:#d9efe0;color:#184a2c}
+.rv-badge-mid{background:#fdf3d6;color:#7a5c08}
+.rv-badge-bad{background:var(--red-bg);color:var(--red)}
+.rv-badge-none{background:#eceef0;color:var(--text2)}
+
+.rv-spark{width:100%;height:34px;display:block}
+
+.rv-loading{padding:40px 20px;text-align:center;color:var(--text2);font-size:.88rem}
+.rv-empty{padding:40px 20px;text-align:center;color:var(--text2);font-size:.88rem;font-style:italic}
+
+/* Drill-in */
+.rv-back{margin-bottom:10px;font-size:.78rem;padding:6px 12px}
+.rv-drill-head{display:flex;justify-content:space-between;align-items:center;margin:10px 0 14px 0;flex-wrap:wrap;gap:14px}
+.rv-drill-name{font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--green);font-weight:600}
+.rv-drill-meta{font-size:.78rem;color:var(--text2);margin-top:3px}
+.rv-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px}
+.rv-stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px}
+.rv-stat-lbl{font-size:.66rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)}
+.rv-stat-val{font-size:1.1rem;font-weight:600;color:var(--text);margin-top:3px}
+.rv-chart-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px 10px}
+.rv-chart-legend{display:flex;gap:18px;font-size:.74rem;margin-bottom:8px;color:var(--text2)}
+.rv-chart-legend .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+.rv-chart{width:100%;height:260px;display:block}
+
+/* Cleaning sub-section wrapper */
+.rv-sub-section{margin-top:36px;border-top:1px solid var(--border);padding-top:18px}
+.rv-sub-toggle{width:100%;display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-family:inherit;font-size:.92rem;color:var(--text);font-weight:500;text-align:left}
+.rv-sub-toggle:hover{background:var(--green-pale);border-color:var(--green)}
+.rv-sub-toggle.open{background:var(--green-pale);border-color:var(--green)}
+.rv-chev{display:inline-block;transition:transform .15s;font-size:.72rem;color:var(--text2);width:12px;text-align:center}
+.rv-chev.open{transform:rotate(90deg)}
+.rv-sub-hint{font-size:.72rem;color:var(--text2);font-weight:400;margin-left:auto}
+#rv-clean-body{padding-top:14px}
+
+@media (max-width:720px){
+  .rv-row{flex-wrap:wrap}
+  .rv-row-spark{flex:0 0 100%;order:5}
+  .rv-row-arrow{display:none}
+  .rv-header{flex-direction:column;align-items:flex-start}
+}
