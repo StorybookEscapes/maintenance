@@ -139,6 +139,20 @@
               <span id="rv-status" class="rv-status"></span>
             </div>
           </div>
+
+          <!-- Portfolio overview: 3 toggleable views -->
+          <div class="rv-portfolio">
+            <div class="rv-portfolio-head">
+              <h3 class="rv-portfolio-title">Portfolio Trend &mdash; last 52 weeks</h3>
+              <div class="rv-tabs" id="rv-tabs">
+                <button class="rv-tab active" data-view="avg"   onclick="rvSetPortfolioView('avg')">Portfolio Average</button>
+                <button class="rv-tab"        data-view="all"   onclick="rvSetPortfolioView('all')">All Properties</button>
+                <button class="rv-tab"        data-view="byNb"  onclick="rvSetPortfolioView('byNb')">By Neighborhood</button>
+              </div>
+            </div>
+            <div id="rv-portfolio-body"></div>
+          </div>
+
           <div id="rv-list"></div>
         </div>
 

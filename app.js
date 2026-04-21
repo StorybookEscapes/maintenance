@@ -9121,6 +9121,21 @@ let rvData = null;
 let rvFetching = false;
 let rvDrillPid = null;
 let rvCleanOpen = false;
+let rvPortfolioView = 'avg';   // 'avg' | 'all' | 'byNb'
+
+// Neighborhood colors (hex — SVG can't use CSS vars reliably via attributes)
+const RV_NB_COLOR = {
+  prc: '#2d6a3f', umc: '#b8830a', gatlinburg: '#6b3fa0',
+  alpine: '#c0392b', sevierville: '#2471a3', hillside: '#1a3a5c',
+};
+function rvNbForPid(pid) {
+  for (const nb of NBS) if (nb.props.includes(pid)) return nb;
+  return null;
+}
+function rvColorForPid(pid) {
+  const nb = rvNbForPid(pid);
+  return (nb && RV_NB_COLOR[nb.cls]) || '#4a6355';
+}
 
 // Monday 00:00 UTC of the week containing d
 function rvIsoWeekStart(d) {
@@ -9291,8 +9306,12 @@ function rvRender() {
   if (!listEl) return;
   if (!rvData) {
     listEl.innerHTML = '<div class="rv-loading">Loading reviews from Hospitable...</div>';
+    const pb = document.getElementById('rv-portfolio-body');
+    if (pb) pb.innerHTML = '';
     return;
   }
+
+  rvRenderPortfolio();
 
   const sortMode = (document.getElementById('rv-sort') || {}).value || 'drop';
 
@@ -9521,6 +9540,275 @@ function rvLineChartSvg(overall, clean, counts, weeks) {
     ${xAxis}
     ${hover}
   </svg>`;
+}
+
+// ── Portfolio overview (always visible above the property list) ──
+
+function rvSetPortfolioView(view) {
+  rvPortfolioView = view;
+  const tabs = document.querySelectorAll('#rv-tabs .rv-tab');
+  tabs.forEach(t => t.classList.toggle('active', t.getAttribute('data-view') === view));
+  rvRenderPortfolio();
+}
+
+// Weighted weekly portfolio average (weighted by review count) + per-week total volume.
+// Returns { avg: [52 nums|null], totalCounts: [52 ints] }
+function rvPortfolioAvgSeries() {
+  const weeks = rvData.weeks;
+  const avg = new Array(weeks.length).fill(null);
+  const totalCounts = new Array(weeks.length).fill(0);
+  for (let w = 0; w < weeks.length; w++) {
+    let sumRating = 0, sumN = 0;
+    for (const pid of Object.keys(rvData.properties)) {
+      const p = rvData.properties[pid];
+      const n = p.counts[w] || 0;
+      if (n > 0 && p.overall[w] != null) {
+        sumRating += p.overall[w] * n;
+        sumN += n;
+      }
+    }
+    totalCounts[w] = sumN;
+    avg[w] = sumN > 0 ? +(sumRating / sumN).toFixed(3) : null;
+  }
+  return { avg, totalCounts };
+}
+
+function rvRenderPortfolio() {
+  const body = document.getElementById('rv-portfolio-body');
+  if (!body || !rvData) return;
+  if (rvPortfolioView === 'all')       body.innerHTML = rvRenderPortfolioAll();
+  else if (rvPortfolioView === 'byNb') body.innerHTML = rvRenderPortfolioByNb();
+  else                                 body.innerHTML = rvRenderPortfolioAvg();
+}
+
+// ── Shared SVG helpers for portfolio charts ──
+function rvPathFromSeries(series, x, y) {
+  let d = '', pen = false;
+  for (let i = 0; i < series.length; i++) {
+    if (series[i] == null) { pen = false; continue; }
+    d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(series[i]).toFixed(1) + ' ';
+    pen = true;
+  }
+  return d;
+}
+function rvYAxisSvg(y, yMin, yMax, x0, x1, step) {
+  let s = '';
+  for (let v = yMin; v <= yMax + 1e-6; v += step) {
+    const yy = y(v);
+    s += `<line x1="${x0}" y1="${yy.toFixed(1)}" x2="${x1}" y2="${yy.toFixed(1)}" stroke="#e3e8e4" stroke-width=".6"/>`;
+    s += `<text x="${x0 - 6}" y="${(yy + 3).toFixed(1)}" font-size="10" text-anchor="end" fill="#7a8a80">${v.toFixed(1)}</text>`;
+  }
+  return s;
+}
+function rvXAxisSvg(weeks, x, yBase, everyN) {
+  let s = '';
+  for (let i = 0; i < weeks.length; i += (everyN || 4)) {
+    const lbl = new Date(weeks[i]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    s += `<text x="${x(i).toFixed(1)}" y="${yBase}" font-size="10" text-anchor="middle" fill="#7a8a80">${escHtml(lbl)}</text>`;
+  }
+  return s;
+}
+function rvThresholdBands(x0, xW, y, yMin, yMax) {
+  return `
+    <rect x="${x0}" y="${y(yMax).toFixed(1)}"          width="${xW}" height="${(y(RV_THRESH_GOOD) - y(yMax)).toFixed(1)}" fill="#d9efe0" opacity=".3"/>
+    <rect x="${x0}" y="${y(RV_THRESH_GOOD).toFixed(1)}" width="${xW}" height="${(y(RV_THRESH_MID)  - y(RV_THRESH_GOOD)).toFixed(1)}" fill="#fdf3d6" opacity=".3"/>
+    <rect x="${x0}" y="${y(RV_THRESH_MID).toFixed(1)}"  width="${xW}" height="${(y(yMin)          - y(RV_THRESH_MID)).toFixed(1)}"  fill="#fdf0ee" opacity=".3"/>`;
+}
+
+// View 1: portfolio avg (single bold line) + review volume bars
+function rvRenderPortfolioAvg() {
+  const { avg, totalCounts } = rvPortfolioAvgSeries();
+  const weeks = rvData.weeks;
+  const W = 720, H = 240;
+  const padL = 38, padR = 34, padT = 14, padB = 32;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const yMin = 4.0, yMax = 5.0;
+  const y   = v => padT + innerH * (1 - (Math.max(yMin, Math.min(yMax, v)) - yMin) / (yMax - yMin));
+  const x   = i => padL + innerW * (i / Math.max(1, weeks.length - 1));
+  const maxCount = Math.max(1, ...totalCounts);
+  // Bars occupy bottom 40% of inner area — layered behind the line.
+  const barHMax = innerH * 0.4;
+  const barYBase = padT + innerH;
+  const barW = Math.max(2, (innerW / weeks.length) - 1);
+
+  let bars = '';
+  for (let i = 0; i < weeks.length; i++) {
+    if (!totalCounts[i]) continue;
+    const h = (totalCounts[i] / maxCount) * barHMax;
+    bars += `<rect x="${(x(i) - barW / 2).toFixed(1)}" y="${(barYBase - h).toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" fill="#c9a84c" opacity=".35"><title>${escHtml(new Date(weeks[i]).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}))} · ${totalCounts[i]} review${totalCounts[i]===1?'':'s'}</title></rect>`;
+  }
+
+  const dPath = rvPathFromSeries(avg, x, y);
+  const pathEl = dPath ? `<path d="${dPath}" fill="none" stroke="#0d3528" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>` : '';
+
+  let pts = '';
+  for (let i = 0; i < weeks.length; i++) {
+    if (avg[i] != null) pts += `<circle cx="${x(i).toFixed(1)}" cy="${y(avg[i]).toFixed(1)}" r="2.4" fill="#0d3528"><title>${escHtml(new Date(weeks[i]).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}))} · avg ${avg[i].toFixed(2)} · ${totalCounts[i]} review${totalCounts[i]===1?'':'s'}</title></circle>`;
+  }
+
+  // Right-side count axis (bars)
+  const countTicks = [0, Math.round(maxCount / 2), maxCount];
+  let rightAxis = '';
+  for (const v of countTicks) {
+    if (v === 0) continue;
+    const h = (v / maxCount) * barHMax;
+    const yy = barYBase - h;
+    rightAxis += `<text x="${W - padR + 6}" y="${(yy + 3).toFixed(1)}" font-size="10" text-anchor="start" fill="#8f7624">${v}</text>`;
+  }
+  rightAxis += `<text x="${W - padR + 6}" y="${(barYBase + 3).toFixed(1)}" font-size="10" text-anchor="start" fill="#8f7624">0</text>`;
+
+  const totalReviews = totalCounts.reduce((s, n) => s + n, 0);
+  const weeksWithReviews = totalCounts.filter(n => n > 0).length;
+  const overallWeightedAvg = (() => {
+    let s = 0, n = 0;
+    for (let i = 0; i < avg.length; i++) if (avg[i] != null) { s += avg[i] * totalCounts[i]; n += totalCounts[i]; }
+    return n > 0 ? s / n : null;
+  })();
+
+  return `
+    <svg class="rv-portfolio-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+      ${rvYAxisSvg(y, 4.0, 5.0, padL, W - padR, 0.2)}
+      ${rvThresholdBands(padL, innerW, y, yMin, yMax)}
+      ${bars}
+      ${pathEl}
+      ${pts}
+      ${rvXAxisSvg(weeks, x, H - padB + 16, 4)}
+      ${rightAxis}
+    </svg>
+    <div class="rv-portfolio-legend">
+      <span><span class="swatch" style="background:#0d3528;border-radius:50%"></span>Portfolio weekly average (weighted by review count)</span>
+      <span><span class="swatch" style="background:#c9a84c;opacity:.5"></span>Total reviews received that week</span>
+    </div>
+    <div class="rv-portfolio-stats">
+      <span>12-mo portfolio avg: <strong>${rvFmt(overallWeightedAvg)}</strong></span>
+      <span>Reviews in window: <strong>${totalReviews}</strong></span>
+      <span>Weeks with data: <strong>${weeksWithReviews} / ${weeks.length}</strong></span>
+    </div>`;
+}
+
+// View 2: all 18 lines + bold portfolio avg
+function rvRenderPortfolioAll() {
+  const weeks = rvData.weeks;
+  const W = 720, H = 260;
+  const padL = 38, padR = 14, padT = 14, padB = 32;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const yMin = 4.0, yMax = 5.0;
+  const y = v => padT + innerH * (1 - (Math.max(yMin, Math.min(yMax, v)) - yMin) / (yMax - yMin));
+  const x = i => padL + innerW * (i / Math.max(1, weeks.length - 1));
+
+  let thinPaths = '';
+  for (const pid of Object.keys(rvData.properties)) {
+    const series = rvData.properties[pid].overall;
+    const d = rvPathFromSeries(series, x, y);
+    if (!d) continue;
+    const color = rvColorForPid(pid);
+    const name = (getProp(pid) || {}).name || pid;
+    thinPaths += `<path d="${d}" fill="none" stroke="${color}" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" opacity=".55"><title>${escHtml(name)}</title></path>`;
+  }
+
+  const { avg, totalCounts } = rvPortfolioAvgSeries();
+  const dAvg = rvPathFromSeries(avg, x, y);
+  const avgPath = dAvg ? `<path d="${dAvg}" fill="none" stroke="#0d3528" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>` : '';
+
+  // Hover zones for the portfolio avg line
+  let hover = '';
+  const band = innerW / Math.max(1, weeks.length - 1);
+  for (let i = 0; i < weeks.length; i++) {
+    const dateLbl = new Date(weeks[i]).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    const parts = [dateLbl, avg[i] != null ? `Portfolio avg ${avg[i].toFixed(2)}` : 'No reviews'];
+    if (totalCounts[i]) parts.push(`${totalCounts[i]} review${totalCounts[i]===1?'':'s'}`);
+    hover += `<rect x="${(x(i) - band / 2).toFixed(1)}" y="${padT}" width="${band.toFixed(1)}" height="${innerH}" fill="transparent"><title>${escHtml(parts.join(' · '))}</title></rect>`;
+  }
+
+  // Build neighborhood legend
+  const legend = NBS.map(nb =>
+    `<span><span class="swatch" style="background:${RV_NB_COLOR[nb.cls]}"></span>${escHtml(nb.name)}</span>`
+  ).join('');
+
+  return `
+    <svg class="rv-portfolio-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+      ${rvYAxisSvg(y, 4.0, 5.0, padL, W - padR, 0.2)}
+      ${rvThresholdBands(padL, innerW, y, yMin, yMax)}
+      ${thinPaths}
+      ${avgPath}
+      ${rvXAxisSvg(weeks, x, H - padB + 16, 4)}
+      ${hover}
+    </svg>
+    <div class="rv-portfolio-legend">
+      ${legend}
+      <span style="margin-left:auto"><span class="swatch" style="background:#0d3528;width:18px;height:3px;border-radius:2px;vertical-align:1px"></span>Portfolio avg</span>
+    </div>`;
+}
+
+// View 3: 6 small multiples, one per neighborhood
+function rvRenderPortfolioByNb() {
+  const weeks = rvData.weeks;
+  const yMin = 4.0, yMax = 5.0;
+  const cells = NBS.map(nb => {
+    // Build weighted weekly avg for this nb only
+    const nbAvg = new Array(weeks.length).fill(null);
+    const nbCount = new Array(weeks.length).fill(0);
+    for (let w = 0; w < weeks.length; w++) {
+      let sumR = 0, sumN = 0;
+      for (const pid of nb.props) {
+        const p = rvData.properties[pid];
+        if (!p) continue;
+        const n = p.counts[w] || 0;
+        if (n > 0 && p.overall[w] != null) { sumR += p.overall[w] * n; sumN += n; }
+      }
+      nbAvg[w] = sumN > 0 ? +(sumR / sumN).toFixed(3) : null;
+      nbCount[w] = sumN;
+    }
+    const nbTotalN = nbCount.reduce((s, n) => s + n, 0);
+    const nbOverall = (() => {
+      let s = 0, n = 0;
+      for (let i = 0; i < nbAvg.length; i++) if (nbAvg[i] != null) { s += nbAvg[i] * nbCount[i]; n += nbCount[i]; }
+      return n > 0 ? s / n : null;
+    })();
+
+    const W = 280, H = 100;
+    const padL = 22, padR = 4, padT = 6, padB = 14;
+    const innerW = W - padL - padR, innerH = H - padT - padB;
+    const y = v => padT + innerH * (1 - (Math.max(yMin, Math.min(yMax, v)) - yMin) / (yMax - yMin));
+    const x = i => padL + innerW * (i / Math.max(1, weeks.length - 1));
+    const color = RV_NB_COLOR[nb.cls] || '#0d3528';
+
+    let propPaths = '';
+    for (const pid of nb.props) {
+      const p = rvData.properties[pid];
+      if (!p) continue;
+      const d = rvPathFromSeries(p.overall, x, y);
+      if (!d) continue;
+      propPaths += `<path d="${d}" fill="none" stroke="${color}" stroke-width=".9" opacity=".45"/>`;
+    }
+    const dAvg = rvPathFromSeries(nbAvg, x, y);
+    const avgPath = dAvg ? `<path d="${dAvg}" fill="none" stroke="${color}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>` : '';
+
+    // Mini y-axis ticks at 4.5 and 5.0
+    let yticks = '';
+    for (const v of [4.0, 4.5, 5.0]) {
+      const yy = y(v);
+      yticks += `<line x1="${padL}" y1="${yy.toFixed(1)}" x2="${W - padR}" y2="${yy.toFixed(1)}" stroke="#e3e8e4" stroke-width=".5"/>`;
+      yticks += `<text x="${padL - 3}" y="${(yy + 3).toFixed(1)}" font-size="8" text-anchor="end" fill="#8aaa95">${v.toFixed(1)}</text>`;
+    }
+
+    return `
+      <div class="rv-sm-cell">
+        <div class="rv-sm-head">
+          <span class="rv-sm-name" style="color:${color}">${escHtml(nb.name)}</span>
+          <span class="rv-sm-avg"><span class="rv-badge ${rvBadgeClass(nbOverall)}" style="font-size:.7rem;padding:2px 8px">${rvFmt(nbOverall)}</span></span>
+        </div>
+        <svg class="rv-sm-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+          ${rvThresholdBands(padL, innerW, y, yMin, yMax)}
+          ${yticks}
+          ${propPaths}
+          ${avgPath}
+        </svg>
+        <div class="rv-sm-meta">${nb.props.length} propert${nb.props.length === 1 ? 'y' : 'ies'} · ${nbTotalN} review${nbTotalN === 1 ? '' : 's'}</div>
+      </div>`;
+  }).join('');
+
+  return `<div class="rv-sm-grid">${cells}</div>`;
 }
 
 function rvToggleCleaning() {
