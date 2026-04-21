@@ -9449,8 +9449,6 @@ function rvRenderDrill() {
 
   const avg12 = rvAvg(pd.overall);
   const avg4  = rvAvg(pd.overall.slice(-4));
-  const cleanAvg12 = rvAvg(pd.cleanliness);
-  const cleanAvg4  = rvAvg(pd.cleanliness.slice(-4));
   const total = rvSum(pd.counts);
   const recent = rvSum(pd.counts.slice(-4));
 
@@ -9465,20 +9463,19 @@ function rvRenderDrill() {
     <div class="rv-stats">
       <div class="rv-stat"><div class="rv-stat-lbl">12-mo overall</div><div class="rv-stat-val">${rvFmt(avg12)}</div></div>
       <div class="rv-stat"><div class="rv-stat-lbl">4-wk overall</div><div class="rv-stat-val">${rvFmt(avg4)}</div></div>
-      <div class="rv-stat"><div class="rv-stat-lbl">12-mo cleanliness</div><div class="rv-stat-val">${rvFmt(cleanAvg12)}</div></div>
-      <div class="rv-stat"><div class="rv-stat-lbl">4-wk cleanliness</div><div class="rv-stat-val">${rvFmt(cleanAvg4)}</div></div>
+      <div class="rv-stat"><div class="rv-stat-lbl">Total reviews (12 mo)</div><div class="rv-stat-val">${total}</div></div>
+      <div class="rv-stat"><div class="rv-stat-lbl">Reviews (4 wk)</div><div class="rv-stat-val">${recent}</div></div>
     </div>
     <div class="rv-chart-wrap">
       <div class="rv-chart-legend">
-        <span><span class="dot" style="background:#0d3528"></span>Overall</span>
-        <span><span class="dot" style="background:#c9a84c"></span>Cleanliness</span>
+        <span><span class="dot" style="background:#0d3528"></span>Overall rating</span>
         <span style="margin-left:auto;color:var(--text3)">Hover a week for detail</span>
       </div>
-      ${rvLineChartSvg(pd.overall, pd.cleanliness, pd.counts, rvData.weeks)}
+      ${rvLineChartSvg(pd.overall, pd.counts, rvData.weeks)}
     </div>`;
 }
 
-function rvLineChartSvg(overall, clean, counts, weeks) {
+function rvLineChartSvg(overall, counts, weeks) {
   const W = 720, H = 260;
   const padL = 34, padR = 14, padT = 14, padB = 34;
   const innerW = W - padL - padR, innerH = H - padT - padB;
@@ -9507,16 +9504,16 @@ function rvLineChartSvg(overall, clean, counts, weeks) {
     yAxis += `<text x="${padL - 6}" y="${(yy + 3).toFixed(1)}" font-size="10" text-anchor="end" fill="#7a8a80">${v.toFixed(1)}</text>`;
   }
 
+  // x-axis: anchor rightmost label at current week, step backward by 4
   let xAxis = '';
-  for (let i = 0; i < weeks.length; i += 4) {
+  for (let i = weeks.length - 1; i >= 0; i -= 4) {
     const lbl = new Date(weeks[i]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     xAxis += `<text x="${x(i).toFixed(1)}" y="${H - padB + 16}" font-size="10" text-anchor="middle" fill="#7a8a80">${escHtml(lbl)}</text>`;
   }
 
-  let ptsO = '', ptsC = '';
+  let ptsO = '';
   for (let i = 0; i < weeks.length; i++) {
     if (overall[i] != null) ptsO += `<circle cx="${x(i).toFixed(1)}" cy="${y(overall[i]).toFixed(1)}" r="2.3" fill="#0d3528"/>`;
-    if (clean[i]   != null) ptsC += `<circle cx="${x(i).toFixed(1)}" cy="${y(clean[i]).toFixed(1)}"   r="2.3" fill="#c9a84c"/>`;
   }
 
   // Hover zones (invisible rects with <title> for native tooltip)
@@ -9524,9 +9521,8 @@ function rvLineChartSvg(overall, clean, counts, weeks) {
   const band = innerW / Math.max(1, weeks.length - 1);
   for (let i = 0; i < weeks.length; i++) {
     const dateLbl = new Date(weeks[i]).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    const parts = [dateLbl];
+    const parts = [`Week of ${dateLbl}`];
     parts.push(overall[i] != null ? `Overall ${overall[i].toFixed(2)}` : 'No reviews');
-    if (clean[i] != null) parts.push(`Cleanliness ${clean[i].toFixed(2)}`);
     if (counts[i]) parts.push(`${counts[i]} review${counts[i] === 1 ? '' : 's'}`);
     const tip = parts.join(' · ');
     hover += `<rect x="${(x(i) - band / 2).toFixed(1)}" y="${padT}" width="${band.toFixed(1)}" height="${innerH}" fill="transparent"><title>${escHtml(tip)}</title></rect>`;
@@ -9535,8 +9531,7 @@ function rvLineChartSvg(overall, clean, counts, weeks) {
   return `<svg class="rv-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
     ${yAxis}${bGood}${bMid}${bBad}
     ${buildPath(overall, '#0d3528')}
-    ${buildPath(clean,   '#c9a84c')}
-    ${ptsO}${ptsC}
+    ${ptsO}
     ${xAxis}
     ${hover}
   </svg>`;
@@ -9601,8 +9596,10 @@ function rvYAxisSvg(y, yMin, yMax, x0, x1, step) {
   return s;
 }
 function rvXAxisSvg(weeks, x, yBase, everyN) {
+  // Anchor rightmost label at the current week (last element), step backward
   let s = '';
-  for (let i = 0; i < weeks.length; i += (everyN || 4)) {
+  const step = everyN || 4;
+  for (let i = weeks.length - 1; i >= 0; i -= step) {
     const lbl = new Date(weeks[i]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     s += `<text x="${x(i).toFixed(1)}" y="${yBase}" font-size="10" text-anchor="middle" fill="#7a8a80">${escHtml(lbl)}</text>`;
   }
