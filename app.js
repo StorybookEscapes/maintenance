@@ -9313,7 +9313,7 @@ function rvRender() {
 
   rvRenderPortfolio();
 
-  const sortMode = (document.getElementById('rv-sort') || {}).value || 'drop';
+  const sortMode = (document.getElementById('rv-sort') || {}).value || 'lowAvg12';
 
   const summaries = {};
   for (const pid of Object.keys(rvData.properties)) {
@@ -9341,6 +9341,9 @@ function rvSortIds(ids, sums, mode) {
   const arr = ids.slice();
   arr.sort((a, b) => {
     const sa = sums[a], sb = sums[b];
+    // Properties with no reviews in the 12-mo window always sink to the bottom.
+    const aEmpty = !sa.totalN, bEmpty = !sb.totalN;
+    if (aEmpty !== bEmpty) return aEmpty ? 1 : -1;
     switch (mode) {
       case 'lowAvg12': return (sa.avg12 ?? 99) - (sb.avg12 ?? 99);
       case 'lowAvg4':  return (sa.avg4  ?? 99) - (sb.avg4  ?? 99);
@@ -9350,8 +9353,8 @@ function rvSortIds(ids, sums, mode) {
         return pa.localeCompare(pb);
       }
       case 'reviews':  return (sb.totalN || 0) - (sa.totalN || 0);
-      case 'drop':
-      default:         return (sb.drop ?? -99) - (sa.drop ?? -99);
+      case 'drop':     return (sb.drop ?? -99) - (sa.drop ?? -99);
+      default:         return (sa.avg12 ?? 99) - (sb.avg12 ?? 99);
     }
   });
   return arr;
@@ -9382,38 +9385,42 @@ function rvRowHtml(pid, s) {
     </div>`;
 }
 
-// Inline SVG sparkline. Nulls render as gaps (no line drawn across them).
+// Inline SVG sparkline on demerit scale (y=0 at bottom = perfect; spikes up = slips).
+// Nulls render as gaps (no line drawn across them).
 function rvSparkSvg(series, width, height) {
   width = width || 170;
   height = height || 34;
   const pad = 2;
   const n = series.length;
-  const yMin = 4.0, yMax = 5.0;
+  const yMin = 0, yMax = 1.5;
   const y = v => {
     const c = Math.max(yMin, Math.min(yMax, v));
     return pad + (height - 2 * pad) * (1 - (c - yMin) / (yMax - yMin));
   };
   const x = i => pad + (width - 2 * pad) * (i / Math.max(1, n - 1));
+  const dem = rvDemeritSeries(series);
 
-  // Threshold bands (subtle)
-  const bGood = `<rect x="0" y="${y(yMax).toFixed(1)}" width="${width}" height="${(y(RV_THRESH_GOOD) - y(yMax)).toFixed(1)}" fill="#d9efe0" opacity=".4"/>`;
-  const bMid  = `<rect x="0" y="${y(RV_THRESH_GOOD).toFixed(1)}" width="${width}" height="${(y(RV_THRESH_MID) - y(RV_THRESH_GOOD)).toFixed(1)}" fill="#fdf3d6" opacity=".4"/>`;
-  const bBad  = `<rect x="0" y="${y(RV_THRESH_MID).toFixed(1)}" width="${width}" height="${(y(yMin) - y(RV_THRESH_MID)).toFixed(1)}" fill="#fdf0ee" opacity=".4"/>`;
+  // Inverted threshold bands (green at bottom, red at top)
+  const bGood = `<rect x="0" y="${y(RV_DEM_GOOD).toFixed(1)}" width="${width}" height="${(y(0)         - y(RV_DEM_GOOD)).toFixed(1)}" fill="#d9efe0" opacity=".45"/>`;
+  const bMid  = `<rect x="0" y="${y(RV_DEM_MID).toFixed(1)}"  width="${width}" height="${(y(RV_DEM_GOOD) - y(RV_DEM_MID)).toFixed(1)}"  fill="#fdf3d6" opacity=".45"/>`;
+  const bBad  = `<rect x="0" y="${y(yMax).toFixed(1)}"        width="${width}" height="${(y(RV_DEM_MID)  - y(yMax)).toFixed(1)}"       fill="#fdf0ee" opacity=".45"/>`;
 
   let d = '';
   let pen = false;
   for (let i = 0; i < n; i++) {
-    if (series[i] == null) { pen = false; continue; }
-    d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(series[i]).toFixed(1) + ' ';
+    if (dem[i] == null) { pen = false; continue; }
+    d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(dem[i]).toFixed(1) + ' ';
     pen = true;
   }
   const path = d ? `<path d="${d}" fill="none" stroke="#0d3528" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>` : '';
 
-  // Highlight the latest data point so the viewer knows where "now" is.
+  // Highlight the latest data point so the viewer knows where "now" is; color by severity.
   let lastDot = '';
   for (let i = n - 1; i >= 0; i--) {
-    if (series[i] != null) {
-      lastDot = `<circle cx="${x(i).toFixed(1)}" cy="${y(series[i]).toFixed(1)}" r="2.2" fill="#0d3528"/>`;
+    if (dem[i] != null) {
+      const v = dem[i];
+      const color = v >= RV_DEM_MID ? '#b3331f' : v >= RV_DEM_GOOD ? '#b58410' : '#0d3528';
+      lastDot = `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.4" fill="${color}"/>`;
       break;
     }
   }
@@ -9467,25 +9474,26 @@ function rvRenderDrill() {
       <div class="rv-stat"><div class="rv-stat-lbl">Reviews (4 wk)</div><div class="rv-stat-val">${recent}</div></div>
     </div>
     <div class="rv-chart-wrap">
+      <div class="rv-chart-title">Stars below 5★ &mdash; <span style="color:var(--text3);font-weight:400">lower is better · flat on the baseline = perfect weeks</span></div>
       <div class="rv-chart-legend">
-        <span><span class="dot" style="background:#0d3528"></span>Overall rating</span>
+        <span><span class="dot" style="background:#0d3528"></span>≥ 4.8★ week</span>
+        <span><span class="dot" style="background:#b58410"></span>4.5 – 4.8★</span>
+        <span><span class="dot" style="background:#b3331f"></span>&lt; 4.5★</span>
         <span style="margin-left:auto;color:var(--text3)">Hover a week for detail</span>
       </div>
       ${rvLineChartSvg(pd.overall, pd.counts, rvData.weeks)}
     </div>`;
 }
 
+// Demerit-scale line chart. y=0 (bottom) = perfect 5★ week. Spikes upward = slips.
 function rvLineChartSvg(overall, counts, weeks) {
   const W = 720, H = 260;
-  const padL = 34, padR = 14, padT = 14, padB = 34;
+  const padL = 50, padR = 14, padT = 14, padB = 34;
   const innerW = W - padL - padR, innerH = H - padT - padB;
-  const yMin = 4.0, yMax = 5.0;
+  const yMin = 0, yMax = 1.5;
   const y = v => padT + innerH * (1 - (Math.max(yMin, Math.min(yMax, v)) - yMin) / (yMax - yMin));
   const x = i => padL + innerW * (i / Math.max(1, overall.length - 1));
-
-  const bGood = `<rect x="${padL}" y="${y(yMax).toFixed(1)}" width="${innerW}" height="${(y(RV_THRESH_GOOD) - y(yMax)).toFixed(1)}" fill="#d9efe0" opacity=".35"/>`;
-  const bMid  = `<rect x="${padL}" y="${y(RV_THRESH_GOOD).toFixed(1)}" width="${innerW}" height="${(y(RV_THRESH_MID) - y(RV_THRESH_GOOD)).toFixed(1)}" fill="#fdf3d6" opacity=".35"/>`;
-  const bBad  = `<rect x="${padL}" y="${y(RV_THRESH_MID).toFixed(1)}" width="${innerW}" height="${(y(yMin) - y(RV_THRESH_MID)).toFixed(1)}" fill="#fdf0ee" opacity=".35"/>`;
+  const demSeries = rvDemeritSeries(overall);
 
   const buildPath = (series, color) => {
     let d = '', pen = false;
@@ -9497,12 +9505,19 @@ function rvLineChartSvg(overall, counts, weeks) {
     return d ? `<path d="${d}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` : '';
   };
 
+  // Y-axis with dual labels (demerit + equivalent star rating)
   let yAxis = '';
-  for (let v = 4.0; v <= 5.001; v += 0.2) {
+  const ticks = [0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5];
+  for (const v of ticks) {
     const yy = y(v);
     yAxis += `<line x1="${padL}" y1="${yy.toFixed(1)}" x2="${W - padR}" y2="${yy.toFixed(1)}" stroke="#e3e8e4" stroke-width=".6"/>`;
-    yAxis += `<text x="${padL - 6}" y="${(yy + 3).toFixed(1)}" font-size="10" text-anchor="end" fill="#7a8a80">${v.toFixed(1)}</text>`;
+    const star = (5 - v).toFixed(2);
+    yAxis += `<text x="${padL - 6}" y="${(yy + 3).toFixed(1)}" font-size="10" text-anchor="end" fill="#7a8a80">${star}★</text>`;
   }
+
+  // Dashed zero-line baseline (perfect week)
+  const yZero = y(0);
+  const zeroLine = `<line x1="${padL}" y1="${yZero.toFixed(1)}" x2="${W - padR}" y2="${yZero.toFixed(1)}" stroke="#1f5a3a" stroke-width="1" stroke-dasharray="3,3" opacity=".5"/>`;
 
   // x-axis: anchor rightmost label at current week, step backward by 4
   let xAxis = '';
@@ -9511,9 +9526,14 @@ function rvLineChartSvg(overall, counts, weeks) {
     xAxis += `<text x="${x(i).toFixed(1)}" y="${H - padB + 16}" font-size="10" text-anchor="middle" fill="#7a8a80">${escHtml(lbl)}</text>`;
   }
 
-  let ptsO = '';
+  // Points sized by severity — bigger dots for bigger slips
+  let pts = '';
   for (let i = 0; i < weeks.length; i++) {
-    if (overall[i] != null) ptsO += `<circle cx="${x(i).toFixed(1)}" cy="${y(overall[i]).toFixed(1)}" r="2.3" fill="#0d3528"/>`;
+    if (demSeries[i] == null) continue;
+    const d = demSeries[i];
+    const r = d >= RV_DEM_MID ? 4.5 : d >= RV_DEM_GOOD ? 3.2 : 2.3;
+    const color = d >= RV_DEM_MID ? '#b3331f' : d >= RV_DEM_GOOD ? '#b58410' : '#0d3528';
+    pts += `<circle cx="${x(i).toFixed(1)}" cy="${y(d).toFixed(1)}" r="${r}" fill="${color}"/>`;
   }
 
   // Hover zones (invisible rects with <title> for native tooltip)
@@ -9522,16 +9542,22 @@ function rvLineChartSvg(overall, counts, weeks) {
   for (let i = 0; i < weeks.length; i++) {
     const dateLbl = new Date(weeks[i]).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     const parts = [`Week of ${dateLbl}`];
-    parts.push(overall[i] != null ? `Overall ${overall[i].toFixed(2)}` : 'No reviews');
+    if (overall[i] != null) {
+      parts.push(`Avg ${overall[i].toFixed(2)}★  (lost ${demSeries[i].toFixed(2)})`);
+    } else {
+      parts.push('No reviews');
+    }
     if (counts[i]) parts.push(`${counts[i]} review${counts[i] === 1 ? '' : 's'}`);
     const tip = parts.join(' · ');
     hover += `<rect x="${(x(i) - band / 2).toFixed(1)}" y="${padT}" width="${band.toFixed(1)}" height="${innerH}" fill="transparent"><title>${escHtml(tip)}</title></rect>`;
   }
 
   return `<svg class="rv-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
-    ${yAxis}${bGood}${bMid}${bBad}
-    ${buildPath(overall, '#0d3528')}
-    ${ptsO}
+    ${yAxis}
+    ${rvThresholdBands(padL, innerW, y, yMin, yMax)}
+    ${zeroLine}
+    ${buildPath(demSeries, '#0d3528')}
+    ${pts}
     ${xAxis}
     ${hover}
   </svg>`;
@@ -9605,28 +9631,41 @@ function rvXAxisSvg(weeks, x, yBase, everyN) {
   }
   return s;
 }
+// Demerit-scale thresholds (lower = better).
+// Rating ≥4.8 → demerit ≤0.2 (green). 4.5–4.8 → 0.2–0.5 (yellow). <4.5 → >0.5 (red).
+const RV_DEM_GOOD = 0.2; // 5 - 4.8
+const RV_DEM_MID  = 0.5; // 5 - 4.5
+// Transform a rating (4.0–5.0) to demerit (stars lost below 5). Nulls preserved.
+function rvDemerit(r) { return r == null ? null : Math.max(0, 5 - r); }
+function rvDemeritSeries(series) { return series.map(rvDemerit); }
+// Draw threshold bands on a demerit-scale chart (y(0) = bottom, y(yMax) = top).
 function rvThresholdBands(x0, xW, y, yMin, yMax) {
+  // yMin is 0 for demerit; kept in signature for legacy callers.
+  const good = Math.min(RV_DEM_GOOD, yMax);
+  const mid  = Math.min(RV_DEM_MID, yMax);
   return `
-    <rect x="${x0}" y="${y(yMax).toFixed(1)}"          width="${xW}" height="${(y(RV_THRESH_GOOD) - y(yMax)).toFixed(1)}" fill="#d9efe0" opacity=".3"/>
-    <rect x="${x0}" y="${y(RV_THRESH_GOOD).toFixed(1)}" width="${xW}" height="${(y(RV_THRESH_MID)  - y(RV_THRESH_GOOD)).toFixed(1)}" fill="#fdf3d6" opacity=".3"/>
-    <rect x="${x0}" y="${y(RV_THRESH_MID).toFixed(1)}"  width="${xW}" height="${(y(yMin)          - y(RV_THRESH_MID)).toFixed(1)}"  fill="#fdf0ee" opacity=".3"/>`;
+    <rect x="${x0}" y="${y(good).toFixed(1)}" width="${xW}" height="${(y(0)    - y(good)).toFixed(1)}" fill="#d9efe0" opacity=".35"/>
+    <rect x="${x0}" y="${y(mid).toFixed(1)}"  width="${xW}" height="${(y(good) - y(mid)).toFixed(1)}"  fill="#fdf3d6" opacity=".35"/>
+    <rect x="${x0}" y="${y(yMax).toFixed(1)}" width="${xW}" height="${(y(mid)  - y(yMax)).toFixed(1)}" fill="#fdf0ee" opacity=".35"/>`;
 }
 
-// View 1: portfolio avg (single bold line) + review volume bars
+// View 1: portfolio demerit (stars below 5) + review volume bars
 function rvRenderPortfolioAvg() {
   const { avg, totalCounts } = rvPortfolioAvgSeries();
   const weeks = rvData.weeks;
   const W = 720, H = 240;
-  const padL = 38, padR = 34, padT = 14, padB = 32;
+  const padL = 52, padR = 34, padT = 14, padB = 32;
   const innerW = W - padL - padR, innerH = H - padT - padB;
-  const yMin = 4.0, yMax = 5.0;
+  const yMin = 0, yMax = 1.0; // portfolio-weighted avg is smoother; 1.0 gives resolution
   const y   = v => padT + innerH * (1 - (Math.max(yMin, Math.min(yMax, v)) - yMin) / (yMax - yMin));
   const x   = i => padL + innerW * (i / Math.max(1, weeks.length - 1));
   const maxCount = Math.max(1, ...totalCounts);
-  // Bars occupy bottom 40% of inner area — layered behind the line.
-  const barHMax = innerH * 0.4;
+  // Bars occupy bottom 30% of inner area — layered behind the line.
+  const barHMax = innerH * 0.3;
   const barYBase = padT + innerH;
   const barW = Math.max(2, (innerW / weeks.length) - 1);
+
+  const demAvg = rvDemeritSeries(avg);
 
   let bars = '';
   for (let i = 0; i < weeks.length; i++) {
@@ -9635,12 +9674,32 @@ function rvRenderPortfolioAvg() {
     bars += `<rect x="${(x(i) - barW / 2).toFixed(1)}" y="${(barYBase - h).toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" fill="#c9a84c" opacity=".35"><title>${escHtml(new Date(weeks[i]).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}))} · ${totalCounts[i]} review${totalCounts[i]===1?'':'s'}</title></rect>`;
   }
 
-  const dPath = rvPathFromSeries(avg, x, y);
+  const dPath = rvPathFromSeries(demAvg, x, y);
   const pathEl = dPath ? `<path d="${dPath}" fill="none" stroke="#0d3528" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>` : '';
 
+  // Dashed zero baseline = perfect week
+  const yZero = y(0);
+  const zeroLine = `<line x1="${padL}" y1="${yZero.toFixed(1)}" x2="${W - padR}" y2="${yZero.toFixed(1)}" stroke="#1f5a3a" stroke-width="1" stroke-dasharray="3,3" opacity=".5"/>`;
+
+  // Severity-colored dots
   let pts = '';
   for (let i = 0; i < weeks.length; i++) {
-    if (avg[i] != null) pts += `<circle cx="${x(i).toFixed(1)}" cy="${y(avg[i]).toFixed(1)}" r="2.4" fill="#0d3528"><title>${escHtml(new Date(weeks[i]).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}))} · avg ${avg[i].toFixed(2)} · ${totalCounts[i]} review${totalCounts[i]===1?'':'s'}</title></circle>`;
+    if (demAvg[i] == null) continue;
+    const d = demAvg[i];
+    const r = d >= RV_DEM_MID ? 4.2 : d >= RV_DEM_GOOD ? 3.0 : 2.4;
+    const color = d >= RV_DEM_MID ? '#b3331f' : d >= RV_DEM_GOOD ? '#b58410' : '#0d3528';
+    const tip = `${new Date(weeks[i]).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} · avg ${avg[i].toFixed(2)}★ (lost ${d.toFixed(2)}) · ${totalCounts[i]} review${totalCounts[i]===1?'':'s'}`;
+    pts += `<circle cx="${x(i).toFixed(1)}" cy="${y(d).toFixed(1)}" r="${r}" fill="${color}"><title>${escHtml(tip)}</title></circle>`;
+  }
+
+  // Demerit y-axis with star-equivalent labels
+  let yAxis = '';
+  const ticks = [0, 0.2, 0.5, 1.0];
+  for (const v of ticks) {
+    if (v > yMax + 1e-6) continue;
+    const yy = y(v);
+    yAxis += `<line x1="${padL}" y1="${yy.toFixed(1)}" x2="${W - padR}" y2="${yy.toFixed(1)}" stroke="#e3e8e4" stroke-width=".6"/>`;
+    yAxis += `<text x="${padL - 6}" y="${(yy + 3).toFixed(1)}" font-size="10" text-anchor="end" fill="#7a8a80">${(5 - v).toFixed(1)}★</text>`;
   }
 
   // Right-side count axis (bars)
@@ -9661,42 +9720,48 @@ function rvRenderPortfolioAvg() {
     for (let i = 0; i < avg.length; i++) if (avg[i] != null) { s += avg[i] * totalCounts[i]; n += totalCounts[i]; }
     return n > 0 ? s / n : null;
   })();
+  // Count weeks with visible slips (below 4.8★ → demerit > 0.2)
+  const slipWeeks = demAvg.filter(v => v != null && v > RV_DEM_GOOD).length;
 
   return `
+    <div class="rv-chart-title">Stars below 5★ &mdash; <span style="color:var(--text3);font-weight:400">lower is better · flat on the baseline = perfect week</span></div>
     <svg class="rv-portfolio-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
-      ${rvYAxisSvg(y, 4.0, 5.0, padL, W - padR, 0.2)}
+      ${yAxis}
       ${rvThresholdBands(padL, innerW, y, yMin, yMax)}
       ${bars}
+      ${zeroLine}
       ${pathEl}
       ${pts}
       ${rvXAxisSvg(weeks, x, H - padB + 16, 4)}
       ${rightAxis}
     </svg>
     <div class="rv-portfolio-legend">
-      <span><span class="swatch" style="background:#0d3528;border-radius:50%"></span>Portfolio weekly average (weighted by review count)</span>
-      <span><span class="swatch" style="background:#c9a84c;opacity:.5"></span>Total reviews received that week</span>
+      <span><span class="swatch" style="background:#0d3528;border-radius:50%"></span>Portfolio weekly avg (stars below 5★, count-weighted)</span>
+      <span><span class="swatch" style="background:#b58410;border-radius:50%"></span>4.5 – 4.8★ week</span>
+      <span><span class="swatch" style="background:#b3331f;border-radius:50%"></span>&lt; 4.5★ week</span>
+      <span><span class="swatch" style="background:#c9a84c;opacity:.5"></span>Reviews that week</span>
     </div>
     <div class="rv-portfolio-stats">
-      <span>12-mo portfolio avg: <strong>${rvFmt(overallWeightedAvg)}</strong></span>
+      <span>12-mo portfolio avg: <strong>${rvFmt(overallWeightedAvg)}★</strong></span>
+      <span>Weeks with a slip (&lt; 4.8★): <strong>${slipWeeks} / ${weeksWithReviews}</strong></span>
       <span>Reviews in window: <strong>${totalReviews}</strong></span>
-      <span>Weeks with data: <strong>${weeksWithReviews} / ${weeks.length}</strong></span>
     </div>`;
 }
 
-// View 2: all 18 lines + bold portfolio avg
+// View 2: all 18 lines + bold portfolio avg (demerit scale)
 function rvRenderPortfolioAll() {
   const weeks = rvData.weeks;
   const W = 720, H = 260;
-  const padL = 38, padR = 14, padT = 14, padB = 32;
+  const padL = 52, padR = 14, padT = 14, padB = 32;
   const innerW = W - padL - padR, innerH = H - padT - padB;
-  const yMin = 4.0, yMax = 5.0;
+  const yMin = 0, yMax = 1.5;
   const y = v => padT + innerH * (1 - (Math.max(yMin, Math.min(yMax, v)) - yMin) / (yMax - yMin));
   const x = i => padL + innerW * (i / Math.max(1, weeks.length - 1));
 
   let thinPaths = '';
   for (const pid of Object.keys(rvData.properties)) {
     const series = rvData.properties[pid].overall;
-    const d = rvPathFromSeries(series, x, y);
+    const d = rvPathFromSeries(rvDemeritSeries(series), x, y);
     if (!d) continue;
     const color = rvColorForPid(pid);
     const name = (getProp(pid) || {}).name || pid;
@@ -9704,15 +9769,32 @@ function rvRenderPortfolioAll() {
   }
 
   const { avg, totalCounts } = rvPortfolioAvgSeries();
-  const dAvg = rvPathFromSeries(avg, x, y);
+  const demAvg = rvDemeritSeries(avg);
+  const dAvg = rvPathFromSeries(demAvg, x, y);
   const avgPath = dAvg ? `<path d="${dAvg}" fill="none" stroke="#0d3528" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>` : '';
+
+  // Dashed zero baseline
+  const yZero = y(0);
+  const zeroLine = `<line x1="${padL}" y1="${yZero.toFixed(1)}" x2="${W - padR}" y2="${yZero.toFixed(1)}" stroke="#1f5a3a" stroke-width="1" stroke-dasharray="3,3" opacity=".5"/>`;
+
+  // Y-axis with star-equivalent labels
+  let yAxis = '';
+  const ticks = [0, 0.2, 0.5, 1.0, 1.5];
+  for (const v of ticks) {
+    if (v > yMax + 1e-6) continue;
+    const yy = y(v);
+    yAxis += `<line x1="${padL}" y1="${yy.toFixed(1)}" x2="${W - padR}" y2="${yy.toFixed(1)}" stroke="#e3e8e4" stroke-width=".6"/>`;
+    yAxis += `<text x="${padL - 6}" y="${(yy + 3).toFixed(1)}" font-size="10" text-anchor="end" fill="#7a8a80">${(5 - v).toFixed(1)}★</text>`;
+  }
 
   // Hover zones for the portfolio avg line
   let hover = '';
   const band = innerW / Math.max(1, weeks.length - 1);
   for (let i = 0; i < weeks.length; i++) {
     const dateLbl = new Date(weeks[i]).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-    const parts = [dateLbl, avg[i] != null ? `Portfolio avg ${avg[i].toFixed(2)}` : 'No reviews'];
+    const parts = [dateLbl];
+    if (avg[i] != null) parts.push(`Portfolio avg ${avg[i].toFixed(2)}★ (lost ${demAvg[i].toFixed(2)})`);
+    else parts.push('No reviews');
     if (totalCounts[i]) parts.push(`${totalCounts[i]} review${totalCounts[i]===1?'':'s'}`);
     hover += `<rect x="${(x(i) - band / 2).toFixed(1)}" y="${padT}" width="${band.toFixed(1)}" height="${innerH}" fill="transparent"><title>${escHtml(parts.join(' · '))}</title></rect>`;
   }
@@ -9723,9 +9805,11 @@ function rvRenderPortfolioAll() {
   ).join('');
 
   return `
+    <div class="rv-chart-title">Stars below 5★ per property &mdash; <span style="color:var(--text3);font-weight:400">each thin line = one property · bold = portfolio average</span></div>
     <svg class="rv-portfolio-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
-      ${rvYAxisSvg(y, 4.0, 5.0, padL, W - padR, 0.2)}
+      ${yAxis}
       ${rvThresholdBands(padL, innerW, y, yMin, yMax)}
+      ${zeroLine}
       ${thinPaths}
       ${avgPath}
       ${rvXAxisSvg(weeks, x, H - padB + 16, 4)}
@@ -9737,10 +9821,10 @@ function rvRenderPortfolioAll() {
     </div>`;
 }
 
-// View 3: 6 small multiples, one per neighborhood
+// View 3: 6 small multiples, one per neighborhood (demerit scale)
 function rvRenderPortfolioByNb() {
   const weeks = rvData.weeks;
-  const yMin = 4.0, yMax = 5.0;
+  const yMin = 0, yMax = 1.5;
   const cells = NBS.map(nb => {
     // Build weighted weekly avg for this nb only
     const nbAvg = new Array(weeks.length).fill(null);
@@ -9764,7 +9848,7 @@ function rvRenderPortfolioByNb() {
     })();
 
     const W = 280, H = 100;
-    const padL = 22, padR = 4, padT = 6, padB = 14;
+    const padL = 28, padR = 4, padT = 6, padB = 14;
     const innerW = W - padL - padR, innerH = H - padT - padB;
     const y = v => padT + innerH * (1 - (Math.max(yMin, Math.min(yMax, v)) - yMin) / (yMax - yMin));
     const x = i => padL + innerW * (i / Math.max(1, weeks.length - 1));
@@ -9774,19 +9858,23 @@ function rvRenderPortfolioByNb() {
     for (const pid of nb.props) {
       const p = rvData.properties[pid];
       if (!p) continue;
-      const d = rvPathFromSeries(p.overall, x, y);
+      const d = rvPathFromSeries(rvDemeritSeries(p.overall), x, y);
       if (!d) continue;
       propPaths += `<path d="${d}" fill="none" stroke="${color}" stroke-width=".9" opacity=".45"/>`;
     }
-    const dAvg = rvPathFromSeries(nbAvg, x, y);
+    const dAvg = rvPathFromSeries(rvDemeritSeries(nbAvg), x, y);
     const avgPath = dAvg ? `<path d="${dAvg}" fill="none" stroke="${color}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>` : '';
 
-    // Mini y-axis ticks at 4.5 and 5.0
+    // Dashed zero baseline
+    const yZero = y(0);
+    const zeroLine = `<line x1="${padL}" y1="${yZero.toFixed(1)}" x2="${W - padR}" y2="${yZero.toFixed(1)}" stroke="${color}" stroke-width=".8" stroke-dasharray="3,3" opacity=".45"/>`;
+
+    // Mini y-axis ticks labeled as stars (0.0 dem → 5★, 0.5 dem → 4.5★, 1.0 dem → 4★)
     let yticks = '';
-    for (const v of [4.0, 4.5, 5.0]) {
+    for (const v of [0, 0.5, 1.0]) {
       const yy = y(v);
       yticks += `<line x1="${padL}" y1="${yy.toFixed(1)}" x2="${W - padR}" y2="${yy.toFixed(1)}" stroke="#e3e8e4" stroke-width=".5"/>`;
-      yticks += `<text x="${padL - 3}" y="${(yy + 3).toFixed(1)}" font-size="8" text-anchor="end" fill="#8aaa95">${v.toFixed(1)}</text>`;
+      yticks += `<text x="${padL - 3}" y="${(yy + 3).toFixed(1)}" font-size="8" text-anchor="end" fill="#8aaa95">${(5 - v).toFixed(1)}★</text>`;
     }
 
     return `
@@ -9798,6 +9886,7 @@ function rvRenderPortfolioByNb() {
         <svg class="rv-sm-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
           ${rvThresholdBands(padL, innerW, y, yMin, yMax)}
           ${yticks}
+          ${zeroLine}
           ${propPaths}
           ${avgPath}
         </svg>
