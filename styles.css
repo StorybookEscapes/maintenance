@@ -1045,6 +1045,10 @@ textarea{resize:vertical;min-height:76px}
 .vs-card-check{width:28px;height:28px;border-radius:50%;border:2px solid var(--border-dark);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s;margin-top:2px;font-size:.9rem;color:transparent;background:var(--white);cursor:pointer;-webkit-tap-highlight-color:transparent;position:relative}
 .vs-card-check::before{content:'';position:absolute;inset:-8px;border-radius:50%}
 .vs-card.vs-done .vs-card-check{background:var(--green);border-color:var(--green);color:#fff}
+/* Locked check — shown for undated tasks so vendor can't mark complete until scheduled */
+.vs-card-check-locked{background:var(--gold-pale);border-color:var(--gold-light);color:#8a5a10;cursor:default;font-size:.85rem}
+.vs-card-check-locked::before{display:none}
+.vs-needs-date-tag{display:inline-flex;align-items:center;gap:4px;font-size:.6rem;font-weight:700;color:#8a5a10;background:var(--gold-pale);border:1px solid var(--gold-light);padding:1px 7px;border-radius:4px;text-transform:uppercase;letter-spacing:.3px}
 .vs-card-info{flex:1;min-width:0}
 .vs-card-prop{font-size:.68rem;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:3px}
 .vs-card-prob{font-size:.88rem;font-weight:600;color:var(--text);line-height:1.35}
@@ -1151,9 +1155,7 @@ textarea{resize:vertical;min-height:76px}
 .vs-needs-title{font-family:'Cormorant Garamond',serif;font-size:1.05rem;font-weight:600;color:#8a5a10;letter-spacing:.5px;text-transform:uppercase}
 .vs-needs-count{font-size:.68rem;font-weight:700;background:var(--gold-pale);color:#8a5a10;border:1px solid var(--gold-light);border-radius:20px;padding:2px 9px}
 .vs-needs-help{font-size:.78rem;color:#7a5c00;margin-bottom:10px}
-.vs-needs-prop{border-left:3px solid var(--green);background:var(--white);border-radius:6px;padding:8px 10px;margin-bottom:10px}
-.vs-needs-prop-label{font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text2);margin-bottom:6px}
-.vs-needs-prop-group{display:flex;flex-direction:column;gap:6px}
+.vs-needs-prop-group{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
 /* Prominent primary Pick-a-date button shown inside the card detail for undated tasks */
 .vs-pick-date-btn-lg{background:var(--gold);color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:.82rem;font-weight:600;cursor:pointer;transition:background .15s;white-space:nowrap;display:inline-flex;align-items:center;gap:7px;-webkit-tap-highlight-color:transparent;box-shadow:0 1px 2px rgba(0,0,0,.08)}
 .vs-pick-date-btn-lg:hover{background:#b8953d}
@@ -1230,14 +1232,20 @@ textarea{resize:vertical;min-height:76px}
 .vs-bulk-row-prob{font-size:.82rem;color:var(--text);line-height:1.35}
 .vs-bulk-skip{margin-top:10px;padding:9px 12px;background:#fff7ea;border:1px solid #e7cfa0;border-radius:7px;font-size:.76rem;color:#7a5c00;line-height:1.4}
 .vs-bulk-skip strong{color:#7a5c00;font-weight:700}
+/* Post-schedule success panel — mirrors what admin would text to vendor */
+.vs-success-body{padding:18px 20px 6px;max-height:55vh;overflow-y:auto}
+.vs-success-lead{font-size:.88rem;color:var(--text);line-height:1.5;margin-bottom:14px}
+.vs-success-lead strong{color:var(--green);font-weight:600}
+.vs-success-tasks{display:flex;flex-direction:column;gap:4px;margin:4px 0 14px 12px}
+.vs-success-task{font-size:.82rem;color:var(--text);line-height:1.4;padding:3px 0}
 @media (max-width:540px){
   .vs-dp-panel{max-width:100%;border-radius:10px}
   .vs-dp-header{padding:14px 14px 10px}
   .vs-dp-title{font-size:1.1rem}
   .vs-dp-body{padding:12px 12px 4px}
   .vs-dp-footer{padding:10px 12px 14px}
-  .vs-needs-prop{padding:8px}
   .vs-bulk-confirm{padding:14px 14px 4px}
+  .vs-success-body{padding:14px 14px 4px}
 }
 /* Vendor-done banner — tasks vendors have marked complete (dark forest gradient) */
 .vdn-banner{background:linear-gradient(135deg,#0f2a1a 0%,#1a3a25 100%);border:1px solid #2a6a40;border-radius:var(--radius);padding:14px 18px;margin-bottom:16px;box-shadow:var(--shadow-md)}

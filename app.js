@@ -6146,6 +6146,32 @@ async function rpQuickDelivered(id) {
   // Renders the full vsCard for each task (photos, notes, purchase, filter,
   // upload, etc.) so vendors see the same context they'd see on a dated task.
   // "Pick a date" lives inside the expanded card detail (see vsCard).
+  // Shared property header renderer — same fields whether the task is
+  // scheduled or waiting on the vendor's schedule. Fields come from
+  // sanitizeWithFields (vendor.js) which applies uniformly to both buckets.
+  function vsPropMetaParts(t){
+    const parts=[];
+    if(t.address)parts.push('<a href="https://maps.google.com/?q='+encodeURIComponent(t.address)+'" target="_blank">'+t.address+'</a>');
+    if(t.doorCode)parts.push('Code: '+t.doorCode);
+    if(t.wifiName)parts.push('WiFi: '+t.wifiName);
+    if(t.wifiPassword)parts.push('WiFi Pass: '+t.wifiPassword);
+    if(t.checkoutTime)parts.push('Checkout: '+t.checkoutTime);
+    if(t.checkinTime)parts.push('Check-in: '+t.checkinTime);
+    if(t.parking)parts.push('Parking: '+t.parking);
+    if(t.lockbox)parts.push('Lockbox: '+t.lockbox);
+    if(t.trashDay)parts.push('Trash: '+t.trashDay);
+    if(t.specialNotes)parts.push(t.specialNotes);
+    return parts;
+  }
+  function vsPropHeaderHtml(t,shortName,nbCls,alertHtml){
+    const metaParts=vsPropMetaParts(t);
+    return`<div class="vs-prop-header" style="border-left-color:var(--${nbCls||'green'})">
+      <div class="vs-prop-name">${shortName}</div>
+      ${metaParts.length?`<div class="vs-prop-meta">${metaParts.join(' &middot; ')}</div>`:''}
+      ${alertHtml||''}
+    </div>`;
+  }
+
   function vsRenderNeedsSchedHtml(){
     if(!vNeedsSched||!vNeedsSched.length)return'';
     let html=`<div class="vs-needs-sched">
@@ -6174,13 +6200,15 @@ async function rpQuickDelivered(id) {
       html+=`<div class="vs-needs-nb" style="color:var(--${ng.nbCls})">${ng.nb}</div>`;
       ng.props.forEach(p=>{
         const shortName=p.propertyName.replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
-        html+=`<div class="vs-needs-prop" style="border-left-color:var(--${ng.nbCls})">
-          <div class="vs-needs-prop-label">${shortName}</div>
-          <div class="vs-needs-prop-group">`;
+        // First task carries the property meta fields (address/codes/WiFi etc.)
+        // — same sanitizeWithFields is applied to needs-sched tasks in vendor.js.
+        const first=p.items[0]||{};
+        html+=vsPropHeaderHtml(first,shortName,ng.nbCls,'');
+        html+=`<div class="vs-needs-prop-group">`;
         p.items.forEach(t=>{
           html+=vsCard(t);
         });
-        html+=`</div></div>`; // vs-needs-prop-group, vs-needs-prop
+        html+=`</div>`; // vs-needs-prop-group
       });
     });
     html+=`</div>`; // vs-needs-sched
@@ -6378,12 +6406,81 @@ async function rpQuickDelivered(id) {
         if(footerBtns){footerBtns.querySelectorAll('button').forEach(b=>{b.disabled=false;b.style.opacity='';});}
         return;
       }
-      vsClosePicker();
-      await vsLoad();
+      // Keep the modal open — show the success panel with addresses, codes,
+      // WiFi etc. (the same info an admin would text). Vendor dismisses when
+      // ready; dismiss triggers refresh + scroll to that day in the agenda.
+      vsRenderScheduledSuccess(taskIds,ds);
     }catch(e){
       alert('Network error. Please try again.');
       if(footerBtns){footerBtns.querySelectorAll('button').forEach(b=>{b.disabled=false;b.style.opacity='';});}
     }
+  };
+
+  // ── Post-schedule success panel — rendered inside the picker modal after
+  // either single or batch self-schedule. Shows the same info admin would text:
+  // date, property address (tap-to-Maps), door code, WiFi, plus each task.
+  // Source: vNeedsSched snapshot (pre-refresh) since those tasks already carry
+  // full prop fields via sanitizeWithFields in vendor.js.
+  function vsRenderScheduledSuccess(scheduledIds,ds){
+    const modal=document.getElementById('vs-dp-modal');
+    if(!modal)return;
+    const idSet=new Set(scheduledIds);
+    const tasks=(vNeedsSched||[]).filter(t=>idSet.has(t.id));
+    const dateLabel=new Date(ds+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+    // Group by property, preserving first-seen order
+    const propBuckets={};const propOrder=[];
+    tasks.forEach(t=>{
+      if(!propBuckets[t.propertyName]){
+        propBuckets[t.propertyName]={first:t,items:[]};
+        propOrder.push(t.propertyName);
+      }
+      propBuckets[t.propertyName].items.push(t);
+    });
+    let body='';
+    propOrder.forEach(pn=>{
+      const b=propBuckets[pn];
+      const shortName=pn.replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
+      const nbCls=b.first.neighborhoodCls||'green';
+      body+=vsPropHeaderHtml(b.first,shortName,nbCls,'');
+      body+='<div class="vs-success-tasks">';
+      b.items.forEach(t=>{
+        body+=`<div class="vs-success-task">
+          ${t.urgent?'<span class="vs-urgent" style="margin-right:6px">Urgent</span>':''}
+          ${t.problem.replace(/</g,'&lt;')}
+        </div>`;
+      });
+      body+='</div>';
+    });
+    const multi=tasks.length>1;
+    const h=`<div class="vs-dp-panel" onclick="event.stopPropagation()">
+      <div class="vs-dp-header">
+        <div>
+          <div class="vs-dp-title"><span style="color:var(--green)">&#x2713;</span> Scheduled</div>
+          <div class="vs-dp-sub">${dateLabel}</div>
+        </div>
+        <button class="vs-dp-close" onclick="window._vsCloseAndScroll('${ds}')">&times;</button>
+      </div>
+      <div class="vs-success-body">
+        <div class="vs-success-lead">You're set for <strong>${dateLabel}</strong>. Here's what you'll need at ${multi?'each property':'the property'}:</div>
+        ${body}
+      </div>
+      <div class="vs-dp-footer">
+        <div class="vs-dp-footer-btns" style="width:100%;justify-content:flex-end">
+          <button class="btn btn-g" onclick="window._vsCloseAndScroll('${ds}')">Got it &mdash; view my schedule</button>
+        </div>
+      </div>
+    </div>`;
+    modal.innerHTML=h;
+  }
+
+  window._vsCloseAndScroll=async function(ds){
+    vsClosePicker();
+    await vsLoad();
+    // After agenda re-renders, scroll to the day header for that date
+    requestAnimationFrame(()=>{
+      const hdr=document.getElementById('vs-day-'+ds);
+      if(hdr)hdr.scrollIntoView({behavior:'smooth',block:'start'});
+    });
   };
 
   // Cache of bookings across all properties with undated tasks; populated during vsLoad
@@ -6404,7 +6501,7 @@ async function rpQuickDelivered(id) {
       if(!dayTasks.length)return;
       const d=new Date(dateStr+'T12:00:00');
       const dayLabel=d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
-      html+=`<div style="margin-top:16px;margin-bottom:6px;padding:8px 12px;background:var(--green);color:#fff;border-radius:8px;font-family:'Cormorant Garamond',serif;font-size:1.1rem;font-weight:600">${dayLabel} <span style="font-size:.78rem;opacity:.8;font-family:'DM Sans',sans-serif;font-weight:400">(${dayTasks.length} task${dayTasks.length!==1?'s':''})</span></div>`;
+      html+=`<div id="vs-day-${dateStr}" style="margin-top:16px;margin-bottom:6px;padding:8px 12px;background:var(--green);color:#fff;border-radius:8px;font-family:'Cormorant Garamond',serif;font-size:1.1rem;font-weight:600;scroll-margin-top:12px">${dayLabel} <span style="font-size:.78rem;opacity:.8;font-family:'DM Sans',sans-serif;font-weight:400">(${dayTasks.length} task${dayTasks.length!==1?'s':''})</span></div>`;
       // Group by neighborhood, then property within each day
       let lastNb='';
       let lastProp='';
@@ -6431,22 +6528,7 @@ async function rpQuickDelivered(id) {
               return `<div class="vs-guest-alert vs-guest-alert-${a.type}">${icon} ${label}</div>`;
             }).join('')+'</div>';
           }
-          let metaParts=[];
-          if(t.address)metaParts.push('<a href="https://maps.google.com/?q='+encodeURIComponent(t.address)+'" target="_blank">'+t.address+'</a>');
-          if(t.doorCode)metaParts.push('Code: '+t.doorCode);
-          if(t.wifiName)metaParts.push('WiFi: '+t.wifiName);
-          if(t.wifiPassword)metaParts.push('WiFi Pass: '+t.wifiPassword);
-          if(t.checkoutTime)metaParts.push('Checkout: '+t.checkoutTime);
-          if(t.checkinTime)metaParts.push('Check-in: '+t.checkinTime);
-          if(t.parking)metaParts.push('Parking: '+t.parking);
-          if(t.lockbox)metaParts.push('Lockbox: '+t.lockbox);
-          if(t.trashDay)metaParts.push('Trash: '+t.trashDay);
-          if(t.specialNotes)metaParts.push(t.specialNotes);
-          html+=`<div class="vs-prop-header" style="border-left-color:var(--${nbCls||'green'})">
-            <div class="vs-prop-name">${shortName}</div>
-            <div class="vs-prop-meta">${metaParts.join(' &middot; ')}</div>
-            ${alertHtml}
-          </div>`;
+          html+=vsPropHeaderHtml(t,shortName,nbCls,alertHtml);
           lastProp=t.propertyName;
         }
         html+=vsCard(t);
@@ -6767,14 +6849,20 @@ async function rpQuickDelivered(id) {
       const who=n.type==='vendor'?'You':(n.by||'Storybook Escapes');
       return`<div class="vs-note"><div class="vs-note-meta">${who} — ${new Date(n.time).toLocaleString()}</div><div>${n.text.replace(/</g,'&lt;')}</div></div>`;
     }).join('');
+    // Undated tasks can't be marked complete — vendor must pick a date first.
+    // The circle-check is hidden; a "Needs a date" chip takes its slot.
+    const canComplete=!!t.date;
     return`<div class="vs-card ${done?'vs-done':''}" id="vsc-${t.id}" style="border-left:3px solid var(--${nbCls||'green'})">
       <div class="vs-card-banner" onclick="window._vsToggle('${t.id}')">
-        <div class="vs-card-check" onclick="event.stopPropagation();window._vsCircleCheck('${t.id}',${!!done})">${done?'&#x2713;':''}</div>
+        ${canComplete
+          ?`<div class="vs-card-check" onclick="event.stopPropagation();window._vsCircleCheck('${t.id}',${!!done})">${done?'&#x2713;':''}</div>`
+          :`<div class="vs-card-check vs-card-check-locked" title="Pick a date first">&#x1F4C5;</div>`}
         <div class="vs-card-info">
           <div class="vs-card-prob">${t.problem}</div>
           <div class="vs-card-badges">
             ${t.urgent?'<span class="vs-urgent">Urgent</span>':''}
             ${t.purchaseNote?'<span class="vs-purchase-tag">Purchase needed</span>':''}
+            ${!canComplete?'<span class="vs-needs-date-tag">Needs a date</span>':''}
             ${done?'<span style="font-size:.7rem;color:var(--green);font-weight:500">Submitted &#x2713;</span>':''}
           </div>
         </div>
@@ -7591,9 +7679,25 @@ async function rpQuickDelivered(id) {
         if(footerBtns){footerBtns.querySelectorAll('button').forEach(b=>{b.disabled=false;b.style.opacity='';});}
         return;
       }
-      vsClosePicker();
-      // Refresh the agenda so the task moves to the right section
-      await vsLoad();
+      // Show success panel — same content admin would text if they scheduled.
+      // vNeedsSched still contains the task pre-refresh (full prop fields).
+      // If the task isn't in vNeedsSched (e.g. vendor changing an already-dated
+      // task's date), we still show a success panel using vTasks as fallback.
+      const inNeeds=(vNeedsSched||[]).some(t=>t.id===taskId);
+      if(inNeeds){
+        vsRenderScheduledSuccess([taskId],date);
+      }else{
+        // Rescheduled an already-dated task — pull from vTasks snapshot
+        const t=(vTasks||[]).find(x=>x.id===taskId);
+        if(t){
+          // Prime a temp list so vsRenderScheduledSuccess can find it
+          const prev=vNeedsSched;vNeedsSched=[t];
+          vsRenderScheduledSuccess([taskId],date);
+          vNeedsSched=prev;
+        }else{
+          window._vsCloseAndScroll(date);
+        }
+      }
     }catch(e){
       alert('Network error. Please try again.');
       if(footerBtns){footerBtns.querySelectorAll('button').forEach(b=>{b.disabled=false;b.style.opacity='';});}
