@@ -624,7 +624,7 @@ function populatePropMulti(id){
   });
 }
 
-function renderAll(){renderVR();renderVD();renderUB();renderTasks();renderCalendar();renderRecurring();renderHistory();renderVendors();if(typeof pjRenderList==='function')pjRenderList();}
+function renderAll(){renderVR();renderVD();renderVSC();renderUB();renderTasks();renderCalendar();renderRecurring();renderHistory();renderVendors();if(typeof pjRenderList==='function')pjRenderList();}
 
 // URGENT BANNER
 function renderUB(){
@@ -668,6 +668,45 @@ function vdTimeAgo(iso){
   if(hrs<24)return hrs+'h ago';
   const days=Math.floor(hrs/24);
   return days+'d ago';
+}
+
+// VENDOR SELF-SCHEDULED BANNER — vendors picked their own date, awaiting admin ack
+function renderVSC(){
+  const vs=tasks.filter(t=>t.selfScheduledAt&&!t.selfScheduleAcknowledged&&!isDone(t));
+  const c=document.getElementById('vsc-wrap');
+  if(!c)return;
+  if(!vs.length){c.innerHTML='';return;}
+  // Sort by selfScheduledAt timestamp (most recent first)
+  vs.sort((a,b)=>(b.selfScheduledAt||'').localeCompare(a.selfScheduledAt||''));
+  const items=vs.map(t=>{
+    const p=getProp(t.property);const nbcls=getNbCls(t.property);
+    const ago=vdTimeAgo(t.selfScheduledAt);
+    // Human-readable date the vendor picked
+    let dateFmt='';
+    if(t.date){
+      try{dateFmt=new Date(t.date+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});}catch(e){dateFmt=t.date;}
+    }
+    const who=t.selfScheduledBy||t.vendor||'Vendor';
+    return`<div class="vsc-item" onclick="openDetail('${t.id}')">
+      <div class="vsc-item-left">
+        <div class="vsc-item-prop vsc-prop-${nbcls}">${p?p.name:t.property}</div>
+        <div class="vsc-item-prob">${t.problem}</div>
+        <div class="vsc-item-meta">${who} \u2022 picked ${dateFmt||'a date'} \u2022 ${ago}</div>
+      </div>
+      <div class="vsc-item-actions">
+        <button class="vsc-btn-ack" onclick="vscAck('${t.id}',event)">Acknowledge</button>
+      </div>
+    </div>`;
+  }).join('');
+  c.innerHTML=`<div class="vsc-banner"><div class="vsc-hdr"><div class="vsc-title">Vendor Self-Scheduled — New Date Picked</div><span class="vsc-count">${vs.length}</span></div>${items}</div>`;
+}
+
+async function vscAck(id,e){
+  if(e){e.stopPropagation();}
+  const t=tasks.find(x=>x.id===id);if(!t)return;
+  t.selfScheduleAcknowledged=true;
+  await saveTasks();renderVSC();
+  showToast('Acknowledged.');
 }
 
 // VENDOR REPORTS BANNER — field observations from vendors
@@ -806,7 +845,7 @@ function taskCard(t){
         ${t.recurring?'<span class="badge b-rec">Recurring</span>':''}
         <span class="badge b-${t.status}">${t.status.replace('_',' ')}</span>
         ${t.date?`<span class="tmi">${t.date}</span>${overdueBadge(t)}`:(t.status!=='scheduled'?'<span class="tmi" style="color:var(--text3)">Not scheduled</span>':'')}
-        ${t.vendor?`<span class="tmi">${t.vendor}</span>`:''}${t.vendorDone?'<span class="vd-badge">Vendor Done</span>':''}
+        ${t.vendor?`<span class="tmi">${t.vendor}</span>`:''}${t.vendorDone?'<span class="vd-badge">Vendor Done</span>':''}${(t.vendor&&!t.date)?'<span class="avs-badge" title="Vendor asked to pick a date">Awaiting vendor schedule</span>':''}${t.selfScheduledAt?'<span class="ss-badge" title="Vendor self-scheduled this date">Self-scheduled</span>':''}
         ${taskEffectivePurchaseNote(t)?`<span style="font-size:.62rem;color:#e65100;font-weight:600;background:#fff3e0;padding:1px 6px;border-radius:10px;border:1px solid #ffcc80">&#x1F6D2; ${t.purchaseStatus==='delivered'?'Delivered':t.purchaseStatus==='purchased'?'Purchased — deliver':'Buy'}${taskEffectivePurchaser(t)==='vendor'?' (vendor)':''}</span>`:''}
         ${t.guest?`<span class="tmi">Reported by ${t.guest}</span>`:''}
         ${t.project_title?`<span style="font-size:.62rem;color:var(--green);font-weight:600;background:var(--green-light);padding:1px 6px;border-radius:10px;border:1px solid var(--border)">📋 ${t.project_title}</span>`:''}
@@ -2703,7 +2742,7 @@ async function renderDetailVendors(t,p){
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
         <div style="flex:1;min-width:0"><div class="vsn">${v.name}</div><div class="vsr">${v.role}</div>${isAssigned?'':`<div class="vsp">${v.phone}${v.email?' | '+v.email:''}</div>`}</div>
         ${isAssigned?contactBtns:''}
-        ${showAssign?`<button class="btn btn-g" onclick="assignVendor('${v.name.replace(/'/g,"\\'")}')">Assign</button>`:''}
+        ${showAssign?`<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0"><button class="btn btn-g" onclick="assignVendor('${v.name.replace(/'/g,"\\'")}')">Assign</button><button class="btn" style="font-size:.7rem;padding:4px 8px;background:var(--gold);color:#fff;border-color:var(--gold)" onclick="letVendorSchedule('${v.name.replace(/'/g,"\\'")}')" title="Assign and let vendor pick their own date">Let vendor schedule</button></div>`:''}
       </div>
       <div style="font-size:.72rem;color:var(--text2);margin:4px 0 6px">${v.note}</div>
       <button class="sms-toggle" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
@@ -3318,6 +3357,36 @@ async function sendAllTasksLink(vendorName,tel){
   }
 }
 
+// Scheduling-focused variant: texts the agenda link with a prompt asking the
+// vendor to pick their own date. Used when a task is assigned to a vendor
+// without a date set — either via letVendorSchedule() or the "Send scheduling
+// link" button on the combined vendor card.
+async function sendSchedulingLink(vendorName,tel,anchorTaskId){
+  try{
+    const token=await createVendorAgenda(vendorName);
+    const url=vendorAgendaUrl(token);
+    const firstName=vendorName.split(' ')[0];
+    const t=tasks.find(x=>x.id===anchorTaskId);
+    // Count all undated tasks assigned to this vendor so the message reflects
+    // the true workload if there's more than one waiting on their schedule.
+    const undatedForVendor=tasks.filter(x=>x.vendor&&x.vendor.toLowerCase()===vendorName.toLowerCase()&&!x.date&&!isDone(x));
+    let body;
+    if(t&&undatedForVendor.length<=1){
+      const p=getProp(t.property);
+      const propName=p?p.name:t.property;
+      const urg=t.urgent?'\n\nThis one\'s marked URGENT — please let us know if same-day is possible.':'';
+      body=`Hi ${firstName}, we've got a task for you at ${propName}:\n\n${t.problem}${urg}\n\nWhen you have a moment, take a look and pick a date that works:\n${url}\n\n— Chip Burns, Storybook Escapes`;
+    }else{
+      const count=undatedForVendor.length;
+      body=`Hi ${firstName}, you've got ${count} task${count!==1?'s':''} waiting on your schedule. When you have a moment, take a look and pick dates that work for you:\n\n${url}\n\n— Chip Burns, Storybook Escapes`;
+    }
+    window.location.href='sms:'+tel+'?body='+encodeURIComponent(body);
+  }catch(e){
+    console.error('[send-scheduling-link] Error:',e);
+    showToast('Failed to generate link','err');
+  }
+}
+
 function buildSMS(t,p,v){
   const pn=p?p.name:t.property,addr=p?p.address:'',door=p?p.door:'';
   const urg=t.urgent?'\n\nThis is URGENT — same-day response needed if possible.':'';
@@ -3436,8 +3505,17 @@ function combinedVendorCard(v,taskList,sheetUrl,showTaskList=true){
 
   // Build send row + collapsible message preview
   const escapedSms=sms.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // If any task in this card has no date set, offer "Send scheduling link"
+  // so admin can prompt the vendor to self-schedule even after assignment.
+  const hasUndated=sorted.some(x=>!x.date);
+  const scheduleLinkBtn=hasUndated?`
+      <button class="cg-send-btn" style="justify-content:center;width:100%;font-size:.82rem;padding:9px 14px;background:var(--gold);color:#fff;border-color:var(--gold)" onclick="sendSchedulingLink('${v.name.replace(/'/g,"\\'")}','${tel}','${sorted[0].id}')">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>
+        Send scheduling link
+      </button>`:'';
   const sendHtml=`
     <div class="cg-send-row" style="flex-direction:column;align-items:stretch;gap:8px">
+      ${scheduleLinkBtn}
       <button class="cg-send-btn" style="justify-content:center;width:100%;font-size:.82rem;padding:9px 14px" onclick="sendAllTasksLink('${v.name.replace(/'/g,"\\'")}','${tel}')">
         <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg>
         Send All Tasks
@@ -3514,6 +3592,44 @@ async function assignVendor(name){
   renderAll();
   closeModal('detail-modal');
   showToast(`${name} assigned to all tasks on this date.`);
+}
+
+// Assign a vendor to a task AND let them pick the date themselves.
+// Unlike assignVendor (which expects admin to set date+vendor), this flow
+// deliberately leaves t.date blank and texts the vendor their agenda link —
+// the same link they already use for Send All Tasks, but now with scheduling
+// power on the vendor side.
+async function letVendorSchedule(name){
+  const t=tasks.find(x=>x.id===detailId);if(!t)return;
+  const vendor=vendors.find(v=>v.name.toLowerCase()===name.toLowerCase());
+  if(!vendor||!vendor.phone){
+    alert('Vendor not found or has no phone number on file.');
+    return;
+  }
+  t.vendor=name;
+  // Deliberately do NOT set a date. Status stays 'open' until vendor picks a date.
+  // (Matches assignVendor's existing behavior of leaving status=open when no date.)
+  if(!t.date&&t.status!=='open')t.status='open';
+  await saveTasks();
+  // Build the scheduling-focused SMS
+  try{
+    const token=await createVendorAgenda(name);
+    const url=vendorAgendaUrl(token);
+    const p=getProp(t.property);
+    const propName=p?p.name:t.property;
+    const firstName=name.split(' ')[0];
+    const urg=t.urgent?'\n\nThis one\'s marked URGENT — please let us know if same-day is possible.':'';
+    const body=`Hi ${firstName}, we've got a new task for you at ${propName}:\n\n${t.problem}${urg}\n\nWhen you have a moment, take a look and pick a date that works:\n${url}\n\n— Chip Burns, Storybook Escapes`;
+    const tel=vendor.phone.replace(/\D/g,'');
+    renderAll();
+    closeModal('detail-modal');
+    showToast(`${name} assigned — open your SMS to send the scheduling link.`);
+    // Launch SMS composer on the admin's device
+    window.location.href='sms:'+tel+'?body='+encodeURIComponent(body);
+  }catch(e){
+    console.error('[let-vendor-schedule] Error:',e);
+    showToast('Failed to generate scheduling link','err');
+  }
 }
 
 // ─── DETAIL MODAL: BADGE + FOLDOUT SYSTEM ───────────────────────
@@ -5893,6 +6009,8 @@ async function rpQuickDelivered(id) {
   let vByDate={}; // grouped tasks by date (agenda mode)
   let vSheetFields=[]; // custom fields from settings
   let vProjects=[]; // active projects this vendor is assigned to (agenda mode)
+  let vNeedsSched=[]; // undated tasks assigned to this vendor (agenda mode)
+  let vIcalByProp={}; // per-property cached reservations for the scheduling calendar
 
   async function vsLoad(){
     try{
@@ -5908,6 +6026,7 @@ async function rpQuickDelivered(id) {
       vIsAgenda=(data.type==='agenda');
       vByDate=data.byDate||{};
       vProjects=data.projects||[];
+      vNeedsSched=data.needsScheduling||[];
       // Apply logo from API (KV-stored custom logo) if available
       if(data.logo){try{document.getElementById('vs-logo').src=data.logo;}catch(e){}}
       if(vIsAgenda){
@@ -6004,12 +6123,56 @@ async function rpQuickDelivered(id) {
     wrap.innerHTML=html;
   }
 
+  // ── Needs-Your-Schedule Render: undated tasks the vendor picks dates for ──
+  function vsRenderNeedsSchedHtml(){
+    if(!vNeedsSched||!vNeedsSched.length)return'';
+    // Group by property within this section so items nest under their property block
+    let html=`<div class="vs-needs-sched">
+      <div class="vs-needs-hdr">
+        <span class="vs-needs-title">Needs Your Schedule</span>
+        <span class="vs-needs-count">${vNeedsSched.length}</span>
+      </div>
+      <div class="vs-needs-help">Pick a date that works for you on each task below.</div>`;
+    // Bucket by propertyName preserving the pre-sorted order
+    const groups=[];const seen={};
+    vNeedsSched.forEach(t=>{
+      if(!seen[t.propertyName]){
+        seen[t.propertyName]={propertyName:t.propertyName,neighborhoodCls:t.neighborhoodCls||'green',items:[]};
+        groups.push(seen[t.propertyName]);
+      }
+      seen[t.propertyName].items.push(t);
+    });
+    groups.forEach(g=>{
+      const shortName=g.propertyName.replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
+      html+=`<div class="vs-needs-prop" style="border-left-color:var(--${g.neighborhoodCls})">
+        <div class="vs-needs-prop-label">${shortName}</div>`;
+      g.items.forEach(t=>{
+        html+=`<div class="vs-needs-item">
+          <div class="vs-needs-item-main">
+            <div class="vs-needs-prob">${t.problem}${t.urgent?' <span class="vs-urgent">Urgent</span>':''}</div>
+          </div>
+          <button class="vs-pick-date-btn" onclick="window._vsPickDate('${t.id}')">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>
+            Pick a date
+          </button>
+        </div>`;
+      });
+      html+=`</div>`; // vs-needs-prop
+    });
+    html+=`</div>`; // vs-needs-sched
+    return html;
+  }
+
   // ── Agenda Render: multi-day schedule grouped by date ──
   function vsRenderAgenda(){
     const wrap=document.getElementById('vs-tasks');
-    if(!vTasks.length){wrap.innerHTML='<div style="text-align:center;padding:30px;color:var(--text2)">No upcoming tasks scheduled.</div>';return;}
+    // If nothing to show (no dated tasks AND nothing needs scheduling), empty state.
+    if(!vTasks.length&&(!vNeedsSched||!vNeedsSched.length)){
+      wrap.innerHTML='<div style="text-align:center;padding:30px;color:var(--text2)">No upcoming tasks scheduled.</div>';
+      return;
+    }
     const dates=Object.keys(vByDate).sort();
-    let html='';
+    let html=vsRenderNeedsSchedHtml();
     dates.forEach(dateStr=>{
       const dayTasks=vByDate[dateStr]||[];
       if(!dayTasks.length)return;
@@ -6406,6 +6569,7 @@ async function rpQuickDelivered(id) {
           <div class="vs-fb-upload-btn" onclick="document.getElementById('vri-${t.id}').click()">&#x1F9FE; Receipt<input type="file" id="vri-${t.id}" accept="image/*" style="display:none" onchange="window._vsUploadPhotos('${t.id}',this.files)"></div>
         </div>
         <div id="vps-${t.id}" style="font-size:.72rem;color:var(--text3);margin:4px 0"></div>
+        ${(vIsAgenda&&t.date&&!done)?`<div class="vs-change-date-row"><button class="vs-change-date-btn" onclick="window._vsPickDate('${t.id}')"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg> Change date</button></div>`:''}
         <div class="vs-notes">${notes}
           <div class="vs-note-input">
             <textarea id="vsn-${t.id}" placeholder="Leave a note..." rows="1"></textarea>
@@ -6957,6 +7121,277 @@ async function rpQuickDelivered(id) {
     // Close on backdrop click
     overlay.addEventListener('click',function(e){if(e.target===overlay)overlay.remove();});
   }
+
+  // ─────────────────────────────────────────────────────────────
+  // VENDOR CALENDAR — self-schedule or reschedule a task
+  // Opens a date picker restricted to a 21-day window from today.
+  // Shows property bookings as bars and warns on guest-in-house days.
+  // ─────────────────────────────────────────────────────────────
+  let vDpState={taskId:null,viewYear:0,viewMonth:0,selected:null,bookings:[],pendingBooked:null,propertyId:null};
+
+  function vsFmtDate(ds){
+    return new Date(ds+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  }
+
+  async function vsFetchBookings(propId){
+    if(vIcalByProp[propId])return vIcalByProp[propId];
+    const hospId=(typeof HOSPITABLE_IDS!=='undefined'?HOSPITABLE_IDS[propId]:null);
+    if(!hospId){vIcalByProp[propId]=[];return[];}
+    try{
+      const url=`${PROXY_BASE}/api/hospitable?action=reservations&pid=${hospId}`;
+      const r=await fetch(url,{signal:AbortSignal.timeout(15000)});
+      if(!r.ok){vIcalByProp[propId]=[];return[];}
+      const json=await r.json();
+      const pd=s=>{const m=(s||'').match(/(\d{4})-(\d{2})-(\d{2})/);return m?new Date(+m[1],+m[2]-1,+m[3],12,0,0):null;};
+      const evs=(json.data||[])
+        .filter(rv=>rv.arrival_date&&rv.departure_date&&rv.status!=='cancelled')
+        .map(rv=>({
+          start:pd(rv.arrival_date),
+          end:pd(rv.departure_date),
+          summary:rv.guest_name||(rv.guest&&rv.guest.name)||'Guest',
+        }))
+        .filter(ev=>ev.start&&ev.end);
+      vIcalByProp[propId]=evs;
+      return evs;
+    }catch(e){
+      console.warn('[vs-bookings]',propId,e.message);
+      vIcalByProp[propId]=[];
+      return[];
+    }
+  }
+
+  window._vsPickDate=async function(taskId){
+    const t=(vNeedsSched||[]).find(x=>x.id===taskId)||vTasks.find(x=>x.id===taskId);
+    if(!t)return;
+    // Ensure the modal container exists
+    let modal=document.getElementById('vs-dp-modal');
+    if(!modal){
+      modal=document.createElement('div');
+      modal.id='vs-dp-modal';
+      modal.className='vs-dp-modal';
+      document.body.appendChild(modal);
+      modal.addEventListener('click',function(e){if(e.target===modal)vsClosePicker();});
+    }
+    // Set initial view = today's month
+    const today=new Date();
+    vDpState.taskId=taskId;
+    vDpState.propertyId=t.property;
+    vDpState.viewYear=today.getFullYear();
+    vDpState.viewMonth=today.getMonth();
+    vDpState.selected=t.date||null; // pre-select the current date if rescheduling
+    vDpState.pendingBooked=null;
+    // Show loading state immediately so the vendor sees feedback
+    modal.innerHTML=`<div class="vs-dp-panel"><div class="vs-dp-load">Loading calendar...</div></div>`;
+    modal.classList.add('open');
+    document.body.style.overflow='hidden';
+    // Fetch bookings (cached after first fetch per property)
+    vDpState.bookings=await vsFetchBookings(t.property);
+    vsRenderPicker();
+  };
+
+  function vsClosePicker(){
+    const modal=document.getElementById('vs-dp-modal');
+    if(modal){modal.classList.remove('open');modal.innerHTML='';}
+    document.body.style.overflow='';
+    vDpState.taskId=null;
+  }
+  window._vsClosePicker=vsClosePicker;
+
+  function vsDayState(d,bookings){
+    const ds=d.toDateString();
+    let hasCheckout=false,hasCheckin=false,isMidStay=false;
+    for(const r of bookings){
+      if(!r.start||!r.end)continue;
+      if(ds===r.end.toDateString())hasCheckout=true;
+      if(ds===r.start.toDateString())hasCheckin=true;
+      if(d>r.start&&d<r.end)isMidStay=true;
+    }
+    if(hasCheckout&&hasCheckin)return'turn';
+    if(isMidStay)return'booked';
+    if(hasCheckin)return'checkin';
+    if(hasCheckout)return'checkout';
+    return'available';
+  }
+
+  function vsRenderPicker(){
+    const modal=document.getElementById('vs-dp-modal');
+    if(!modal)return;
+    const t=(vNeedsSched||[]).find(x=>x.id===vDpState.taskId)||vTasks.find(x=>x.id===vDpState.taskId);
+    if(!t){vsClosePicker();return;}
+    const today=new Date();today.setHours(12,0,0,0);
+    const maxDate=new Date(today.getTime()+21*86400000);maxDate.setHours(12,0,0,0);
+    const y=vDpState.viewYear,mo=vDpState.viewMonth;
+    const first=new Date(y,mo,1,12,0,0);
+    const last=new Date(y,mo+1,0,12,0,0);
+    const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const selVal=vDpState.selected;
+    const bookings=vDpState.bookings||[];
+    // Navigation bounds: can only view months containing any day in [today, maxDate]
+    const minNavY=today.getFullYear(),minNavM=today.getMonth();
+    const maxNavY=maxDate.getFullYear(),maxNavM=maxDate.getMonth();
+    const canGoPrev=(y>minNavY)||(y===minNavY&&mo>minNavM);
+    const canGoNext=(y<maxNavY)||(y===maxNavY&&mo<maxNavM);
+
+    // Build the week grid
+    const sc=first.getDay();
+    const tot=Math.ceil((sc+last.getDate())/7)*7;
+    const weeks=[];let wk=[];
+    for(let i=0;i<tot;i++){
+      const dn=i-sc+1;
+      const d=new Date(y,mo,dn,12,0,0);
+      wk.push({dn,d,isOther:dn<1||dn>last.getDate()});
+      if(wk.length===7){weeks.push(wk);wk=[];}
+    }
+
+    const shortProp=(t.propertyName||'').replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
+    const titleAction=t.date?'Change date':'Pick a date';
+    const sub=t.date?`Currently scheduled for ${vsFmtDate(t.date)}`:'';
+    let h=`<div class="vs-dp-panel" onclick="event.stopPropagation()">
+      <div class="vs-dp-header">
+        <div>
+          <div class="vs-dp-title">${titleAction}</div>
+          <div class="vs-dp-sub">${shortProp} — ${t.problem}${sub?'<br>'+sub:''}</div>
+        </div>
+        <button class="vs-dp-close" onclick="window._vsClosePicker()">&times;</button>
+      </div>
+      <div class="vs-dp-body">
+        <div class="vs-dp-range">You can pick any day from today through ${vsFmtDate(maxDate.toISOString().slice(0,10))}.</div>
+        <div class="dp-phdr">
+          <div class="dp-ptitle">${MONTHS[mo]} ${y}</div>
+          <div class="dp-pnav">
+            <button ${canGoPrev?'':'disabled style="opacity:.3;cursor:not-allowed"'} onclick="window._vsDpNav(-1)">&#x2190;</button>
+            <button ${canGoNext?'':'disabled style="opacity:.3;cursor:not-allowed"'} onclick="window._vsDpNav(1)">&#x2192;</button>
+          </div>
+        </div>
+        <div class="dp-cal-wrap"><div class="dp-dow-row">`;
+    ['Su','Mo','Tu','We','Th','Fr','Sa'].forEach(dw=>h+=`<div class="dp-dow">${dw}</div>`);
+    h+=`</div>`;
+    const COL_PCT=100/7;
+    weeks.forEach(wk=>{
+      const wkStart=wk[0].d;
+      const wkEnd=new Date(wk[6].d.getFullYear(),wk[6].d.getMonth(),wk[6].d.getDate()+1,12,0,0);
+      h+=`<div class="dp-week-row">`;
+      wk.forEach(({dn,d,isOther})=>{
+        if(isOther){h+=`<div class="dp-cell dp-other"></div>`;return;}
+        const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        const isSel=selVal===ds;
+        const isPast=d<today;
+        const isToday=d.toDateString()===today.toDateString();
+        const isBeyond=d>maxDate;
+        const st=vsDayState(d,bookings);
+        const isGuestInHouse=st==='booked';
+        const disabled=isPast||isBeyond;
+        let cls='dp-cell';
+        if(isToday)cls+=' dp-today-cell';
+        if(isSel)cls+=' dp-selected';
+        if(disabled)cls+=' dp-disabled';
+        const dnCls='dp-dn'+(isToday?' dp-today-num':'');
+        const click=!disabled?`onclick="window._vsSelDate('${ds}',${isGuestInHouse})"`:'';
+        h+=`<div class="${cls}" ${click}><div class="${dnCls}">${dn}</div></div>`;
+      });
+      // Render reservation bars overlaying this week
+      bookings.forEach(r=>{
+        if(!r.start||!r.end)return;
+        if(r.start>=wkEnd||r.end<=wkStart)return;
+        const barStart=r.start<wkStart?wkStart:r.start;
+        const barEnd=r.end>wkEnd?wkEnd:r.end;
+        const msPerDay=86400000;
+        const startCol=Math.round((barStart.getTime()-wkStart.getTime())/msPerDay);
+        const endCol=Math.round((barEnd.getTime()-wkStart.getTime())/msPerDay);
+        if(endCol<=startCol)return;
+        const isFirst=r.start>=wkStart;
+        const isLast=r.end<=wkEnd;
+        let left=isFirst?(startCol+0.5)*COL_PCT:0;
+        let right=isLast?Math.min((endCol+0.5)*COL_PCT,100):100;
+        let width=right-left;
+        if(width<=0)return;
+        let barCls='dp-res-bar';
+        if(isFirst)barCls+=' dp-bar-start';
+        if(isLast)barCls+=' dp-bar-end';
+        h+=`<div class="${barCls}" style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%"><span class="dp-res-name">${(r.summary||'').replace(/</g,'&lt;')}</span></div>`;
+      });
+      h+=`</div>`;
+    });
+    h+=`</div>`; // dp-cal-wrap
+    // Guest-in-house warning panel
+    h+=`<div class="dp-warn" id="vs-dp-warn">
+      <strong>⚠ Guests are in the house on this day.</strong>
+      Service is not recommended while guests are present. Please pick another day when possible.
+      <div class="dp-warn-btns">
+        <button class="btn btn-gold" onclick="window._vsConfirmBooked()">Schedule Anyway</button>
+        <button class="btn" onclick="window._vsCancelBooked()">Pick Another Day</button>
+      </div>
+    </div>`;
+    // Confirm / Cancel footer
+    const selLabel=vDpState.selected?vsFmtDate(vDpState.selected):'—';
+    const canConfirm=!!vDpState.selected;
+    h+=`<div class="vs-dp-footer">
+      <div class="vs-dp-selected">${vDpState.selected?'Selected: <strong>'+selLabel+'</strong>':'No date selected yet'}</div>
+      <div class="vs-dp-footer-btns">
+        <button class="btn" onclick="window._vsClosePicker()">Cancel</button>
+        <button class="btn btn-g" ${canConfirm?'':'disabled style="opacity:.4;cursor:not-allowed"'} onclick="window._vsConfirmPicker()">Confirm</button>
+      </div>
+    </div></div></div>`;
+    modal.innerHTML=h;
+  }
+
+  window._vsDpNav=function(dir){
+    const newMo=vDpState.viewMonth+dir;
+    const d=new Date(vDpState.viewYear,newMo,1);
+    vDpState.viewYear=d.getFullYear();
+    vDpState.viewMonth=d.getMonth();
+    vsRenderPicker();
+  };
+
+  window._vsSelDate=function(ds,isBooked){
+    if(isBooked){
+      vDpState.pendingBooked=ds;
+      const warn=document.getElementById('vs-dp-warn');
+      if(warn){warn.classList.add('show');warn.scrollIntoView({behavior:'smooth',block:'nearest'});}
+      return;
+    }
+    vDpState.selected=ds;
+    vDpState.pendingBooked=null;
+    vsRenderPicker();
+  };
+
+  window._vsConfirmBooked=function(){
+    if(vDpState.pendingBooked){
+      vDpState.selected=vDpState.pendingBooked;
+      vDpState.pendingBooked=null;
+    }
+    vsRenderPicker();
+  };
+
+  window._vsCancelBooked=function(){
+    vDpState.pendingBooked=null;
+    const warn=document.getElementById('vs-dp-warn');
+    if(warn)warn.classList.remove('show');
+  };
+
+  window._vsConfirmPicker=async function(){
+    if(!vDpState.selected||!vDpState.taskId)return;
+    const taskId=vDpState.taskId;
+    const date=vDpState.selected;
+    // Lock the confirm button to prevent double-submit
+    const footerBtns=document.querySelector('.vs-dp-footer-btns');
+    if(footerBtns){footerBtns.querySelectorAll('button').forEach(b=>{b.disabled=true;b.style.opacity='.5';});}
+    try{
+      const r=await fetch(VAPI,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,action:'selfSchedule',taskId,date})});
+      if(!r.ok){
+        const err=await r.json().catch(()=>({error:'Unknown error'}));
+        alert('Could not save: '+(err.error||'Please try again.'));
+        if(footerBtns){footerBtns.querySelectorAll('button').forEach(b=>{b.disabled=false;b.style.opacity='';});}
+        return;
+      }
+      vsClosePicker();
+      // Refresh the agenda so the task moves to the right section
+      await vsLoad();
+    }catch(e){
+      alert('Network error. Please try again.');
+      if(footerBtns){footerBtns.querySelectorAll('button').forEach(b=>{b.disabled=false;b.style.opacity='';});}
+    }
+  };
 
   // Boot vendor sheet
   vsLoad();
@@ -9657,8 +10092,7 @@ function rvRenderPortfolioAvg() {
   const W = 720, H = 240;
   const padL = 52, padR = 34, padT = 14, padB = 32;
   const innerW = W - padL - padR, innerH = H - padT - padB;
-  const yMin = 0, yMax = 1.0; // portfolio-weighted avg is smoother; 1.0 gives resolution
-  const y   = v => padT + innerH * (1 - (Math.max(yMin, Math.min(yMax, v)) - yMin) / (yMax - yMin));
+  const yMin = 0;
   const x   = i => padL + innerW * (i / Math.max(1, weeks.length - 1));
   const maxCount = Math.max(1, ...totalCounts);
   // Bars occupy bottom 30% of inner area — layered behind the line.
@@ -9667,6 +10101,11 @@ function rvRenderPortfolioAvg() {
   const barW = Math.max(2, (innerW / weeks.length) - 1);
 
   const demAvg = rvDemeritSeries(avg);
+
+  // Dynamic y-axis ceiling: snap up to nearest 0.1 above the actual peak, min 0.3
+  const peakDem = Math.max(0, ...demAvg.filter(v => v != null));
+  const yMax = Math.max(0.3, Math.ceil((peakDem + 0.05) * 10) / 10);
+  const y   = v => padT + innerH * (1 - (Math.max(yMin, Math.min(yMax, v)) - yMin) / (yMax - yMin));
 
   let bars = '';
   for (let i = 0; i < weeks.length; i++) {
@@ -9693,11 +10132,11 @@ function rvRenderPortfolioAvg() {
     pts += `<circle cx="${x(i).toFixed(1)}" cy="${y(d).toFixed(1)}" r="${r}" fill="${color}"><title>${escHtml(tip)}</title></circle>`;
   }
 
-  // Demerit y-axis with star-equivalent labels
+  // Demerit y-axis with star-equivalent labels — ticks at standard thresholds + ceiling
   let yAxis = '';
-  const ticks = [0, 0.2, 0.5, 1.0];
+  const stdTicks = [0, 0.2, 0.5, 1.0].filter(v => v < yMax - 1e-6);
+  const ticks = [...new Set([...stdTicks, yMax])].sort((a, b) => a - b);
   for (const v of ticks) {
-    if (v > yMax + 1e-6) continue;
     const yy = y(v);
     yAxis += `<line x1="${padL}" y1="${yy.toFixed(1)}" x2="${W - padR}" y2="${yy.toFixed(1)}" stroke="#e3e8e4" stroke-width=".6"/>`;
     yAxis += `<text x="${padL - 6}" y="${(yy + 3).toFixed(1)}" font-size="10" text-anchor="end" fill="#7a8a80">${(5 - v).toFixed(1)}★</text>`;

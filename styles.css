@@ -1135,6 +1135,62 @@ textarea{resize:vertical;min-height:76px}
 /* Vendor-done badge for admin task cards */
 .vd-badge{display:inline-flex;align-items:center;gap:3px;background:#e8f5e9;color:#2e7d32;font-size:.62rem;font-weight:600;padding:2px 7px;border-radius:12px;border:1px solid #a5d6a7;text-transform:uppercase;letter-spacing:.5px}
 .vd-badge::before{content:'\\2713';font-size:.7rem}
+/* Awaiting-vendor-schedule badge: vendor assigned, vendor is picking the date */
+.avs-badge{display:inline-flex;align-items:center;gap:3px;background:#fff4e0;color:#8a5a10;font-size:.62rem;font-weight:600;padding:2px 7px;border-radius:12px;border:1px solid #f0d090;text-transform:uppercase;letter-spacing:.5px}
+.avs-badge::before{content:'\\23F3';font-size:.7rem}
+/* Self-scheduled badge: vendor chose the date themselves */
+.ss-badge{display:inline-flex;align-items:center;gap:3px;background:#eef4ff;color:#1c4a90;font-size:.62rem;font-weight:600;padding:2px 7px;border-radius:12px;border:1px solid #9ab8e8;text-transform:uppercase;letter-spacing:.5px}
+.ss-badge::before{content:'\\1F4C5';font-size:.7rem}
+/* ── Vendor self-schedule: "Needs Your Schedule" section + date picker modal ── */
+/* Amber/gold accented section that sits at the top of the vendor agenda */
+.vs-needs-sched{background:#fff9ec;border:1px solid var(--gold-light);border-left:4px solid var(--gold);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px;box-shadow:var(--shadow-sm,0 1px 3px rgba(0,0,0,.06))}
+.vs-needs-hdr{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.vs-needs-title{font-family:'Cormorant Garamond',serif;font-size:1.05rem;font-weight:600;color:#8a5a10;letter-spacing:.5px;text-transform:uppercase}
+.vs-needs-count{font-size:.68rem;font-weight:700;background:var(--gold-pale);color:#8a5a10;border:1px solid var(--gold-light);border-radius:20px;padding:2px 9px}
+.vs-needs-help{font-size:.78rem;color:#7a5c00;margin-bottom:10px}
+.vs-needs-prop{border-left:3px solid var(--green);background:var(--white);border-radius:6px;padding:8px 10px 4px;margin-bottom:8px}
+.vs-needs-prop-label{font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text2);margin-bottom:6px}
+.vs-needs-item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid var(--border)}
+.vs-needs-item:first-of-type{border-top:none}
+.vs-needs-item-main{flex:1;min-width:0}
+.vs-needs-prob{font-size:.82rem;font-weight:500;color:var(--text);line-height:1.35}
+.vs-pick-date-btn{background:var(--gold);color:#fff;border:none;border-radius:7px;padding:7px 13px;font-size:.74rem;font-weight:600;cursor:pointer;transition:background .15s;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;-webkit-tap-highlight-color:transparent}
+.vs-pick-date-btn:hover{background:#b8953d}
+.vs-pick-date-btn:active{transform:translateY(1px)}
+/* Change-date row shown inside vendor task card detail when task is already dated */
+.vs-change-date-row{margin-top:8px}
+.vs-change-date-btn{background:var(--gold-pale);color:#8a5a10;border:1px solid var(--gold-light);border-radius:7px;padding:6px 11px;font-size:.72rem;font-weight:600;cursor:pointer;transition:background .15s;display:inline-flex;align-items:center;gap:5px;-webkit-tap-highlight-color:transparent}
+.vs-change-date-btn:hover{background:#f5e8c8}
+.vs-change-date-btn:active{transform:translateY(1px)}
+/* Date picker modal — backdrop + panel */
+.vs-dp-modal{position:fixed;inset:0;background:rgba(13,53,40,.55);z-index:900;display:none;align-items:flex-start;justify-content:center;padding:24px 12px;overflow-y:auto;-webkit-overflow-scrolling:touch;animation:vpFadeIn .2s ease}
+.vs-dp-modal.open{display:flex}
+.vs-dp-panel{background:var(--white);border-radius:14px;max-width:640px;width:100%;box-shadow:var(--shadow-md);margin:auto;overflow:hidden;animation:vpSlideUp .3s ease .05s both}
+.vs-dp-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 20px 12px;background:var(--green);color:#fff}
+.vs-dp-title{font-family:'Cormorant Garamond',serif;font-size:1.25rem;font-weight:600;color:var(--gold-light);text-transform:uppercase;letter-spacing:1.5px;line-height:1.15}
+.vs-dp-sub{font-size:.78rem;color:rgba(255,255,255,.82);margin-top:4px;line-height:1.4}
+.vs-dp-close{background:transparent;border:none;color:rgba(255,255,255,.75);font-size:1.6rem;line-height:1;cursor:pointer;padding:2px 6px;border-radius:6px;transition:background .15s,color .15s}
+.vs-dp-close:hover{background:rgba(255,255,255,.1);color:#fff}
+.vs-dp-body{padding:14px 18px 6px}
+.vs-dp-range{font-size:.74rem;color:var(--text2);margin-bottom:10px;padding:7px 11px;background:var(--gold-pale);border:1px solid var(--gold-light);border-radius:6px;color:#7a5c00}
+.vs-dp-load{padding:40px 20px;text-align:center;font-size:.88rem;color:var(--text2)}
+.vs-dp-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 18px 16px;border-top:1px solid var(--border);background:var(--surface2);flex-wrap:wrap}
+.vs-dp-selected{font-size:.8rem;color:var(--text2)}
+.vs-dp-selected strong{color:var(--green);font-weight:600}
+.vs-dp-footer-btns{display:flex;gap:7px}
+/* Disabled calendar cell — outside the 21-day window or in the past */
+.dp-cell.dp-disabled{background:#f5f5f3;cursor:not-allowed;color:#bbb}
+.dp-cell.dp-disabled .dp-dn{color:#bbb}
+.dp-cell.dp-disabled:hover{background:#f5f5f3}
+@media (max-width:540px){
+  .vs-dp-panel{max-width:100%;border-radius:10px}
+  .vs-dp-header{padding:14px 14px 10px}
+  .vs-dp-title{font-size:1.1rem}
+  .vs-dp-body{padding:12px 12px 4px}
+  .vs-dp-footer{padding:10px 12px 14px}
+  .vs-needs-item{flex-direction:column;align-items:stretch;gap:6px}
+  .vs-pick-date-btn{align-self:flex-start}
+}
 /* Vendor-done banner — tasks vendors have marked complete (dark forest gradient) */
 .vdn-banner{background:linear-gradient(135deg,#0f2a1a 0%,#1a3a25 100%);border:1px solid #2a6a40;border-radius:var(--radius);padding:14px 18px;margin-bottom:16px;box-shadow:var(--shadow-md)}
 .vdn-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px}
@@ -1151,6 +1207,22 @@ textarea{resize:vertical;min-height:76px}
 .vdn-item-actions{display:flex;gap:6px;flex-shrink:0}
 .vdn-btn-done{padding:5px 12px;border-radius:7px;font-size:.72rem;font-weight:600;cursor:pointer;border:1px solid #4caf6a;background:rgba(76,175,106,.15);color:#4caf6a;transition:all .15s;white-space:nowrap}
 .vdn-btn-done:hover{background:rgba(76,175,106,.3)}
+/* Vendor Self-Scheduled banner — blue/slate theme, matches .ss-badge palette */
+.vsc-banner{background:linear-gradient(135deg,#0f1d2e 0%,#1a2d44 100%);border:1px solid #2a558a;border-radius:var(--radius);padding:14px 18px;margin-bottom:16px;box-shadow:var(--shadow-md)}
+.vsc-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px}
+.vsc-title{font-size:.72rem;text-transform:uppercase;letter-spacing:1.5px;color:#7ab0e8;font-weight:700;display:flex;align-items:center;gap:8px}
+.vsc-title::before{content:'\\1F4C5';font-size:.82rem}
+.vsc-count{font-size:.68rem;background:#1a3a5a;color:#9ac8ee;border-radius:20px;padding:2px 9px;font-weight:700}
+.vsc-item{background:rgba(255,255,255,.06);border:1px solid rgba(122,176,232,.2);border-radius:8px;padding:11px 14px;margin-bottom:6px;transition:border-color .15s;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.vsc-item:hover{border-color:#7ab0e8}
+.vsc-item-left{flex:1;min-width:0}
+.vsc-item-prop{font-size:.69rem;text-transform:uppercase;letter-spacing:1.2px;font-weight:700;margin-bottom:3px}
+.vsc-prop-prc{color:#5cc878}.vsc-prop-umc{color:#e0ad30}.vsc-prop-gatlinburg{color:#b080e0}.vsc-prop-alpine{color:#e87070}.vsc-prop-sevierville{color:#60b8e8}.vsc-prop-hillside{color:#6898c0}.vsc-prop-other{color:#7aaa90}
+.vsc-item-prob{font-size:.86rem;font-weight:500;color:#cfe0f0;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vsc-item-meta{font-size:.7rem;color:#8aa8c8;margin-top:3px}
+.vsc-item-actions{display:flex;gap:6px;flex-shrink:0}
+.vsc-btn-ack{padding:5px 12px;border-radius:7px;font-size:.72rem;font-weight:600;cursor:pointer;border:1px solid #7ab0e8;background:rgba(122,176,232,.15);color:#9ac8ee;transition:all .15s;white-space:nowrap}
+.vsc-btn-ack:hover{background:rgba(122,176,232,.3)}
 /* Vendor Reports banner — yellow/amber theme */
 .vr-banner{background:linear-gradient(135deg,#2a2510 0%,#3a3218 100%);border:1px solid #8a7a30;border-radius:var(--radius);padding:14px 18px;margin-bottom:16px;box-shadow:var(--shadow-md)}
 .vr-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px}
