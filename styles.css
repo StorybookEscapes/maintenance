@@ -1151,15 +1151,13 @@ textarea{resize:vertical;min-height:76px}
 .vs-needs-title{font-family:'Cormorant Garamond',serif;font-size:1.05rem;font-weight:600;color:#8a5a10;letter-spacing:.5px;text-transform:uppercase}
 .vs-needs-count{font-size:.68rem;font-weight:700;background:var(--gold-pale);color:#8a5a10;border:1px solid var(--gold-light);border-radius:20px;padding:2px 9px}
 .vs-needs-help{font-size:.78rem;color:#7a5c00;margin-bottom:10px}
-.vs-needs-prop{border-left:3px solid var(--green);background:var(--white);border-radius:6px;padding:8px 10px 4px;margin-bottom:8px}
+.vs-needs-prop{border-left:3px solid var(--green);background:var(--white);border-radius:6px;padding:8px 10px;margin-bottom:10px}
 .vs-needs-prop-label{font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text2);margin-bottom:6px}
-.vs-needs-item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid var(--border)}
-.vs-needs-item:first-of-type{border-top:none}
-.vs-needs-item-main{flex:1;min-width:0}
-.vs-needs-prob{font-size:.82rem;font-weight:500;color:var(--text);line-height:1.35}
-.vs-pick-date-btn{background:var(--gold);color:#fff;border:none;border-radius:7px;padding:7px 13px;font-size:.74rem;font-weight:600;cursor:pointer;transition:background .15s;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;-webkit-tap-highlight-color:transparent}
-.vs-pick-date-btn:hover{background:#b8953d}
-.vs-pick-date-btn:active{transform:translateY(1px)}
+.vs-needs-prop-group{display:flex;flex-direction:column;gap:6px}
+/* Prominent primary Pick-a-date button shown inside the card detail for undated tasks */
+.vs-pick-date-btn-lg{background:var(--gold);color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:.82rem;font-weight:600;cursor:pointer;transition:background .15s;white-space:nowrap;display:inline-flex;align-items:center;gap:7px;-webkit-tap-highlight-color:transparent;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.vs-pick-date-btn-lg:hover{background:#b8953d}
+.vs-pick-date-btn-lg:active{transform:translateY(1px)}
 /* Change-date row shown inside vendor task card detail when task is already dated */
 .vs-change-date-row{margin-top:8px}
 .vs-change-date-btn{background:var(--gold-pale);color:#8a5a10;border:1px solid var(--gold-light);border-radius:7px;padding:6px 11px;font-size:.72rem;font-weight:600;cursor:pointer;transition:background .15s;display:inline-flex;align-items:center;gap:5px;-webkit-tap-highlight-color:transparent}
@@ -1224,7 +1222,7 @@ textarea{resize:vertical;min-height:76px}
   .vs-dp-title{font-size:1.1rem}
   .vs-dp-body{padding:12px 12px 4px}
   .vs-dp-footer{padding:10px 12px 14px}
-  .vs-needs-item{flex-direction:column;align-items:stretch;gap:6px}
+  .vs-needs-prop{padding:8px}
   .vs-pick-date-btn{align-self:flex-start}
 }
 /* Vendor-done banner — tasks vendors have marked complete (dark forest gradient) */

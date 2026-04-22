@@ -3370,46 +3370,32 @@ async function generateVendorAgendaLink(vendorName){
   }
 }
 
-// Opens SMS with the all-in-one agenda link (tasks + projects for all upcoming days)
+// Opens SMS with the one-and-only vendor agenda link. The agenda view shows
+// BOTH scheduled tasks and tasks the vendor still needs to pick a date for,
+// so this single link covers every case. The body text adapts based on what
+// the vendor currently has on their plate.
 async function sendAllTasksLink(vendorName,tel){
   try{
     const token=await createVendorAgenda(vendorName);
     const url=vendorAgendaUrl(token);
     const firstName=vendorName.split(' ')[0];
-    const body=`Hi ${firstName}, here's your Storybook Escapes link — all your upcoming tasks and projects in one place:\n\n${url}`;
-    window.location.href='sms:'+tel+'?body='+encodeURIComponent(body);
-  }catch(e){
-    console.error('[send-all-tasks] Error:',e);
-    showToast('Failed to generate link','err');
-  }
-}
-
-// Scheduling-focused variant: texts the agenda link with a prompt asking the
-// vendor to pick their own date. Used when a task is assigned to a vendor
-// without a date set — either via letVendorSchedule() or the "Send scheduling
-// link" button on the combined vendor card.
-async function sendSchedulingLink(vendorName,tel,anchorTaskId){
-  try{
-    const token=await createVendorAgenda(vendorName);
-    const url=vendorAgendaUrl(token);
-    const firstName=vendorName.split(' ')[0];
-    const t=tasks.find(x=>x.id===anchorTaskId);
-    // Count all undated tasks assigned to this vendor so the message reflects
-    // the true workload if there's more than one waiting on their schedule.
-    const undatedForVendor=tasks.filter(x=>x.vendor&&x.vendor.toLowerCase()===vendorName.toLowerCase()&&!x.date&&!isDone(x));
+    // Count dated vs. undated tasks assigned to this vendor so we can phrase
+    // the SMS correctly — tasks awaiting vendor-picked dates get a specific
+    // call-out so Cody knows to pick dates, not just review the schedule.
+    const open=tasks.filter(x=>x.vendor&&x.vendor.toLowerCase()===vendorName.toLowerCase()&&!isDone(x));
+    const undated=open.filter(x=>!x.date).length;
+    const dated=open.filter(x=>!!x.date).length;
     let body;
-    if(t&&undatedForVendor.length<=1){
-      const p=getProp(t.property);
-      const propName=p?p.name:t.property;
-      const urg=t.urgent?'\n\nThis one\'s marked URGENT — please let us know if same-day is possible.':'';
-      body=`Hi ${firstName}, we've got a task for you at ${propName}:\n\n${t.problem}${urg}\n\nWhen you have a moment, take a look and pick a date that works:\n${url}\n\n— Chip Burns, Storybook Escapes`;
+    if(undated>0&&dated>0){
+      body=`Hi ${firstName}, here's your Storybook Escapes link — it shows your upcoming schedule plus ${undated} task${undated!==1?'s':''} that still need${undated!==1?'':'s'} a date picked by you:\n\n${url}\n\n— Chip Burns, Storybook Escapes`;
+    }else if(undated>0){
+      body=`Hi ${firstName}, you've got ${undated} task${undated!==1?'s':''} waiting on your schedule. When you have a moment, take a look and pick dates that work for you:\n\n${url}\n\n— Chip Burns, Storybook Escapes`;
     }else{
-      const count=undatedForVendor.length;
-      body=`Hi ${firstName}, you've got ${count} task${count!==1?'s':''} waiting on your schedule. When you have a moment, take a look and pick dates that work for you:\n\n${url}\n\n— Chip Burns, Storybook Escapes`;
+      body=`Hi ${firstName}, here's your Storybook Escapes link — all your upcoming tasks and projects in one place:\n\n${url}`;
     }
     window.location.href='sms:'+tel+'?body='+encodeURIComponent(body);
   }catch(e){
-    console.error('[send-scheduling-link] Error:',e);
+    console.error('[send-all-tasks] Error:',e);
     showToast('Failed to generate link','err');
   }
 }
@@ -3532,17 +3518,10 @@ function combinedVendorCard(v,taskList,sheetUrl,showTaskList=true){
 
   // Build send row + collapsible message preview
   const escapedSms=sms.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  // If any task in this card has no date set, offer "Send scheduling link"
-  // so admin can prompt the vendor to self-schedule even after assignment.
-  const hasUndated=sorted.some(x=>!x.date);
-  const scheduleLinkBtn=hasUndated?`
-      <button class="cg-send-btn" style="justify-content:center;width:100%;font-size:.82rem;padding:9px 14px;background:var(--gold);color:#fff;border-color:var(--gold)" onclick="sendSchedulingLink('${v.name.replace(/'/g,"\\'")}','${tel}','${sorted[0].id}')">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>
-        Send scheduling link
-      </button>`:'';
+  // ONE link covers both scheduled tasks AND tasks the vendor still needs to
+  // pick a date for — the agenda view on the vendor side shows both buckets.
   const sendHtml=`
     <div class="cg-send-row" style="flex-direction:column;align-items:stretch;gap:8px">
-      ${scheduleLinkBtn}
       <button class="cg-send-btn" style="justify-content:center;width:100%;font-size:.82rem;padding:9px 14px" onclick="sendAllTasksLink('${v.name.replace(/'/g,"\\'")}','${tel}')">
         <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg>
         Send All Tasks
@@ -6076,13 +6055,15 @@ async function rpQuickDelivered(id) {
         },400);
       }
       // Prefetch bookings for every property with an undated task so the
-      // Good Days strip can render a cross-property availability summary.
-      // Runs async after the agenda paints so nothing else is blocked.
+      // Good Days strip can render instantly inside the calendar modal when
+      // the vendor taps Pick-a-date. Runs async after the agenda paints.
       if(vIsAgenda&&vNeedsSched&&vNeedsSched.length){
         (async()=>{
           try{
             vBookingsByProp=await vsPrefetchNeedsBookings();
-            vsRenderBestDaysStrip();
+            // If a picker is already open (e.g. vendor tapped before prefetch
+            // completed), re-render so the strip appears.
+            if(vDpState&&vDpState.taskId)vsRenderPicker();
           }catch(e){console.warn('[vs-best-days]',e);}
         })();
       }
@@ -6162,8 +6143,9 @@ async function rpQuickDelivered(id) {
   }
 
   // ── Needs-Your-Schedule Render: undated tasks the vendor picks dates for ──
-  // Grouped neighborhood → property → items. "Good Days" strip is appended
-  // asynchronously after vsLoad fetches bookings for every affected property.
+  // Renders the full vsCard for each task (photos, notes, purchase, filter,
+  // upload, etc.) so vendors see the same context they'd see on a dated task.
+  // "Pick a date" lives inside the expanded card detail (see vsCard).
   function vsRenderNeedsSchedHtml(){
     if(!vNeedsSched||!vNeedsSched.length)return'';
     let html=`<div class="vs-needs-sched">
@@ -6171,8 +6153,7 @@ async function rpQuickDelivered(id) {
         <span class="vs-needs-title">Needs Your Schedule</span>
         <span class="vs-needs-count">${vNeedsSched.length}</span>
       </div>
-      <div class="vs-needs-help">Pick a date that works for you on each task below.</div>
-      <div id="vs-best-days-slot"></div>`;
+      <div class="vs-needs-help">Tap a task to see details, then pick a date that works for you.</div>`;
     // Bucket neighborhood → property, preserving pre-sorted order
     const nbGroups=[];const nbSeen={};
     vNeedsSched.forEach(t=>{
@@ -6194,19 +6175,12 @@ async function rpQuickDelivered(id) {
       ng.props.forEach(p=>{
         const shortName=p.propertyName.replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
         html+=`<div class="vs-needs-prop" style="border-left-color:var(--${ng.nbCls})">
-          <div class="vs-needs-prop-label">${shortName}</div>`;
+          <div class="vs-needs-prop-label">${shortName}</div>
+          <div class="vs-needs-prop-group">`;
         p.items.forEach(t=>{
-          html+=`<div class="vs-needs-item">
-            <div class="vs-needs-item-main">
-              <div class="vs-needs-prob">${t.problem}${t.urgent?' <span class="vs-urgent">Urgent</span>':''}</div>
-            </div>
-            <button class="vs-pick-date-btn" onclick="window._vsPickDate('${t.id}')">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>
-              Pick a date
-            </button>
-          </div>`;
+          html+=vsCard(t);
         });
-        html+=`</div>`; // vs-needs-prop
+        html+=`</div></div>`; // vs-needs-prop-group, vs-needs-prop
       });
     });
     html+=`</div>`; // vs-needs-sched
@@ -6270,16 +6244,14 @@ async function rpQuickDelivered(id) {
     return{days,propIds,propMeta};
   }
 
-  function vsRenderBestDaysStrip(){
-    if(!vNeedsSched||!vNeedsSched.length)return;
-    const slot=document.getElementById('vs-best-days-slot');
-    if(!slot)return;
-    // If there's only one property, the per-task picker already tells the story
+  // Returns the Good Days strip HTML for embedding inside the calendar modal.
+  // Returns '' when there's <2 properties with needs-sched tasks or no data.
+  function vsRenderBestDaysHtml(){
+    if(!vNeedsSched||!vNeedsSched.length)return'';
     const uniqueProps=[...new Set(vNeedsSched.map(t=>t.property))];
-    if(uniqueProps.length<2)return;
+    if(uniqueProps.length<2)return'';
     const computed=vsComputeBestDays(vBookingsByProp||{});
-    const {days,propIds,propMeta}=computed;
-    // Score each day and pick the best up to 8 chips to show
+    const {days}=computed;
     const rank=d=>{
       if(d.overall==='skip')return-1;
       return d.lockedCount*3 + d.openCount*1 - d.bookedCount*2;
@@ -6287,11 +6259,10 @@ async function rpQuickDelivered(id) {
     const candidates=days.filter(d=>d.overall!=='skip').sort((a,b)=>{
       const r=rank(b)-rank(a);
       if(r!==0)return r;
-      return a.d-b.d; // earlier date wins ties
+      return a.d-b.d;
     }).slice(0,8).sort((a,b)=>a.d-b.d);
     if(!candidates.length){
-      slot.innerHTML=`<div class="vs-bd-empty">No common workable days found in the next 21 days — guests are in house at every property. Admin will coordinate.</div>`;
-      return;
+      return`<div class="vs-bd-empty">No common workable days found in the next 21 days — guests are in house at every property. Admin will coordinate.</div>`;
     }
     const fmt=d=>d.toLocaleDateString('en-US',{weekday:'short',month:'numeric',day:'numeric'});
     let h=`<div class="vs-best-days">
@@ -6306,7 +6277,6 @@ async function rpQuickDelivered(id) {
       else if(day.overall==='partial-mixed'){chipCls+=' vs-bd-partial-mixed';tierLabel=`${day.lockedCount} ideal • ${day.bookedCount} blocked`;}
       else if(day.overall==='open'){chipCls+=' vs-bd-open';tierLabel='All open';}
       else{chipCls+=' vs-bd-partial-mixed';tierLabel=`${day.openCount} open • ${day.bookedCount} blocked`;}
-      // Per-property dots
       let dots='';
       day.perProp.forEach(p=>{
         const nbCls=p.meta.neighborhoodCls||'green';
@@ -6324,7 +6294,7 @@ async function rpQuickDelivered(id) {
       </div>`;
     });
     h+=`</div></div>`;
-    slot.innerHTML=h;
+    return h;
   }
 
   // Cache of bookings across all properties with undated tasks; populated during vsLoad
@@ -6736,7 +6706,7 @@ async function rpQuickDelivered(id) {
           <div class="vs-fb-upload-btn" onclick="document.getElementById('vri-${t.id}').click()">&#x1F9FE; Receipt<input type="file" id="vri-${t.id}" accept="image/*" style="display:none" onchange="window._vsUploadPhotos('${t.id}',this.files)"></div>
         </div>
         <div id="vps-${t.id}" style="font-size:.72rem;color:var(--text3);margin:4px 0"></div>
-        ${(vIsAgenda&&t.date&&!done)?`<div class="vs-change-date-row"><button class="vs-change-date-btn" onclick="window._vsPickDate('${t.id}')"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg> Change date</button></div>`:''}
+        ${(vIsAgenda&&!done)?`<div class="vs-change-date-row"><button class="${t.date?'vs-change-date-btn':'vs-pick-date-btn-lg'}" onclick="window._vsPickDate('${t.id}')"><svg viewBox="0 0 24 24" width="${t.date?12:14}" height="${t.date?12:14}" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg> ${t.date?'Change date':'Pick a date'}</button></div>`:''}
         <div class="vs-notes">${notes}
           <div class="vs-note-input">
             <textarea id="vsn-${t.id}" placeholder="Leave a note..." rows="1"></textarea>
@@ -7423,6 +7393,7 @@ async function rpQuickDelivered(id) {
       </div>
       <div class="vs-dp-body">
         <div class="vs-dp-range">You can pick any day from today through ${vsFmtDate(maxDate.toISOString().slice(0,10))}.</div>
+        ${vsRenderBestDaysHtml()}
         <div class="dp-phdr">
           <div class="dp-ptitle">${MONTHS[mo]} ${y}</div>
           <div class="dp-pnav">
