@@ -1526,6 +1526,12 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
     </div>`;
   }
   h+=`<div class="dp-warn" id="${px}-dp-warn"><strong>⚠ Guests are in house on this day.</strong> Service is not recommended while guests are present. Consider a checkout day (after 10am) or check-in day (before 4pm) instead.<div class="dp-warn-btns"><button class="btn btn-gold" onclick="confirmBookedDate('${px}')">Schedule Anyway</button><button class="btn" onclick="cancelBookedDate('${px}')">Pick Another Day</button></div></div>`;
+  // Clear-date footer — only on detail modal picker when a date is currently set.
+  // Clearing reverts the task to the undated 'open' state so it flows back into
+  // the vendor's "Needs Your Schedule" bucket (or admin can pick a new date).
+  if(px==='d'&&selVal){
+    h+=`<div class="dp-clear-row"><button type="button" class="dp-clear-btn" onclick="clearDate('d')">&#x2715; Clear date</button></div>`;
+  }
   popup.innerHTML=h;
 }
 async function dpNav(px,dir,y,m){
@@ -1570,6 +1576,27 @@ function cancelBookedDate(px){
   pendingBookedDate={px:null,ds:null};
   const warn=document.getElementById(px+'-dp-warn');
   if(warn)warn.classList.remove('show');
+}
+// Clear the currently-set date on the detail-modal task. Reverts status from
+// 'scheduled' back to 'open' so the task returns to the undated bucket;
+// leaves in_progress/complete/resolved_by_guest alone. Vendor stays assigned.
+async function clearDate(px){
+  if(px!=='d')return;
+  const t=tasks.find(x=>x.id===detailId);if(!t)return;
+  t.date='';
+  if(t.status==='scheduled')t.status='open';
+  // Sync the hidden input + picker display so the modal matches immediately
+  document.getElementById('d-date').value='';
+  const disp=document.getElementById('d-dp-display');
+  disp.textContent='Select a date...';disp.className='dp-ph';
+  document.getElementById('d-dp-btn').classList.remove('has-val');
+  document.getElementById('d-dp-popup').style.display='none';
+  document.getElementById('d-status').value=t.status;
+  await saveTasks();
+  renderDetailBadges(t);
+  checkCombine();
+  renderAll();
+  showToast('Date cleared — back to unscheduled.');
 }
 document.addEventListener('click',e=>{
   // If the clicked element was removed from the DOM (e.g. by dpNav re-rendering), don't close the popup
