@@ -6075,6 +6075,17 @@ async function rpQuickDelivered(id) {
           if(first)first.classList.add('vs-expanded');
         },400);
       }
+      // Prefetch bookings for every property with an undated task so the
+      // Good Days strip can render a cross-property availability summary.
+      // Runs async after the agenda paints so nothing else is blocked.
+      if(vIsAgenda&&vNeedsSched&&vNeedsSched.length){
+        (async()=>{
+          try{
+            vBookingsByProp=await vsPrefetchNeedsBookings();
+            vsRenderBestDaysStrip();
+          }catch(e){console.warn('[vs-best-days]',e);}
+        })();
+      }
     }catch(e){
       console.error('[vendor-sheet]',e);
       vsShowError();
@@ -6151,44 +6162,173 @@ async function rpQuickDelivered(id) {
   }
 
   // ── Needs-Your-Schedule Render: undated tasks the vendor picks dates for ──
+  // Grouped neighborhood → property → items. "Good Days" strip is appended
+  // asynchronously after vsLoad fetches bookings for every affected property.
   function vsRenderNeedsSchedHtml(){
     if(!vNeedsSched||!vNeedsSched.length)return'';
-    // Group by property within this section so items nest under their property block
     let html=`<div class="vs-needs-sched">
       <div class="vs-needs-hdr">
         <span class="vs-needs-title">Needs Your Schedule</span>
         <span class="vs-needs-count">${vNeedsSched.length}</span>
       </div>
-      <div class="vs-needs-help">Pick a date that works for you on each task below.</div>`;
-    // Bucket by propertyName preserving the pre-sorted order
-    const groups=[];const seen={};
+      <div class="vs-needs-help">Pick a date that works for you on each task below.</div>
+      <div id="vs-best-days-slot"></div>`;
+    // Bucket neighborhood → property, preserving pre-sorted order
+    const nbGroups=[];const nbSeen={};
     vNeedsSched.forEach(t=>{
-      if(!seen[t.propertyName]){
-        seen[t.propertyName]={propertyName:t.propertyName,neighborhoodCls:t.neighborhoodCls||'green',items:[]};
-        groups.push(seen[t.propertyName]);
+      const nb=t.neighborhood||'Other';
+      const nbCls=t.neighborhoodCls||'green';
+      if(!nbSeen[nb]){
+        nbSeen[nb]={nb,nbCls,propSeen:{},props:[]};
+        nbGroups.push(nbSeen[nb]);
       }
-      seen[t.propertyName].items.push(t);
+      const g=nbSeen[nb];
+      if(!g.propSeen[t.propertyName]){
+        g.propSeen[t.propertyName]={propertyName:t.propertyName,items:[]};
+        g.props.push(g.propSeen[t.propertyName]);
+      }
+      g.propSeen[t.propertyName].items.push(t);
     });
-    groups.forEach(g=>{
-      const shortName=g.propertyName.replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
-      html+=`<div class="vs-needs-prop" style="border-left-color:var(--${g.neighborhoodCls})">
-        <div class="vs-needs-prop-label">${shortName}</div>`;
-      g.items.forEach(t=>{
-        html+=`<div class="vs-needs-item">
-          <div class="vs-needs-item-main">
-            <div class="vs-needs-prob">${t.problem}${t.urgent?' <span class="vs-urgent">Urgent</span>':''}</div>
-          </div>
-          <button class="vs-pick-date-btn" onclick="window._vsPickDate('${t.id}')">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>
-            Pick a date
-          </button>
-        </div>`;
+    nbGroups.forEach(ng=>{
+      html+=`<div class="vs-needs-nb" style="color:var(--${ng.nbCls})">${ng.nb}</div>`;
+      ng.props.forEach(p=>{
+        const shortName=p.propertyName.replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
+        html+=`<div class="vs-needs-prop" style="border-left-color:var(--${ng.nbCls})">
+          <div class="vs-needs-prop-label">${shortName}</div>`;
+        p.items.forEach(t=>{
+          html+=`<div class="vs-needs-item">
+            <div class="vs-needs-item-main">
+              <div class="vs-needs-prob">${t.problem}${t.urgent?' <span class="vs-urgent">Urgent</span>':''}</div>
+            </div>
+            <button class="vs-pick-date-btn" onclick="window._vsPickDate('${t.id}')">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>
+              Pick a date
+            </button>
+          </div>`;
+        });
+        html+=`</div>`; // vs-needs-prop
       });
-      html+=`</div>`; // vs-needs-prop
     });
     html+=`</div>`; // vs-needs-sched
     return html;
   }
+
+  // ── Good Days strip: compute per-day tier across every property with an undated task ──
+  // tier='locked'   → that day is checkout/checkin/turn at that property (ideal — empty 10–4)
+  // tier='open'     → no booking at that property that day (workable but could get booked later)
+  // tier='booked'   → guest in house that day (not schedulable by vendor)
+  async function vsPrefetchNeedsBookings(){
+    if(!vNeedsSched||!vNeedsSched.length)return {};
+    const props=[...new Set(vNeedsSched.map(t=>t.property))];
+    const out={};
+    await Promise.all(props.map(async pid=>{
+      out[pid]=await vsFetchBookings(pid);
+    }));
+    return out;
+  }
+
+  function vsComputeBestDays(bookingsByProp){
+    const today=new Date();today.setHours(12,0,0,0);
+    // Unique properties that have undated tasks in this agenda
+    const propIds=[...new Set(vNeedsSched.map(t=>t.property))];
+    const propMeta={};
+    vNeedsSched.forEach(t=>{
+      if(!propMeta[t.property]){
+        propMeta[t.property]={
+          id:t.property,
+          name:(t.propertyName||'').replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,''),
+          neighborhoodCls:t.neighborhoodCls||'green',
+        };
+      }
+    });
+    const days=[];
+    for(let i=0;i<21;i++){
+      const d=new Date(today.getTime()+i*86400000);d.setHours(12,0,0,0);
+      const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      // For every property with needs-sched tasks, classify the day
+      const perProp=propIds.map(pid=>{
+        const st=vsDayState(d,bookingsByProp[pid]||[]);
+        let tier;
+        if(st==='turn'||st==='checkin'||st==='checkout')tier='locked';
+        else if(st==='booked')tier='booked';
+        else tier='open';
+        return{pid,tier,state:st,meta:propMeta[pid]};
+      });
+      const lockedCount=perProp.filter(p=>p.tier==='locked').length;
+      const bookedCount=perProp.filter(p=>p.tier==='booked').length;
+      const openCount=perProp.filter(p=>p.tier==='open').length;
+      // Overall day tier
+      let overall;
+      if(bookedCount===perProp.length)overall='skip'; // guest-in-house everywhere — useless
+      else if(lockedCount===perProp.length)overall='locked'; // ideal across the board
+      else if(lockedCount>0&&bookedCount===0)overall='partial-locked'; // some ideal, rest open
+      else if(lockedCount>0)overall='partial-mixed'; // some ideal, some blocked
+      else if(openCount===perProp.length)overall='open'; // all workable but none ideal
+      else overall='partial-open'; // some open, some blocked
+      days.push({ds,d,perProp,lockedCount,bookedCount,openCount,overall});
+    }
+    return{days,propIds,propMeta};
+  }
+
+  function vsRenderBestDaysStrip(){
+    if(!vNeedsSched||!vNeedsSched.length)return;
+    const slot=document.getElementById('vs-best-days-slot');
+    if(!slot)return;
+    // If there's only one property, the per-task picker already tells the story
+    const uniqueProps=[...new Set(vNeedsSched.map(t=>t.property))];
+    if(uniqueProps.length<2)return;
+    const computed=vsComputeBestDays(vBookingsByProp||{});
+    const {days,propIds,propMeta}=computed;
+    // Score each day and pick the best up to 8 chips to show
+    const rank=d=>{
+      if(d.overall==='skip')return-1;
+      return d.lockedCount*3 + d.openCount*1 - d.bookedCount*2;
+    };
+    const candidates=days.filter(d=>d.overall!=='skip').sort((a,b)=>{
+      const r=rank(b)-rank(a);
+      if(r!==0)return r;
+      return a.d-b.d; // earlier date wins ties
+    }).slice(0,8).sort((a,b)=>a.d-b.d);
+    if(!candidates.length){
+      slot.innerHTML=`<div class="vs-bd-empty">No common workable days found in the next 21 days — guests are in house at every property. Admin will coordinate.</div>`;
+      return;
+    }
+    const fmt=d=>d.toLocaleDateString('en-US',{weekday:'short',month:'numeric',day:'numeric'});
+    let h=`<div class="vs-best-days">
+      <div class="vs-bd-hdr">Good days for ${uniqueProps.length} properties</div>
+      <div class="vs-bd-help">Turn, checkout, and check-in days are ideal — properties are empty from 10am to 4pm.</div>
+      <div class="vs-bd-strip">`;
+    candidates.forEach(day=>{
+      let chipCls='vs-bd-chip';
+      let tierLabel='';
+      if(day.overall==='locked'){chipCls+=' vs-bd-locked';tierLabel='All ideal';}
+      else if(day.overall==='partial-locked'){chipCls+=' vs-bd-partial-locked';tierLabel=`${day.lockedCount} ideal • ${day.openCount} open`;}
+      else if(day.overall==='partial-mixed'){chipCls+=' vs-bd-partial-mixed';tierLabel=`${day.lockedCount} ideal • ${day.bookedCount} blocked`;}
+      else if(day.overall==='open'){chipCls+=' vs-bd-open';tierLabel='All open';}
+      else{chipCls+=' vs-bd-partial-mixed';tierLabel=`${day.openCount} open • ${day.bookedCount} blocked`;}
+      // Per-property dots
+      let dots='';
+      day.perProp.forEach(p=>{
+        const nbCls=p.meta.neighborhoodCls||'green';
+        let dotCls='vs-bd-dot';
+        if(p.tier==='locked')dotCls+=' vs-bd-dot-locked';
+        else if(p.tier==='booked')dotCls+=' vs-bd-dot-booked';
+        else dotCls+=' vs-bd-dot-open';
+        const stLabel=p.state==='turn'?'Turn':p.state==='checkin'?'Check-in':p.state==='checkout'?'Checkout':p.state==='booked'?'Guest in house':'Open';
+        dots+=`<span class="${dotCls}" style="--nb:var(--${nbCls})" title="${p.meta.name} — ${stLabel}"></span>`;
+      });
+      h+=`<div class="${chipCls}">
+        <div class="vs-bd-date">${fmt(day.d)}</div>
+        <div class="vs-bd-tier">${tierLabel}</div>
+        <div class="vs-bd-dots">${dots}</div>
+      </div>`;
+    });
+    h+=`</div></div>`;
+    slot.innerHTML=h;
+  }
+
+  // Cache of bookings across all properties with undated tasks; populated during vsLoad
+  let vBookingsByProp={};
 
   // ── Agenda Render: multi-day schedule grouped by date ──
   function vsRenderAgenda(){
@@ -7152,9 +7292,10 @@ async function rpQuickDelivered(id) {
   // ─────────────────────────────────────────────────────────────
   // VENDOR CALENDAR — self-schedule or reschedule a task
   // Opens a date picker restricted to a 21-day window from today.
-  // Shows property bookings as bars and warns on guest-in-house days.
+  // Shows property bookings as bars. Guest-in-house days are hard-blocked
+  // (no click); vendors can only pick turn / checkout / check-in / open days.
   // ─────────────────────────────────────────────────────────────
-  let vDpState={taskId:null,viewYear:0,viewMonth:0,selected:null,bookings:[],pendingBooked:null,propertyId:null};
+  let vDpState={taskId:null,viewYear:0,viewMonth:0,selected:null,bookings:[],propertyId:null};
 
   function vsFmtDate(ds){
     return new Date(ds+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
@@ -7206,7 +7347,6 @@ async function rpQuickDelivered(id) {
     vDpState.viewYear=today.getFullYear();
     vDpState.viewMonth=today.getMonth();
     vDpState.selected=t.date||null; // pre-select the current date if rescheduling
-    vDpState.pendingBooked=null;
     // Show loading state immediately so the vendor sees feedback
     modal.innerHTML=`<div class="vs-dp-panel"><div class="vs-dp-load">Loading calendar...</div></div>`;
     modal.classList.add('open');
@@ -7307,13 +7447,16 @@ async function rpQuickDelivered(id) {
         const isBeyond=d>maxDate;
         const st=vsDayState(d,bookings);
         const isGuestInHouse=st==='booked';
-        const disabled=isPast||isBeyond;
+        // Booked days are hard-blocked for vendors: no click, no "schedule anyway"
+        // option. Admin only can schedule through a guest stay.
+        const disabled=isPast||isBeyond||isGuestInHouse;
         let cls='dp-cell';
         if(isToday)cls+=' dp-today-cell';
         if(isSel)cls+=' dp-selected';
         if(disabled)cls+=' dp-disabled';
+        if(isGuestInHouse&&!isPast&&!isBeyond)cls+=' dp-guest-locked';
         const dnCls='dp-dn'+(isToday?' dp-today-num':'');
-        const click=!disabled?`onclick="window._vsSelDate('${ds}',${isGuestInHouse})"`:'';
+        const click=!disabled?`onclick="window._vsSelDate('${ds}')"`:'';
         h+=`<div class="${cls}" ${click}><div class="${dnCls}">${dn}</div></div>`;
       });
       // Render reservation bars overlaying this week
@@ -7340,14 +7483,11 @@ async function rpQuickDelivered(id) {
       h+=`</div>`;
     });
     h+=`</div>`; // dp-cal-wrap
-    // Guest-in-house warning panel
-    h+=`<div class="dp-warn" id="vs-dp-warn">
-      <strong>⚠ Guests are in the house on this day.</strong>
-      Service is not recommended while guests are present. Please pick another day when possible.
-      <div class="dp-warn-btns">
-        <button class="btn btn-gold" onclick="window._vsConfirmBooked()">Schedule Anyway</button>
-        <button class="btn" onclick="window._vsCancelBooked()">Pick Another Day</button>
-      </div>
+    // Legend explaining the day-state colors
+    h+=`<div class="vs-dp-legend">
+      <span class="vs-dp-lg-item"><span class="vs-dp-lg-sw vs-dp-lg-turn"></span>Turn / Checkout / Check-in <em>(ideal — property is empty 10am-4pm)</em></span>
+      <span class="vs-dp-lg-item"><span class="vs-dp-lg-sw vs-dp-lg-open"></span>Open day <em>(could get booked later)</em></span>
+      <span class="vs-dp-lg-item"><span class="vs-dp-lg-sw vs-dp-lg-locked"></span>Guest in house <em>(not schedulable — ask admin)</em></span>
     </div>`;
     // Confirm / Cancel footer
     const selLabel=vDpState.selected?vsFmtDate(vDpState.selected):'—';
@@ -7370,30 +7510,10 @@ async function rpQuickDelivered(id) {
     vsRenderPicker();
   };
 
-  window._vsSelDate=function(ds,isBooked){
-    if(isBooked){
-      vDpState.pendingBooked=ds;
-      const warn=document.getElementById('vs-dp-warn');
-      if(warn){warn.classList.add('show');warn.scrollIntoView({behavior:'smooth',block:'nearest'});}
-      return;
-    }
+  window._vsSelDate=function(ds){
+    // Booked days can't reach this handler — they render without an onclick.
     vDpState.selected=ds;
-    vDpState.pendingBooked=null;
     vsRenderPicker();
-  };
-
-  window._vsConfirmBooked=function(){
-    if(vDpState.pendingBooked){
-      vDpState.selected=vDpState.pendingBooked;
-      vDpState.pendingBooked=null;
-    }
-    vsRenderPicker();
-  };
-
-  window._vsCancelBooked=function(){
-    vDpState.pendingBooked=null;
-    const warn=document.getElementById('vs-dp-warn');
-    if(warn)warn.classList.remove('show');
   };
 
   window._vsConfirmPicker=async function(){

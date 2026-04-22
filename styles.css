@@ -1185,6 +1185,39 @@ textarea{resize:vertical;min-height:76px}
 .dp-cell.dp-disabled{background:#f5f5f3;cursor:not-allowed;color:#bbb}
 .dp-cell.dp-disabled .dp-dn{color:#bbb}
 .dp-cell.dp-disabled:hover{background:#f5f5f3}
+/* Guest-in-house cell — hard-blocked for vendor self-schedule; admin only */
+.dp-cell.dp-guest-locked{background:repeating-linear-gradient(135deg,#f7e6e6 0 6px,#fff0f0 6px 12px);cursor:not-allowed}
+.dp-cell.dp-guest-locked .dp-dn{color:#b85a5a;font-weight:600}
+.dp-cell.dp-guest-locked:hover{background:repeating-linear-gradient(135deg,#f7e6e6 0 6px,#fff0f0 6px 12px)}
+/* Legend under the vendor calendar */
+.vs-dp-legend{display:flex;flex-wrap:wrap;gap:10px 16px;padding:10px 14px;margin:10px 4px 0;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:.72rem;color:var(--text2)}
+.vs-dp-lg-item{display:inline-flex;align-items:center;gap:6px;line-height:1.3}
+.vs-dp-lg-item em{font-style:normal;color:var(--text2);opacity:.78}
+.vs-dp-lg-sw{display:inline-block;width:14px;height:14px;border-radius:3px;border:1px solid var(--border);flex-shrink:0}
+.vs-dp-lg-turn{background:var(--green-pale);border-color:var(--green)}
+.vs-dp-lg-open{background:#fff}
+.vs-dp-lg-locked{background:repeating-linear-gradient(135deg,#f7e6e6 0 4px,#fff0f0 4px 8px);border-color:#e7b9b9}
+/* Needs-sched neighborhood headers — mirror the vendor sheet neighborhood banner */
+.vs-needs-nb{font-family:'Cormorant Garamond',serif;font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;margin:8px 0 4px;padding-left:2px}
+.vs-needs-nb:first-of-type{margin-top:4px}
+/* Good Days strip — cross-property availability summary when 2+ properties have undated tasks */
+.vs-best-days{margin:0 0 10px;padding:10px 12px;background:#fff;border:1px solid var(--gold-light);border-radius:8px}
+.vs-bd-hdr{font-family:'Cormorant Garamond',serif;font-size:.86rem;font-weight:600;color:#8a5a10;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+.vs-bd-help{font-size:.72rem;color:var(--text2);margin-bottom:8px;line-height:1.35}
+.vs-bd-strip{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+.vs-bd-chip{flex:0 0 auto;min-width:96px;padding:7px 9px;border-radius:7px;background:#fff;border:1px solid var(--border);display:flex;flex-direction:column;gap:3px;align-items:flex-start}
+.vs-bd-chip.vs-bd-locked{background:var(--green-pale);border-color:var(--green)}
+.vs-bd-chip.vs-bd-partial-locked{background:#f7fbf3;border-color:var(--green-light,#bddab0)}
+.vs-bd-chip.vs-bd-open{background:#fffdf4;border-color:var(--gold-light)}
+.vs-bd-chip.vs-bd-partial-mixed{background:#fff7ea;border-color:#e7cfa0}
+.vs-bd-date{font-size:.76rem;font-weight:700;color:var(--text)}
+.vs-bd-tier{font-size:.64rem;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;line-height:1.2}
+.vs-bd-dots{display:flex;gap:3px;margin-top:2px;flex-wrap:wrap}
+.vs-bd-dot{width:8px;height:8px;border-radius:50%;border:1.5px solid var(--nb,var(--green));background:#fff;flex-shrink:0}
+.vs-bd-dot.vs-bd-dot-locked{background:var(--nb,var(--green))}
+.vs-bd-dot.vs-bd-dot-open{background:#fff}
+.vs-bd-dot.vs-bd-dot-booked{background:#d9b2b2;border-color:#b85a5a}
+.vs-bd-empty{padding:10px 12px;margin:0 0 10px;background:#fff7ea;border:1px solid #e7cfa0;border-radius:8px;font-size:.78rem;color:#7a5c00;line-height:1.4}
 @media (max-width:540px){
   .vs-dp-panel{max-width:100%;border-radius:10px}
   .vs-dp-header{padding:14px 14px 10px}
