@@ -1216,6 +1216,20 @@ textarea{resize:vertical;min-height:76px}
 .vs-bd-dot.vs-bd-dot-open{background:#fff}
 .vs-bd-dot.vs-bd-dot-booked{background:#d9b2b2;border-color:#b85a5a}
 .vs-bd-empty{padding:10px 12px;margin:0 0 10px;background:#fff7ea;border:1px solid #e7cfa0;border-radius:8px;font-size:.78rem;color:#7a5c00;line-height:1.4}
+/* Clickable chip — at least one property is IDEAL so a bulk-pick is available */
+.vs-bd-chip.vs-bd-clickable{cursor:pointer;transition:transform .12s,box-shadow .12s,border-color .12s}
+.vs-bd-chip.vs-bd-clickable:hover{transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,.12);border-color:var(--green)}
+.vs-bd-chip.vs-bd-clickable:active{transform:translateY(0)}
+/* Bulk-schedule confirmation overlay (replaces panel body) */
+.vs-bulk-confirm{padding:18px 20px 6px;max-height:50vh;overflow-y:auto}
+.vs-bulk-lead{font-size:.88rem;color:var(--text);line-height:1.5;margin-bottom:12px}
+.vs-bulk-lead strong{color:var(--green);font-weight:600}
+.vs-bulk-list{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
+.vs-bulk-row{padding:8px 10px;background:var(--green-pale,#ebf3ee);border:1px solid var(--green-light,#bddab0);border-radius:7px;display:flex;flex-direction:column;gap:2px}
+.vs-bulk-row-prop{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px}
+.vs-bulk-row-prob{font-size:.82rem;color:var(--text);line-height:1.35}
+.vs-bulk-skip{margin-top:10px;padding:9px 12px;background:#fff7ea;border:1px solid #e7cfa0;border-radius:7px;font-size:.76rem;color:#7a5c00;line-height:1.4}
+.vs-bulk-skip strong{color:#7a5c00;font-weight:700}
 @media (max-width:540px){
   .vs-dp-panel{max-width:100%;border-radius:10px}
   .vs-dp-header{padding:14px 14px 10px}
@@ -1223,7 +1237,7 @@ textarea{resize:vertical;min-height:76px}
   .vs-dp-body{padding:12px 12px 4px}
   .vs-dp-footer{padding:10px 12px 14px}
   .vs-needs-prop{padding:8px}
-  .vs-pick-date-btn{align-self:flex-start}
+  .vs-bulk-confirm{padding:14px 14px 4px}
 }
 /* Vendor-done banner — tasks vendors have marked complete (dark forest gradient) */
 .vdn-banner{background:linear-gradient(135deg,#0f2a1a 0%,#1a3a25 100%);border:1px solid #2a6a40;border-radius:var(--radius);padding:14px 18px;margin-bottom:16px;box-shadow:var(--shadow-md)}

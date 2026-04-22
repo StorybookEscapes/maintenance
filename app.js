@@ -6287,7 +6287,13 @@ async function rpQuickDelivered(id) {
         const stLabel=p.state==='turn'?'Turn':p.state==='checkin'?'Check-in':p.state==='checkout'?'Checkout':p.state==='booked'?'Guest in house':'Open';
         dots+=`<span class="${dotCls}" style="--nb:var(--${nbCls})" title="${p.meta.name} — ${stLabel}"></span>`;
       });
-      h+=`<div class="${chipCls}">
+      // Only chips that have at least one IDEAL property (turn/checkin/checkout)
+      // are clickable for bulk assign. Pure-open chips can't be bulk-picked;
+      // vendor has to manually pick since those days aren't guaranteed empty.
+      const clickable=day.lockedCount>=1;
+      const click=clickable?` onclick="window._vsPickBulk('${day.ds}')"`:'';
+      if(clickable)chipCls+=' vs-bd-clickable';
+      h+=`<div class="${chipCls}"${click}>
         <div class="vs-bd-date">${fmt(day.d)}</div>
         <div class="vs-bd-tier">${tierLabel}</div>
         <div class="vs-bd-dots">${dots}</div>
@@ -6296,6 +6302,89 @@ async function rpQuickDelivered(id) {
     h+=`</div></div>`;
     return h;
   }
+
+  // Bulk-pick: vendor tapped a Good Days chip. Collect every undated task
+  // whose property is IDEAL on that date (turn/checkin/checkout = locked tier),
+  // show a confirmation overlay, then fire one batch call on confirm.
+  window._vsPickBulk=function(ds){
+    if(!vNeedsSched||!vNeedsSched.length)return;
+    // Recompute so we pick the same ideal set that rendered the chip
+    const computed=vsComputeBestDays(vBookingsByProp||{});
+    const day=computed.days.find(d=>d.ds===ds);
+    if(!day)return;
+    // Tasks whose property is IDEAL on this date
+    const idealPropIds=new Set(day.perProp.filter(p=>p.tier==='locked').map(p=>p.pid));
+    const idealTasks=vNeedsSched.filter(t=>idealPropIds.has(t.property));
+    if(!idealTasks.length)return;
+    // Tasks skipped because their property isn't ideal on this date
+    const skippedTasks=vNeedsSched.filter(t=>!idealPropIds.has(t.property));
+    const dateLabel=new Date(ds+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+    // Render confirmation overlay in the modal panel (replaces panel contents)
+    const modal=document.getElementById('vs-dp-modal');
+    if(!modal)return;
+    let taskRows='';
+    idealTasks.forEach(t=>{
+      const shortName=(t.propertyName||'').replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
+      const nbCls=t.neighborhoodCls||'green';
+      taskRows+=`<div class="vs-bulk-row">
+        <div class="vs-bulk-row-prop" style="color:var(--${nbCls})">${shortName}</div>
+        <div class="vs-bulk-row-prob">${t.problem}</div>
+      </div>`;
+    });
+    let skipHtml='';
+    if(skippedTasks.length){
+      const skipNames=[...new Set(skippedTasks.map(t=>(t.propertyName||'').replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'')))];
+      skipHtml=`<div class="vs-bulk-skip">
+        <strong>Not scheduled today:</strong> ${skipNames.join(', ')}.
+        These aren't guaranteed empty on ${dateLabel} — pick a day for each one on the calendar below.
+      </div>`;
+    }
+    const idealIds=JSON.stringify(idealTasks.map(t=>t.id)).replace(/"/g,'&quot;');
+    const h=`<div class="vs-dp-panel" onclick="event.stopPropagation()">
+      <div class="vs-dp-header">
+        <div>
+          <div class="vs-dp-title">Confirm schedule</div>
+          <div class="vs-dp-sub">${dateLabel}</div>
+        </div>
+        <button class="vs-dp-close" onclick="window._vsClosePicker()">&times;</button>
+      </div>
+      <div class="vs-bulk-confirm">
+        <div class="vs-bulk-lead">Schedule ${idealTasks.length} task${idealTasks.length!==1?'s':''} on <strong>${dateLabel}</strong>? These properties are empty from 10am to 4pm that day.</div>
+        <div class="vs-bulk-list">${taskRows}</div>
+        ${skipHtml}
+      </div>
+      <div class="vs-dp-footer">
+        <div class="vs-dp-footer-btns" style="width:100%;justify-content:space-between">
+          <button class="btn" onclick="window._vsCancelBulk()">Back to calendar</button>
+          <button class="btn btn-g" onclick='window._vsConfirmBulk(&quot;${ds}&quot;,${idealIds})'>Schedule ${idealTasks.length}</button>
+        </div>
+      </div>
+    </div>`;
+    modal.innerHTML=h;
+  };
+
+  window._vsCancelBulk=function(){
+    vsRenderPicker(); // re-render the normal calendar view
+  };
+
+  window._vsConfirmBulk=async function(ds,taskIds){
+    const footerBtns=document.querySelector('.vs-dp-footer-btns');
+    if(footerBtns){footerBtns.querySelectorAll('button').forEach(b=>{b.disabled=true;b.style.opacity='.5';});}
+    try{
+      const r=await fetch(VAPI,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,action:'selfScheduleMany',taskIds,date:ds})});
+      if(!r.ok){
+        const err=await r.json().catch(()=>({error:'Unknown error'}));
+        alert('Could not save: '+(err.error||'Please try again.'));
+        if(footerBtns){footerBtns.querySelectorAll('button').forEach(b=>{b.disabled=false;b.style.opacity='';});}
+        return;
+      }
+      vsClosePicker();
+      await vsLoad();
+    }catch(e){
+      alert('Network error. Please try again.');
+      if(footerBtns){footerBtns.querySelectorAll('button').forEach(b=>{b.disabled=false;b.style.opacity='';});}
+    }
+  };
 
   // Cache of bookings across all properties with undated tasks; populated during vsLoad
   let vBookingsByProp={};
