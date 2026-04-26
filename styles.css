@@ -71,6 +71,9 @@ main{flex:1;padding:22px;max-width:1440px;margin:0 auto;width:100%}
 .tb-btn{padding:5px 13px;border-radius:20px;font-size:.76rem;font-family:inherit;cursor:pointer;border:1px solid var(--border);background:var(--white);color:var(--text2);transition:all .15s}
 .tb-btn:hover{border-color:var(--green);color:var(--green)}
 .tb-btn.active{background:var(--green);color:#fff;border-color:var(--green)}
+/* Group Schedule button — subtle gold accent so it reads as a separate primary action */
+.tb-btn-gs{background:var(--gold-pale,#f5e8c8);color:#8a5a10;border-color:var(--gold-light,#d8b97a);font-weight:600}
+.tb-btn-gs:hover{background:var(--gold,#c9a35a);color:#fff;border-color:var(--gold,#c9a35a)}
 .task-list{display:flex;flex-direction:column;gap:4px}
 .cat-section{margin-bottom:18px}
 .cat-section-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid var(--border)}
@@ -2017,4 +2020,49 @@ textarea{resize:vertical;min-height:76px}
   .rv-row-spark{flex:0 0 100%;order:5}
   .rv-row-arrow{display:none}
   .rv-header{flex-direction:column;align-items:flex-start}
+}
+
+/* ── Group Scheduler (admin) — reuses .vs-dp-modal / .vs-dp-panel / .vs-bd-* shells ── */
+.gs-panel{max-width:760px}
+.gs-filters{display:flex;gap:14px;padding:12px 20px 4px;flex-wrap:wrap}
+.gs-filter{display:flex;flex-direction:column;gap:3px;flex:1;min-width:180px}
+.gs-filter-lbl{font-size:.66rem;text-transform:uppercase;letter-spacing:1px;color:var(--text3);font-weight:600}
+.gs-filter select{padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-family:inherit;font-size:.85rem;background:var(--white);color:var(--text);cursor:pointer}
+.gs-filter select:focus{outline:none;border-color:var(--green)}
+.gs-count{padding:6px 20px 0;font-size:.78rem;color:var(--text2);font-weight:500}
+.gs-body{padding:10px 20px 6px;max-height:55vh;overflow-y:auto}
+.gs-empty{padding:20px;text-align:center;color:var(--text2);font-size:.88rem;line-height:1.5}
+.gs-empty strong{color:var(--text)}
+.gs-task-list{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+.gs-prop-block{}
+.gs-task-rows{display:flex;flex-direction:column;gap:4px;margin:6px 0 8px 12px}
+.gs-task-row{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:.82rem;color:var(--text);line-height:1.35;flex-wrap:wrap}
+.gs-task-prob{flex:1;min-width:0}
+.gs-task-vendor{font-size:.7rem;color:var(--green);background:rgba(46,125,82,.08);border:1px solid rgba(46,125,82,.25);padding:1px 7px;border-radius:4px;font-weight:500;white-space:nowrap}
+.gs-task-novendor{font-size:.7rem;color:var(--text3);background:#f4f4f4;border:1px solid #e0e0e0;padding:1px 7px;border-radius:4px;font-style:italic;white-space:nowrap}
+.gs-strip-wrap{margin-top:6px}
+.gs-loading{padding:20px;text-align:center;color:var(--text3);font-size:.82rem;font-style:italic}
+/* Confirm view */
+.gs-warn{margin:0 0 12px;padding:9px 12px;background:#fff7ea;border:1px solid #e7cfa0;border-radius:7px;font-size:.78rem;color:#7a5c00;line-height:1.4}
+.gs-conf-list{display:flex;flex-direction:column;gap:8px}
+.gs-conf-row{padding:8px 10px;background:var(--white);border:1px solid var(--border);border-radius:7px}
+.gs-conf-prop{font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.gs-conf-tasks{font-size:.8rem;color:var(--text2);margin-top:3px;line-height:1.4}
+.gs-conf-ideal{font-size:.62rem;font-weight:700;color:#fff;background:var(--green);padding:1px 7px;border-radius:4px;text-transform:uppercase;letter-spacing:.5px}
+.gs-conf-blocked{font-size:.62rem;font-weight:700;color:#fff;background:#c44;padding:1px 7px;border-radius:4px;text-transform:uppercase;letter-spacing:.5px}
+.gs-conf-open{font-size:.62rem;font-weight:700;color:#7a5c00;background:var(--gold-pale,#f5e8c8);border:1px solid var(--gold-light,#d8b97a);padding:0 6px;border-radius:4px;text-transform:uppercase;letter-spacing:.5px}
+/* Vendor step in success panel */
+.gs-vendor-step{margin-top:18px;padding:14px;background:#f9f7f0;border:1px solid var(--gold-light,#d8b97a);border-radius:8px}
+.gs-vendor-lead{font-size:.74rem;text-transform:uppercase;letter-spacing:1px;color:#8a5a10;font-weight:700;margin-bottom:8px}
+.gs-vendor-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.gs-vendor-row select{flex:1;min-width:200px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-family:inherit;font-size:.85rem;background:var(--white);color:var(--text)}
+.gs-vendor-row select:focus{outline:none;border-color:var(--green)}
+.gs-vendor-row .btn{padding:7px 14px;font-size:.78rem}
+.gs-vendor-hint{margin-top:8px;font-size:.72rem;color:var(--text3);font-style:italic}
+@media (max-width:540px){
+  .gs-filters{padding:10px 14px 0;gap:10px}
+  .gs-body{padding:10px 14px 4px}
+  .gs-count{padding:6px 14px 0}
+  .gs-vendor-row{flex-direction:column;align-items:stretch}
+  .gs-vendor-row select{min-width:0}
 }

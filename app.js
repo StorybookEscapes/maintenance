@@ -346,6 +346,26 @@ const CASHAPP_TAG='chipburns';
 let calDate=new Date(), calMode='month', editVendorId=null, icalCache={}, showDone=false;
 function toggleShowDone(){showDone=!showDone;document.getElementById('toggle-done').classList.toggle('on',showDone);renderCalendar();}
 
+// ── Day-state classifier ──────────────────────────────────────────────
+// Given a Date and a property's bookings array (from fetchIcal), classify
+// the day as turn / checkin / checkout / booked / available. Pure function,
+// shared across vendor sheet and admin Group Scheduler.
+function dayState(d,bookings){
+  const ds=d.toDateString();
+  let hasCheckout=false,hasCheckin=false,isMidStay=false;
+  for(const r of (bookings||[])){
+    if(!r.start||!r.end)continue;
+    if(ds===r.end.toDateString())hasCheckout=true;
+    if(ds===r.start.toDateString())hasCheckin=true;
+    if(d>r.start&&d<r.end)isMidStay=true;
+  }
+  if(hasCheckout&&hasCheckin)return'turn';
+  if(isMidStay)return'booked';
+  if(hasCheckin)return'checkin';
+  if(hasCheckout)return'checkout';
+  return'available';
+}
+
 // STORAGE
 const STORAGE_API = 'https://storybook-webhook.vercel.app/api/storage';
 function getAuthToken(){
@@ -873,7 +893,7 @@ function renderTasks(){
 
   // Render toolbar
   const tb=document.getElementById('task-toolbar');
-  if(tb) tb.innerHTML=`<div class="task-tb"><button class="tb-btn${groupMode==='property'?' active':''}" onclick="toggleGroupMode()">${groupMode==='property'?'All Tasks':'Group by Property'}</button><button class="tb-btn${_selectMode?' active':''}" onclick="toggleSelectMode()">${_selectMode?'Exit Select':'Select'}</button></div>`;
+  if(tb) tb.innerHTML=`<div class="task-tb"><button class="tb-btn${groupMode==='property'?' active':''}" onclick="toggleGroupMode()">${groupMode==='property'?'All Tasks':'Group by Property'}</button><button class="tb-btn${_selectMode?' active':''}" onclick="toggleSelectMode()">${_selectMode?'Exit Select':'Select'}</button><button class="tb-btn tb-btn-gs" onclick="openGroupScheduler()" title="Find a day that works across multiple properties">Group Schedule</button></div>`;
 
   // Sort within each group: urgent first, then by status, then by date
   const sortTasks=arr=>arr.sort((a,b)=>{
@@ -1244,6 +1264,549 @@ function bulkMarkComplete(){
   saveTasks();renderAll();updateBulkBar();
   showToast(sel.length+' task'+(sel.length!==1?'s':'')+' marked complete');
 }
+
+// ── Group Scheduler ──────────────────────────────────────────────────────
+// Admin tool. Pick a category (defaults to whichever has the most undated
+// tasks), see all unscheduled tasks of that category grouped by property,
+// see a Good Days strip computed across the affected properties using the
+// same Hospitable booking lookup the vendor side uses, click a chip to
+// bulk-assign that date, then optionally bulk-assign a vendor in the
+// success panel. Date is committed first; vendor is a separate confirmed
+// step (admin texts vendor outside the app, comes back to assign).
+let _gsState={
+  category:null,            // selected category id ('handyman', etc.)
+  neighborhood:'all',       // 'all' or NB id
+  bookingsByProp:{},        // pid → bookings array (cached across opens via icalCache)
+  loading:false,
+  view:'pick',              // 'pick' (filters + tasks + chips) | 'confirm' | 'success'
+  pendingDate:null,         // for confirm view
+  scheduledIds:[],          // for success view — what just got dated
+  scheduledDate:null,       // for success view
+};
+
+function openGroupScheduler(){
+  _gsState.category=_gsDefaultCategory();
+  _gsState.neighborhood='all';
+  _gsState.bookingsByProp={};
+  _gsState.loading=false;
+  _gsState.view='pick';
+  _gsState.pendingDate=null;
+  _gsState.scheduledIds=[];
+  _gsState.scheduledDate=null;
+  const modal=_gsEnsureModal();
+  modal.classList.add('open');
+  document.body.style.overflow='hidden';
+  _gsRender();
+  _gsLoadBookings();
+}
+window.openGroupScheduler=openGroupScheduler;
+
+function closeGroupScheduler(){
+  const m=document.getElementById('gs-modal');
+  if(m){m.innerHTML='';m.classList.remove('open');}
+  document.body.style.overflow='';
+}
+window.closeGroupScheduler=closeGroupScheduler;
+
+function _gsEnsureModal(){
+  let modal=document.getElementById('gs-modal');
+  if(!modal){
+    modal=document.createElement('div');
+    modal.id='gs-modal';
+    modal.className='vs-dp-modal';   // reuse vendor-side overlay styling
+    document.body.appendChild(modal);
+    modal.addEventListener('click',e=>{if(e.target===modal)closeGroupScheduler();});
+  }
+  return modal;
+}
+
+// All open, undated, non-completed admin-side tasks
+function _gsAllUndated(){
+  return tasks.filter(t=>!t.date
+    && !['complete','resolved_by_guest'].includes(t.status));
+}
+
+// Default category = whichever has the largest undated backlog
+function _gsDefaultCategory(){
+  const counts=_gsCategoryCounts();
+  let best=null,bestN=0;
+  for(const c in counts){if(counts[c]>bestN){best=c;bestN=counts[c];}}
+  return best||(VCAT[0]&&VCAT[0].id)||'handyman';
+}
+
+function _gsCategoryCounts(){
+  const counts={};
+  _gsAllUndated().forEach(t=>{
+    if(!t.category)return;
+    t.category.split(',').map(x=>x.trim()).filter(Boolean).forEach(c=>{
+      counts[c]=(counts[c]||0)+1;
+    });
+  });
+  return counts;
+}
+
+function _gsMatchingTasks(){
+  return _gsAllUndated().filter(t=>{
+    if(_gsState.category&&_gsState.category!=='all'){
+      const cats=(t.category||'').split(',').map(x=>x.trim());
+      if(!cats.includes(_gsState.category))return false;
+    }
+    if(_gsState.neighborhood!=='all'){
+      const nb=getNb(t.property);
+      if(!nb||nb.id!==_gsState.neighborhood)return false;
+    }
+    return true;
+  });
+}
+
+async function _gsLoadBookings(){
+  const propIds=[...new Set(_gsMatchingTasks().map(t=>t.property))];
+  const fresh=propIds.filter(pid=>!_gsState.bookingsByProp[pid]);
+  if(!fresh.length)return;
+  _gsState.loading=true;
+  _gsRender();
+  await Promise.all(fresh.map(async pid=>{
+    const evs=await fetchIcal(pid);
+    _gsState.bookingsByProp[pid]=(evs==='error'?[]:(Array.isArray(evs)?evs:[]));
+  }));
+  _gsState.loading=false;
+  _gsRender();
+}
+
+// Per-day classification across the matching properties — chronological
+// (admin scanning their own calendar). Returns 21 days starting today.
+function _gsComputeDays(matchingTasks){
+  const today=new Date();today.setHours(12,0,0,0);
+  const propIds=[...new Set(matchingTasks.map(t=>t.property))];
+  const days=[];
+  for(let i=0;i<21;i++){
+    const d=new Date(today.getTime()+i*86400000);d.setHours(12,0,0,0);
+    const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const perProp=propIds.map(pid=>{
+      const st=dayState(d,_gsState.bookingsByProp[pid]||[]);
+      let tier;
+      if(st==='turn'||st==='checkin'||st==='checkout')tier='locked';
+      else if(st==='booked')tier='booked';
+      else tier='open';
+      return{pid,tier,state:st};
+    });
+    const lockedCount=perProp.filter(p=>p.tier==='locked').length;
+    const bookedCount=perProp.filter(p=>p.tier==='booked').length;
+    const openCount=perProp.filter(p=>p.tier==='open').length;
+    let overall;
+    if(bookedCount===perProp.length)overall='skip';
+    else if(lockedCount===perProp.length)overall='locked';
+    else if(lockedCount>0&&bookedCount===0)overall='partial-locked';
+    else if(lockedCount>0)overall='partial-mixed';
+    else if(openCount===perProp.length)overall='open';
+    else overall='partial-open';
+    days.push({ds,d,perProp,lockedCount,bookedCount,openCount,overall});
+  }
+  return days;
+}
+
+function _gsRenderBestDaysHtml(matching){
+  if(!matching.length)return'';
+  const propIds=[...new Set(matching.map(t=>t.property))];
+  if(!propIds.length)return'';
+  const days=_gsComputeDays(matching);
+  // Admin: chronological order, drop only "skip" (everything booked everywhere)
+  const candidates=days.filter(d=>d.overall!=='skip');
+  if(!candidates.length){
+    return`<div class="vs-bd-empty">Every property in this group has a guest in house every day for the next 3 weeks. Try a wider category or different neighborhood.</div>`;
+  }
+  const fmt=d=>d.toLocaleDateString('en-US',{weekday:'short',month:'numeric',day:'numeric'});
+  let h=`<div class="vs-best-days">
+    <div class="vs-bd-hdr">Good days for ${propIds.length} ${propIds.length===1?'property':'properties'}</div>
+    <div class="vs-bd-help">Turn / check-in / checkout days are ideal — properties are empty 10am-4pm. Click a day to schedule.</div>
+    <div class="vs-bd-strip">`;
+  candidates.forEach(day=>{
+    let chipCls='vs-bd-chip vs-bd-clickable';
+    let tierLabel='';
+    if(day.overall==='locked'){chipCls+=' vs-bd-locked';tierLabel='All ideal';}
+    else if(day.overall==='partial-locked'){chipCls+=' vs-bd-partial-locked';tierLabel=`${day.lockedCount} ideal • ${day.openCount} open`;}
+    else if(day.overall==='partial-mixed'){chipCls+=' vs-bd-partial-mixed';tierLabel=`${day.lockedCount} ideal • ${day.bookedCount} blocked`;}
+    else if(day.overall==='open'){chipCls+=' vs-bd-open';tierLabel='All open';}
+    else{chipCls+=' vs-bd-partial-mixed';tierLabel=`${day.openCount} open • ${day.bookedCount} blocked`;}
+    let dots='';
+    day.perProp.forEach(p=>{
+      const nbCls=getNbCls(p.pid);
+      let dotCls='vs-bd-dot';
+      if(p.tier==='locked')dotCls+=' vs-bd-dot-locked';
+      else if(p.tier==='booked')dotCls+=' vs-bd-dot-booked';
+      else dotCls+=' vs-bd-dot-open';
+      const propName=(getProp(p.pid)||{}).name||p.pid;
+      const stLabel=p.state==='turn'?'Turn':p.state==='checkin'?'Check-in':p.state==='checkout'?'Checkout':p.state==='booked'?'Guest in house':'Open';
+      dots+=`<span class="${dotCls}" style="--nb:var(--${nbCls})" title="${propName.replace(/"/g,'&quot;')} — ${stLabel}"></span>`;
+    });
+    h+=`<div class="${chipCls}" onclick="_gsPickDate('${day.ds}')">
+      <div class="vs-bd-date">${fmt(day.d)}</div>
+      <div class="vs-bd-tier">${tierLabel}</div>
+      <div class="vs-bd-dots">${dots}</div>
+    </div>`;
+  });
+  h+=`</div></div>`;
+  return h;
+}
+
+// ── Render ──────────────────────────────────────────────────────────────
+function _gsRender(){
+  const modal=_gsEnsureModal();
+  if(_gsState.view==='confirm'){_gsRenderConfirm();return;}
+  if(_gsState.view==='success'){_gsRenderSuccess();return;}
+
+  const matching=_gsMatchingTasks();
+  const propIds=[...new Set(matching.map(t=>t.property))];
+  const catCounts=_gsCategoryCounts();
+  const catOpts=VCAT.filter(c=>catCounts[c.id]>0).map(c=>({id:c.id,label:c.label,count:catCounts[c.id]}));
+  // Neighborhoods that contain any property with an undated task in current category
+  const nbsWithMatch=new Set();
+  _gsAllUndated().filter(t=>{
+    if(_gsState.category&&_gsState.category!=='all'){
+      const cats=(t.category||'').split(',').map(x=>x.trim());
+      if(!cats.includes(_gsState.category))return false;
+    }
+    return true;
+  }).forEach(t=>{const nb=getNb(t.property);if(nb)nbsWithMatch.add(nb.id);});
+  const nbOpts=NBS.filter(n=>nbsWithMatch.has(n.id));
+  const catLbl=(VCAT.find(c=>c.id===_gsState.category)||{}).label||_gsState.category||'All';
+
+  let h=`<div class="vs-dp-panel gs-panel" onclick="event.stopPropagation()">
+    <div class="vs-dp-header">
+      <div>
+        <div class="vs-dp-title">Group Schedule</div>
+        <div class="vs-dp-sub">Find a day that works across multiple properties</div>
+      </div>
+      <button class="vs-dp-close" onclick="closeGroupScheduler()">&times;</button>
+    </div>
+    <div class="gs-filters">
+      <label class="gs-filter">
+        <span class="gs-filter-lbl">Category</span>
+        <select onchange="_gsSetCat(this.value)">
+          ${catOpts.map(c=>`<option value="${c.id}" ${c.id===_gsState.category?'selected':''}>${c.label} (${c.count})</option>`).join('')}
+          ${catOpts.length===0?'<option>No unscheduled tasks</option>':''}
+        </select>
+      </label>
+      <label class="gs-filter">
+        <span class="gs-filter-lbl">Neighborhood</span>
+        <select onchange="_gsSetNb(this.value)">
+          <option value="all" ${_gsState.neighborhood==='all'?'selected':''}>All neighborhoods</option>
+          ${nbOpts.map(n=>`<option value="${n.id}" ${n.id===_gsState.neighborhood?'selected':''}>${n.name}</option>`).join('')}
+        </select>
+      </label>
+    </div>
+    <div class="gs-count">${matching.length} unscheduled ${catLbl.toLowerCase()} task${matching.length!==1?'s':''} across ${propIds.length} propert${propIds.length!==1?'ies':'y'}</div>
+    <div class="gs-body">`;
+
+  if(!matching.length){
+    h+=`<div class="gs-empty">Nothing unscheduled in <strong>${catLbl}</strong>${_gsState.neighborhood!=='all'?' in this neighborhood':''}. Try another category or neighborhood.</div>`;
+  }else{
+    // Property-grouped task list
+    const propBuckets={};const propOrder=[];
+    matching.forEach(t=>{
+      if(!propBuckets[t.property]){propBuckets[t.property]={first:t,items:[]};propOrder.push(t.property);}
+      propBuckets[t.property].items.push(t);
+    });
+    h+=`<div class="gs-task-list">`;
+    propOrder.forEach(pid=>{
+      const b=propBuckets[pid];
+      const p=getProp(pid);
+      const propName=p?p.name:'Unknown';
+      const shortName=propName.replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
+      const nbCls=getNbCls(pid);
+      const addr=p&&p.address?p.address:'';
+      const door=p&&p.door?p.door:'';
+      const metaParts=[];
+      if(addr)metaParts.push(`<a href="https://maps.google.com/?q=${encodeURIComponent(addr)}" target="_blank">${addr}</a>`);
+      if(door)metaParts.push('Code: '+door);
+      h+=`<div class="gs-prop-block">
+        <div class="vs-prop-header" style="border-left-color:var(--${nbCls})">
+          <div class="vs-prop-name">${shortName}</div>
+          ${metaParts.length?`<div class="vs-prop-meta">${metaParts.join(' &middot; ')}</div>`:''}
+        </div>
+        <div class="gs-task-rows">`;
+      b.items.forEach(t=>{
+        const vendorTag=t.vendor
+          ?`<span class="gs-task-vendor">${t.vendor.replace(/</g,'&lt;')}</span>`
+          :`<span class="gs-task-novendor">No vendor</span>`;
+        h+=`<div class="gs-task-row">
+          ${t.urgent?'<span class="vs-urgent">Urgent</span>':''}
+          <span class="gs-task-prob">${t.problem.replace(/</g,'&lt;')}</span>
+          ${vendorTag}
+        </div>`;
+      });
+      h+=`</div></div>`;
+    });
+    h+=`</div>`;
+    // Good Days strip
+    h+=`<div class="gs-strip-wrap">`;
+    if(_gsState.loading){
+      h+=`<div class="gs-loading">Looking up bookings…</div>`;
+    }else{
+      h+=_gsRenderBestDaysHtml(matching);
+    }
+    h+=`</div>`;
+  }
+  h+=`</div>
+    <div class="vs-dp-footer">
+      <div class="vs-dp-footer-btns" style="width:100%;justify-content:flex-end">
+        <button class="btn" onclick="closeGroupScheduler()">Close</button>
+      </div>
+    </div>
+  </div>`;
+  modal.innerHTML=h;
+}
+
+window._gsSetCat=function(c){
+  _gsState.category=c;
+  _gsState.neighborhood='all';   // reset narrow filter when category changes
+  _gsRender();
+  _gsLoadBookings();
+};
+window._gsSetNb=function(n){
+  _gsState.neighborhood=n;
+  _gsRender();
+  _gsLoadBookings();
+};
+
+// ── Confirm view ────────────────────────────────────────────────────────
+window._gsPickDate=function(ds){
+  _gsState.pendingDate=ds;
+  _gsState.view='confirm';
+  _gsRender();
+};
+
+function _gsRenderConfirm(){
+  const modal=_gsEnsureModal();
+  const ds=_gsState.pendingDate;
+  const matching=_gsMatchingTasks();
+  const days=_gsComputeDays(matching);
+  const day=days.find(d=>d.ds===ds);
+  if(!day){_gsState.view='pick';_gsRender();return;}
+  const dateLabel=new Date(ds+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  // Tasks at properties that are blocked (guest in house) on this date — admin can still assign but should know
+  const blockedProps=new Set(day.perProp.filter(p=>p.tier==='booked').map(p=>p.pid));
+  const idealProps=new Set(day.perProp.filter(p=>p.tier==='locked').map(p=>p.pid));
+  // Group tasks by property for display
+  const propBuckets={};const propOrder=[];
+  matching.forEach(t=>{
+    if(!propBuckets[t.property]){propBuckets[t.property]={first:t,items:[]};propOrder.push(t.property);}
+    propBuckets[t.property].items.push(t);
+  });
+  let rows='';
+  propOrder.forEach(pid=>{
+    const b=propBuckets[pid];
+    const p=getProp(pid);
+    const shortName=(p?p.name:pid).replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
+    const nbCls=getNbCls(pid);
+    let stLabel='';
+    if(idealProps.has(pid))stLabel='<span class="gs-conf-ideal">Ideal</span>';
+    else if(blockedProps.has(pid))stLabel='<span class="gs-conf-blocked">Guest in house</span>';
+    else stLabel='<span class="gs-conf-open">Open</span>';
+    rows+=`<div class="gs-conf-row">
+      <div class="gs-conf-prop" style="color:var(--${nbCls})">${shortName} ${stLabel}</div>
+      <div class="gs-conf-tasks">${b.items.map(t=>(t.problem||'').replace(/</g,'&lt;')).join(' • ')}</div>
+    </div>`;
+  });
+  const taskCount=matching.length;
+  const blockedCount=propOrder.filter(pid=>blockedProps.has(pid)).length;
+  const taskIds=JSON.stringify(matching.map(t=>t.id)).replace(/"/g,'&quot;');
+  const h=`<div class="vs-dp-panel gs-panel" onclick="event.stopPropagation()">
+    <div class="vs-dp-header">
+      <div>
+        <div class="vs-dp-title">Confirm schedule</div>
+        <div class="vs-dp-sub">${dateLabel}</div>
+      </div>
+      <button class="vs-dp-close" onclick="closeGroupScheduler()">&times;</button>
+    </div>
+    <div class="vs-bulk-confirm">
+      <div class="vs-bulk-lead">Schedule ${taskCount} task${taskCount!==1?'s':''} on <strong>${dateLabel}</strong>?</div>
+      ${blockedCount>0?`<div class="gs-warn">Heads up: ${blockedCount} ${blockedCount===1?'property has a guest':'properties have guests'} in house that day. You can still assign, but the work isn't easy without coordinating with the guest.</div>`:''}
+      <div class="gs-conf-list">${rows}</div>
+    </div>
+    <div class="vs-dp-footer">
+      <div class="vs-dp-footer-btns" style="width:100%;justify-content:space-between">
+        <button class="btn" onclick="_gsCancelConfirm()">Back</button>
+        <button class="btn btn-g" onclick='_gsConfirmDate(&quot;${ds}&quot;,${taskIds})'>Schedule ${taskCount}</button>
+      </div>
+    </div>
+  </div>`;
+  modal.innerHTML=h;
+}
+
+window._gsCancelConfirm=function(){_gsState.view='pick';_gsState.pendingDate=null;_gsRender();};
+
+window._gsConfirmDate=function(ds,taskIds){
+  // Lock the buttons to prevent double-submit
+  const btns=document.querySelectorAll('.vs-dp-footer-btns button');
+  btns.forEach(b=>{b.disabled=true;b.style.opacity='.5';});
+  // Mutate tasks: assign date, bump open→scheduled, log change
+  const idSet=new Set(taskIds);
+  const updated=[];
+  tasks.forEach(t=>{
+    if(!idSet.has(t.id))return;
+    if(t.date)return;          // already dated — skip silently
+    if(['complete','resolved_by_guest'].includes(t.status))return;
+    t.date=ds;
+    if(t.status==='open')t.status='scheduled';
+    if(typeof logTaskChange==='function')logTaskChange('group_schedule',t);
+    updated.push(t.id);
+  });
+  if(!updated.length){
+    alert('No eligible tasks to schedule.');
+    btns.forEach(b=>{b.disabled=false;b.style.opacity='';});
+    return;
+  }
+  saveTasks();
+  if(typeof renderAll==='function')renderAll();
+  // Flip to success view
+  _gsState.scheduledIds=updated;
+  _gsState.scheduledDate=ds;
+  _gsState.view='success';
+  _gsRender();
+};
+
+// ── Success view: lists what just got dated, offers text-vendor + assign-all ──
+function _gsRenderSuccess(){
+  const modal=_gsEnsureModal();
+  const ds=_gsState.scheduledDate;
+  const idSet=new Set(_gsState.scheduledIds);
+  const dated=tasks.filter(t=>idSet.has(t.id));
+  const dateLabel=new Date(ds+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  // Group by property
+  const propBuckets={};const propOrder=[];
+  dated.forEach(t=>{
+    if(!propBuckets[t.property]){propBuckets[t.property]={first:t,items:[]};propOrder.push(t.property);}
+    propBuckets[t.property].items.push(t);
+  });
+  // Vendor dropdown options — all vendors, but bubble up vendors matching
+  // any of the categories of the scheduled tasks
+  const taskCats=new Set();
+  dated.forEach(t=>{(t.category||'').split(',').map(x=>x.trim()).filter(Boolean).forEach(c=>taskCats.add(c));});
+  const matchVendors=[];const otherVendors=[];
+  (vendors||[]).forEach(v=>{
+    if(!v.name)return;
+    const vCats=Array.isArray(v.categories)?v.categories:[];
+    if(vCats.some(c=>taskCats.has(c)))matchVendors.push(v);
+    else otherVendors.push(v);
+  });
+  matchVendors.sort((a,b)=>a.name.localeCompare(b.name));
+  otherVendors.sort((a,b)=>a.name.localeCompare(b.name));
+  let vendorOpts=`<option value="">— Pick a vendor —</option>`;
+  if(matchVendors.length){
+    vendorOpts+=`<optgroup label="Matches this category">`;
+    matchVendors.forEach(v=>{vendorOpts+=`<option value="${v.name.replace(/"/g,'&quot;')}">${v.name}</option>`;});
+    vendorOpts+=`</optgroup>`;
+  }
+  if(otherVendors.length){
+    vendorOpts+=`<optgroup label="Other vendors">`;
+    otherVendors.forEach(v=>{vendorOpts+=`<option value="${v.name.replace(/"/g,'&quot;')}">${v.name}</option>`;});
+    vendorOpts+=`</optgroup>`;
+  }
+  let body='';
+  propOrder.forEach(pid=>{
+    const b=propBuckets[pid];
+    const p=getProp(pid);
+    const shortName=(p?p.name:pid).replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
+    const nbCls=getNbCls(pid);
+    const addr=p&&p.address?p.address:'';
+    const door=p&&p.door?p.door:'';
+    const metaParts=[];
+    if(addr)metaParts.push(`<a href="https://maps.google.com/?q=${encodeURIComponent(addr)}" target="_blank">${addr}</a>`);
+    if(door)metaParts.push('Code: '+door);
+    body+=`<div class="vs-prop-header" style="border-left-color:var(--${nbCls})">
+      <div class="vs-prop-name">${shortName}</div>
+      ${metaParts.length?`<div class="vs-prop-meta">${metaParts.join(' &middot; ')}</div>`:''}
+    </div>
+    <div class="vs-success-tasks">`;
+    b.items.forEach(t=>{body+=`<div class="vs-success-task">${t.urgent?'<span class="vs-urgent" style="margin-right:6px">Urgent</span>':''}${(t.problem||'').replace(/</g,'&lt;')}${t.vendor?` <span class="gs-task-vendor" style="margin-left:8px">(${t.vendor.replace(/</g,'&lt;')})</span>`:''}</div>`;});
+    body+=`</div>`;
+  });
+  const idsParam=JSON.stringify(_gsState.scheduledIds).replace(/"/g,'&quot;');
+  const h=`<div class="vs-dp-panel gs-panel" onclick="event.stopPropagation()">
+    <div class="vs-dp-header">
+      <div>
+        <div class="vs-dp-title"><span style="color:var(--green)">&#x2713;</span> Scheduled</div>
+        <div class="vs-dp-sub">${dateLabel}</div>
+      </div>
+      <button class="vs-dp-close" onclick="closeGroupScheduler()">&times;</button>
+    </div>
+    <div class="vs-success-body">
+      <div class="vs-success-lead">Locked in <strong>${dated.length} task${dated.length!==1?'s':''}</strong> for <strong>${dateLabel}</strong>.</div>
+      ${body}
+      <div class="gs-vendor-step">
+        <div class="gs-vendor-lead">Next: ask a vendor</div>
+        <div class="gs-vendor-row">
+          <select id="gs-vendor-select" onchange="_gsVendorChanged()">${vendorOpts}</select>
+          <button id="gs-text-btn" class="btn" disabled onclick='_gsTextVendor(&quot;${ds}&quot;,${idsParam})'>Text</button>
+          <button id="gs-assign-btn" class="btn btn-g" disabled onclick='_gsAssignVendor(${idsParam})'>Assign all</button>
+        </div>
+        <div class="gs-vendor-hint">Pick a vendor to text the day's plan, or assign once they confirm.</div>
+      </div>
+    </div>
+    <div class="vs-dp-footer">
+      <div class="vs-dp-footer-btns" style="width:100%;justify-content:flex-end">
+        <button class="btn" onclick="closeGroupScheduler()">Done</button>
+      </div>
+    </div>
+  </div>`;
+  modal.innerHTML=h;
+}
+
+window._gsVendorChanged=function(){
+  const sel=document.getElementById('gs-vendor-select');
+  const v=sel?sel.value:'';
+  const txt=document.getElementById('gs-text-btn');
+  const asg=document.getElementById('gs-assign-btn');
+  if(txt){txt.disabled=!v;txt.textContent=v?('Text '+v.split(' ')[0]):'Text';}
+  if(asg){asg.disabled=!v;asg.textContent=v?('Assign all to '+v.split(' ')[0]):'Assign all';}
+};
+
+window._gsTextVendor=function(ds,taskIds){
+  const sel=document.getElementById('gs-vendor-select');
+  const vName=sel?sel.value:'';
+  if(!vName){alert('Pick a vendor first.');return;}
+  const v=(vendors||[]).find(x=>x.name===vName);
+  if(!v||!v.phone){alert('No phone number on file for '+vName+'.');return;}
+  const tel=String(v.phone).replace(/[^\d+]/g,'');
+  const idSet=new Set(taskIds);
+  const dated=tasks.filter(t=>idSet.has(t.id));
+  // Group by property for the message
+  const propGroups={};const propOrder=[];
+  dated.forEach(t=>{
+    if(!propGroups[t.property]){propGroups[t.property]=[];propOrder.push(t.property);}
+    propGroups[t.property].push(t);
+  });
+  const dateLabel=new Date(ds+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  const firstName=vName.split(' ')[0];
+  const propLines=propOrder.map(pid=>{
+    const p=getProp(pid);
+    const propName=p?p.name.replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,''):pid;
+    const probs=propGroups[pid].map(t=>'  - '+(t.problem||'')).join('\n');
+    return propName+':\n'+probs;
+  }).join('\n\n');
+  const body=`Hi ${firstName} — wanted to bundle these for ${dateLabel}. Can you handle that day?\n\n${propLines}\n\n— Chip`;
+  window.location.href='sms:'+tel+'?body='+encodeURIComponent(body);
+};
+
+window._gsAssignVendor=function(taskIds){
+  const sel=document.getElementById('gs-vendor-select');
+  const vName=sel?sel.value:'';
+  if(!vName){alert('Pick a vendor first.');return;}
+  if(!confirm('Assign '+taskIds.length+' task'+(taskIds.length!==1?'s':'')+' to '+vName+'?'))return;
+  const idSet=new Set(taskIds);
+  let n=0;
+  tasks.forEach(t=>{
+    if(!idSet.has(t.id))return;
+    t.vendor=vName;
+    if(typeof logTaskChange==='function')logTaskChange('group_assign',t);
+    n++;
+  });
+  saveTasks();
+  if(typeof renderAll==='function')renderAll();
+  if(typeof showToast==='function')showToast(n+' task'+(n!==1?'s':'')+' assigned to '+vName);
+  closeGroupScheduler();
+};
 
 function bulkDelete(){
   const sel=_getSelectedTasks();if(!sel.length){showToast('No tasks selected');return;}
@@ -7511,21 +8074,8 @@ async function rpQuickDelivered(id) {
   }
   window._vsClosePicker=vsClosePicker;
 
-  function vsDayState(d,bookings){
-    const ds=d.toDateString();
-    let hasCheckout=false,hasCheckin=false,isMidStay=false;
-    for(const r of bookings){
-      if(!r.start||!r.end)continue;
-      if(ds===r.end.toDateString())hasCheckout=true;
-      if(ds===r.start.toDateString())hasCheckin=true;
-      if(d>r.start&&d<r.end)isMidStay=true;
-    }
-    if(hasCheckout&&hasCheckin)return'turn';
-    if(isMidStay)return'booked';
-    if(hasCheckin)return'checkin';
-    if(hasCheckout)return'checkout';
-    return'available';
-  }
+  // Alias to the module-scope dayState — single source of truth.
+  const vsDayState=dayState;
 
   function vsRenderPicker(){
     const modal=document.getElementById('vs-dp-modal');
