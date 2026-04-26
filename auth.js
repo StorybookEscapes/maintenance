@@ -85,6 +85,82 @@
     };
   }
 
+  // ── Silent refresh ──────────────────────────────────────────────────
+  // Google ID tokens expire in 1 hour (Google policy — can't be extended).
+  // We schedule a silent re-auth ~10 minutes before expiry. Because the
+  // user is already signed into Google in their browser, the prompt API
+  // can usually re-issue a fresh credential without showing any UI. If
+  // silent re-auth fails (signed out of Google, third-party cookies
+  // blocked, etc.), a small "Session expiring — click to refresh" badge
+  // appears in the corner so the user can re-sign with one click.
+  let _refreshTimer=null;
+
+  function scheduleRefresh(token){
+    try{
+      const payload=JSON.parse(atob(token.split('.')[1]));
+      if(!payload.exp)return;
+      const expMs=payload.exp*1000;
+      const refreshAt=expMs - 10*60*1000;       // 10 min before expiry
+      const delay=Math.max(refreshAt - Date.now(), 5000);  // min 5s out
+      if(_refreshTimer)clearTimeout(_refreshTimer);
+      _refreshTimer=setTimeout(attemptSilentRefresh, delay);
+    }catch(e){}
+  }
+
+  function attemptSilentRefresh(){
+    // Google library loads async — wait for it
+    if(typeof google==='undefined'||!google.accounts||!google.accounts.id){
+      setTimeout(attemptSilentRefresh, 2000);
+      return;
+    }
+    // The credential (if any) arrives via handleCredentialResponse; the
+    // notification callback only tells us whether the prompt UI was shown.
+    google.accounts.id.prompt(notification=>{
+      // isNotDisplayed / isSkippedMoment / isDismissedMoment all mean the
+      // silent attempt didn't yield a credential. Show the fallback badge.
+      try{
+        const noShow=notification && (
+          (typeof notification.isNotDisplayed==='function' && notification.isNotDisplayed()) ||
+          (typeof notification.isSkippedMoment==='function' && notification.isSkippedMoment()) ||
+          (typeof notification.isDismissedMoment==='function' && notification.isDismissedMoment())
+        );
+        if(noShow)showRefreshBadge();
+      }catch(e){
+        // Notification API shape varies — be conservative and show badge
+        showRefreshBadge();
+      }
+    });
+  }
+
+  function showRefreshBadge(){
+    let b=document.getElementById('se-refresh-badge');
+    if(!b){
+      b=document.createElement('div');
+      b.id='se-refresh-badge';
+      b.style.cssText='position:fixed;top:12px;right:12px;background:#fff7ea;border:1.5px solid #d8b97a;color:#8a5a10;padding:9px 16px;border-radius:24px;font-size:.78rem;font-weight:600;cursor:pointer;z-index:9999;box-shadow:0 3px 12px rgba(0,0,0,.18);font-family:inherit;display:flex;align-items:center;gap:8px;-webkit-tap-highlight-color:transparent;transition:transform .15s,box-shadow .15s';
+      b.innerHTML='<span style="font-size:1rem">&#x1F510;</span><span>Session expiring &mdash; click to refresh</span>';
+      b.onmouseover=()=>{b.style.transform='translateY(-1px)';b.style.boxShadow='0 5px 16px rgba(0,0,0,.22)';};
+      b.onmouseout=()=>{b.style.transform='';b.style.boxShadow='0 3px 12px rgba(0,0,0,.18)';};
+      b.onclick=()=>{
+        // Force the prompt UI to appear. New credential lands in
+        // handleCredentialResponse which hides the badge.
+        if(typeof google!=='undefined'&&google.accounts&&google.accounts.id){
+          google.accounts.id.prompt();
+        }
+      };
+      document.body.appendChild(b);
+    }
+    b.style.display='flex';
+  }
+
+  function hideRefreshBadge(){
+    const b=document.getElementById('se-refresh-badge');
+    if(b)b.style.display='none';
+  }
+  // Expose for manual debug if needed
+  window._authShowRefreshBadge=showRefreshBadge;
+  window._authHideRefreshBadge=hideRefreshBadge;
+
   function handleCredentialResponse(response){
     const token=response.credential;
     // Decode JWT to check email
@@ -95,13 +171,47 @@
         alert('Access denied. This account is not authorized.');
         return;
       }
+      // Detect refresh vs initial sign-in: if app is already authed, this
+      // is a silent refresh and we shouldn't re-init the app.
+      const appEl=document.getElementById('app');
+      const isRefresh=appEl&&appEl.classList.contains('authed')&&!!localStorage.getItem('se_auth_token');
       localStorage.setItem('se_auth_token',token);
       window.storage=makeStorage(token);
-      document.getElementById('login-screen').style.display='none';
-      document.getElementById('app').classList.add('authed');
-      // Trigger app init if it's waiting
-      if(typeof initApp==='function')initApp();
+      if(!isRefresh){
+        document.getElementById('login-screen').style.display='none';
+        appEl.classList.add('authed');
+        if(typeof initApp==='function')initApp();
+      }else{
+        // Silent refresh succeeded — hide the "expiring" badge if it's up
+        hideRefreshBadge();
+        console.log('[auth] silent refresh succeeded');
+      }
+      // Always re-arm the next refresh based on the new token's exp
+      scheduleRefresh(token);
     }catch(e){alert('Sign-in failed. Please try again.');}
+  }
+
+  // Initialize Google Sign-In when the library loads.
+  // renderButton=true → also draws the Sign In button (login screen path).
+  // renderButton=false → init-only so prompt() works for silent refresh
+  //   without rendering anything visible.
+  function tryInitGoogle(renderButton){
+    if(typeof google==='undefined'||!google.accounts||!google.accounts.id){
+      setTimeout(()=>tryInitGoogle(renderButton),100);
+      return;
+    }
+    google.accounts.id.initialize({
+      client_id:GOOGLE_CLIENT_ID,
+      callback:handleCredentialResponse,
+      auto_select:true,                  // enable silent re-auth via prompt()
+      cancel_on_tap_outside:false,
+    });
+    if(renderButton){
+      const slot=document.getElementById('g_id_signin');
+      if(slot){
+        google.accounts.id.renderButton(slot,{theme:'outline',size:'large',text:'signin_with',shape:'pill'});
+      }
+    }
   }
 
   // Check for existing session (localStorage persists across tabs/restarts)
@@ -109,22 +219,35 @@
   if(existing){
     try{
       const payload=JSON.parse(atob(existing.split('.')[1]));
-      if(payload.exp&&payload.exp*1000>Date.now()&&ALLOWED.includes((payload.email||'').toLowerCase())){
+      const valid=payload.exp&&payload.exp*1000>Date.now()&&ALLOWED.includes((payload.email||'').toLowerCase());
+      if(valid){
         window.storage=makeStorage(existing);
         document.getElementById('login-screen').style.display='none';
         document.getElementById('app').classList.add('authed');
+        // Schedule the next silent refresh; load Google library so it's
+        // ready when the timer fires (no button rendered).
+        scheduleRefresh(existing);
+        if(document.readyState==='loading'){
+          document.addEventListener('DOMContentLoaded',()=>tryInitGoogle(false));
+        }else{
+          tryInitGoogle(false);
+        }
         return;
       }
+      // Token has expired during a session that's been idle. Try a silent
+      // refresh BEFORE bouncing the user to the login screen.
+      const appEl=document.getElementById('app');
+      // We need to leave login-screen visible until refresh resolves OR
+      // we get a new credential. Use a short fallback: show login screen
+      // AND attempt prompt — whichever resolves first wins. Simpler:
+      // remove the expired token, render the login screen, but also init
+      // Google with auto_select so One Tap appears immediately. If user
+      // is signed into Google, One Tap re-issues with one click.
     }catch(e){}
     localStorage.removeItem('se_auth_token');
   }
 
-  // Initialize Google Sign-In when the library loads
-  function tryInitGoogle(){
-    if(typeof google==='undefined'||!google.accounts){setTimeout(tryInitGoogle,100);return;}
-    google.accounts.id.initialize({client_id:GOOGLE_CLIENT_ID,callback:handleCredentialResponse});
-    google.accounts.id.renderButton(document.getElementById('g_id_signin'),{theme:'outline',size:'large',text:'signin_with',shape:'pill'});
-  }
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',tryInitGoogle);
-  else tryInitGoogle();
+  // No valid token → render login screen + Sign In button
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>tryInitGoogle(true));
+  else tryInitGoogle(true);
 })();
