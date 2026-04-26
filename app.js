@@ -1410,15 +1410,25 @@ function _gsRenderBestDaysHtml(matching){
   const propIds=[...new Set(matching.map(t=>t.property))];
   if(!propIds.length)return'';
   const days=_gsComputeDays(matching);
-  // Admin: chronological order, drop only "skip" (everything booked everywhere)
-  const candidates=days.filter(d=>d.overall!=='skip');
+  // Best-first: rank by ideal-count, then open-count, then earliest date.
+  // Drop "skip" days (booked everywhere). Most-ideal day surfaces at front
+  // so admin sees their best option immediately; can scroll right to see
+  // less-ideal options or further-out dates.
+  const rank=d=>d.lockedCount*10 + d.openCount - d.bookedCount*2;
+  const candidates=days
+    .filter(d=>d.overall!=='skip')
+    .sort((a,b)=>{
+      const r=rank(b)-rank(a);
+      if(r!==0)return r;
+      return a.d-b.d;   // tie-break: earliest first
+    });
   if(!candidates.length){
     return`<div class="vs-bd-empty">Every property in this group has a guest in house every day for the next 3 weeks. Try a wider category or different neighborhood.</div>`;
   }
   const fmt=d=>d.toLocaleDateString('en-US',{weekday:'short',month:'numeric',day:'numeric'});
   let h=`<div class="vs-best-days">
     <div class="vs-bd-hdr">Good days for ${propIds.length} ${propIds.length===1?'property':'properties'}</div>
-    <div class="vs-bd-help">Turn / check-in / checkout days are ideal — properties are empty 10am-4pm. Click a day to schedule.</div>
+    <div class="vs-bd-help">Best days first — turn / check-in / checkout days are ideal (property empty 10am-4pm). Scroll right for more options.</div>
     <div class="vs-bd-strip">`;
   candidates.forEach(day=>{
     let chipCls='vs-bd-chip vs-bd-clickable';
