@@ -4882,14 +4882,58 @@ async function vendorDrop(e,targetVid){
   showToast('Vendor order saved.');
 }
 
+// Vendor Directory search state. Empty string = unfiltered.
+let _vendorSearch='';
+function onVendorSearch(val){
+  _vendorSearch=(val||'').trim();
+  const clr=document.getElementById('vendor-search-clear');
+  if(clr)clr.style.display=_vendorSearch?'':'none';
+  renderVendors();
+}
+function clearVendorSearch(){
+  const inp=document.getElementById('vendor-search');
+  if(inp)inp.value='';
+  _vendorSearch='';
+  const clr=document.getElementById('vendor-search-clear');
+  if(clr)clr.style.display='none';
+  renderVendors();
+  if(inp)inp.focus();
+}
+// Returns true if vendor matches current search string. Searches name, role,
+// phone (digits-only too), email, notes, and category labels.
+function _vendorMatchesSearch(v,q){
+  if(!q)return true;
+  const needle=q.toLowerCase();
+  const phoneDigits=(v.phone||'').replace(/\D/g,'');
+  const needleDigits=needle.replace(/\D/g,'');
+  const hay=[v.name||'',v.role||'',v.phone||'',v.email||'',v.note||'',
+    (v.categories||[]).map(cid=>{const c=VCAT.find(x=>x.id===cid);return c?c.label:'';}).join(' ')
+  ].join(' ').toLowerCase();
+  if(hay.includes(needle))return true;
+  if(needleDigits&&needleDigits.length>=3&&phoneDigits.includes(needleDigits))return true;
+  return false;
+}
+// Wraps the first occurrence of the search term in a vendor field for visual highlight.
+function _vendorHighlight(text,q){
+  if(!q||!text)return text;
+  const idx=text.toLowerCase().indexOf(q.toLowerCase());
+  if(idx<0)return text;
+  const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return esc(text.slice(0,idx))+'<span class="vd-match-hl">'+esc(text.slice(idx,idx+q.length))+'</span>'+esc(text.slice(idx+q.length));
+}
+
 function renderVendors(){
   const c=document.getElementById('vendor-dir');let h='';
   const collapsed=_getVCatCollapsed();
+  const q=_vendorSearch;
   // Display copy only — alphabetized for directory; does not affect VCAT source or other dropdowns
   const sortedCats=[...VCAT].sort((a,b)=>a.label.localeCompare(b.label));
+  let totalMatches=0;
   sortedCats.forEach(cat=>{
-    const cv=vendors.filter(v=>v.categories.includes(cat.id));if(!cv.length)return;
-    const isCollapsed=collapsed.has(cat.id);
+    const cv=vendors.filter(v=>v.categories.includes(cat.id)&&_vendorMatchesSearch(v,q));if(!cv.length)return;
+    totalMatches+=cv.length;
+    // When searching, force categories with matches to be expanded
+    const isCollapsed=q?false:collapsed.has(cat.id);
     h+=`<div class="vs${isCollapsed?' vs-collapsed':''}">`;
     h+=`<div class="vs-hdr" onclick="toggleVCat('${cat.id}')">`;
     h+=`<h3>${cat.label}<span class="vs-cat-count">${cv.length}</span></h3>`;
@@ -4906,7 +4950,7 @@ function renderVendors(){
       h+=`<div class="vc-top">`;
       h+=`<div class="vc-drag-handle" title="Drag to reorder">&#x2807;</div>`;
       h+=`<div class="vc-info">`;
-      h+=`<div class="vc-name">${v.name}</div><div class="vc-role">${v.role}</div>`;
+      h+=`<div class="vc-name">${q?_vendorHighlight(v.name,q):v.name}</div><div class="vc-role">${q?_vendorHighlight(v.role,q):v.role}</div>`;
       h+=`<div class="vc-contact"><span class="vc-phone">${v.phone}</span>${v.email?`<span class="vc-email">${v.email}</span>`:''}</div>`;
       h+=!v.email?`<span class="add-email" onclick="showEmailForm('${v.id}')">+ Add email</span>`:'';
       h+=`<div id="ef-${v.id}" style="display:none" class="email-form">
@@ -4935,7 +4979,11 @@ function renderVendors(){
     });
     h+=`</div></div>`; // close vc-list, vs
   });
-  document.getElementById('vendor-dir').innerHTML=h||'<div class="empty">No vendors yet.</div>';
+  if(!h){
+    if(q)h=`<div class="vd-no-match">No vendors match "<b>${q.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</b>". <a href="#" onclick="clearVendorSearch();return false" style="color:var(--green);font-weight:600">Clear search</a></div>`;
+    else h='<div class="empty">No vendors yet.</div>';
+  }
+  document.getElementById('vendor-dir').innerHTML=h;
 }
 function toggleVendorInvoices(vid){
   const el=document.getElementById('vinv-'+vid);
@@ -5167,23 +5215,42 @@ function _aabParseText(text){
 }
 
 function _aabBuildNoteText(r){
-  const lines=[];
-  if(r.tech)lines.push('Tech: '+r.tech);
-  if(r.issues&&r.issues.length)lines.push('Issues: '+r.issues.join(', '));
-  if(r.locations&&r.locations.length)lines.push('Locations: '+r.locations.join('; '));
-  lines.push('');
-  if(r.notes){
-    lines.push(r.notes+(r.truncated?' [truncated by Gmail PDF export]':''));
+  // Pretty-printed, category-organized note. Renderer respects \n via
+  // .note-text { white-space: pre-wrap }, so blank lines and bullets survive.
+  const sections=[];
+
+  // Header line — Tech + service date readable
+  const headerBits=[];
+  if(r.tech)headerBits.push('Tech: '+r.tech);
+  if(r.date){
+    try{
+      const d=new Date(r.date+'T12:00:00');
+      const ds=d.toLocaleDateString('en-US',{weekday:'short',month:'long',day:'numeric',year:'numeric'});
+      headerBits.push('Date: '+ds);
+    }catch(e){headerBits.push('Date: '+r.date);}
   }
-  if(r.acct)lines.push('');
-  if(r.acct)lines.push('AAB account: '+r.acct);
-  return lines.join('\n').trim();
+  if(headerBits.length)sections.push(headerBits.join(' · '));
+
+  if(r.issues&&r.issues.length){
+    sections.push('Issues Targeted:\n'+r.issues.map(x=>'  • '+x).join('\n'));
+  }
+  if(r.locations&&r.locations.length){
+    sections.push('Locations Treated:\n'+r.locations.map(x=>'  • '+x).join('\n'));
+  }
+  if(r.notes){
+    const body=r.notes+(r.truncated?'  [note truncated by Gmail PDF export]':'');
+    sections.push('Technician Notes:\n'+body);
+  }
+  if(r.acct){
+    sections.push('— AAB account #'+r.acct);
+  }
+  return sections.join('\n\n').trim();
 }
 
-// Duplicate detection: same property + same date + vendor v10 + _source aab_pdf
+// Duplicate detection: same property + same date + All About Bugs + pest service
 function _aabIsDuplicate(cabin,date){
   if(!cabin||!date)return false;
-  return tasks.some(t=>t.property===cabin&&t.date===date&&t.vendor==='v10'&&(t._source==='aab_pdf'||(t.problem&&/pest control/i.test(t.problem))));
+  return tasks.some(t=>t.property===cabin&&t.date===date&&(t.vendor==='All About Bugs'||t.vendor==='v10')&&(t._source==='aab_pdf'||(t.problem&&/pest control/i.test(t.problem))));
 }
 
 // Cabin <option> list for the per-row dropdown: NB-grouped, mirrors populatePropSel.
@@ -5316,7 +5383,7 @@ async function aabLogAll(){
     const task={
       id:Date.now().toString()+Math.random().toString(36).slice(2,6),
       property:r.cabin,guest:'',problem:'Pest Control — Monthly',category:'pest',
-      status:'complete',date:r.date,vendor:'v10',urgent:false,recurring:false,
+      status:'complete',date:r.date,vendor:'All About Bugs',urgent:false,recurring:false,
       notes:noteText?[{text:noteText,type:'admin',time:nowIso}]:[],
       vendorNotes:'',created:nowIso,_loggedService:true,_source:'aab_pdf',_aabAcct:r.acct||null,
     };

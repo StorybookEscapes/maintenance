@@ -215,9 +215,13 @@
     </div>
 
     <div class="view" id="view-vendors">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px;flex-wrap:wrap">
         <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--green);font-weight:600">Vendor Directory</h2>
         <button class="btn btn-g" onclick="openAddVendor()">+ Add Vendor</button>
+      </div>
+      <div class="vd-search-row">
+        <input type="text" id="vendor-search" class="vd-search" placeholder="Search vendors by name, role, or phone…" oninput="onVendorSearch(this.value)" autocomplete="off">
+        <button class="vd-search-clear" id="vendor-search-clear" onclick="clearVendorSearch()" title="Clear search" style="display:none">&#x2715;</button>
       </div>
       <div id="vendor-dir"></div>
     </div>

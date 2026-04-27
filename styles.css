@@ -545,6 +545,7 @@ textarea{resize:vertical;min-height:76px}
 /* NOTES */
 .notes{display:flex;flex-direction:column;gap:4px;margin-bottom:6px;max-height:160px;overflow-y:auto;scrollbar-width:thin}
 .note{background:var(--surface2);border-radius:7px;padding:8px 12px;font-size:.79rem;line-height:1.5}
+.note-text{white-space:pre-wrap}
 .note-meta{font-size:.66rem;color:var(--text3);margin-bottom:3px}
 .note.admin .note-meta{color:var(--green-mid);font-weight:600}
 .note.vendor .note-meta{color:#2e5f8a;font-weight:600}
@@ -1942,6 +1943,16 @@ textarea{resize:vertical;min-height:76px}
 .rv-nb-banner.gatlinburg{border-left-color:var(--gatlinburg)}
 .rv-nb-banner.alpine{border-left-color:var(--alpine)}
 .rv-nb-banner.sevierville{border-left-color:var(--sevierville)}
+
+/* Vendor Directory — search box */
+.vd-search-row{position:relative;margin-bottom:14px}
+.vd-search{width:100%;padding:9px 36px 9px 14px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);font-family:inherit;font-size:.88rem;color:var(--text);transition:border-color .15s,box-shadow .15s}
+.vd-search:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px var(--green-light)}
+.vd-search::placeholder{color:var(--text3)}
+.vd-search-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text3);font-size:.95rem;cursor:pointer;padding:4px 8px;border-radius:6px;font-family:inherit}
+.vd-search-clear:hover{color:var(--green);background:var(--green-light)}
+.vd-no-match{padding:24px 14px;text-align:center;color:var(--text2);font-size:.88rem;background:var(--surface);border:1px dashed var(--border);border-radius:var(--radius)}
+.vd-match-hl{background:var(--gold-pale);padding:0 2px;border-radius:3px;font-weight:600}
 
 /* All About Bugs — Import Service Logs modal */
 .aab-drop{border:2px dashed var(--border-dark);background:var(--green-pale);border-radius:var(--radius);padding:28px 18px;text-align:center;cursor:pointer;transition:all .15s;margin-bottom:14px}
