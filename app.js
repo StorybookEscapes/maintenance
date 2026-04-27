@@ -5056,8 +5056,11 @@ function showToast(msg,cls='',undoFn=null,duration=0){
 
 // Account # → cabin ID. Mapping is by ADDRESS (verified against PROPS), not
 // by the customer-name string in the AAB portal — those names have drifted
-// over time and don't match current cabin names. AAB does NOT service
-// Hillside Haven Big House or Cottage (those are in Alabama).
+// over time and don't match current cabin names. AAB services every cabin
+// EXCEPT Hillside Haven Big House and Cottage (Alabama — out of service area).
+// Account numbers for prc3, prc4, prc6 aren't listed below because they
+// haven't been seen yet — when they show up the address fallback in
+// _aabAddressToCabin will resolve them, and they should be added here.
 const AAB_ACCT_TO_CABIN = {
   '3000':'bearadise',     // 734 Heiden Dr
   '11147':'prc1','11148':'prc2','11151':'prc5',
@@ -5169,27 +5172,30 @@ function _aabParseText(text){
     if(techM)tech=techM[1].trim();
 
     // Issues Targeted — between heading and Locations Treated
+    // Section terminators include Gmail's "[Quoted text hidden]" because
+    // Gmail-export PDFs collapse repeated boilerplate (Caution block,
+    // sometimes Issues/Locations headers themselves) into that marker.
     let issues=[];
-    const issM=chunk.match(/Issues\s+Targeted([\s\S]*?)Locations\s+Treated/i);
+    const issM=chunk.match(/Issues\s+Targeted([\s\S]*?)(?:Locations\s+Treated|Technician\s+Notes|\[Quoted text hidden\]|Caution)/i);
     if(issM){
       const block=issM[1];
       // Items appear like "1. Ants 2. Cockroaches" — split on numbers
       const items=block.split(/\d+\.\s+/).map(s=>s.trim()).filter(Boolean);
       issues=items.map(s=>s.replace(/\s+/g,' ').trim()).filter(s=>s.length>0&&s.length<60);
     }
-    // Locations Treated — between heading and Technician Notes
+    // Locations Treated — between heading and Technician Notes (or quoted-collapse marker)
     let locations=[];
-    const locM2=chunk.match(/Locations\s+Treated([\s\S]*?)Technician\s+Notes/i);
+    const locM2=chunk.match(/Locations\s+Treated([\s\S]*?)(?:Technician\s+Notes|\[Quoted text hidden\]|Caution|Invoice Items)/i);
     if(locM2){
       const block=locM2[1];
       // Lines mix numbered "1. ..." with unnumbered tags like "Bait Station"; capture both
       const lines=block.split(/(?:\d+\.\s+|\n)/).map(s=>s.trim()).filter(Boolean);
       locations=lines.map(s=>s.replace(/\s+/g,' ').trim()).filter(s=>s.length>0&&s.length<200);
     }
-    // Technician Notes — between heading and Caution
+    // Technician Notes — between heading and Caution (or quoted-collapse / Invoice Items / end)
     let notes='';
     let truncated=false;
-    const tnM=chunk.match(/Technician\s+Notes([\s\S]*?)Caution/i);
+    const tnM=chunk.match(/Technician\s+Notes([\s\S]*?)(?:Caution|\[Quoted text hidden\]|Invoice Items|$)/i);
     if(tnM){
       notes=tnM[1].replace(/\s+/g,' ').trim();
       // Gmail-export PDFs often truncate the Technician Notes mid-sentence.
