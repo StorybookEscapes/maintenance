@@ -5054,16 +5054,18 @@ function showToast(msg,cls='',undoFn=null,duration=0){
 // record shape so logged services thread into the existing tasks list.
 // ────────────────────────────────────────────────────────────────────────────
 
-// Account # → cabin ID. Verified from PROPS addresses; account # 11163 carries
-// the legacy "Wilderness Escape" label in All About Bugs' system but the
-// address (1775 Bluff Ridge Rd) is Magic Mountain in current PROPS.
+// Account # → cabin ID. Mapping is by ADDRESS (verified against PROPS), not
+// by the customer-name string in the AAB portal — those names have drifted
+// over time and don't match current cabin names. AAB does NOT service
+// Hillside Haven Big House or Cottage (those are in Alabama).
 const AAB_ACCT_TO_CABIN = {
-  '3000':'bearadise',
+  '3000':'bearadise',     // 734 Heiden Dr
   '11147':'prc1','11148':'prc2','11151':'prc5',
   '11154':'umc10','11155':'umc20','11156':'umc30','11157':'umc40','11159':'umc50','11160':'umc60',
-  '11161':'hillside_big','11162':'hillside_cottage',
-  '11163':'magic',  // 1775 Bluff Ridge Rd
-  '11164':'wizards' // 658 Pinecrest Dr
+  '11161':'hero',         // 2382 Alpine Village Way
+  '11162':'hibernation',  // 335 Alpine Mountain Way
+  '11163':'magic',        // 1775 Bluff Ridge Rd
+  '11164':'wizards'       // 658 Pinecrest Dr
 };
 
 let _aabPdfLib=null;
