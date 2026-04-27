@@ -7193,9 +7193,11 @@ async function rpQuickDelivered(id) {
       const nbCls=t.neighborhoodCls||'green';
       const safeProb=(t.problem||'').replace(/</g,'&lt;');
       const safeNote=String(t.purchaseNote||'').replace(/</g,'&lt;');
+      // Item leads (the actionable shopping list); property + problem are the
+      // small descriptor below for context.
       html+=`<div class="vs-pn-item" onclick="window._vsScrollToTask('${t.id}')">
-        <div class="vs-pn-row1"><span class="vs-pn-prop" style="color:var(--${nbCls})">${shortName}</span><span class="vs-pn-prob">${safeProb}</span></div>
         <div class="vs-pn-need">${safeNote}</div>
+        <div class="vs-pn-context"><span class="vs-pn-prop" style="color:var(--${nbCls})">${shortName}</span><span class="vs-pn-prob">${safeProb}</span></div>
       </div>`;
     });
     html+=`</div>`;
