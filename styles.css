@@ -1154,7 +1154,20 @@ textarea{resize:vertical;min-height:76px}
 .ss-badge::before{content:'\\1F4C5';font-size:.7rem}
 /* ── Vendor self-schedule: "Needs Your Schedule" section + date picker modal ── */
 /* Amber/gold accented section that sits at the top of the vendor agenda */
-.vs-needs-sched{background:#fff9ec;border:1px solid var(--gold-light);border-left:4px solid var(--gold);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px;box-shadow:var(--shadow-sm,0 1px 3px rgba(0,0,0,.06))}
+.vs-needs-sched{background:#fff9ec;border:1px solid var(--gold-light);border-left:4px solid var(--gold);border-radius:var(--radius);padding:14px 16px;margin-top:24px;margin-bottom:16px;box-shadow:var(--shadow-sm,0 1px 3px rgba(0,0,0,.06))}
+
+/* Purchases-needed top banner — uses orange like the inline Purchase tag */
+.vs-purchases-banner{background:#fff5e6;border:1px solid rgba(255,149,0,.35);border-left:4px solid #ff9500;border-radius:var(--radius);padding:12px 14px;margin-bottom:16px}
+.vs-purchases-hdr{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.vs-purchases-title{font-family:'Cormorant Garamond',serif;font-size:1.05rem;font-weight:600;color:#8a4a00;letter-spacing:.5px;text-transform:uppercase}
+.vs-purchases-count{font-size:.68rem;font-weight:700;background:#fff;color:#b8700a;border:1px solid rgba(255,149,0,.35);border-radius:20px;padding:2px 9px}
+.vs-pn-item{background:#fff;border:1px solid rgba(255,149,0,.2);border-radius:8px;padding:8px 12px;margin-bottom:6px;cursor:pointer;transition:background .12s,border-color .12s}
+.vs-pn-item:hover{background:#fffaf0;border-color:rgba(255,149,0,.45)}
+.vs-pn-item:last-child{margin-bottom:0}
+.vs-pn-row1{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;margin-bottom:3px}
+.vs-pn-prop{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+.vs-pn-prob{font-size:.78rem;color:var(--text);font-weight:500}
+.vs-pn-need{font-size:.74rem;color:var(--text2);line-height:1.4}
 .vs-needs-hdr{display:flex;align-items:center;gap:10px;margin-bottom:6px}
 .vs-needs-title{font-family:'Cormorant Garamond',serif;font-size:1.05rem;font-weight:600;color:#8a5a10;letter-spacing:.5px;text-transform:uppercase}
 .vs-needs-count{font-size:.68rem;font-weight:700;background:var(--gold-pale);color:#8a5a10;border:1px solid var(--gold-light);border-radius:20px;padding:2px 9px}
@@ -1166,8 +1179,8 @@ textarea{resize:vertical;min-height:76px}
 .vs-pick-date-btn-lg:active{transform:translateY(1px)}
 /* Change-date row shown inside vendor task card detail when task is already dated */
 .vs-change-date-row{margin-top:8px}
-.vs-change-date-btn{background:var(--gold-pale);color:#8a5a10;border:1px solid var(--gold-light);border-radius:7px;padding:6px 11px;font-size:.72rem;font-weight:600;cursor:pointer;transition:background .15s;display:inline-flex;align-items:center;gap:5px;-webkit-tap-highlight-color:transparent}
-.vs-change-date-btn:hover{background:#f5e8c8}
+.vs-change-date-btn{background:var(--surface);color:var(--text2);border:1px solid var(--border);border-radius:6px;padding:4px 9px;font-size:.68rem;font-weight:500;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:5px;-webkit-tap-highlight-color:transparent}
+.vs-change-date-btn:hover{background:var(--surface2);color:var(--text);border-color:var(--border-dark)}
 .vs-change-date-btn:active{transform:translateY(1px)}
 /* Date picker modal — backdrop + panel */
 .vs-dp-modal{position:fixed;inset:0;background:rgba(13,53,40,.55);z-index:900;display:none;align-items:flex-start;justify-content:center;padding:24px 12px;overflow-y:auto;-webkit-overflow-scrolling:touch;animation:vpFadeIn .2s ease}

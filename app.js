@@ -4674,13 +4674,27 @@ function buildHistForm(){
     <button class="btn btn-g" onclick="saveHistTask()">Add Record</button>
   </div>`;
 }
-/* Repeat issue detection — analyzes completed tasks for patterns */
+/* Repeat issue detection — analyzes completed tasks for patterns.
+   Only break/fix categories count; routine recurring services (pest, cleaning,
+   water filtration, landscaping, arcade) and anything stamped via the
+   log-service / recurring-template flow (_loggedService flag) are filtered
+   out so a normal monthly pest schedule doesn't read as a "repeat issue."
+   HVAC filter changes are also stripped — they're routine maintenance. */
+const TREND_ISSUE_CATS = new Set(['plumbing','hvac','handyman','hot_tub','pool','septic','bed_bugs','electrical']);
+function _isTrendIssue(t){
+  if(!t)return false;
+  if(t._loggedService)return false;                          // logged from a recurring template
+  if(!TREND_ISSUE_CATS.has(t.category))return false;          // routine category
+  if(t.category==='hvac' && t.problem && /filter/i.test(t.problem))return false; // HVAC filter swaps
+  return true;
+}
 function buildTrendInsights(doneTasks){
-  if(doneTasks.length<3)return''; // not enough data
+  const issueTasks=doneTasks.filter(_isTrendIssue);
+  if(issueTasks.length<3)return''; // not enough data
   const now=new Date();const sixMonthsAgo=new Date(now);sixMonthsAgo.setMonth(sixMonthsAgo.getMonth()-6);
   // Group by property+category
   const combos={};
-  doneTasks.forEach(t=>{
+  issueTasks.forEach(t=>{
     const d=t.date||t.created;if(!d)return;
     const key=t.property+'||'+t.category;
     if(!combos[key])combos[key]={property:t.property,category:t.category,total:0,recent:0,tasks:[]};
@@ -4691,8 +4705,8 @@ function buildTrendInsights(doneTasks){
   // Find repeat offenders: 3+ same category at same property
   const repeats=Object.values(combos).filter(c=>c.total>=3).sort((a,b)=>b.recent-a.recent||b.total-a.total);
   if(!repeats.length)return'';
-  // Also find properties with the highest total issue count
-  const propTotals={};doneTasks.forEach(t=>{propTotals[t.property]=(propTotals[t.property]||0)+1;});
+  // Also find properties with the highest total issue count (same break/fix filter)
+  const propTotals={};issueTasks.forEach(t=>{propTotals[t.property]=(propTotals[t.property]||0)+1;});
   const topProps=Object.entries(propTotals).sort((a,b)=>b[1]-a[1]).slice(0,3);
   let h=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px;box-shadow:var(--shadow)">`;
   h+=`<div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--green);margin-bottom:10px">Repeat Issue Alerts</div>`;
@@ -7154,6 +7168,50 @@ async function rpQuickDelivered(id) {
     </div>`;
   }
 
+  // Top-of-page alert: list every open task with a purchase requirement so the
+  // vendor sees them before scrolling. Pulls from both dated tasks and the
+  // needs-schedule bucket. Tapping a row scrolls to that task's card.
+  function vsRenderPurchasesNeededHtml(){
+    const all=[...(vTasks||[]),...(vNeedsSched||[])];
+    const seen=new Set();
+    const purchases=[];
+    all.forEach(t=>{
+      if(!t||!t.purchaseNote||!String(t.purchaseNote).trim())return;
+      if(t.vendorDone)return;
+      if(seen.has(t.id))return;
+      seen.add(t.id);
+      purchases.push(t);
+    });
+    if(!purchases.length)return'';
+    let html=`<div class="vs-purchases-banner">
+      <div class="vs-purchases-hdr">
+        <span class="vs-purchases-title">&#x1F6D2; Purchases needed</span>
+        <span class="vs-purchases-count">${purchases.length}</span>
+      </div>`;
+    purchases.forEach(t=>{
+      const shortName=(t.propertyName||'').replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
+      const nbCls=t.neighborhoodCls||'green';
+      const safeProb=(t.problem||'').replace(/</g,'&lt;');
+      const safeNote=String(t.purchaseNote||'').replace(/</g,'&lt;');
+      html+=`<div class="vs-pn-item" onclick="window._vsScrollToTask('${t.id}')">
+        <div class="vs-pn-row1"><span class="vs-pn-prop" style="color:var(--${nbCls})">${shortName}</span><span class="vs-pn-prob">${safeProb}</span></div>
+        <div class="vs-pn-need">${safeNote}</div>
+      </div>`;
+    });
+    html+=`</div>`;
+    return html;
+  }
+  // Scroll a task card into view and expand its detail if collapsed.
+  window._vsScrollToTask=function(id){
+    const el=document.getElementById('vsc-'+id);
+    if(!el)return;
+    el.scrollIntoView({behavior:'smooth',block:'start'});
+    const detail=el.querySelector('.vs-card-detail');
+    if(detail&&!detail.classList.contains('vs-card-detail-open')&&typeof window._vsToggle==='function'){
+      window._vsToggle(id);
+    }
+  };
+
   function vsRenderNeedsSchedHtml(){
     if(!vNeedsSched||!vNeedsSched.length)return'';
     let html=`<div class="vs-needs-sched">
@@ -7477,7 +7535,9 @@ async function rpQuickDelivered(id) {
       return;
     }
     const dates=Object.keys(vByDate).sort();
-    let html=vsRenderNeedsSchedHtml();
+    // Top: purchases needed across all buckets. Middle: dated days. Bottom:
+    // needs-your-schedule (added after the dates loop).
+    let html=vsRenderPurchasesNeededHtml();
     dates.forEach(dateStr=>{
       const dayTasks=vByDate[dateStr]||[];
       if(!dayTasks.length)return;
@@ -7516,6 +7576,9 @@ async function rpQuickDelivered(id) {
         html+=vsCard(t);
       });
     });
+    // Bottom: Needs-Your-Schedule bucket — vendor handles these last after seeing
+    // their actual dated workload and the purchase list at the top.
+    html+=vsRenderNeedsSchedHtml();
     wrap.innerHTML=html;
   }
 
