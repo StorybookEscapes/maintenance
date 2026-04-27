@@ -731,6 +731,34 @@
   </div>
 </div>
 
+<!-- ALL ABOUT BUGS — IMPORT SERVICE LOGS MODAL -->
+<div class="mo" id="aab-import-modal">
+  <div class="modal" style="max-width:920px;width:96vw">
+    <div class="mhdr">
+      <div class="mtitle">Import Service Logs — All About Bugs</div>
+      <button class="mclose" onclick="closeModal('aab-import-modal')">&#x2715;</button>
+    </div>
+    <div id="aab-drop" class="aab-drop">
+      <div class="aab-drop-icon">&#x21A7;</div>
+      <div class="aab-drop-title">Drop pest control PDFs here</div>
+      <div class="aab-drop-sub">or <span class="aab-drop-link" onclick="document.getElementById('aab-file').click()">browse</span> &middot; multi-file OK &middot; multi-message PDFs split automatically</div>
+      <input type="file" id="aab-file" accept="application/pdf" multiple style="display:none">
+    </div>
+    <div id="aab-status" class="aab-status" style="display:none"></div>
+    <div id="aab-rows-wrap" style="display:none">
+      <div class="aab-rows-hdr">
+        <div>Detected services <span id="aab-count" class="aab-count-badge"></span></div>
+        <button class="btn" onclick="aabClearRows()" style="font-size:.78rem;padding:4px 10px">Clear all</button>
+      </div>
+      <div id="aab-rows"></div>
+    </div>
+    <div style="display:flex;gap:9px;margin-top:18px;justify-content:flex-end" id="aab-actions" style="display:none">
+      <button class="btn" onclick="closeModal('aab-import-modal')">Cancel</button>
+      <button class="btn btn-g" id="aab-log-btn" onclick="aabLogAll()">Log all selected</button>
+    </div>
+  </div>
+</div>
+
 <!-- VENDOR MODAL -->
 <div class="mo" id="vendor-modal">
   <div class="modal">

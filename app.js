@@ -4927,6 +4927,9 @@ function renderVendors(){
         h+=`<span class="btn btn-call" style="opacity:.4;cursor:default">Call</span>`;
       }
       h+=`<button class="btn" onclick="generateVendorAgendaLink('${safeName}')">Schedule Link</button>`;
+      if(v.id==='v10'){
+        h+=`<button class="btn" onclick="openAabImport()" title="Drag and drop completed-service PDFs to log them automatically">Import PDFs</button>`;
+      }
       h+=`<button class="btn" onclick="openEditVendor('${v.id}')">Edit</button>`;
       h+=`</div></div>`; // close vc-btn-row, vc
     });
@@ -4995,7 +4998,338 @@ function showToast(msg,cls='',undoFn=null,duration=0){
 
 // SEED removed — tasks are loaded from server storage
 
-// HOSTBUDDY INTEGRATION
+// ────────────────────────────────────────────────────────────────────────────
+// ALL ABOUT BUGS — IMPORT SERVICE LOGS
+// Drag-and-drop pest control PDFs onto the All About Bugs vendor card.
+// Parser splits each Gmail-export PDF on Account Number boundaries and emits
+// one logged-service record per service block. Mirrors the saveLogTask
+// record shape so logged services thread into the existing tasks list.
+// ────────────────────────────────────────────────────────────────────────────
+
+// Account # → cabin ID. Verified from PROPS addresses; account # 11163 carries
+// the legacy "Wilderness Escape" label in All About Bugs' system but the
+// address (1775 Bluff Ridge Rd) is Magic Mountain in current PROPS.
+const AAB_ACCT_TO_CABIN = {
+  '3000':'bearadise',
+  '11147':'prc1','11148':'prc2','11151':'prc5',
+  '11154':'umc10','11155':'umc20','11156':'umc30','11157':'umc40','11159':'umc50','11160':'umc60',
+  '11161':'hillside_big','11162':'hillside_cottage',
+  '11163':'magic',  // 1775 Bluff Ridge Rd
+  '11164':'wizards' // 658 Pinecrest Dr
+};
+
+let _aabPdfLib=null;
+function _aabLoadPdfLib(){
+  if(_aabPdfLib)return Promise.resolve(_aabPdfLib);
+  if(window.pdfjsLib){_aabPdfLib=window.pdfjsLib;return Promise.resolve(_aabPdfLib);}
+  return new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload=()=>{const lib=window.pdfjsLib;lib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';_aabPdfLib=lib;resolve(lib);};
+    s.onerror=()=>reject(new Error('Failed to load pdf.js'));
+    document.head.appendChild(s);
+  });
+}
+
+// In-memory rows for the open import session. Cleared when modal closes.
+let _aabRows=[];
+
+// Pull plain text from a PDF, joined as one string with whitespace between items.
+async function _aabExtractText(file){
+  const lib=await _aabLoadPdfLib();
+  const buf=await file.arrayBuffer();
+  const doc=await lib.getDocument({data:buf}).promise;
+  let out='';
+  for(let i=1;i<=doc.numPages;i++){
+    const pg=await doc.getPage(i);
+    const tc=await pg.getTextContent();
+    out+=tc.items.map(it=>it.str).join(' ')+'\n';
+  }
+  return out;
+}
+
+// Address → cabin id fallback. Normalizes both sides for fuzzy match.
+function _aabAddressToCabin(addr){
+  if(!addr)return null;
+  const n=addr.toLowerCase().replace(/[.,]/g,'').replace(/\s+/g,' ').trim();
+  // Direct address numbers + street stems are unique enough across PROPS
+  if(/1627 paradise ridge/.test(n)){
+    const m=n.match(/(?:unit|#)\s*(\d)/);if(m)return 'prc'+m[1];
+  }
+  if(/1181 upper middle creek/.test(n)){
+    const m=n.match(/(?:cabin|unit|#)\s*(\d{2})/);if(m)return 'umc'+m[1];
+  }
+  if(/1619 rebel hill/.test(n)){
+    const m=n.match(/(?:cabin|unit|#)\s*(\d{2})/);if(m)return 'umc'+m[1];
+  }
+  if(/734 heiden/.test(n))return 'bearadise';
+  if(/658 pinecrest/.test(n))return 'wizards';
+  if(/1775 bluff ridge/.test(n))return 'magic';
+  if(/335 alpine mountain/.test(n))return 'hibernation';
+  if(/2382 alpine village/.test(n))return 'hero';
+  if(/226 oak hill/.test(n))return 'hillside_big';
+  if(/218 oak hill/.test(n))return 'hillside_cottage';
+  return null;
+}
+
+// Resolve the year for a "(M/D)" service date given the email-header date.
+// If service month is far ahead of email month, treat as previous year (Dec service in Jan email).
+function _aabResolveDate(svcMonth,svcDay,emailDate){
+  if(!emailDate||isNaN(emailDate.getTime())){
+    // Fallback: assume current year
+    const now=new Date();
+    return `${now.getFullYear()}-${String(svcMonth).padStart(2,'0')}-${String(svcDay).padStart(2,'0')}`;
+  }
+  let year=emailDate.getFullYear();
+  const emailMonth=emailDate.getMonth()+1;
+  if(svcMonth>emailMonth+1)year-=1;
+  return `${year}-${String(svcMonth).padStart(2,'0')}-${String(svcDay).padStart(2,'0')}`;
+}
+
+// Parse one PDF text dump → array of service records.
+function _aabParseText(text){
+  const records=[];
+  // Split on Account Number boundaries; keep each chunk that follows.
+  // The capture preserves the account number so we can attach it to the chunk.
+  const parts=text.split(/Account\s*Number:\s*(\d+)/i);
+  // parts[0] is preamble before first account number; parts[1]=acct, parts[2]=chunk, parts[3]=acct, parts[4]=chunk...
+  // We also need email date that PRECEDES each Account Number — extract from preamble or prior chunk.
+  let priorText=parts[0]||'';
+  for(let i=1;i<parts.length;i+=2){
+    const acct=parts[i];
+    const chunk=parts[i+1]||'';
+    // Email date is the most recent "DOW, Mon DD, YYYY" found in priorText (or chunk if priorText missed it)
+    const dateRx=/([A-Z][a-z]{2}),\s*([A-Z][a-z]{2})\s*(\d{1,2}),\s*(\d{4})/g;
+    let lastEmail=null,m;const searchSrc=priorText+' '+chunk.slice(0,400);
+    while((m=dateRx.exec(searchSrc))!==null){lastEmail=m[0];}
+    const emailDateObj=lastEmail?new Date(lastEmail):null;
+
+    // Address + service date. "located at <ADDRESS> on <Day> (<M/D>)"
+    let addr=null,svcMonth=null,svcDay=null;
+    const locRx=/located\s+at\s+(.+?)\s+on\s+([A-Z][a-z]+)\s*\((\d{1,2})\/(\d{1,2})\)/i;
+    const locM=chunk.match(locRx);
+    if(locM){
+      addr=locM[1].trim().replace(/\s+/g,' ');
+      svcMonth=parseInt(locM[3],10);
+      svcDay=parseInt(locM[4],10);
+    }
+    // Tech name
+    let tech=null;
+    const techM=chunk.match(/My\s+name\s+is\s+([A-Z][A-Za-z'.\-]+(?:\s+[A-Z][A-Za-z'.\-]+){0,3})/);
+    if(techM)tech=techM[1].trim();
+
+    // Issues Targeted — between heading and Locations Treated
+    let issues=[];
+    const issM=chunk.match(/Issues\s+Targeted([\s\S]*?)Locations\s+Treated/i);
+    if(issM){
+      const block=issM[1];
+      // Items appear like "1. Ants 2. Cockroaches" — split on numbers
+      const items=block.split(/\d+\.\s+/).map(s=>s.trim()).filter(Boolean);
+      issues=items.map(s=>s.replace(/\s+/g,' ').trim()).filter(s=>s.length>0&&s.length<60);
+    }
+    // Locations Treated — between heading and Technician Notes
+    let locations=[];
+    const locM2=chunk.match(/Locations\s+Treated([\s\S]*?)Technician\s+Notes/i);
+    if(locM2){
+      const block=locM2[1];
+      // Lines mix numbered "1. ..." with unnumbered tags like "Bait Station"; capture both
+      const lines=block.split(/(?:\d+\.\s+|\n)/).map(s=>s.trim()).filter(Boolean);
+      locations=lines.map(s=>s.replace(/\s+/g,' ').trim()).filter(s=>s.length>0&&s.length<200);
+    }
+    // Technician Notes — between heading and Caution
+    let notes='';
+    let truncated=false;
+    const tnM=chunk.match(/Technician\s+Notes([\s\S]*?)Caution/i);
+    if(tnM){
+      notes=tnM[1].replace(/\s+/g,' ').trim();
+      // Gmail-export PDFs often truncate the Technician Notes mid-sentence.
+      // Heuristic: a complete note ends in . ! ? or a closing quote/paren.
+      // Anything else is treated as truncated and surfaced in the preview.
+      if(notes&&!/[.!?"')\]]\s*$/.test(notes))truncated=true;
+    }
+
+    // Cabin lookup: account # first, address fallback
+    const cabinFromAcct=AAB_ACCT_TO_CABIN[acct]||null;
+    const cabinFromAddr=_aabAddressToCabin(addr);
+    const cabin=cabinFromAcct||cabinFromAddr||null;
+
+    const date=svcMonth&&svcDay?_aabResolveDate(svcMonth,svcDay,emailDateObj):'';
+
+    records.push({
+      acct,address:addr||'',date,tech:tech||'',issues,locations,notes,truncated,
+      cabin,cabinSource:cabinFromAcct?'account':(cabinFromAddr?'address':null),
+      emailDate:emailDateObj?emailDateObj.toISOString().slice(0,10):null,
+      skip:false,
+    });
+    priorText=chunk;
+  }
+  return records;
+}
+
+function _aabBuildNoteText(r){
+  const lines=[];
+  if(r.tech)lines.push('Tech: '+r.tech);
+  if(r.issues&&r.issues.length)lines.push('Issues: '+r.issues.join(', '));
+  if(r.locations&&r.locations.length)lines.push('Locations: '+r.locations.join('; '));
+  lines.push('');
+  if(r.notes){
+    lines.push(r.notes+(r.truncated?' [truncated by Gmail PDF export]':''));
+  }
+  if(r.acct)lines.push('');
+  if(r.acct)lines.push('AAB account: '+r.acct);
+  return lines.join('\n').trim();
+}
+
+// Duplicate detection: same property + same date + vendor v10 + _source aab_pdf
+function _aabIsDuplicate(cabin,date){
+  if(!cabin||!date)return false;
+  return tasks.some(t=>t.property===cabin&&t.date===date&&t.vendor==='v10'&&(t._source==='aab_pdf'||(t.problem&&/pest control/i.test(t.problem))));
+}
+
+// Cabin <option> list for the per-row dropdown: NB-grouped, mirrors populatePropSel.
+function _aabCabinOptionsHtml(selectedId){
+  let h='<option value="">— pick cabin —</option>';
+  NBS.forEach(nb=>{
+    h+=`<optgroup label="${nb.name} — ${nb.sub}">`;
+    nb.props.forEach(pid=>{
+      const p=PROPS.find(x=>x.id===pid);if(!p)return;
+      const display=p.name.replace(/^(PRC|UMC)\s*-\s*\d+\s*[-:]\s*/,'');
+      h+=`<option value="${p.id}"${p.id===selectedId?' selected':''}>${display}</option>`;
+    });
+    h+='</optgroup>';
+  });
+  return h;
+}
+
+function aabRenderRows(){
+  const wrap=document.getElementById('aab-rows');
+  const rowsWrap=document.getElementById('aab-rows-wrap');
+  const actions=document.getElementById('aab-actions');
+  if(!_aabRows.length){
+    rowsWrap.style.display='none';
+    if(actions)actions.style.display='none';
+    return;
+  }
+  rowsWrap.style.display='';
+  if(actions)actions.style.display='';
+  document.getElementById('aab-count').textContent=_aabRows.length;
+  let h='';
+  _aabRows.forEach((r,idx)=>{
+    const dup=_aabIsDuplicate(r.cabin,r.date);
+    if(dup&&r._dupSet!==true){r.skip=true;r._dupSet=true;}
+    const needsCabin=!r.cabin;
+    const needsDate=!r.date;
+    let cls='aab-row';
+    if(r.skip)cls+=' aab-skip';
+    if(needsCabin||needsDate)cls+=' aab-warn';
+    else if(dup)cls+=' aab-dup';
+    const escNotes=_aabBuildNoteText(r).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    h+=`<div class="${cls}" data-idx="${idx}">`;
+    h+=`<div class="aab-row-top">`;
+    h+=`<label>Cabin <select onchange="aabSetCabin(${idx},this.value)">${_aabCabinOptionsHtml(r.cabin)}</select></label>`;
+    h+=`<label>Service date <input type="date" value="${r.date||''}" onchange="aabSetDate(${idx},this.value)"></label>`;
+    h+=`<span class="aab-row-acct">acct ${r.acct||'?'}${r.cabinSource==='address'?' · matched by address':''}</span>`;
+    h+=`<label style="margin-left:auto"><input type="checkbox" class="aab-skip-cb" ${r.skip?'checked':''} onchange="aabToggleSkip(${idx},this.checked)"> Skip</label>`;
+    h+=`</div>`;
+    if(r.tech||r.address){
+      h+=`<div class="aab-row-meta">`;
+      if(r.tech)h+=`<span><b>Tech:</b> ${r.tech}</span>`;
+      if(r.address)h+=`<span><b>Address:</b> ${r.address}</span>`;
+      if(r.issues&&r.issues.length)h+=`<span><b>Issues:</b> ${r.issues.join(', ')}</span>`;
+      h+=`</div>`;
+    }
+    if(needsCabin)h+=`<div class="aab-row-warn">Account # ${r.acct||'(none)'} not recognized — pick a cabin manually.</div>`;
+    else if(needsDate)h+=`<div class="aab-row-warn">Service date couldn't be parsed — set it manually.</div>`;
+    else if(dup)h+=`<div class="aab-row-warn dup">Already logged for this cabin on this date. Pre-skipped — un-check Skip to log anyway.</div>`;
+    if(r.truncated)h+=`<div class="aab-row-warn">Technician note truncated by Gmail's PDF export — captured what's visible.</div>`;
+    h+=`<textarea class="aab-row-notes" rows="4" oninput="aabSetNotes(${idx},this.value)">${escNotes}</textarea>`;
+    h+=`</div>`;
+  });
+  wrap.innerHTML=h;
+}
+
+function aabSetCabin(idx,val){_aabRows[idx].cabin=val;_aabRows[idx].cabinSource=val?'manual':null;_aabRows[idx]._dupSet=false;_aabRows[idx].skip=false;aabRenderRows();}
+function aabSetDate(idx,val){_aabRows[idx].date=val;_aabRows[idx]._dupSet=false;_aabRows[idx].skip=false;aabRenderRows();}
+function aabSetNotes(idx,val){_aabRows[idx]._noteOverride=val;}
+function aabToggleSkip(idx,checked){_aabRows[idx].skip=!!checked;aabRenderRows();}
+function aabClearRows(){_aabRows=[];aabSetStatus('');aabRenderRows();}
+
+function aabSetStatus(msg,isErr){
+  const el=document.getElementById('aab-status');
+  if(!msg){el.style.display='none';el.textContent='';return;}
+  el.style.display='';el.className='aab-status'+(isErr?' err':'');el.textContent=msg;
+}
+
+async function aabHandleFiles(fileList){
+  const files=Array.from(fileList).filter(f=>/pdf$/i.test(f.type)||/\.pdf$/i.test(f.name));
+  if(!files.length){aabSetStatus('No PDF files detected.',true);return;}
+  aabSetStatus(`Parsing ${files.length} PDF${files.length>1?'s':''}…`);
+  let added=0,skipped=0,errors=0;
+  for(const f of files){
+    try{
+      const text=await _aabExtractText(f);
+      const recs=_aabParseText(text);
+      if(!recs.length){skipped++;continue;}
+      // De-dupe within session: skip rows already present (same acct + date)
+      recs.forEach(r=>{
+        const exists=_aabRows.some(x=>x.acct===r.acct&&x.date===r.date&&x.cabin===r.cabin);
+        if(!exists){_aabRows.push(r);added++;}
+      });
+    }catch(e){console.error('[aab] parse failed',f.name,e);errors++;}
+  }
+  const parts=[];
+  parts.push(`${added} service${added===1?'':'s'} added`);
+  if(skipped)parts.push(`${skipped} PDF${skipped>1?'s':''} had no service blocks`);
+  if(errors)parts.push(`${errors} parse error${errors>1?'s':''}`);
+  aabSetStatus(parts.join(' · '),errors>0&&added===0);
+  aabRenderRows();
+}
+
+function openAabImport(){
+  _aabRows=[];aabSetStatus('');aabRenderRows();
+  document.getElementById('aab-import-modal').classList.add('open');
+  // Bind once
+  if(!document.getElementById('aab-drop')._bound){
+    const drop=document.getElementById('aab-drop');
+    const fileInp=document.getElementById('aab-file');
+    drop.addEventListener('click',e=>{if(e.target.tagName!=='SPAN')fileInp.click();});
+    drop.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('aab-drag');});
+    drop.addEventListener('dragleave',()=>drop.classList.remove('aab-drag'));
+    drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('aab-drag');aabHandleFiles(e.dataTransfer.files);});
+    fileInp.addEventListener('change',e=>{aabHandleFiles(e.target.files);e.target.value='';});
+    drop._bound=true;
+  }
+  // Pre-load pdf.js so the first drop is responsive
+  _aabLoadPdfLib().catch(e=>console.warn('[aab] pdf.js preload failed',e));
+}
+
+async function aabLogAll(){
+  const rows=_aabRows.filter(r=>!r.skip);
+  if(!rows.length){showToast('Nothing to log — all rows skipped.','err');return;}
+  // Validate
+  const bad=rows.find(r=>!r.cabin||!r.date);
+  if(bad){showToast('Some rows still need a cabin or date.','err');return;}
+  let logged=0;
+  const nowIso=new Date().toISOString();
+  rows.forEach(r=>{
+    const noteText=(r._noteOverride!=null?r._noteOverride:_aabBuildNoteText(r)).trim();
+    const task={
+      id:Date.now().toString()+Math.random().toString(36).slice(2,6),
+      property:r.cabin,guest:'',problem:'Pest Control — Monthly',category:'pest',
+      status:'complete',date:r.date,vendor:'v10',urgent:false,recurring:false,
+      notes:noteText?[{text:noteText,type:'admin',time:nowIso}]:[],
+      vendorNotes:'',created:nowIso,_loggedService:true,_source:'aab_pdf',_aabAcct:r.acct||null,
+    };
+    tasks.unshift(task);
+    if(typeof logTaskChange==='function'){try{logTaskChange('log_service',task);}catch(e){}}
+    logged++;
+  });
+  await saveTasks();
+  renderAll();
+  closeModal('aab-import-modal');
+  _aabRows=[];
+  showToast(`${logged} pest control service${logged>1?'s':''} logged.`);
+}
 // ── Configure this after deploying the webhook API ──
 const HB_CONFIG = {
   // Set this to your deployed Vercel URL (e.g. 'https://storybook-webhook.vercel.app')

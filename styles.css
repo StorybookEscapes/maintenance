@@ -1942,6 +1942,35 @@ textarea{resize:vertical;min-height:76px}
 .rv-nb-banner.gatlinburg{border-left-color:var(--gatlinburg)}
 .rv-nb-banner.alpine{border-left-color:var(--alpine)}
 .rv-nb-banner.sevierville{border-left-color:var(--sevierville)}
+
+/* All About Bugs — Import Service Logs modal */
+.aab-drop{border:2px dashed var(--border-dark);background:var(--green-pale);border-radius:var(--radius);padding:28px 18px;text-align:center;cursor:pointer;transition:all .15s;margin-bottom:14px}
+.aab-drop:hover{border-color:var(--green);background:var(--green-light)}
+.aab-drop.aab-drag{border-color:var(--green);background:var(--green-light);box-shadow:inset 0 0 0 2px var(--green)}
+.aab-drop-icon{font-size:1.8rem;color:var(--green);margin-bottom:6px}
+.aab-drop-title{font-weight:700;color:var(--green);font-size:1rem;margin-bottom:4px}
+.aab-drop-sub{font-size:.78rem;color:var(--text2)}
+.aab-drop-link{color:var(--green);font-weight:600;cursor:pointer;text-decoration:underline}
+.aab-status{padding:8px 12px;border-radius:var(--radius);font-size:.82rem;margin-bottom:10px;background:var(--green-pale);color:var(--green);border:1px solid var(--border)}
+.aab-status.err{background:var(--red-bg);color:var(--red);border-color:var(--red-border)}
+.aab-rows-hdr{display:flex;justify-content:space-between;align-items:center;margin:6px 0 8px 0;font-size:.86rem;font-weight:700;color:var(--text)}
+.aab-count-badge{background:var(--green);color:#fff;border-radius:20px;padding:1px 9px;font-size:.7rem;font-weight:700;margin-left:6px}
+.aab-row{border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;background:var(--surface);position:relative}
+.aab-row.aab-skip{opacity:.55;background:var(--surface2)}
+.aab-row.aab-warn{border-left:4px solid var(--gold);background:var(--gold-pale)}
+.aab-row.aab-dup{border-left:4px solid var(--text3);background:var(--surface2)}
+.aab-row.aab-err{border-left:4px solid var(--red);background:var(--red-bg)}
+.aab-row-top{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+.aab-row-top label{display:flex;align-items:center;gap:6px;font-size:.74rem;color:var(--text2);font-weight:600}
+.aab-row-top input[type=date],.aab-row-top select{padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--white);font-family:inherit;font-size:.82rem;color:var(--text)}
+.aab-row-top .aab-skip-cb{width:15px;height:15px;accent-color:var(--green);cursor:pointer;margin-left:auto}
+.aab-row-meta{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.74rem;color:var(--text2);margin-bottom:6px}
+.aab-row-meta b{color:var(--text);font-weight:600}
+.aab-row-warn{font-size:.72rem;color:var(--gold);font-weight:600;margin-bottom:6px}
+.aab-row-warn.dup{color:var(--text3)}
+.aab-row-warn.err{color:var(--red)}
+.aab-row-notes{width:100%;min-height:60px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:.82rem;color:var(--text);background:var(--white);resize:vertical;line-height:1.4}
+.aab-row-acct{font-size:.7rem;color:var(--text3);font-family:'DM Mono',monospace;letter-spacing:.5px}
 .rv-nb-banner.hillside{border-left-color:var(--hillside)}
 .rv-nb-name{font-weight:600;color:var(--green);font-size:.92rem}
 .rv-nb-sub{font-size:.72rem;color:var(--text2)}
