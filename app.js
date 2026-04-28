@@ -2717,6 +2717,54 @@ function checkCombine(){
     area.innerHTML+=`<div class="combine"><div class="combine-txt"><strong>${r.name}</strong> is due ${dt} at this property. Combine into one visit?</div><div class="combine-btns"><button class="btn btn-gold" onclick="combineTask('${r.id}','${t.date}')">Combine</button><button class="btn" onclick="this.closest('.combine').remove()">Dismiss</button></div></div>`;
   });
 }
+// Banner shown in the task detail when this task carries a bundled filter
+// service. Surfaces the otherwise-hidden flag and gives an explicit Unbundle
+// path, since the flag forces the recount modal to gate Mark Complete.
+function renderBundleBanner(t){
+  const el=document.getElementById('d-bundle');
+  if(!el)return;
+  if(!t||!t.filter_service_bundled){el.innerHTML='';return;}
+  el.innerHTML=`<div class="bundle-banner">
+    <div class="bundle-banner-icon">&#x1F32C;&#xFE0F;</div>
+    <div class="bundle-banner-body">
+      <div class="bundle-banner-title">Filter service bundled with this task</div>
+      <div class="bundle-banner-sub">Vendor will be asked to recount filters before this task can be marked complete. Unbundle if filters aren't part of this visit.</div>
+    </div>
+    <button class="btn" onclick="unbundleFilterService('${t.id}')">Unbundle</button>
+  </div>`;
+}
+async function unbundleFilterService(id){
+  const t=tasks.find(x=>x.id===id);if(!t)return;
+  if(!t.filter_service_bundled){renderBundleBanner(t);return;}
+  // Strip the auto-appended notes block (anything that opens with the
+  // "— FILTER SERVICE BUNDLED —" header). Leave manually-added notes alone.
+  if(Array.isArray(t.notes)){
+    t.notes=t.notes.filter(n=>!(n&&n.text&&/^—\s*FILTER SERVICE BUNDLED\s*—/i.test(n.text.trim())));
+  }
+  // Only clear purchaseNote if it matches the auto-populated "Filters: …" pattern.
+  // Manually-edited purchase notes stay put.
+  if(t.purchaseNote&&/^Filters:\s/i.test(t.purchaseNote.trim())){
+    t.purchaseNote='';
+    if(t.purchaseStatus==='needed')t.purchaseStatus='';
+    if(t.purchaser==='vendor')t.purchaser='';
+  }
+  delete t.filter_service_bundled;
+  // Also clear the recount-submitted flag so the task is in a clean state.
+  delete t.filter_recount_submitted_by_vendor;
+  if(typeof logTaskChange==='function'){try{logTaskChange('unbundle_filter',t);}catch(e){}}
+  await saveTasks();
+  // Refresh the relevant pieces of the open detail modal in place.
+  renderBundleBanner(t);
+  renderNotes(t);
+  const purchaseInp=document.getElementById('d-purchase');
+  if(purchaseInp)purchaseInp.value=t.purchaseNote||'';
+  const pSaved=document.getElementById('d-purchase-saved');
+  if(pSaved)pSaved.style.display=t.purchaseNote?'':'none';
+  if(typeof renderPurchaseWorkflow==='function')renderPurchaseWorkflow(t);
+  renderAll();
+  showToast('Filter service unbundled — Mark Complete will work normally now.');
+}
+
 async function combineTask(rid,date){
   const r=recurring.find(x=>x.id===rid);if(!r)return;
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
@@ -2845,7 +2893,7 @@ async function openDetail(id){
   renderPurchaseWorkflow(t);
   showTaskPhoto(t);
   showVendorPhotos(t);
-  renderDetailVendors(t,p);renderNotes(t);checkCombine();
+  renderDetailVendors(t,p);renderNotes(t);checkCombine();renderBundleBanner(t);
   closeVendorDD(); // reset dropdown state when opening a new task
   renderMiniCal(t.property).then(()=>renderDetailVendors(t,p));
   // Guest context section removed — not useful for admin workflow

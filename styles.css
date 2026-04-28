@@ -422,6 +422,14 @@ textarea{resize:vertical;min-height:76px}
 .combine-txt strong{color:#b8830a}
 .combine-btns{display:flex;gap:6px}
 
+/* Filter-service bundle banner — appears in task detail when filter_service_bundled is true */
+.bundle-banner{background:var(--green-pale);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:8px;padding:10px 12px;margin-top:11px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.bundle-banner-icon{font-size:1.2rem;flex-shrink:0}
+.bundle-banner-body{flex:1;min-width:200px}
+.bundle-banner-title{font-size:.82rem;font-weight:600;color:var(--green);margin-bottom:2px}
+.bundle-banner-sub{font-size:.72rem;color:var(--text2);line-height:1.4}
+.bundle-banner .btn{flex-shrink:0;font-size:.74rem;padding:5px 12px}
+
 /* SMS */
 .sms-toggle{display:flex;align-items:center;gap:6px;padding:7px 0;cursor:pointer;user-select:none;border:none;background:none;font-family:inherit;width:100%}
 .sms-toggle-label{font-size:.72rem;text-transform:uppercase;letter-spacing:1px;color:var(--text2);font-weight:600}
