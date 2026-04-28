@@ -596,6 +596,18 @@ const _nbVirtualProps={
 };
 const getNb=id=>_nbMap[id]||_nbById[id]||null;
 const getProp=id=>_propMap[id]||_nbVirtualProps[id]||null;
+// Resolve a cabin's current door code: prefer the Property Bible
+// (profile.access.front_door.code) so Chip's edits in the Properties tab
+// flow through to vendor sheets, group scheduler, and {door_code} SMS
+// substitutions. Falls back to the legacy hardcoded PROPS.door so any
+// cabin whose profile isn't migrated still works.
+function getDoorCode(propOrId){
+  const prop=typeof propOrId==='string'?getProp(propOrId):propOrId;
+  const id=prop&&prop.id;
+  const profile=(typeof PP!=='undefined'&&PP&&id)?PP[id]:null;
+  const fromBible=profile&&profile.access&&profile.access.front_door&&profile.access.front_door.code;
+  return fromBible||(prop&&prop.door)||'';
+}
 const getNbCls=id=>{if(_nbById[id])return _nbById[id].cls;const n=_nbMap[id];return n?n.cls:'other';};
 const DONE_STATUSES=['complete','resolved_by_guest'];
 const isDone=t=>DONE_STATUSES.includes(t.status);
@@ -1525,7 +1537,7 @@ function _gsRender(){
       const shortName=propName.replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
       const nbCls=getNbCls(pid);
       const addr=p&&p.address?p.address:'';
-      const door=p&&p.door?p.door:'';
+      const door=getDoorCode(p);
       const metaParts=[];
       if(addr)metaParts.push(`<a href="https://maps.google.com/?q=${encodeURIComponent(addr)}" target="_blank">${addr}</a>`);
       if(door)metaParts.push('Code: '+door);
@@ -1720,7 +1732,7 @@ function _gsRenderSuccess(){
     const shortName=(p?p.name:pid).replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
     const nbCls=getNbCls(pid);
     const addr=p&&p.address?p.address:'';
-    const door=p&&p.door?p.door:'';
+    const door=getDoorCode(p);
     const metaParts=[];
     if(addr)metaParts.push(`<a href="https://maps.google.com/?q=${encodeURIComponent(addr)}" target="_blank">${addr}</a>`);
     if(door)metaParts.push('Code: '+door);
@@ -4022,7 +4034,7 @@ async function sendAllTasksLink(vendorName,tel){
 }
 
 function buildSMS(t,p,v){
-  const pn=p?p.name:t.property,addr=p?p.address:'',door=p?p.door:'';
+  const pn=p?p.name:t.property,addr=p?p.address:'',door=getDoorCode(p);
   const urg=t.urgent?'\n\nThis is URGENT — same-day response needed if possible.':'';
   let ds;
   if(t.date){ds=`Scheduled for: ${t.date}`;}
