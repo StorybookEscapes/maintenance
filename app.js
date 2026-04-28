@@ -53,7 +53,7 @@ const PROPS = [
   {id:'bearadise',name:'Bearadise Lodge',address:'734 Heiden Dr. Gatlinburg, TN',door:'1967'},
   {id:'wizards',name:"The Wizard's Edge",address:'658 Pinecrest Dr., Gatlinburg, TN',door:'4558'},
   {id:'hibernation',name:'Hibernation Station',address:'335 Alpine Mountain Way, Pigeon Forge, TN',door:'4558'},
-  {id:'hero',name:'Hero Hideout',address:'2382 Alpine Village Way, Pigeon Forge, TN',door:'4558'},
+  {id:'hero',name:'Hero Hideout',address:'2382 Alpine Village Way, Pigeon Forge, TN',door:'3940'},
   {id:'magic',name:'Magic Mountain',address:'1775 Bluff Ridge Rd. Sevierville, TN',door:'4558'},
   {id:'hillside_big',name:'Hillside Haven - The Big House',address:'226 Oak Hill, Jacksons Gap, AL',door:'4425'},
   {id:'hillside_cottage',name:'Hillside Haven - The Cottage',address:'218 Oak Hill, Jacksons Gap, AL',door:'O812'},
