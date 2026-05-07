@@ -5048,6 +5048,9 @@ function renderVendors(){
       if(v.id==='v10'){
         h+=`<button class="btn" onclick="openAabImport()" title="Drag and drop completed-service PDFs to log them automatically">Import PDFs</button>`;
       }
+      if(v.name==='Lisa Hawthorne'||v.name==='Mammie Johnson'){
+        h+=`<button class="btn btn-inv" onclick="openInvoiceReconciler('${safeName}')">Invoice</button>`;
+      }
       h+=`<button class="btn" onclick="openEditVendor('${v.id}')">Edit</button>`;
       h+=`</div></div>`; // close vc-btn-row, vc
     });
@@ -11773,3 +11776,599 @@ function rvInit() {
 }
 
 // ═══════════════  END Reviews  ═══════════════
+
+// ═══════════════  Invoice Reconciliation  ═══════════════
+const INV_PROP_INFO = {
+  bearadise:       { name:'Bearadise Lodge',                  group:'individual' },
+  hero:            { name:'Hero Hideout',                     group:'individual' },
+  hibernation:     { name:'Hibernation Station',              group:'individual' },
+  magic:           { name:'Magic Mountain',                   group:'individual' },
+  wizards:         { name:"The Wizard's Edge",                group:'individual' },
+  umc10:           { name:'UMC-10 Whispering Wand',           group:'umc' },
+  umc20:           { name:'UMC-20 Honey Haven',               group:'umc' },
+  umc30:           { name:'UMC-30 Rebel Refuge',              group:'umc' },
+  umc40:           { name:'UMC-40 Lookout on the Roadside',   group:'umc' },
+  umc50:           { name:'UMC-50 Rosy Ridge',                group:'umc' },
+  umc60:           { name:'UMC-60 Hero Hangout',              group:'umc' },
+  prc1:            { name:'PRC-1 Forge in the Forest',        group:'prc' },
+  prc2:            { name:'PRC-2 Bluebird Bungalow',          group:'prc' },
+  prc3:            { name:'PRC-3 The Rustic Rose',            group:'prc' },
+  prc4:            { name:'PRC-4 Snuggle Shack',              group:'prc' },
+  prc5:            { name:'PRC-5 Pink Paradise',              group:'prc' },
+  prc6:            { name:"PRC-6 Ringbearer's Roost",         group:'prc' },
+  hillside_big:    { name:'Hillside Haven - Big House',       group:'individual' },
+  hillside_cottage:{ name:'Hillside Haven - Cottage',         group:'individual' },
+};
+
+const INV_LISA_PROP_PATTERNS = [
+  { pattern:/Magic Mountain instant booking pool/i,      key:'magic'       },
+  { pattern:/Heros Hideout instant booking/i,            key:'hero'        },
+  { pattern:/Hero's Hideout instant booking/i,           key:'hero'        },
+  { pattern:/Hibernation Station instant booking/i,      key:'hibernation' },
+  { pattern:/Wizards Edge instant booking/i,             key:'wizards'     },
+  { pattern:/Bearadise 1967/i,                           key:'bearadise'   },
+  { pattern:/Bluebird Bungalow\s*\(2\)/i,                key:'prc2'        },
+  { pattern:/Forge in the forest\s*\(1\)/i,              key:'prc1'        },
+  { pattern:/Hero Hangout 3940/i,                        key:'umc60'       },
+  { pattern:/Honey Haven 3940/i,                         key:'umc20'       },
+  { pattern:/Lookout on The Roadside 3940/i,             key:'umc40'       },
+  { pattern:/Pink Paradise\s*\(5\)/i,                    key:'prc5'        },
+  { pattern:/Rebel Refuge 3940/i,                        key:'umc30'       },
+  { pattern:/Ringbearer.s Roost\s*\(6\)/i,               key:'prc6'        },
+  { pattern:/Rosy Ridge 3940/i,                          key:'umc50'       },
+  { pattern:/Rustic Rose\s*\(3\)/i,                      key:'prc3'        },
+  { pattern:/Snuggle Shack\s*\(4\)/i,                    key:'prc4'        },
+  { pattern:/The Whispering Wand 3940/i,                 key:'umc10'       },
+];
+
+let _invVendor = '';
+let _invItems  = [];
+let _invMeta   = {};
+let _invResult = null;
+let _invRows   = [];
+
+function _invFmt(n){ return '$' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,','); }
+function _invFmtD(iso){ const [y,m,d]=iso.split('-'); return `${m}/${d}/${y}`; }
+function _invShift(iso,days){
+  const d=new Date(iso+'T12:00:00Z'); d.setUTCDate(d.getUTCDate()+days);
+  return d.toISOString().split('T')[0];
+}
+function _invDaysBetween(a,b){
+  return Math.round((new Date(b+'T12:00:00Z')-new Date(a+'T12:00:00Z'))/86400000);
+}
+function _invFormatPeriod(s,e){
+  const mn=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const sd=new Date(s+'T12:00:00Z'), ed=new Date(e+'T12:00:00Z');
+  if(sd.getUTCMonth()===ed.getUTCMonth()&&sd.getUTCFullYear()===ed.getUTCFullYear())
+    return mn[sd.getUTCMonth()]+' '+sd.getUTCFullYear();
+  return mn[sd.getUTCMonth()]+' – '+mn[ed.getUTCMonth()]+' '+ed.getUTCFullYear();
+}
+function _invPropId(key){ return HOSPITABLE_IDS[key]||null; }
+
+function openInvoiceReconciler(vendorName){
+  _invVendor=vendorName; _invItems=[]; _invResult=null; _invMeta={}; _invRows=[];
+  document.getElementById('inv-modal-title').textContent='Invoice Reconciliation — '+vendorName;
+  document.getElementById('inv-body').innerHTML=_invStep1HTML();
+  openModal('inv-modal');
+}
+
+function _invStep1HTML(){
+  if(_invVendor==='Lisa Hawthorne'){
+    return `<div style="padding:4px 0 8px">
+      <p style="font-size:.84rem;color:var(--text2);margin-bottom:16px">Upload Lisa's invoice PDF to automatically extract all line items, then verify each clean against Hospitable.</p>
+      <div class="inv-drop-zone" id="inv-drop"
+        ondragover="invDragOver(event)" ondragleave="invDragLeave(event)" ondrop="invDrop(event)"
+        onclick="document.getElementById('inv-file').click()">
+        <div class="inv-drop-icon">📄</div>
+        <div class="inv-drop-label">Drop LJ Cleaning invoice PDF here</div>
+        <div class="inv-drop-sub">or click to choose file</div>
+        <input type="file" accept=".pdf" id="inv-file" style="display:none" onchange="invHandleFile(this.files[0])">
+      </div>
+      <div id="inv-parse-status" style="display:none"></div>
+    </div>`;
+  } else {
+    _invRows=[{date:'',prop:'hillside_big',service:'Departure Clean',amount:''}];
+    return _invMammieHTML();
+  }
+}
+
+function invDragOver(e){e.preventDefault();document.getElementById('inv-drop').classList.add('drag-over');}
+function invDragLeave(e){document.getElementById('inv-drop').classList.remove('drag-over');}
+function invDrop(e){
+  e.preventDefault();
+  document.getElementById('inv-drop').classList.remove('drag-over');
+  const f=e.dataTransfer.files[0];
+  if(f&&f.type==='application/pdf') invHandleFile(f);
+  else showToast('Please drop a PDF file.');
+}
+function invHandleFile(file){
+  if(!file)return;
+  const statusEl=document.getElementById('inv-parse-status');
+  statusEl.style.display='block';
+  statusEl.className='inv-parse-notice inv-notice-ok';
+  statusEl.textContent='Reading PDF…';
+  const reader=new FileReader();
+  reader.onload=async(e)=>{
+    try{
+      const arr=e.target.result;
+      statusEl.textContent='Extracting text from PDF…';
+      const pdf=await pdfjsLib.getDocument({data:arr}).promise;
+      let text='';
+      for(let p=1;p<=pdf.numPages;p++){
+        const page=await pdf.getPage(p);
+        const content=await page.getTextContent();
+        text+=content.items.map(i=>i.str).join(' ')+' ';
+      }
+      statusEl.textContent='Parsing line items…';
+      const items=_invParseLisaPdf(text);
+      if(!items.length){
+        statusEl.className='inv-parse-notice inv-notice-err';
+        statusEl.textContent='Could not find any invoice line items in this PDF. Make sure this is a LJ Cleaning invoice.';
+        return;
+      }
+      _invItems=items;
+      const dates=items.map(i=>i.date).sort();
+      _invMeta={
+        vendor:'LJ Cleaning and Repair',
+        startDate:dates[0], endDate:dates[dates.length-1],
+        period:_invFormatPeriod(dates[0],dates[dates.length-1]),
+        totalAmount:items.reduce((s,i)=>s+i.amount,0),
+        totalAppointments:items.length
+      };
+      statusEl.className='inv-parse-notice inv-notice-ok';
+      statusEl.textContent=`✓ Parsed ${items.length} line items — $${_invMeta.totalAmount.toFixed(2)} total`;
+      setTimeout(()=>{document.getElementById('inv-body').innerHTML=_invStep2HTML();},500);
+    }catch(err){
+      console.error('Invoice PDF parse error:',err);
+      statusEl.className='inv-parse-notice inv-notice-err';
+      statusEl.textContent='Parse error: '+err.message;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function _invParseLisaPdf(rawText){
+  const text=rawText.replace(/\r\n/g,'\n').replace(/[ \t]+/g,' ');
+  const items=[];
+  let firstPropPos=Infinity;
+  for(const pp of INV_LISA_PROP_PATTERNS){
+    const m=text.match(pp.pattern);
+    if(m&&text.indexOf(m[0])<firstPropPos) firstPropPos=text.indexOf(m[0]);
+  }
+  if(firstPropPos===Infinity) return items;
+  const dateRe=/(\d{2})\/(\d{2})\/(\d{4})/g;
+  const allDates=[];
+  let dm;
+  while((dm=dateRe.exec(text))!==null){
+    allDates.push({pos:dm.index, end:dm.index+dm[0].length, iso:`${dm[3]}-${dm[1]}-${dm[2]}`});
+  }
+  const invoiceDates=allDates.filter(d=>d.pos>firstPropPos);
+  for(let i=0;i<invoiceDates.length;i++){
+    const {pos,end,iso}=invoiceDates[i];
+    const nextPos=invoiceDates[i+1]?.pos??text.length;
+    const beforeText=text.substring(0,pos);
+    const afterText=text.substring(end,nextPos);
+    let propKey=null, lastPropPos=-1;
+    for(const pp of INV_LISA_PROP_PATTERNS){
+      const re=new RegExp(pp.pattern.source,'gi');
+      let pm;
+      while((pm=re.exec(beforeText))!==null){
+        if(pm.index>lastPropPos){lastPropPos=pm.index; propKey=pp.key;}
+      }
+    }
+    if(!propKey) continue;
+    const isDep=/Departure\s*Clean/i.test(afterText);
+    const isMisc=/Miscellaneous/i.test(afterText);
+    if(!isDep&&!isMisc) continue;
+    const service=isDep?'Departure Clean':'Miscellaneous';
+    const amtM=afterText.match(/\$\s*([\d,]+\.\d{2})/);
+    if(!amtM) continue;
+    const amount=parseFloat(amtM[1].replace(/,/g,''));
+    if(amount>50000) continue;
+    const info=INV_PROP_INFO[propKey];
+    const hospId=_invPropId(propKey);
+    if(!info||!hospId) continue;
+    items.push({propKey, propName:info.name, propId:hospId, group:info.group, date:iso, service, amount});
+  }
+  return items;
+}
+
+function _invMammieHTML(){
+  const total=_invRows.reduce((s,r)=>s+(parseFloat(r.amount)||0),0);
+  const rows=_invRows.map((r,i)=>`<tr>
+    <td><input type="date" class="inv-input" data-idx="${i}" data-field="date" value="${r.date}"></td>
+    <td><select class="inv-input" data-idx="${i}" data-field="prop">
+      <option value="hillside_big"${r.prop==='hillside_big'?' selected':''}>Big House</option>
+      <option value="hillside_cottage"${r.prop==='hillside_cottage'?' selected':''}>Cottage</option>
+    </select></td>
+    <td><select class="inv-input" data-idx="${i}" data-field="service">
+      <option value="Departure Clean"${r.service==='Departure Clean'?' selected':''}>Departure Clean</option>
+      <option value="Miscellaneous"${r.service==='Miscellaneous'?' selected':''}>Miscellaneous</option>
+    </select></td>
+    <td><input type="number" step="0.01" min="0" class="inv-input" data-idx="${i}" data-field="amount" value="${r.amount}" placeholder="0.00" style="width:90px"></td>
+    <td style="width:32px;text-align:center">
+      <button class="btn" style="padding:2px 8px;font-size:.72rem" onclick="invMammieRemove(${i})">✕</button>
+    </td>
+  </tr>`).join('');
+  return `<div style="padding:4px 0 8px">
+    <p style="font-size:.84rem;color:var(--text2);margin-bottom:14px">Enter Mammie's invoice line items, then verify each clean against Hospitable.</p>
+    <div style="overflow-x:auto">
+      <table class="inv-manual-table">
+        <thead><tr><th>Date</th><th>Property</th><th>Service</th><th>Amount</th><th></th></tr></thead>
+        <tbody id="inv-mammie-tbody">${rows}</tbody>
+      </table>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
+      <button class="btn" onclick="invMammieAdd()">+ Add Row</button>
+      <span style="font-size:.8rem;color:var(--text2)">${_invRows.length} item${_invRows.length!==1?'s':''} · ${_invFmt(total)}</span>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:14px">
+      <button class="btn btn-g" onclick="invMammieProceed()">Review Items →</button>
+    </div>
+  </div>`;
+}
+function _invMammieSync(){
+  const tbody=document.getElementById('inv-mammie-tbody');
+  if(!tbody)return;
+  tbody.querySelectorAll('tr').forEach(row=>{
+    const idx=parseInt(row.querySelector('[data-field="date"]')?.dataset.idx??'-1');
+    if(idx<0||idx>=_invRows.length)return;
+    _invRows[idx].date=row.querySelector('[data-field="date"]')?.value||'';
+    _invRows[idx].prop=row.querySelector('[data-field="prop"]')?.value||'hillside_big';
+    _invRows[idx].service=row.querySelector('[data-field="service"]')?.value||'Departure Clean';
+    _invRows[idx].amount=row.querySelector('[data-field="amount"]')?.value||'';
+  });
+}
+function invMammieAdd(){
+  _invMammieSync();
+  _invRows.push({date:'',prop:'hillside_big',service:'Departure Clean',amount:''});
+  document.getElementById('inv-body').innerHTML=_invMammieHTML();
+}
+function invMammieRemove(i){
+  _invMammieSync();
+  _invRows.splice(i,1);
+  if(!_invRows.length) _invRows=[{date:'',prop:'hillside_big',service:'Departure Clean',amount:''}];
+  document.getElementById('inv-body').innerHTML=_invMammieHTML();
+}
+function invMammieProceed(){
+  _invMammieSync();
+  _invItems=[];
+  for(const r of _invRows){
+    if(!r.date){showToast('Please fill in all dates.');return;}
+    const amt=parseFloat(r.amount);
+    if(!r.amount||isNaN(amt)||amt<=0){showToast('Please enter a valid amount for each row.');return;}
+    const info=INV_PROP_INFO[r.prop];
+    const hospId=_invPropId(r.prop);
+    if(!info||!hospId) continue;
+    _invItems.push({propKey:r.prop, propName:info.name, propId:hospId, group:info.group, date:r.date, service:r.service, amount:amt});
+  }
+  if(!_invItems.length){showToast('No valid items to process.');return;}
+  _invItems.sort((a,b)=>a.date.localeCompare(b.date));
+  const dates=_invItems.map(i=>i.date).sort();
+  _invMeta={
+    vendor:'Mammie Johnson',
+    startDate:dates[0], endDate:dates[dates.length-1],
+    period:_invFormatPeriod(dates[0],dates[dates.length-1]),
+    totalAmount:_invItems.reduce((s,i)=>s+i.amount,0),
+    totalAppointments:_invItems.length
+  };
+  document.getElementById('inv-body').innerHTML=_invStep2HTML();
+}
+
+function _invStep2HTML(){
+  const total=_invItems.reduce((s,i)=>s+i.amount,0);
+  const rows=_invItems.map(item=>`<tr>
+    <td style="font-size:.8rem">${item.propName}</td>
+    <td style="white-space:nowrap;font-size:.8rem">${_invFmtD(item.date)}</td>
+    <td><span class="badge ${item.service==='Departure Clean'?'badge-green':'badge-yellow'}" style="font-size:.7rem">${item.service}</span></td>
+    <td style="text-align:right;font-weight:600;font-size:.82rem">${_invFmt(item.amount)}</td>
+  </tr>`).join('');
+  const propCount=[...new Set(_invItems.map(i=>i.propKey))].length;
+  return `<div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;gap:12px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:.9rem;font-weight:700;color:var(--green);font-family:'Cormorant Garamond',serif">${_invMeta.period}</div>
+        <div style="font-size:.78rem;color:var(--text2)">${_invItems.length} items · ${propCount} properties · ${_invFmt(total)} total</div>
+      </div>
+    </div>
+    <div style="overflow-x:auto;max-height:380px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius)">
+      <table class="inv-table">
+        <thead><tr><th>Property</th><th>Date</th><th>Service</th><th style="text-align:right">Amount</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:space-between;margin-top:16px">
+      <button class="btn" onclick="invGoBack()">← Back</button>
+      <button class="btn btn-g" onclick="invStartVerification()">Verify with Hospitable →</button>
+    </div>
+  </div>`;
+}
+function invGoBack(){
+  _invItems=[];
+  document.getElementById('inv-body').innerHTML=_invStep1HTML();
+}
+
+function invStartVerification(){
+  document.getElementById('inv-body').innerHTML=`
+    <div>
+      <div class="inv-progress" id="inv-pg-box">
+        <div class="inv-progress-track"><div class="inv-progress-fill" id="inv-pg-fill" style="width:0%"></div></div>
+        <div id="inv-pg-steps"></div>
+      </div>
+      <div id="inv-results" style="display:none"></div>
+    </div>`;
+  _invRunVerification();
+}
+function _invSetProgress(pct,steps){
+  const fill=document.getElementById('inv-pg-fill');
+  const stepsEl=document.getElementById('inv-pg-steps');
+  if(fill) fill.style.width=pct+'%';
+  if(stepsEl) stepsEl.innerHTML=steps.map(s=>`<div class="inv-step-line ${s.cls||''}"><div class="inv-step-dot"></div>${s.text}</div>`).join('');
+}
+
+async function _invRunVerification(){
+  const propIds=[...new Set(_invItems.map(i=>i.propId))];
+  const fetchStart=_invShift(_invMeta.startDate,-1);
+  _invSetProgress(5,[{text:`Fetching data for ${propIds.length} properties…`,cls:'active'}]);
+  const propDeps={};
+  const propCal={};
+  let fetchedD=0, fetchedC=0;
+  const errors=[];
+  const updatePg=()=>{
+    const pct=5+Math.round(((fetchedD+fetchedC)/(propIds.length*2))*77);
+    _invSetProgress(pct,[{text:`Departures: ${fetchedD}/${propIds.length} · Calendars: ${fetchedC}/${propIds.length}`,cls:'active'}]);
+  };
+  await Promise.all([
+    ...propIds.map(async pid=>{
+      const deps=new Set();
+      try{
+        const url=new URL(PROXY_BASE+'/api/hospitable');
+        url.searchParams.set('action','reservations');
+        url.searchParams.set('pid',pid);
+        url.searchParams.set('start_date',_invMeta.startDate);
+        url.searchParams.set('end_date',_invMeta.endDate);
+        url.searchParams.set('date_query','checkout');
+        url.searchParams.set('per_page','200');
+        const r=await fetch(url.toString(),{signal:AbortSignal.timeout(20000)});
+        if(!r.ok) throw new Error('HTTP '+r.status);
+        const raw=await r.json();
+        const items=Array.isArray(raw)?raw
+          :Array.isArray(raw?.data)?raw.data
+          :Array.isArray(raw?.data?.data)?raw.data.data:[];
+        items.forEach(res=>{
+          const dep=(res.departure_date||'').split('T')[0];
+          if(dep>=_invMeta.startDate&&dep<=_invMeta.endDate) deps.add(dep);
+        });
+      }catch(e){ errors.push('DEP '+pid.slice(0,8)+': '+(e.message||String(e))); }
+      propDeps[pid]=deps; fetchedD++; updatePg();
+    }),
+    ...propIds.map(async pid=>{
+      const cal={};
+      try{
+        const url=new URL(PROXY_BASE+'/api/hospitable');
+        url.searchParams.set('action','calendar');
+        url.searchParams.set('pid',pid);
+        url.searchParams.set('start_date',fetchStart);
+        url.searchParams.set('end_date',_invMeta.endDate);
+        const r=await fetch(url.toString(),{signal:AbortSignal.timeout(20000)});
+        if(!r.ok) throw new Error('HTTP '+r.status);
+        const raw=await r.json();
+        const days=Array.isArray(raw?.data?.days)?raw.data.days
+          :Array.isArray(raw?.days)?raw.days
+          :Array.isArray(raw)?raw:[];
+        days.forEach(d=>{ if(d.date) cal[d.date]=d; });
+      }catch(e){ errors.push('CAL '+pid.slice(0,8)+': '+(e.message||String(e))); }
+      propCal[pid]=cal; fetchedC++; updatePg();
+    })
+  ]);
+  if(errors.length){
+    _invSetProgress(100,[
+      {text:`⚠️ ${errors.length} API error(s)`,cls:'active'},
+      ...errors.slice(0,3).map(e=>({text:e,cls:'active'}))
+    ]);
+    if(errors.length>=propIds.length*2){ return; }
+  }
+  _invSetProgress(84,[
+    {text:`Data fetched for ${propIds.length} properties`,cls:'done'},
+    {text:'Building reservation gaps…',cls:'active'}
+  ]);
+  const propGapIds={};
+  const propGapStarts={};
+  for(const pid of propIds){
+    const cal=propCal[pid];
+    const deps=propDeps[pid];
+    const allDates=Object.keys(cal)
+      .filter(d=>d>=_invMeta.startDate&&d<=_invMeta.endDate)
+      .sort();
+    let gapId=0;
+    const gapMap={}, gapStarts={};
+    for(const date of allDates){
+      const isDep=deps.has(date);
+      const isAvail=cal[date]?.status?.available===true;
+      const prevInGap=gapMap[_invShift(date,-1)]!=null;
+      if(isDep){
+        gapId++; gapStarts[gapId]=date; gapMap[date]=gapId;
+      } else if(isAvail&&prevInGap){
+        gapMap[date]=gapId;
+      } else if(isAvail&&!prevInGap){
+        gapId++; gapStarts[gapId]=date; gapMap[date]=gapId;
+      }
+    }
+    propGapIds[pid]=gapMap; propGapStarts[pid]=gapStarts;
+  }
+  const gapFirst={};
+  [..._invItems]
+    .filter(i=>i.service==='Departure Clean')
+    .sort((a,b)=>a.date.localeCompare(b.date))
+    .forEach(item=>{
+      const gid=propGapIds[item.propId]?.[item.date];
+      if(gid!=null){
+        const key=`${item.propId}_${gid}`;
+        if(!gapFirst[key]) gapFirst[key]=item.date;
+      }
+    });
+  _invSetProgress(94,[
+    {text:'Data fetched and gaps built',cls:'done'},
+    {text:'Classifying line items…',cls:'active'}
+  ]);
+  _invResult=_invItems.map(item=>{
+    const r={...item};
+    if(item.service==='Miscellaneous'){
+      r.status='misc'; r.statusLabel='Reimbursement'; r.statusClass='badge-yellow'; return r;
+    }
+    const isDep=propDeps[item.propId]?.has(item.date)??false;
+    const calDay=propCal[item.propId]?.[item.date];
+    const isAvail=calDay?.status?.available===true;
+    const isOwner=!isAvail&&calDay?.status?.source_type==='USER';
+    const gid=propGapIds[item.propId]?.[item.date];
+    const gKey=gid!=null?`${item.propId}_${gid}`:null;
+    const isFirst=gKey!=null&&gapFirst[gKey]===item.date;
+    if(gKey!=null&&!isFirst){
+      r.status='duplicate'; r.statusLabel='Duplicate in Gap'; r.statusClass='badge-red';
+      r.duplicateOf=gapFirst[gKey]; return r;
+    }
+    if(isDep){ r.status='checkout'; r.statusLabel='Checkout Day'; r.statusClass='badge-green'; return r; }
+    if(isOwner){ r.status='owner_block'; r.statusLabel='Owner Block'; r.statusClass='badge-blue'; return r; }
+    if(isAvail){
+      const gStart=propGapStarts[item.propId]?.[gid];
+      const daysIn=gStart?_invDaysBetween(gStart,item.date):null;
+      r.status='gap_clean'; r.statusClass='badge-blue';
+      r.statusLabel=daysIn?`Gap Clean (+${daysIn}d)`:'Gap Clean';
+      r.daysIn=daysIn; r.gapStart=gStart; return r;
+    }
+    if(!calDay){ r.status='no_cal'; r.statusLabel='No Cal Data'; r.statusClass='badge-gray'; }
+    else { r.status='occupied'; r.statusLabel='Active Reservation'; r.statusClass='badge-red'; }
+    return r;
+  });
+  _invSetProgress(100,[
+    {text:'Data fetched and gaps built',cls:'done'},
+    {text:'Reconciliation complete',cls:'done'}
+  ]);
+  setTimeout(()=>{
+    document.getElementById('inv-pg-box').style.display='none';
+    const resEl=document.getElementById('inv-results');
+    if(resEl){ resEl.style.display='block'; resEl.innerHTML=_invResultsHTML(); }
+  },350);
+}
+
+function _invResultsHTML(){
+  const actionable=_invResult.filter(i=>['occupied','duplicate','misc','no_cal'].includes(i.status));
+  const flagBadge=actionable.length?` <span style="background:#dc2626;color:#fff;border-radius:99px;padding:1px 7px;font-size:.72rem;font-weight:700">${actionable.length}</span>`:'';
+  return `<div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div>
+        <div style="font-size:.88rem;font-weight:700;color:var(--green);font-family:'Cormorant Garamond',serif">${_invMeta.period} · ${_invMeta.vendor}</div>
+        <div style="font-size:.76rem;color:var(--text2)">${_invResult.length} items · ${_invFmt(_invResult.reduce((s,i)=>s+i.amount,0))}</div>
+      </div>
+      <button class="btn" onclick="invGoBack()" style="font-size:.78rem">← Start Over</button>
+    </div>
+    <div class="inv-tabs">
+      <div class="inv-tab active" onclick="invTab('summary',this)">Payment Summary</div>
+      <div class="inv-tab" onclick="invTab('flags',this)">⚠ Flags${flagBadge}</div>
+      <div class="inv-tab" onclick="invTab('detail',this)">Full Detail</div>
+    </div>
+    <div id="inv-panel-summary" class="inv-tab-panel active">${_invSummaryHTML()}</div>
+    <div id="inv-panel-flags"   class="inv-tab-panel">${_invFlagsHTML()}</div>
+    <div id="inv-panel-detail"  class="inv-tab-panel">${_invDetailHTML()}</div>
+  </div>`;
+}
+function invTab(name,el){
+  document.querySelectorAll('#inv-body .inv-tab').forEach(t=>t.classList.toggle('active',t===el));
+  ['summary','flags','detail'].forEach(n=>{
+    const p=document.getElementById('inv-panel-'+n);
+    if(p) p.classList.toggle('active',n===name);
+  });
+}
+
+function _invSummaryHTML(){
+  const groups={
+    individual:{label:'Individual Properties',sub:'Separate check per property',props:{},total:0,cleans:0},
+    umc:{label:'Upper Middle Creek (UMC)',sub:'One check — all UMC cabins',props:{},total:0,cleans:0},
+    prc:{label:'Paradise Ridge Cabins (PRC)',sub:'One check — all PRC cabins',props:{},total:0,cleans:0},
+  };
+  _invResult.forEach(item=>{
+    const g=groups[item.group]||groups.individual;
+    if(!g.props[item.propId]) g.props[item.propId]={name:item.propName,total:0,cleans:0,misc:0};
+    g.props[item.propId].total+=item.amount;
+    if(item.service==='Departure Clean') g.props[item.propId].cleans++;
+    else g.props[item.propId].misc+=item.amount;
+    g.total+=item.amount;
+    if(item.service==='Departure Clean') g.cleans++;
+  });
+  const grand=_invResult.reduce((s,i)=>s+i.amount,0);
+  let h='';
+  Object.entries(groups).forEach(([,g])=>{
+    const propList=Object.values(g.props).sort((a,b)=>a.name.localeCompare(b.name));
+    if(!propList.length) return;
+    h+=`<div class="inv-group-card">
+      <div class="inv-group-hdr">
+        <div><div class="inv-group-title">${g.label}</div><div class="inv-group-sub">${g.sub}</div></div>
+        <div style="text-align:right"><div class="inv-group-amt">${_invFmt(g.total)}</div><div class="inv-group-meta">${g.cleans} clean${g.cleans!==1?'s':''}</div></div>
+      </div>
+      ${propList.map(p=>`<div class="inv-prop-row">
+        <div><div class="inv-prop-name">${p.name}</div>${p.misc>0?`<div class="inv-prop-meta">Includes ${_invFmt(p.misc)} reimb.</div>`:''}</div>
+        <div class="inv-prop-amt">${_invFmt(p.total)}<br><span style="font-size:.72rem;color:var(--text2);font-weight:400">${p.cleans} clean${p.cleans!==1?'s':''}</span></div>
+      </div>`).join('')}
+    </div>`;
+  });
+  h+=`<div class="inv-grand-total"><div class="inv-grand-label">Total — All Properties</div><div class="inv-grand-amt">${_invFmt(grand)}</div></div>`;
+  return h;
+}
+
+function _invFlagsHTML(){
+  const errors=_invResult.filter(i=>['occupied','duplicate'].includes(i.status));
+  const misc=_invResult.filter(i=>i.status==='misc');
+  const unknown=_invResult.filter(i=>i.status==='no_cal');
+  const info=_invResult.filter(i=>['gap_clean','owner_block'].includes(i.status));
+  if(!errors.length&&!misc.length&&!unknown.length&&!info.length)
+    return '<div style="text-align:center;padding:32px;color:var(--text2)">✅ No flags — all items verified clean.</div>';
+  let h='';
+  if(errors.length){
+    h+=`<div class="inv-section-head">🚨 Requires Review Before Paying (${errors.length})</div>`;
+    errors.forEach(i=>{
+      let detail='';
+      if(i.status==='occupied') detail='No checkout found for this property on this date, but it shows an active reservation. Could be a same-day turnover not yet reflected in Hospitable, or a mid-stay clean. Verify with cleaner.';
+      if(i.status==='duplicate') detail=`Another clean already occurred in this same guest gap (first clean ${_invFmtD(i.duplicateOf)}). Two cleans in one open window — confirm both are legitimate.`;
+      h+=`<div class="inv-flag-card inv-flag-err"><div><div class="inv-flag-title">${i.propName} — ${_invFmtD(i.date)}</div><div class="inv-flag-detail">${detail}</div></div><div class="inv-flag-amt">${_invFmt(i.amount)}</div></div>`;
+    });
+  }
+  if(misc.length){
+    h+=`<div class="inv-section-head">Reimbursements (${misc.length})</div>`;
+    misc.forEach(i=>{
+      h+=`<div class="inv-flag-card inv-flag-warn"><div><div class="inv-flag-title">${i.propName} — ${_invFmtD(i.date)}</div><div class="inv-flag-detail">Miscellaneous charge — verify receipt and approve before paying.</div></div><div class="inv-flag-amt">${_invFmt(i.amount)}</div></div>`;
+    });
+  }
+  if(unknown.length){
+    h+=`<div class="inv-section-head">No Calendar Data (${unknown.length})</div>`;
+    unknown.forEach(i=>{
+      h+=`<div class="inv-flag-card inv-flag-warn"><div><div class="inv-flag-title">${i.propName} — ${_invFmtD(i.date)}</div><div class="inv-flag-detail">Could not retrieve calendar data for this date. Manual verification required.</div></div><div class="inv-flag-amt">${_invFmt(i.amount)}</div></div>`;
+    });
+  }
+  if(info.length){
+    h+=`<div class="inv-section-head">Informational — Valid but Noteworthy (${info.length})</div>`;
+    info.forEach(i=>{
+      let detail='';
+      if(i.status==='gap_clean') detail=i.daysIn?`Clean occurred ${i.daysIn} day${i.daysIn!==1?'s':''} after the previous checkout (gap started ${_invFmtD(i.gapStart)}). Property was open — looks fine.`:'Property was open on this date with no confirmed departure. Gap clean — looks fine.';
+      if(i.status==='owner_block') detail='Property was in an owner-blocked period (maintenance window). Clean during owner block is expected.';
+      h+=`<div class="inv-flag-card inv-flag-info"><div><div class="inv-flag-title">${i.propName} — ${_invFmtD(i.date)}</div><div class="inv-flag-detail">${detail}</div></div><div class="inv-flag-amt">${_invFmt(i.amount)}</div></div>`;
+    });
+  }
+  return h;
+}
+
+function _invDetailHTML(){
+  const rows=_invResult.map(i=>`<tr>
+    <td style="font-size:.78rem">${i.propName}</td>
+    <td style="white-space:nowrap;font-size:.78rem">${_invFmtD(i.date)}</td>
+    <td style="font-size:.76rem">${i.service}</td>
+    <td><span class="badge ${i.statusClass}" style="font-size:.68rem">${i.statusLabel}</span></td>
+    <td style="text-align:right;font-weight:600;font-size:.8rem">${_invFmt(i.amount)}</td>
+  </tr>`).join('');
+  return `<div style="overflow-x:auto;max-height:460px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius)">
+    <table class="inv-table">
+      <thead><tr><th>Property</th><th>Date</th><th>Service</th><th>Status</th><th style="text-align:right">Amount</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+// ═══════════════  END Invoice Reconciliation  ═══════════════
