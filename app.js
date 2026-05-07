@@ -53,7 +53,7 @@ const PROPS = [
   {id:'bearadise',name:'Bearadise Lodge',address:'734 Heiden Dr. Gatlinburg, TN',door:'1967'},
   {id:'wizards',name:"The Wizard's Edge",address:'658 Pinecrest Dr., Gatlinburg, TN',door:'4558'},
   {id:'hibernation',name:'Hibernation Station',address:'335 Alpine Mountain Way, Pigeon Forge, TN',door:'4558'},
-  {id:'hero',name:'Hero Hideout',address:'2382 Alpine Village Way, Pigeon Forge, TN',door:'4558'},
+  {id:'hero',name:'Hero Hideout',address:'2382 Alpine Village Way, Pigeon Forge, TN',door:'3940'},
   {id:'magic',name:'Magic Mountain',address:'1775 Bluff Ridge Rd. Sevierville, TN',door:'4558'},
   {id:'hillside_big',name:'Hillside Haven - The Big House',address:'226 Oak Hill, Jacksons Gap, AL',door:'4425'},
   {id:'hillside_cottage',name:'Hillside Haven - The Cottage',address:'218 Oak Hill, Jacksons Gap, AL',door:'O812'},
@@ -114,11 +114,6 @@ let PROJECT_TYPES = [...DEFAULT_PROJECT_TYPES];
 let appSettings = {
   vendorCategories: null,      // null = use DEFAULT_VCAT
   projectTypes: null,          // null = use DEFAULT_PROJECT_TYPES
-  guestAlert: {
-    mode: 'all',               // 'all' | 'tagged' — 'all' = current behavior, 'tagged' = only tasks with guestAlert flag
-    lookAhead: 2,              // days ahead to check for arrivals
-    excludeCategories: [],     // categories to exclude from alerts
-  },
   vendorSheetFields: ['address','doorCode'],  // which fields to show on vendor task sheets
   vendorSheetFieldOptions: [
     {id:'address',label:'Address',default:true},
@@ -142,7 +137,6 @@ async function loadSettings() {
       // Merge with defaults (so new fields don't break old saved settings)
       if (parsed.vendorCategories) appSettings.vendorCategories = parsed.vendorCategories;
       if (parsed.projectTypes) appSettings.projectTypes = parsed.projectTypes;
-      if (parsed.guestAlert) appSettings.guestAlert = { ...appSettings.guestAlert, ...parsed.guestAlert };
       if (parsed.vendorSheetFields) appSettings.vendorSheetFields = parsed.vendorSheetFields;
     }
   } catch (e) { console.warn('Failed to load settings:', e.message); }
@@ -160,7 +154,7 @@ async function loadSettings() {
   // Populate dynamic dropdowns
   populateCategoryDropdowns();
   // Render settings panels if they exist in the DOM (handles page refresh while on Settings tab)
-  if (document.getElementById('set-ga-mode')) renderSettingsOnSwitch();
+  if (document.getElementById('set-vs-fields')) renderSettingsOnSwitch();
 }
 
 function rebuildCatLabels() {
@@ -202,44 +196,9 @@ async function saveSettings() {
 // ── Settings Panel Renderers ──────────────────────────────────
 
 function renderSettingsOnSwitch() {
-  renderGuestAlertSettings();
   renderVendorSheetFieldSettings();
   renderCategorySettings();
   renderProjectTypeSettings();
-}
-
-// -- Guest Alert Settings --
-function renderGuestAlertSettings() {
-  const ga = appSettings.guestAlert || {};
-  const modeEl = document.getElementById('set-ga-mode');
-  const laEl = document.getElementById('set-ga-lookahead');
-  if (modeEl) modeEl.value = ga.mode || 'all';
-  if (laEl) laEl.value = ga.lookAhead || 2;
-  // Render exclude category checkboxes
-  const wrap = document.getElementById('set-ga-exclude-cats');
-  if (!wrap) return;
-  const excluded = ga.excludeCategories || [];
-  wrap.innerHTML = VCAT.map(c =>
-    `<label style="font-size:.74rem;color:var(--text2);display:flex;align-items:center;gap:4px;padding:4px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer">
-      <input type="checkbox" data-cat="${c.id}" ${excluded.includes(c.id) ? 'checked' : ''}> ${c.label}
-    </label>`
-  ).join('');
-}
-
-function settingsUpdateGA() {
-  // Live preview — updates appSettings but doesn't save
-}
-
-function saveGuestAlertSettings() {
-  const mode = document.getElementById('set-ga-mode').value;
-  const lookAhead = parseInt(document.getElementById('set-ga-lookahead').value) || 2;
-  const excludeCategories = [];
-  document.querySelectorAll('#set-ga-exclude-cats input[type=checkbox]:checked').forEach(cb => {
-    excludeCategories.push(cb.dataset.cat);
-  });
-  appSettings.guestAlert = { mode, lookAhead, excludeCategories };
-  saveSettings();
-  gaFetch(); // re-run to apply changes
 }
 
 // -- Vendor Task Sheet Field Settings --
@@ -386,6 +345,26 @@ const CASHAPP_TAG='chipburns';
 
 let calDate=new Date(), calMode='month', editVendorId=null, icalCache={}, showDone=false;
 function toggleShowDone(){showDone=!showDone;document.getElementById('toggle-done').classList.toggle('on',showDone);renderCalendar();}
+
+// ── Day-state classifier ──────────────────────────────────────────────
+// Given a Date and a property's bookings array (from fetchIcal), classify
+// the day as turn / checkin / checkout / booked / available. Pure function,
+// shared across vendor sheet and admin Group Scheduler.
+function dayState(d,bookings){
+  const ds=d.toDateString();
+  let hasCheckout=false,hasCheckin=false,isMidStay=false;
+  for(const r of (bookings||[])){
+    if(!r.start||!r.end)continue;
+    if(ds===r.end.toDateString())hasCheckout=true;
+    if(ds===r.start.toDateString())hasCheckin=true;
+    if(d>r.start&&d<r.end)isMidStay=true;
+  }
+  if(hasCheckout&&hasCheckin)return'turn';
+  if(isMidStay)return'booked';
+  if(hasCheckin)return'checkin';
+  if(hasCheckout)return'checkout';
+  return'available';
+}
 
 // STORAGE
 const STORAGE_API = 'https://storybook-webhook.vercel.app/api/storage';
@@ -617,6 +596,18 @@ const _nbVirtualProps={
 };
 const getNb=id=>_nbMap[id]||_nbById[id]||null;
 const getProp=id=>_propMap[id]||_nbVirtualProps[id]||null;
+// Resolve a cabin's current door code: prefer the Property Bible
+// (profile.access.front_door.code) so Chip's edits in the Properties tab
+// flow through to vendor sheets, group scheduler, and {door_code} SMS
+// substitutions. Falls back to the legacy hardcoded PROPS.door so any
+// cabin whose profile isn't migrated still works.
+function getDoorCode(propOrId){
+  const prop=typeof propOrId==='string'?getProp(propOrId):propOrId;
+  const id=prop&&prop.id;
+  const profile=(typeof PP!=='undefined'&&PP&&id)?PP[id]:null;
+  const fromBible=profile&&profile.access&&profile.access.front_door&&profile.access.front_door.code;
+  return fromBible||(prop&&prop.door)||'';
+}
 const getNbCls=id=>{if(_nbById[id])return _nbById[id].cls;const n=_nbMap[id];return n?n.cls:'other';};
 const DONE_STATUSES=['complete','resolved_by_guest'];
 const isDone=t=>DONE_STATUSES.includes(t.status);
@@ -627,10 +618,11 @@ const fmtReported=iso=>{if(!iso)return'';const d=new Date(iso);const now=new Dat
 function switchView(name,btn){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
-  document.getElementById('view-'+name).classList.add('active');
+  const el = document.getElementById('view-'+name);
+  if (el) el.classList.add('active');
   if(btn)btn.classList.add('active');
-  // Cleaning log now pre-loaded on init; this is a fallback
-  if (name === 'cleaning' && !clLoaded && !clFetching) clFetch();
+  // Reviews — load aggregated ratings (24h client-cached) + host cleaning sub-section
+  if (name === 'reviews' && typeof rvInit === 'function') rvInit();
   // Refresh replacements view when switching to it
   if (name === 'replacements') renderReplacements();
   // Property Bible (Deploy 1) — lazy load on first open
@@ -664,7 +656,7 @@ function populatePropMulti(id){
   });
 }
 
-function renderAll(){renderVR();renderVD();renderUB();renderTasks();renderCalendar();renderRecurring();renderHistory();renderVendors();if(typeof pjRenderList==='function')pjRenderList();}
+function renderAll(){renderVR();renderVD();renderVSC();renderUB();renderTasks();renderCalendar();renderRecurring();renderHistory();renderVendors();if(typeof pjRenderList==='function')pjRenderList();}
 
 // URGENT BANNER
 function renderUB(){
@@ -708,6 +700,45 @@ function vdTimeAgo(iso){
   if(hrs<24)return hrs+'h ago';
   const days=Math.floor(hrs/24);
   return days+'d ago';
+}
+
+// VENDOR SELF-SCHEDULED BANNER — vendors picked their own date, awaiting admin ack
+function renderVSC(){
+  const vs=tasks.filter(t=>t.selfScheduledAt&&!t.selfScheduleAcknowledged&&!isDone(t));
+  const c=document.getElementById('vsc-wrap');
+  if(!c)return;
+  if(!vs.length){c.innerHTML='';return;}
+  // Sort by selfScheduledAt timestamp (most recent first)
+  vs.sort((a,b)=>(b.selfScheduledAt||'').localeCompare(a.selfScheduledAt||''));
+  const items=vs.map(t=>{
+    const p=getProp(t.property);const nbcls=getNbCls(t.property);
+    const ago=vdTimeAgo(t.selfScheduledAt);
+    // Human-readable date the vendor picked
+    let dateFmt='';
+    if(t.date){
+      try{dateFmt=new Date(t.date+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});}catch(e){dateFmt=t.date;}
+    }
+    const who=t.selfScheduledBy||t.vendor||'Vendor';
+    return`<div class="vsc-item" onclick="openDetail('${t.id}')">
+      <div class="vsc-item-left">
+        <div class="vsc-item-prop vsc-prop-${nbcls}">${p?p.name:t.property}</div>
+        <div class="vsc-item-prob">${t.problem}</div>
+        <div class="vsc-item-meta">${who} \u2022 picked ${dateFmt||'a date'} \u2022 ${ago}</div>
+      </div>
+      <div class="vsc-item-actions">
+        <button class="vsc-btn-ack" onclick="vscAck('${t.id}',event)">Acknowledge</button>
+      </div>
+    </div>`;
+  }).join('');
+  c.innerHTML=`<div class="vsc-banner"><div class="vsc-hdr"><div class="vsc-title">Vendor Self-Scheduled — New Date Picked</div><span class="vsc-count">${vs.length}</span></div>${items}</div>`;
+}
+
+async function vscAck(id,e){
+  if(e){e.stopPropagation();}
+  const t=tasks.find(x=>x.id===id);if(!t)return;
+  t.selfScheduleAcknowledged=true;
+  await saveTasks();renderVSC();
+  showToast('Acknowledged.');
 }
 
 // VENDOR REPORTS BANNER — field observations from vendors
@@ -811,7 +842,7 @@ const CAT_LABELS={replacement:'Replacement',handyman:'Handyman',plumbing:'Plumbi
 let catFilter='all';
 let propFilter='all';
 let dateSort=false;
-let groupMode='property'; // 'status' | 'property'
+let groupMode='status'; // 'status' | 'property'
 const _collapsedProps=new Set();
 const _collapsedNbs=new Set();
 let _propGroupSeeded=false; // true after first auto-collapse seed on load
@@ -846,7 +877,7 @@ function taskCard(t){
         ${t.recurring?'<span class="badge b-rec">Recurring</span>':''}
         <span class="badge b-${t.status}">${t.status.replace('_',' ')}</span>
         ${t.date?`<span class="tmi">${t.date}</span>${overdueBadge(t)}`:(t.status!=='scheduled'?'<span class="tmi" style="color:var(--text3)">Not scheduled</span>':'')}
-        ${t.vendor?`<span class="tmi">${t.vendor}</span>`:''}${t.vendorDone?'<span class="vd-badge">Vendor Done</span>':''}
+        ${t.vendor?`<span class="tmi">${t.vendor}</span>`:''}${t.vendorDone?'<span class="vd-badge">Vendor Done</span>':''}${(t.vendor&&!t.date)?'<span class="avs-badge" title="Vendor asked to pick a date">Awaiting vendor schedule</span>':''}${t.selfScheduledAt?'<span class="ss-badge" title="Vendor self-scheduled this date">Self-scheduled</span>':''}
         ${taskEffectivePurchaseNote(t)?`<span style="font-size:.62rem;color:#e65100;font-weight:600;background:#fff3e0;padding:1px 6px;border-radius:10px;border:1px solid #ffcc80">&#x1F6D2; ${t.purchaseStatus==='delivered'?'Delivered':t.purchaseStatus==='purchased'?'Purchased — deliver':'Buy'}${taskEffectivePurchaser(t)==='vendor'?' (vendor)':''}</span>`:''}
         ${t.guest?`<span class="tmi">Reported by ${t.guest}</span>`:''}
         ${t.project_title?`<span style="font-size:.62rem;color:var(--green);font-weight:600;background:var(--green-light);padding:1px 6px;border-radius:10px;border:1px solid var(--border)">📋 ${t.project_title}</span>`:''}
@@ -874,7 +905,7 @@ function renderTasks(){
 
   // Render toolbar
   const tb=document.getElementById('task-toolbar');
-  if(tb) tb.innerHTML=`<div class="task-tb"><button class="tb-btn${groupMode==='property'?' active':''}" onclick="toggleGroupMode()">${groupMode==='property'?'All Tasks':'Group by Property'}</button><button class="tb-btn${_selectMode?' active':''}" onclick="toggleSelectMode()">${_selectMode?'Exit Select':'Select'}</button></div>`;
+  if(tb) tb.innerHTML=`<div class="task-tb"><button class="tb-btn${groupMode==='property'?' active':''}" onclick="toggleGroupMode()">${groupMode==='property'?'All Tasks':'Group by Property'}</button><button class="tb-btn${_selectMode?' active':''}" onclick="toggleSelectMode()">${_selectMode?'Exit Select':'Select'}</button><button class="tb-btn tb-btn-gs" onclick="openGroupScheduler()" title="Find a day that works across multiple properties">Group Schedule</button></div>`;
 
   // Sort within each group: urgent first, then by status, then by date
   const sortTasks=arr=>arr.sort((a,b)=>{
@@ -988,15 +1019,66 @@ function renderTasks(){
 
   let html='';
   if(needsScheduling.length){
+    // Urgent floats to top as flat list; non-urgent grouped by property A→Z
+    // with a colored neighborhood banner inserted at each boundary.
+    const urgentList=needsScheduling.filter(t=>t.urgent);
+    const nonUrgent=needsScheduling.filter(t=>!t.urgent);
+    const nsGroups={};
+    nonUrgent.forEach(t=>{if(!nsGroups[t.property])nsGroups[t.property]=[];nsGroups[t.property].push(t);});
+    const nsPropIds=Object.keys(nsGroups).sort((a,b)=>{const pa=getProp(a);const pb=getProp(b);return(pa?pa.name:a).localeCompare(pb?pb.name:b);});
+    let nsInner='';
+    if(urgentList.length)nsInner+=`<div class="task-list">${urgentList.map(taskCard).join('')}</div>`;
+    let nsCurNb=null,nsBucket=[];
+    const nsFlush=()=>{
+      if(!nsBucket.length)return;
+      const nb=nsCurNb,nbName=nb?nb.name:'Other',nbCls=nb?nb.cls:'other';
+      const nbTaskCount=nsBucket.reduce((s,pid)=>s+nsGroups[pid].length,0);
+      const cabinCount=nsBucket.length;
+      const countLabel=cabinCount>1?`${nbTaskCount} task${nbTaskCount!==1?'s':''} · ${cabinCount} cabins`:`${nbTaskCount} task${nbTaskCount!==1?'s':''}`;
+      nsInner+=`<div class="nb-banner nbb-${nbCls}"><span>${nbName}</span><span class="nb-banner-count">${countLabel}</span></div>`;
+      nsInner+=`<div class="task-list">${nsBucket.map(pid=>nsGroups[pid].map(taskCard).join('')).join('')}</div>`;
+      nsBucket=[];
+    };
+    nsPropIds.forEach(pid=>{
+      const nb=getNb(pid),curId=nsCurNb?nsCurNb.id:null,newId=nb?nb.id:null;
+      if(curId!==newId){nsFlush();nsCurNb=nb;}
+      nsBucket.push(pid);
+    });
+    nsFlush();
     html+=`<div class="cat-section">
       <div class="cat-section-hdr"><span class="cat-section-title">Needs Scheduling</span><span class="cat-section-count">${needsScheduling.length}</span></div>
-      <div class="task-list">${needsScheduling.map(taskCard).join('')}</div>
+      ${nsInner}
     </div>`;
   }
   if(scheduled.length){
+    // Same treatment as Needs Scheduling: grouped by property A→Z with a
+    // colored neighborhood banner at each boundary. Within each property
+    // group, tasks keep the pre-group sort order (urgent first, then date
+    // ascending) so overdue items still surface near the top of their group.
+    const scGroups={};
+    scheduled.forEach(t=>{if(!scGroups[t.property])scGroups[t.property]=[];scGroups[t.property].push(t);});
+    const scPropIds=Object.keys(scGroups).sort((a,b)=>{const pa=getProp(a);const pb=getProp(b);return(pa?pa.name:a).localeCompare(pb?pb.name:b);});
+    let scInner='';
+    let scCurNb=null,scBucket=[];
+    const scFlush=()=>{
+      if(!scBucket.length)return;
+      const nb=scCurNb,nbName=nb?nb.name:'Other',nbCls=nb?nb.cls:'other';
+      const nbTaskCount=scBucket.reduce((s,pid)=>s+scGroups[pid].length,0);
+      const cabinCount=scBucket.length;
+      const countLabel=cabinCount>1?`${nbTaskCount} task${nbTaskCount!==1?'s':''} · ${cabinCount} cabins`:`${nbTaskCount} task${nbTaskCount!==1?'s':''}`;
+      scInner+=`<div class="nb-banner nbb-${nbCls}"><span>${nbName}</span><span class="nb-banner-count">${countLabel}</span></div>`;
+      scInner+=`<div class="task-list">${scBucket.map(pid=>scGroups[pid].map(taskCard).join('')).join('')}</div>`;
+      scBucket=[];
+    };
+    scPropIds.forEach(pid=>{
+      const nb=getNb(pid),curId=scCurNb?scCurNb.id:null,newId=nb?nb.id:null;
+      if(curId!==newId){scFlush();scCurNb=nb;}
+      scBucket.push(pid);
+    });
+    scFlush();
     html+=`<div class="cat-section">
       <div class="cat-section-hdr"><span class="cat-section-title">Scheduled</span><span class="cat-section-count">${scheduled.length}</span></div>
-      <div class="task-list">${scheduled.map(taskCard).join('')}</div>
+      ${scInner}
     </div>`;
   }
   el.innerHTML=html;
@@ -1194,6 +1276,559 @@ function bulkMarkComplete(){
   saveTasks();renderAll();updateBulkBar();
   showToast(sel.length+' task'+(sel.length!==1?'s':'')+' marked complete');
 }
+
+// ── Group Scheduler ──────────────────────────────────────────────────────
+// Admin tool. Pick a category (defaults to whichever has the most undated
+// tasks), see all unscheduled tasks of that category grouped by property,
+// see a Good Days strip computed across the affected properties using the
+// same Hospitable booking lookup the vendor side uses, click a chip to
+// bulk-assign that date, then optionally bulk-assign a vendor in the
+// success panel. Date is committed first; vendor is a separate confirmed
+// step (admin texts vendor outside the app, comes back to assign).
+let _gsState={
+  category:null,            // selected category id ('handyman', etc.)
+  neighborhood:'all',       // 'all' or NB id
+  bookingsByProp:{},        // pid → bookings array (cached across opens via icalCache)
+  loading:false,
+  view:'pick',              // 'pick' (filters + tasks + chips) | 'confirm' | 'success'
+  pendingDate:null,         // for confirm view
+  scheduledIds:[],          // for success view — what just got dated
+  scheduledDate:null,       // for success view
+};
+
+function openGroupScheduler(){
+  _gsState.category=_gsDefaultCategory();
+  _gsState.neighborhood='all';
+  _gsState.bookingsByProp={};
+  _gsState.loading=false;
+  _gsState.view='pick';
+  _gsState.pendingDate=null;
+  _gsState.scheduledIds=[];
+  _gsState.scheduledDate=null;
+  const modal=_gsEnsureModal();
+  modal.classList.add('open');
+  document.body.style.overflow='hidden';
+  _gsRender();
+  _gsLoadBookings();
+}
+window.openGroupScheduler=openGroupScheduler;
+
+function closeGroupScheduler(){
+  const m=document.getElementById('gs-modal');
+  if(m){m.innerHTML='';m.classList.remove('open');}
+  document.body.style.overflow='';
+}
+window.closeGroupScheduler=closeGroupScheduler;
+
+function _gsEnsureModal(){
+  let modal=document.getElementById('gs-modal');
+  if(!modal){
+    modal=document.createElement('div');
+    modal.id='gs-modal';
+    modal.className='vs-dp-modal';   // reuse vendor-side overlay styling
+    document.body.appendChild(modal);
+    modal.addEventListener('click',e=>{if(e.target===modal)closeGroupScheduler();});
+  }
+  return modal;
+}
+
+// All open, undated, non-completed admin-side tasks
+function _gsAllUndated(){
+  return tasks.filter(t=>!t.date
+    && !['complete','resolved_by_guest'].includes(t.status));
+}
+
+// Default category = whichever has the largest undated backlog
+function _gsDefaultCategory(){
+  const counts=_gsCategoryCounts();
+  let best=null,bestN=0;
+  for(const c in counts){if(counts[c]>bestN){best=c;bestN=counts[c];}}
+  return best||(VCAT[0]&&VCAT[0].id)||'handyman';
+}
+
+function _gsCategoryCounts(){
+  const counts={};
+  _gsAllUndated().forEach(t=>{
+    if(!t.category)return;
+    t.category.split(',').map(x=>x.trim()).filter(Boolean).forEach(c=>{
+      counts[c]=(counts[c]||0)+1;
+    });
+  });
+  return counts;
+}
+
+function _gsMatchingTasks(){
+  return _gsAllUndated().filter(t=>{
+    if(_gsState.category&&_gsState.category!=='all'){
+      const cats=(t.category||'').split(',').map(x=>x.trim());
+      if(!cats.includes(_gsState.category))return false;
+    }
+    if(_gsState.neighborhood!=='all'){
+      const nb=getNb(t.property);
+      if(!nb||nb.id!==_gsState.neighborhood)return false;
+    }
+    return true;
+  });
+}
+
+async function _gsLoadBookings(){
+  const propIds=[...new Set(_gsMatchingTasks().map(t=>t.property))];
+  const fresh=propIds.filter(pid=>!_gsState.bookingsByProp[pid]);
+  if(!fresh.length)return;
+  _gsState.loading=true;
+  _gsRender();
+  await Promise.all(fresh.map(async pid=>{
+    const evs=await fetchIcal(pid);
+    _gsState.bookingsByProp[pid]=(evs==='error'?[]:(Array.isArray(evs)?evs:[]));
+  }));
+  _gsState.loading=false;
+  _gsRender();
+}
+
+// Per-day classification across the matching properties — chronological
+// (admin scanning their own calendar). Returns 21 days starting today.
+function _gsComputeDays(matchingTasks){
+  const today=new Date();today.setHours(12,0,0,0);
+  const propIds=[...new Set(matchingTasks.map(t=>t.property))];
+  const days=[];
+  for(let i=0;i<21;i++){
+    const d=new Date(today.getTime()+i*86400000);d.setHours(12,0,0,0);
+    const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const perProp=propIds.map(pid=>{
+      const st=dayState(d,_gsState.bookingsByProp[pid]||[]);
+      let tier;
+      if(st==='turn'||st==='checkin'||st==='checkout')tier='locked';
+      else if(st==='booked')tier='booked';
+      else tier='open';
+      return{pid,tier,state:st};
+    });
+    const lockedCount=perProp.filter(p=>p.tier==='locked').length;
+    const bookedCount=perProp.filter(p=>p.tier==='booked').length;
+    const openCount=perProp.filter(p=>p.tier==='open').length;
+    let overall;
+    if(bookedCount===perProp.length)overall='skip';
+    else if(lockedCount===perProp.length)overall='locked';
+    else if(lockedCount>0&&bookedCount===0)overall='partial-locked';
+    else if(lockedCount>0)overall='partial-mixed';
+    else if(openCount===perProp.length)overall='open';
+    else overall='partial-open';
+    days.push({ds,d,perProp,lockedCount,bookedCount,openCount,overall});
+  }
+  return days;
+}
+
+function _gsRenderBestDaysHtml(matching){
+  if(!matching.length)return'';
+  const propIds=[...new Set(matching.map(t=>t.property))];
+  if(!propIds.length)return'';
+  const days=_gsComputeDays(matching);
+  // Best-first: rank by ideal-count, then open-count, then earliest date.
+  // Drop "skip" days (booked everywhere). Most-ideal day surfaces at front
+  // so admin sees their best option immediately; can scroll right to see
+  // less-ideal options or further-out dates.
+  const rank=d=>d.lockedCount*10 + d.openCount - d.bookedCount*2;
+  const candidates=days
+    .filter(d=>d.overall!=='skip')
+    .sort((a,b)=>{
+      const r=rank(b)-rank(a);
+      if(r!==0)return r;
+      return a.d-b.d;   // tie-break: earliest first
+    });
+  if(!candidates.length){
+    return`<div class="vs-bd-empty">Every property in this group has a guest in house every day for the next 3 weeks. Try a wider category or different neighborhood.</div>`;
+  }
+  const fmt=d=>d.toLocaleDateString('en-US',{weekday:'short',month:'numeric',day:'numeric'});
+  let h=`<div class="vs-best-days">
+    <div class="vs-bd-hdr">Good days for ${propIds.length} ${propIds.length===1?'property':'properties'}</div>
+    <div class="vs-bd-help">Best days first — turn / check-in / checkout days are ideal (property empty 10am-4pm). Scroll right for more options.</div>
+    <div class="vs-bd-strip">`;
+  candidates.forEach(day=>{
+    let chipCls='vs-bd-chip vs-bd-clickable';
+    let tierLabel='';
+    if(day.overall==='locked'){chipCls+=' vs-bd-locked';tierLabel='All ideal';}
+    else if(day.overall==='partial-locked'){chipCls+=' vs-bd-partial-locked';tierLabel=`${day.lockedCount} ideal • ${day.openCount} open`;}
+    else if(day.overall==='partial-mixed'){chipCls+=' vs-bd-partial-mixed';tierLabel=`${day.lockedCount} ideal • ${day.bookedCount} blocked`;}
+    else if(day.overall==='open'){chipCls+=' vs-bd-open';tierLabel='All open';}
+    else{chipCls+=' vs-bd-partial-mixed';tierLabel=`${day.openCount} open • ${day.bookedCount} blocked`;}
+    let dots='';
+    day.perProp.forEach(p=>{
+      const nbCls=getNbCls(p.pid);
+      let dotCls='vs-bd-dot';
+      if(p.tier==='locked')dotCls+=' vs-bd-dot-locked';
+      else if(p.tier==='booked')dotCls+=' vs-bd-dot-booked';
+      else dotCls+=' vs-bd-dot-open';
+      const propName=(getProp(p.pid)||{}).name||p.pid;
+      const stLabel=p.state==='turn'?'Turn':p.state==='checkin'?'Check-in':p.state==='checkout'?'Checkout':p.state==='booked'?'Guest in house':'Open';
+      dots+=`<span class="${dotCls}" style="--nb:var(--${nbCls})" title="${propName.replace(/"/g,'&quot;')} — ${stLabel}"></span>`;
+    });
+    h+=`<div class="${chipCls}" onclick="_gsPickDate('${day.ds}')">
+      <div class="vs-bd-date">${fmt(day.d)}</div>
+      <div class="vs-bd-tier">${tierLabel}</div>
+      <div class="vs-bd-dots">${dots}</div>
+    </div>`;
+  });
+  h+=`</div></div>`;
+  return h;
+}
+
+// ── Render ──────────────────────────────────────────────────────────────
+function _gsRender(){
+  const modal=_gsEnsureModal();
+  if(_gsState.view==='confirm'){_gsRenderConfirm();return;}
+  if(_gsState.view==='success'){_gsRenderSuccess();return;}
+
+  const matching=_gsMatchingTasks();
+  const propIds=[...new Set(matching.map(t=>t.property))];
+  const catCounts=_gsCategoryCounts();
+  const catOpts=VCAT.filter(c=>catCounts[c.id]>0).map(c=>({id:c.id,label:c.label,count:catCounts[c.id]}));
+  // Neighborhoods that contain any property with an undated task in current category
+  const nbsWithMatch=new Set();
+  _gsAllUndated().filter(t=>{
+    if(_gsState.category&&_gsState.category!=='all'){
+      const cats=(t.category||'').split(',').map(x=>x.trim());
+      if(!cats.includes(_gsState.category))return false;
+    }
+    return true;
+  }).forEach(t=>{const nb=getNb(t.property);if(nb)nbsWithMatch.add(nb.id);});
+  const nbOpts=NBS.filter(n=>nbsWithMatch.has(n.id));
+  const catLbl=(VCAT.find(c=>c.id===_gsState.category)||{}).label||_gsState.category||'All';
+
+  let h=`<div class="vs-dp-panel gs-panel" onclick="event.stopPropagation()">
+    <div class="vs-dp-header">
+      <div>
+        <div class="vs-dp-title">Group Schedule</div>
+        <div class="vs-dp-sub">Find a day that works across multiple properties</div>
+      </div>
+      <button class="vs-dp-close" onclick="closeGroupScheduler()">&times;</button>
+    </div>
+    <div class="gs-filters">
+      <label class="gs-filter">
+        <span class="gs-filter-lbl">Category</span>
+        <select onchange="_gsSetCat(this.value)">
+          ${catOpts.map(c=>`<option value="${c.id}" ${c.id===_gsState.category?'selected':''}>${c.label} (${c.count})</option>`).join('')}
+          ${catOpts.length===0?'<option>No unscheduled tasks</option>':''}
+        </select>
+      </label>
+      <label class="gs-filter">
+        <span class="gs-filter-lbl">Neighborhood</span>
+        <select onchange="_gsSetNb(this.value)">
+          <option value="all" ${_gsState.neighborhood==='all'?'selected':''}>All neighborhoods</option>
+          ${nbOpts.map(n=>`<option value="${n.id}" ${n.id===_gsState.neighborhood?'selected':''}>${n.name}</option>`).join('')}
+        </select>
+      </label>
+    </div>
+    <div class="gs-count">${matching.length} unscheduled ${catLbl.toLowerCase()} task${matching.length!==1?'s':''} across ${propIds.length} propert${propIds.length!==1?'ies':'y'}</div>
+    <div class="gs-body">`;
+
+  if(!matching.length){
+    h+=`<div class="gs-empty">Nothing unscheduled in <strong>${catLbl}</strong>${_gsState.neighborhood!=='all'?' in this neighborhood':''}. Try another category or neighborhood.</div>`;
+  }else{
+    // Property-grouped task list
+    const propBuckets={};const propOrder=[];
+    matching.forEach(t=>{
+      if(!propBuckets[t.property]){propBuckets[t.property]={first:t,items:[]};propOrder.push(t.property);}
+      propBuckets[t.property].items.push(t);
+    });
+    h+=`<div class="gs-task-list">`;
+    propOrder.forEach(pid=>{
+      const b=propBuckets[pid];
+      const p=getProp(pid);
+      const propName=p?p.name:'Unknown';
+      const shortName=propName.replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
+      const nbCls=getNbCls(pid);
+      const addr=p&&p.address?p.address:'';
+      const door=getDoorCode(p);
+      const metaParts=[];
+      if(addr)metaParts.push(`<a href="https://maps.google.com/?q=${encodeURIComponent(addr)}" target="_blank">${addr}</a>`);
+      if(door)metaParts.push('Code: '+door);
+      h+=`<div class="gs-prop-block">
+        <div class="vs-prop-header" style="border-left-color:var(--${nbCls})">
+          <div class="vs-prop-name">${shortName}</div>
+          ${metaParts.length?`<div class="vs-prop-meta">${metaParts.join(' &middot; ')}</div>`:''}
+        </div>
+        <div class="gs-task-rows">`;
+      b.items.forEach(t=>{
+        const vendorTag=t.vendor
+          ?`<span class="gs-task-vendor">${t.vendor.replace(/</g,'&lt;')}</span>`
+          :`<span class="gs-task-novendor">No vendor</span>`;
+        h+=`<div class="gs-task-row">
+          ${t.urgent?'<span class="vs-urgent">Urgent</span>':''}
+          <span class="gs-task-prob">${t.problem.replace(/</g,'&lt;')}</span>
+          ${vendorTag}
+        </div>`;
+      });
+      h+=`</div></div>`;
+    });
+    h+=`</div>`;
+    // Good Days strip
+    h+=`<div class="gs-strip-wrap">`;
+    if(_gsState.loading){
+      h+=`<div class="gs-loading">Looking up bookings…</div>`;
+    }else{
+      h+=_gsRenderBestDaysHtml(matching);
+    }
+    h+=`</div>`;
+  }
+  h+=`</div>
+    <div class="vs-dp-footer">
+      <div class="vs-dp-footer-btns" style="width:100%;justify-content:flex-end">
+        <button class="btn" onclick="closeGroupScheduler()">Close</button>
+      </div>
+    </div>
+  </div>`;
+  modal.innerHTML=h;
+}
+
+window._gsSetCat=function(c){
+  _gsState.category=c;
+  _gsState.neighborhood='all';   // reset narrow filter when category changes
+  _gsRender();
+  _gsLoadBookings();
+};
+window._gsSetNb=function(n){
+  _gsState.neighborhood=n;
+  _gsRender();
+  _gsLoadBookings();
+};
+
+// ── Confirm view ────────────────────────────────────────────────────────
+window._gsPickDate=function(ds){
+  _gsState.pendingDate=ds;
+  _gsState.view='confirm';
+  _gsRender();
+};
+
+function _gsRenderConfirm(){
+  const modal=_gsEnsureModal();
+  const ds=_gsState.pendingDate;
+  const matching=_gsMatchingTasks();
+  const days=_gsComputeDays(matching);
+  const day=days.find(d=>d.ds===ds);
+  if(!day){_gsState.view='pick';_gsRender();return;}
+  const dateLabel=new Date(ds+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  // Tasks at properties that are blocked (guest in house) on this date — admin can still assign but should know
+  const blockedProps=new Set(day.perProp.filter(p=>p.tier==='booked').map(p=>p.pid));
+  const idealProps=new Set(day.perProp.filter(p=>p.tier==='locked').map(p=>p.pid));
+  // Group tasks by property for display
+  const propBuckets={};const propOrder=[];
+  matching.forEach(t=>{
+    if(!propBuckets[t.property]){propBuckets[t.property]={first:t,items:[]};propOrder.push(t.property);}
+    propBuckets[t.property].items.push(t);
+  });
+  let rows='';
+  propOrder.forEach(pid=>{
+    const b=propBuckets[pid];
+    const p=getProp(pid);
+    const shortName=(p?p.name:pid).replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
+    const nbCls=getNbCls(pid);
+    let stLabel='';
+    if(idealProps.has(pid))stLabel='<span class="gs-conf-ideal">Ideal</span>';
+    else if(blockedProps.has(pid))stLabel='<span class="gs-conf-blocked">Guest in house</span>';
+    else stLabel='<span class="gs-conf-open">Open</span>';
+    rows+=`<div class="gs-conf-row">
+      <div class="gs-conf-prop" style="color:var(--${nbCls})">${shortName} ${stLabel}</div>
+      <div class="gs-conf-tasks">${b.items.map(t=>(t.problem||'').replace(/</g,'&lt;')).join(' • ')}</div>
+    </div>`;
+  });
+  const taskCount=matching.length;
+  const blockedCount=propOrder.filter(pid=>blockedProps.has(pid)).length;
+  const taskIds=JSON.stringify(matching.map(t=>t.id)).replace(/"/g,'&quot;');
+  const h=`<div class="vs-dp-panel gs-panel" onclick="event.stopPropagation()">
+    <div class="vs-dp-header">
+      <div>
+        <div class="vs-dp-title">Confirm schedule</div>
+        <div class="vs-dp-sub">${dateLabel}</div>
+      </div>
+      <button class="vs-dp-close" onclick="closeGroupScheduler()">&times;</button>
+    </div>
+    <div class="vs-bulk-confirm">
+      <div class="vs-bulk-lead">Schedule ${taskCount} task${taskCount!==1?'s':''} on <strong>${dateLabel}</strong>?</div>
+      ${blockedCount>0?`<div class="gs-warn">Heads up: ${blockedCount} ${blockedCount===1?'property has a guest':'properties have guests'} in house that day. You can still assign, but the work isn't easy without coordinating with the guest.</div>`:''}
+      <div class="gs-conf-list">${rows}</div>
+    </div>
+    <div class="vs-dp-footer">
+      <div class="vs-dp-footer-btns" style="width:100%;justify-content:space-between">
+        <button class="btn" onclick="_gsCancelConfirm()">Back</button>
+        <button class="btn btn-g" onclick='_gsConfirmDate(&quot;${ds}&quot;,${taskIds})'>Schedule ${taskCount}</button>
+      </div>
+    </div>
+  </div>`;
+  modal.innerHTML=h;
+}
+
+window._gsCancelConfirm=function(){_gsState.view='pick';_gsState.pendingDate=null;_gsRender();};
+
+window._gsConfirmDate=function(ds,taskIds){
+  // Lock the buttons to prevent double-submit
+  const btns=document.querySelectorAll('.vs-dp-footer-btns button');
+  btns.forEach(b=>{b.disabled=true;b.style.opacity='.5';});
+  // Mutate tasks: assign date, bump open→scheduled, log change
+  const idSet=new Set(taskIds);
+  const updated=[];
+  tasks.forEach(t=>{
+    if(!idSet.has(t.id))return;
+    if(t.date)return;          // already dated — skip silently
+    if(['complete','resolved_by_guest'].includes(t.status))return;
+    t.date=ds;
+    if(t.status==='open')t.status='scheduled';
+    if(typeof logTaskChange==='function')logTaskChange('group_schedule',t);
+    updated.push(t.id);
+  });
+  if(!updated.length){
+    alert('No eligible tasks to schedule.');
+    btns.forEach(b=>{b.disabled=false;b.style.opacity='';});
+    return;
+  }
+  saveTasks();
+  if(typeof renderAll==='function')renderAll();
+  // Flip to success view
+  _gsState.scheduledIds=updated;
+  _gsState.scheduledDate=ds;
+  _gsState.view='success';
+  _gsRender();
+};
+
+// ── Success view: lists what just got dated, offers text-vendor + assign-all ──
+function _gsRenderSuccess(){
+  const modal=_gsEnsureModal();
+  const ds=_gsState.scheduledDate;
+  const idSet=new Set(_gsState.scheduledIds);
+  const dated=tasks.filter(t=>idSet.has(t.id));
+  const dateLabel=new Date(ds+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  // Group by property
+  const propBuckets={};const propOrder=[];
+  dated.forEach(t=>{
+    if(!propBuckets[t.property]){propBuckets[t.property]={first:t,items:[]};propOrder.push(t.property);}
+    propBuckets[t.property].items.push(t);
+  });
+  // Vendor dropdown options — all vendors, but bubble up vendors matching
+  // any of the categories of the scheduled tasks
+  const taskCats=new Set();
+  dated.forEach(t=>{(t.category||'').split(',').map(x=>x.trim()).filter(Boolean).forEach(c=>taskCats.add(c));});
+  const matchVendors=[];const otherVendors=[];
+  (vendors||[]).forEach(v=>{
+    if(!v.name)return;
+    const vCats=Array.isArray(v.categories)?v.categories:[];
+    if(vCats.some(c=>taskCats.has(c)))matchVendors.push(v);
+    else otherVendors.push(v);
+  });
+  matchVendors.sort((a,b)=>a.name.localeCompare(b.name));
+  otherVendors.sort((a,b)=>a.name.localeCompare(b.name));
+  let vendorOpts=`<option value="">— Pick a vendor —</option>`;
+  if(matchVendors.length){
+    vendorOpts+=`<optgroup label="Matches this category">`;
+    matchVendors.forEach(v=>{vendorOpts+=`<option value="${v.name.replace(/"/g,'&quot;')}">${v.name}</option>`;});
+    vendorOpts+=`</optgroup>`;
+  }
+  if(otherVendors.length){
+    vendorOpts+=`<optgroup label="Other vendors">`;
+    otherVendors.forEach(v=>{vendorOpts+=`<option value="${v.name.replace(/"/g,'&quot;')}">${v.name}</option>`;});
+    vendorOpts+=`</optgroup>`;
+  }
+  let body='';
+  propOrder.forEach(pid=>{
+    const b=propBuckets[pid];
+    const p=getProp(pid);
+    const shortName=(p?p.name:pid).replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
+    const nbCls=getNbCls(pid);
+    const addr=p&&p.address?p.address:'';
+    const door=getDoorCode(p);
+    const metaParts=[];
+    if(addr)metaParts.push(`<a href="https://maps.google.com/?q=${encodeURIComponent(addr)}" target="_blank">${addr}</a>`);
+    if(door)metaParts.push('Code: '+door);
+    body+=`<div class="vs-prop-header" style="border-left-color:var(--${nbCls})">
+      <div class="vs-prop-name">${shortName}</div>
+      ${metaParts.length?`<div class="vs-prop-meta">${metaParts.join(' &middot; ')}</div>`:''}
+    </div>
+    <div class="vs-success-tasks">`;
+    b.items.forEach(t=>{body+=`<div class="vs-success-task">${t.urgent?'<span class="vs-urgent" style="margin-right:6px">Urgent</span>':''}${(t.problem||'').replace(/</g,'&lt;')}${t.vendor?` <span class="gs-task-vendor" style="margin-left:8px">(${t.vendor.replace(/</g,'&lt;')})</span>`:''}</div>`;});
+    body+=`</div>`;
+  });
+  const idsParam=JSON.stringify(_gsState.scheduledIds).replace(/"/g,'&quot;');
+  const h=`<div class="vs-dp-panel gs-panel" onclick="event.stopPropagation()">
+    <div class="vs-dp-header">
+      <div>
+        <div class="vs-dp-title"><span style="color:var(--green)">&#x2713;</span> Scheduled</div>
+        <div class="vs-dp-sub">${dateLabel}</div>
+      </div>
+      <button class="vs-dp-close" onclick="closeGroupScheduler()">&times;</button>
+    </div>
+    <div class="vs-success-body">
+      <div class="vs-success-lead">Locked in <strong>${dated.length} task${dated.length!==1?'s':''}</strong> for <strong>${dateLabel}</strong>.</div>
+      ${body}
+      <div class="gs-vendor-step">
+        <div class="gs-vendor-lead">Next: ask a vendor</div>
+        <div class="gs-vendor-row">
+          <select id="gs-vendor-select" onchange="_gsVendorChanged()">${vendorOpts}</select>
+          <button id="gs-text-btn" class="btn" disabled onclick='_gsTextVendor(&quot;${ds}&quot;,${idsParam})'>Text</button>
+          <button id="gs-assign-btn" class="btn btn-g" disabled onclick='_gsAssignVendor(${idsParam})'>Assign all</button>
+        </div>
+        <div class="gs-vendor-hint">Pick a vendor to text the day's plan, or assign once they confirm.</div>
+      </div>
+    </div>
+    <div class="vs-dp-footer">
+      <div class="vs-dp-footer-btns" style="width:100%;justify-content:flex-end">
+        <button class="btn" onclick="closeGroupScheduler()">Done</button>
+      </div>
+    </div>
+  </div>`;
+  modal.innerHTML=h;
+}
+
+window._gsVendorChanged=function(){
+  const sel=document.getElementById('gs-vendor-select');
+  const v=sel?sel.value:'';
+  const txt=document.getElementById('gs-text-btn');
+  const asg=document.getElementById('gs-assign-btn');
+  if(txt){txt.disabled=!v;txt.textContent=v?('Text '+v.split(' ')[0]):'Text';}
+  if(asg){asg.disabled=!v;asg.textContent=v?('Assign all to '+v.split(' ')[0]):'Assign all';}
+};
+
+window._gsTextVendor=function(ds,taskIds){
+  const sel=document.getElementById('gs-vendor-select');
+  const vName=sel?sel.value:'';
+  if(!vName){alert('Pick a vendor first.');return;}
+  const v=(vendors||[]).find(x=>x.name===vName);
+  if(!v||!v.phone){alert('No phone number on file for '+vName+'.');return;}
+  const tel=String(v.phone).replace(/[^\d+]/g,'');
+  const idSet=new Set(taskIds);
+  const dated=tasks.filter(t=>idSet.has(t.id));
+  // Group by property for the message
+  const propGroups={};const propOrder=[];
+  dated.forEach(t=>{
+    if(!propGroups[t.property]){propGroups[t.property]=[];propOrder.push(t.property);}
+    propGroups[t.property].push(t);
+  });
+  const dateLabel=new Date(ds+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  const firstName=vName.split(' ')[0];
+  const propLines=propOrder.map(pid=>{
+    const p=getProp(pid);
+    const propName=p?p.name.replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,''):pid;
+    const probs=propGroups[pid].map(t=>'  - '+(t.problem||'')).join('\n');
+    return propName+':\n'+probs;
+  }).join('\n\n');
+  const body=`Hi ${firstName} — wanted to bundle these for ${dateLabel}. Can you handle that day?\n\n${propLines}\n\n— Chip`;
+  window.location.href='sms:'+tel+'?body='+encodeURIComponent(body);
+};
+
+window._gsAssignVendor=function(taskIds){
+  const sel=document.getElementById('gs-vendor-select');
+  const vName=sel?sel.value:'';
+  if(!vName){alert('Pick a vendor first.');return;}
+  if(!confirm('Assign '+taskIds.length+' task'+(taskIds.length!==1?'s':'')+' to '+vName+'?'))return;
+  const idSet=new Set(taskIds);
+  let n=0;
+  tasks.forEach(t=>{
+    if(!idSet.has(t.id))return;
+    t.vendor=vName;
+    if(typeof logTaskChange==='function')logTaskChange('group_assign',t);
+    n++;
+  });
+  saveTasks();
+  if(typeof renderAll==='function')renderAll();
+  if(typeof showToast==='function')showToast(n+' task'+(n!==1?'s':'')+' assigned to '+vName);
+  closeGroupScheduler();
+};
 
 function bulkDelete(){
   const sel=_getSelectedTasks();if(!sel.length){showToast('No tasks selected');return;}
@@ -1476,6 +2111,12 @@ function renderDP(px,evs,selVal,vd,fetchFailed){
     </div>`;
   }
   h+=`<div class="dp-warn" id="${px}-dp-warn"><strong>⚠ Guests are in house on this day.</strong> Service is not recommended while guests are present. Consider a checkout day (after 10am) or check-in day (before 4pm) instead.<div class="dp-warn-btns"><button class="btn btn-gold" onclick="confirmBookedDate('${px}')">Schedule Anyway</button><button class="btn" onclick="cancelBookedDate('${px}')">Pick Another Day</button></div></div>`;
+  // Clear-date footer — only on detail modal picker when a date is currently set.
+  // Clearing reverts the task to the undated 'open' state so it flows back into
+  // the vendor's "Needs Your Schedule" bucket (or admin can pick a new date).
+  if(px==='d'&&selVal){
+    h+=`<div class="dp-clear-row"><button type="button" class="dp-clear-btn" onclick="clearDate('d')">&#x2715; Clear date</button></div>`;
+  }
   popup.innerHTML=h;
 }
 async function dpNav(px,dir,y,m){
@@ -1520,6 +2161,27 @@ function cancelBookedDate(px){
   pendingBookedDate={px:null,ds:null};
   const warn=document.getElementById(px+'-dp-warn');
   if(warn)warn.classList.remove('show');
+}
+// Clear the currently-set date on the detail-modal task. Reverts status from
+// 'scheduled' back to 'open' so the task returns to the undated bucket;
+// leaves in_progress/complete/resolved_by_guest alone. Vendor stays assigned.
+async function clearDate(px){
+  if(px!=='d')return;
+  const t=tasks.find(x=>x.id===detailId);if(!t)return;
+  t.date='';
+  if(t.status==='scheduled')t.status='open';
+  // Sync the hidden input + picker display so the modal matches immediately
+  document.getElementById('d-date').value='';
+  const disp=document.getElementById('d-dp-display');
+  disp.textContent='Select a date...';disp.className='dp-ph';
+  document.getElementById('d-dp-btn').classList.remove('has-val');
+  document.getElementById('d-dp-popup').style.display='none';
+  document.getElementById('d-status').value=t.status;
+  await saveTasks();
+  renderDetailBadges(t);
+  checkCombine();
+  renderAll();
+  showToast('Date cleared — back to unscheduled.');
 }
 document.addEventListener('click',e=>{
   // If the clicked element was removed from the DOM (e.g. by dpNav re-rendering), don't close the popup
@@ -2067,6 +2729,54 @@ function checkCombine(){
     area.innerHTML+=`<div class="combine"><div class="combine-txt"><strong>${r.name}</strong> is due ${dt} at this property. Combine into one visit?</div><div class="combine-btns"><button class="btn btn-gold" onclick="combineTask('${r.id}','${t.date}')">Combine</button><button class="btn" onclick="this.closest('.combine').remove()">Dismiss</button></div></div>`;
   });
 }
+// Banner shown in the task detail when this task carries a bundled filter
+// service. Surfaces the otherwise-hidden flag and gives an explicit Unbundle
+// path, since the flag forces the recount modal to gate Mark Complete.
+function renderBundleBanner(t){
+  const el=document.getElementById('d-bundle');
+  if(!el)return;
+  if(!t||!t.filter_service_bundled){el.innerHTML='';return;}
+  el.innerHTML=`<div class="bundle-banner">
+    <div class="bundle-banner-icon">&#x1F32C;&#xFE0F;</div>
+    <div class="bundle-banner-body">
+      <div class="bundle-banner-title">Filter service bundled with this task</div>
+      <div class="bundle-banner-sub">Vendor will be asked to recount filters before this task can be marked complete. Unbundle if filters aren't part of this visit.</div>
+    </div>
+    <button class="btn" onclick="unbundleFilterService('${t.id}')">Unbundle</button>
+  </div>`;
+}
+async function unbundleFilterService(id){
+  const t=tasks.find(x=>x.id===id);if(!t)return;
+  if(!t.filter_service_bundled){renderBundleBanner(t);return;}
+  // Strip the auto-appended notes block (anything that opens with the
+  // "— FILTER SERVICE BUNDLED —" header). Leave manually-added notes alone.
+  if(Array.isArray(t.notes)){
+    t.notes=t.notes.filter(n=>!(n&&n.text&&/^—\s*FILTER SERVICE BUNDLED\s*—/i.test(n.text.trim())));
+  }
+  // Only clear purchaseNote if it matches the auto-populated "Filters: …" pattern.
+  // Manually-edited purchase notes stay put.
+  if(t.purchaseNote&&/^Filters:\s/i.test(t.purchaseNote.trim())){
+    t.purchaseNote='';
+    if(t.purchaseStatus==='needed')t.purchaseStatus='';
+    if(t.purchaser==='vendor')t.purchaser='';
+  }
+  delete t.filter_service_bundled;
+  // Also clear the recount-submitted flag so the task is in a clean state.
+  delete t.filter_recount_submitted_by_vendor;
+  if(typeof logTaskChange==='function'){try{logTaskChange('unbundle_filter',t);}catch(e){}}
+  await saveTasks();
+  // Refresh the relevant pieces of the open detail modal in place.
+  renderBundleBanner(t);
+  renderNotes(t);
+  const purchaseInp=document.getElementById('d-purchase');
+  if(purchaseInp)purchaseInp.value=t.purchaseNote||'';
+  const pSaved=document.getElementById('d-purchase-saved');
+  if(pSaved)pSaved.style.display=t.purchaseNote?'':'none';
+  if(typeof renderPurchaseWorkflow==='function')renderPurchaseWorkflow(t);
+  renderAll();
+  showToast('Filter service unbundled — Mark Complete will work normally now.');
+}
+
 async function combineTask(rid,date){
   const r=recurring.find(x=>x.id===rid);if(!r)return;
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
@@ -2155,31 +2865,47 @@ async function openDetail(id){
   document.getElementById('d-date').value=dv;
   if(dv){document.getElementById('d-dp-display').textContent=fmtDate(dv);document.getElementById('d-dp-display').className='';document.getElementById('d-dp-btn').classList.add('has-val');}
   else{document.getElementById('d-dp-display').textContent='Select a date...';document.getElementById('d-dp-display').className='dp-ph';document.getElementById('d-dp-btn').classList.remove('has-val');}
-  // Badges — compact: status + combined reporter/date
-  const guestFirst=t.guest?t.guest.split(' ')[0]:'';
-  const createdShort=t.created?new Date(t.created).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'';
-  const reporterBadge=(guestFirst||createdShort)?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${guestFirst}${guestFirst&&createdShort?' \u00B7 ':''}${createdShort}</span>`:'';
-  document.getElementById('d-badges').innerHTML=`
-    ${t.urgent?'<span class="badge b-urgent">Urgent</span>':''}
-    ${t.recurring?'<span class="badge b-rec">Recurring</span>':''}
-    <span class="badge b-${t.status}">${t.status.replace('_',' ')}</span>
-    ${reporterBadge}`;
+  // Interactive badge row (category + status + urgent)
+  renderDetailBadges(t);
+  // Vendor contact row
+  const contactRow=document.getElementById('d-contact-row');
+  if(contactRow){
+    const assignedV=t.vendor?vendors.find(v=>v.name===t.vendor):null;
+    if(assignedV&&assignedV.phone){
+      const tel=assignedV.phone.replace(/\D/g,'');
+      contactRow.style.display='flex';
+      contactRow.innerHTML=`
+        <a href="sms:+1${tel}" class="cg-btn-text"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg> Text</a>
+        <a href="tel:+1${tel}" class="cg-btn-call"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13 19.79 19.79 0 0 1 1.61 4.4 2 2 0 0 1 3.6 2.21h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.91a16 16 0 0 0 6.06 6.06l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"></path></svg> Call</a>`;
+    } else {
+      contactRow.style.display='none';
+      contactRow.innerHTML='';
+    }
+  }
+  // Foldout states: open if has content, closed otherwise
+  const notesCount=(t.notes||[]).length;
+  const notesFold=document.getElementById('dm-fold-notes');
+  if(notesFold){notesFold.classList.toggle('open',notesCount>0);}
+  const notesCountEl=document.getElementById('dm-notes-count');
+  if(notesCountEl){notesCountEl.textContent=notesCount>0?notesCount:'';notesCountEl.style.display=notesCount>0?'':'none';}
+  const hasPurchase=!!(t.purchaseNote);
+  const purchaseFold=document.getElementById('dm-fold-purchase');
+  if(purchaseFold){purchaseFold.classList.toggle('open',hasPurchase);}
+  const purchasePreview=document.getElementById('dm-purchase-preview');
+  if(purchasePreview){purchasePreview.textContent=hasPurchase?t.purchaseNote.substring(0,40)+(t.purchaseNote.length>40?'...':''):'';}
+  const photosFold=document.getElementById('dm-fold-photos');
+  const hasPhotos=!!(t.photos&&t.photos.length)||(document.getElementById('d-task-photos')&&document.getElementById('d-task-photos').children.length>0);
+  if(photosFold){photosFold.classList.toggle('open',false);} // photos start collapsed
+  const photoCount=t.photos?t.photos.length:0;
+  const photoCountEl=document.getElementById('dm-photo-count');
+  if(photoCountEl){photoCountEl.textContent=photoCount>0?photoCount:'';photoCountEl.style.display=photoCount>0?'':'none';}
   document.getElementById('d-purchase').value=t.purchaseNote||'';
   const pSaved=document.getElementById('d-purchase-saved');
   if(pSaved)pSaved.style.display=t.purchaseNote?'':'none';
   renderPurchaseWorkflow(t);
-  renderUrgentToggle(t);
-  // Guest Alert toggle — show when mode is 'tagged'
-  const gaWrap=document.getElementById('d-guest-alert-wrap');
-  const gaCb=document.getElementById('d-guest-alert');
-  if(gaWrap&&gaCb){
-    const gaMode=(appSettings.guestAlert||{}).mode||'all';
-    gaWrap.style.display=(gaMode==='tagged')?'':'none';
-    gaCb.checked=!!t.guestAlert;
-  }
   showTaskPhoto(t);
   showVendorPhotos(t);
-  renderDetailVendors(t,p);renderNotes(t);checkCombine();
+  renderDetailVendors(t,p);renderNotes(t);checkCombine();renderBundleBanner(t);
   closeVendorDD(); // reset dropdown state when opening a new task
   renderMiniCal(t.property).then(()=>renderDetailVendors(t,p));
   // Guest context section removed — not useful for admin workflow
@@ -2240,6 +2966,11 @@ async function savePurchaseNote(){
   await saveTasks();
   const pSaved=document.getElementById('d-purchase-saved');
   if(pSaved){pSaved.style.display=val?'':'none';}
+  // Update purchase foldout preview
+  const purchaseFold=document.getElementById('dm-fold-purchase');
+  if(purchaseFold){purchaseFold.classList.toggle('open',!!val);}
+  const purchasePreview=document.getElementById('dm-purchase-preview');
+  if(purchasePreview){purchasePreview.textContent=val?val.substring(0,40)+(val.length>40?'...':''):'';}
   renderPurchaseWorkflow(t);
   renderAll();
   showToast(val?'Purchase note saved.':'Purchase note cleared.');
@@ -2501,8 +3232,9 @@ async function openVendorDay(vendorName,date){
   const vdTasks=getVendorDayTasks(vendorName,date);
   if(!vdTasks.length)return;
   const v=vendors.find(x=>x.name.toLowerCase()===vendorName.toLowerCase());
-  // Header — just the vendor name
-  document.getElementById('vd-title').textContent=vendorName;
+  // Header — vendor name + date
+  const dateFmtHdr=date?new Date(date+'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}):'';
+  document.getElementById('vd-title').textContent=vendorName+(dateFmtHdr?' — '+dateFmtHdr:'');
   // Contact row
   const contactEl=document.getElementById('vd-contact-row');
   if(v){
@@ -2576,39 +3308,38 @@ async function renderGuestComm(t){
   // Strip country code: +1, 1, or leading 1 for US numbers (11 digits)
   const phone=rawPhone.replace(/\D/g,'').replace(/^1(\d{10})$/,'$1');
   const phoneFmt=phone?phone.replace(/^(\d{3})(\d{3})(\d{4})$/,'($1) $2-$3'):rawPhone;
-  const phoneLinks=phone?`<div class="vc-action-row" style="flex-shrink:0">
-    <a href="sms:${phone}" class="vc-action-btn vc-text"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg> Text ${phoneFmt}</a>
-    <a href="tel:${phone}" class="vc-action-btn vc-call"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg> Call</a>
-  </div>`:`<div class="vc-action-row" style="flex-shrink:0">
-    <span class="vc-action-btn vc-disabled"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg> Text</span>
-    <span class="vc-action-btn vc-disabled"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg> Call</span>
-    <span class="vc-no-phone">No phone on file</span>
-  </div>`;
+  const phoneLinks=phone?`<div style="display:flex;gap:5px;flex-shrink:0">
+    <a href="sms:${phone}" class="vc-action-btn vc-text" style="font-size:.7rem;padding:5px 10px"><svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg> Text ${phoneFmt}</a>
+    <a href="tel:${phone}" class="vc-action-btn vc-call" style="font-size:.7rem;padding:5px 10px"><svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg> Call</a>
+  </div>`:`<span style="font-size:.68rem;color:var(--text3)">No phone on file</span>`;
   // Determine if guest action buttons should show
   const tRef=tasks.find(x=>x.id===detailId);
   const gcIsDone=tRef&&isDone(tRef);
   const showAssignGuest=tRef&&!gcIsDone&&!tRef.assignedToGuest;
   const showResolved=tRef&&!gcIsDone;
-  const gcActions=`<div class="gc-hosp-actions">
-    ${showAssignGuest?`<button class="btn" onclick="assignToGuest()" style="border-color:var(--gold);color:var(--gold);font-size:.68rem;padding:2px 9px;box-shadow:none">Assign to Guest</button>`:''}
-    ${showResolved?`<button class="btn" onclick="markResolvedByGuest()" style="border-color:var(--green);color:var(--green);font-size:.68rem;padding:2px 9px;box-shadow:none">Resolved by Guest</button>`:''}
-  </div>`;
-  el.innerHTML=`<div class="guest-comm">
-    <div class="guest-comm-header">
-      <div class="gc-hosp-left"><span style="font-size:.7rem;font-weight:600;color:var(--text2)">Guest at this property</span><span class="gc-hosp-badge">Hospitable</span></div>
-      ${gcActions}
-    </div>
-    <div class="gc-top-row">
-      <div class="gc-top-left">
-        <div class="gc-guest-name">${guestName}</div>
-        <div class="gc-guest-dates">${checkin} – ${checkout}${activeRes.platform?' · '+activeRes.platform:''}</div>
+  const gcActionBtns=(showAssignGuest||showResolved)?`<div style="display:flex;gap:5px;margin-bottom:8px">
+    ${showAssignGuest?`<button class="btn" onclick="assignToGuest()" style="border-color:var(--gold);color:var(--gold);font-size:.68rem;padding:3px 10px;box-shadow:none">Assign to Guest</button>`:''}
+    ${showResolved?`<button class="btn" onclick="markResolvedByGuest()" style="border-color:var(--green);color:var(--green);font-size:.68rem;padding:3px 10px;box-shadow:none">Resolved by Guest</button>`:''}
+  </div>`:'';
+  el.innerHTML=`<div class="gc-foldout">
+    <button class="gc-fold-trigger" onclick="this.closest('.gc-foldout').classList.toggle('open')">
+      <span><svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="vertical-align:-1px;margin-right:5px"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg>Contact ${guestFirst} — current guest</span>
+      <span class="gc-fold-arrow">&#x25BA;</span>
+    </button>
+    <div class="gc-fold-body"><div class="gc-fold-inner">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 0 8px">
+        <div>
+          <div style="font-size:.84rem;font-weight:600;color:var(--text)">${guestName}</div>
+          <div style="font-size:.68rem;color:var(--text2)">${checkin} – ${checkout}${activeRes.platform?' · '+activeRes.platform:''}</div>
+        </div>
+        ${phoneLinks}
       </div>
-      ${phoneLinks}
-    </div>
-    <div class="gc-msg-box">
-      <textarea id="gc-msg-input" placeholder="Send a message to ${guestFirst} via Hospitable..."></textarea>
-      <button class="gc-send-btn" onclick="sendGuestCommMsg('${activeRes.reservationId}','${guestFirst}')">Send</button>
-    </div>
+      ${gcActionBtns}
+      <div class="gc-msg-box">
+        <textarea id="gc-msg-input" placeholder="Send a message to ${guestFirst} via Hospitable..."></textarea>
+        <button class="gc-send-btn" onclick="sendGuestCommMsg('${activeRes.reservationId}','${guestFirst}')">Send</button>
+      </div>
+    </div></div>
   </div>`;
 }
 async function sendGuestCommMsg(rid,guestFirst){
@@ -2671,7 +3402,7 @@ async function renderDetailVendors(t,p){
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
         <div style="flex:1;min-width:0"><div class="vsn">${v.name}</div><div class="vsr">${v.role}</div>${isAssigned?'':`<div class="vsp">${v.phone}${v.email?' | '+v.email:''}</div>`}</div>
         ${isAssigned?contactBtns:''}
-        ${showAssign?`<button class="btn btn-g" onclick="assignVendor('${v.name.replace(/'/g,"\\'")}')">Assign</button>`:''}
+        ${showAssign?`<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0"><button class="btn btn-g" onclick="assignVendor('${v.name.replace(/'/g,"\\'")}')">Assign</button><button class="btn" style="font-size:.7rem;padding:4px 8px;background:var(--gold);color:#fff;border-color:var(--gold)" onclick="letVendorSchedule('${v.name.replace(/'/g,"\\'")}')" title="Assign and let vendor pick their own date">Let vendor schedule</button></div>`:''}
       </div>
       <div style="font-size:.72rem;color:var(--text2);margin:4px 0 6px">${v.note}</div>
       <button class="sms-toggle" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
@@ -2699,23 +3430,10 @@ async function renderDetailVendors(t,p){
   if(assignedVendor){
     titleEl.textContent='';
     let h='';
-    // Check for same-vendor same-day grouping → show combined SMS banner
+    // Always use the combined card layout — fall back to [t] if no date is set
     const sameDayTasks=getVendorDayTasks(assignedVendor.name,t.date);
-    if(sameDayTasks.length>=2){
-      h+=combinedCard(assignedVendor,sameDayTasks);
-      h+=`<details style="margin-top:10px"><summary style="font-size:.78rem;color:var(--text2);cursor:pointer;padding:6px 0">Single-task message for this job only</summary>`;
-      h+=vendorCard(assignedVendor,false);
-      h+=`</details>`;
-    } else {
-      h+=vendorCard(assignedVendor,false);
-    }
-    // Show other vendors in a collapsible section
-    const others=m.filter(v=>v.id!==assignedVendor.id).slice(0,3);
-    if(others.length){
-      h+=`<details style="margin-top:10px"><summary style="font-size:.78rem;color:var(--text2);cursor:pointer;padding:6px 0">Other vendors for this category (${others.length})</summary>`;
-      h+=others.map(v=>vendorCard(v,true)).join('');
-      h+=`</details>`;
-    }
+    const taskListForCard=sameDayTasks.length?sameDayTasks:[t];
+    h+=combinedCard(assignedVendor,taskListForCard);
     area.innerHTML=h;
     return;
   }
@@ -3285,13 +4003,29 @@ async function generateVendorAgendaLink(vendorName){
   }
 }
 
-// Opens SMS with the all-in-one agenda link (tasks + projects for all upcoming days)
+// Opens SMS with the one-and-only vendor agenda link. The agenda view shows
+// BOTH scheduled tasks and tasks the vendor still needs to pick a date for,
+// so this single link covers every case. The body text adapts based on what
+// the vendor currently has on their plate.
 async function sendAllTasksLink(vendorName,tel){
   try{
     const token=await createVendorAgenda(vendorName);
     const url=vendorAgendaUrl(token);
     const firstName=vendorName.split(' ')[0];
-    const body=`Hi ${firstName}, here's your Storybook Escapes link — all your upcoming tasks and projects in one place:\n\n${url}`;
+    // Count dated vs. undated tasks assigned to this vendor so we can phrase
+    // the SMS correctly — tasks awaiting vendor-picked dates get a specific
+    // call-out so Cody knows to pick dates, not just review the schedule.
+    const open=tasks.filter(x=>x.vendor&&x.vendor.toLowerCase()===vendorName.toLowerCase()&&!isDone(x));
+    const undated=open.filter(x=>!x.date).length;
+    const dated=open.filter(x=>!!x.date).length;
+    let body;
+    if(undated>0&&dated>0){
+      body=`Hi ${firstName}, here's your Storybook Escapes link — it shows your upcoming schedule plus ${undated} task${undated!==1?'s':''} that still need${undated!==1?'':'s'} a date picked by you:\n\n${url}\n\n— Chip Burns, Storybook Escapes`;
+    }else if(undated>0){
+      body=`Hi ${firstName}, you've got ${undated} task${undated!==1?'s':''} waiting on your schedule. When you have a moment, take a look and pick dates that work for you:\n\n${url}\n\n— Chip Burns, Storybook Escapes`;
+    }else{
+      body=`Hi ${firstName}, here's your Storybook Escapes link — all your upcoming tasks and projects in one place:\n\n${url}`;
+    }
     window.location.href='sms:'+tel+'?body='+encodeURIComponent(body);
   }catch(e){
     console.error('[send-all-tasks] Error:',e);
@@ -3300,7 +4034,7 @@ async function sendAllTasksLink(vendorName,tel){
 }
 
 function buildSMS(t,p,v){
-  const pn=p?p.name:t.property,addr=p?p.address:'',door=p?p.door:'';
+  const pn=p?p.name:t.property,addr=p?p.address:'',door=getDoorCode(p);
   const urg=t.urgent?'\n\nThis is URGENT — same-day response needed if possible.':'';
   let ds;
   if(t.date){ds=`Scheduled for: ${t.date}`;}
@@ -3417,33 +4151,14 @@ function combinedVendorCard(v,taskList,sheetUrl,showTaskList=true){
 
   // Build send row + collapsible message preview
   const escapedSms=sms.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // ONE link covers both scheduled tasks AND tasks the vendor still needs to
+  // pick a date for — the agenda view on the vendor side shows both buckets.
   const sendHtml=`
     <div class="cg-send-row" style="flex-direction:column;align-items:stretch;gap:8px">
       <button class="cg-send-btn" style="justify-content:center;width:100%;font-size:.82rem;padding:9px 14px" onclick="sendAllTasksLink('${v.name.replace(/'/g,"\\'")}','${tel}')">
         <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg>
         Send All Tasks
       </button>
-      <div class="cg-send-main">
-        <a id="${smsId}-link" href="sms:${tel}?body=${encodeURIComponent(sms)}" class="cg-send-btn" style="background:var(--surface2);color:var(--green);border:1.5px solid var(--green);font-size:.74rem" onclick="updateSmsLink('${smsId}','${tel}')">
-          <svg viewBox="0 0 24 24" style="fill:var(--green)"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg>
-          Send Job Sheet
-        </a>
-        <span class="cg-send-status">Not yet sent</span>
-        <button class="cg-send-edit" onclick="const b=this.closest('.combined-sms-banner');const m=b.querySelector('.cg-msg-body');const t=b.querySelector('.cg-msg-toggle');m.classList.toggle('open');t.classList.toggle('open')">Preview & edit</button>
-      </div>
-    </div>
-    <button class="cg-msg-toggle" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
-      <span class="cg-msg-toggle-label">Message Preview</span>
-      <span class="cg-msg-toggle-arrow">&#x25BC;</span>
-    </button>
-    <div class="cg-msg-body">
-      <div class="sms-box" style="margin-top:3px">
-        <textarea class="sms-edit" id="${smsId}" style="min-height:100px">${escapedSms}</textarea>
-        <div class="sms-acts">
-          <a href="sms:${tel}?body=${encodeURIComponent(sms)}" class="sms-btn sms-send" onclick="updateSmsLink('${smsId}','${tel}')">Send Job Sheet</a>
-          <button class="sms-btn sms-copy" onclick="copySms('${smsId}')">Copy Text</button>
-        </div>
-      </div>
     </div>`;
 
   return`<div class="combined-sms-banner">
@@ -3453,6 +4168,9 @@ function combinedVendorCard(v,taskList,sheetUrl,showTaskList=true){
 }
 function renderNotes(t){
   const el=document.getElementById('d-notes');const ns=t.notes||[];
+  // Update notes foldout count badge
+  const notesCountEl=document.getElementById('dm-notes-count');
+  if(notesCountEl){notesCountEl.textContent=ns.length>0?ns.length:'';notesCountEl.style.display=ns.length>0?'':'none';}
   if(!ns.length){el.innerHTML='<div style="color:var(--text3);font-size:.79rem">No notes yet.</div>';return;}
   el.innerHTML=ns.map((n,i)=>{
     const isAdmin=n.type!=='vendor';
@@ -3485,6 +4203,8 @@ async function updateField(f,v){
   // Auto-advance status: setting a date on an open task → scheduled
   if(f==='date'&&v&&t.status==='open'){t.status='scheduled';document.getElementById('d-status').value='scheduled';}
   await saveTasks();renderAll();
+  // Refresh badges to reflect any status/category change
+  renderDetailBadges(t);
   // Re-render vendor section when vendor or category changes
   if(f==='vendor'||f==='category'){
     const p=getProp(t.property);
@@ -3505,13 +4225,7 @@ async function assignVendor(name){
   // Refresh the modal fields to reflect the change immediately
   document.getElementById('d-vendor').value=name;
   document.getElementById('d-status').value=t.status;
-  document.getElementById('d-badges').innerHTML=`
-    ${t.urgent?'<span class="badge b-urgent">Urgent</span>':''}
-    ${t.recurring?'<span class="badge b-rec">Recurring</span>':''}
-    <span class="badge b-${t.status}">${t.status.replace('_',' ')}</span>
-    ${t.category?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${t.category.replace('_',' ')}</span>`:''}
-    ${t.guest?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">Reported by ${t.guest}</span>`:''}
-    ${t.created?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${fmtReported(t.created)}</span>`:''}`;
+  renderDetailBadges(t);
   // Hide suggested vendors — assignment is done
   document.getElementById('d-vendors').innerHTML=`<div style="font-size:.8rem;color:var(--text2);padding:6px 0">Assigned to <strong>${name}</strong>.</div>`;
   renderAll();
@@ -3519,30 +4233,107 @@ async function assignVendor(name){
   showToast(`${name} assigned to all tasks on this date.`);
 }
 
-// ─── URGENT TOGGLE (detail modal) ───────────────────────────────
-function renderUrgentToggle(task){
-  const btn=document.getElementById('d-urgent-toggle');
-  if(task.urgent){
-    btn.className='btn urg-on';
-    btn.innerHTML='&#x26A0; URGENT — click to remove';
-  } else {
-    btn.className='btn urg-off';
-    btn.textContent='Mark as Urgent';
+// Assign a vendor to a task AND let them pick the date themselves.
+// Unlike assignVendor (which expects admin to set date+vendor), this flow
+// deliberately leaves t.date blank and texts the vendor their agenda link —
+// the same link they already use for Send All Tasks, but now with scheduling
+// power on the vendor side.
+async function letVendorSchedule(name){
+  const t=tasks.find(x=>x.id===detailId);if(!t)return;
+  const vendor=vendors.find(v=>v.name.toLowerCase()===name.toLowerCase());
+  if(!vendor||!vendor.phone){
+    alert('Vendor not found or has no phone number on file.');
+    return;
+  }
+  t.vendor=name;
+  // Deliberately do NOT set a date. Status stays 'open' until vendor picks a date.
+  // (Matches assignVendor's existing behavior of leaving status=open when no date.)
+  if(!t.date&&t.status!=='open')t.status='open';
+  await saveTasks();
+  // Build the scheduling-focused SMS
+  try{
+    const token=await createVendorAgenda(name);
+    const url=vendorAgendaUrl(token);
+    const p=getProp(t.property);
+    const propName=p?p.name:t.property;
+    const firstName=name.split(' ')[0];
+    const urg=t.urgent?'\n\nThis one\'s marked URGENT — please let us know if same-day is possible.':'';
+    const body=`Hi ${firstName}, we've got a new task for you at ${propName}:\n\n${t.problem}${urg}\n\nWhen you have a moment, take a look and pick a date that works:\n${url}\n\n— Chip Burns, Storybook Escapes`;
+    const tel=vendor.phone.replace(/\D/g,'');
+    renderAll();
+    closeModal('detail-modal');
+    showToast(`${name} assigned — open your SMS to send the scheduling link.`);
+    // Launch SMS composer on the admin's device
+    window.location.href='sms:'+tel+'?body='+encodeURIComponent(body);
+  }catch(e){
+    console.error('[let-vendor-schedule] Error:',e);
+    showToast('Failed to generate scheduling link','err');
   }
 }
+
+// ─── DETAIL MODAL: BADGE + FOLDOUT SYSTEM ───────────────────────
+function toggleDMFold(id){
+  const el=document.getElementById(id);
+  if(el)el.classList.toggle('open');
+}
+
+function renderDetailBadges(t){
+  const row=document.getElementById('d-badge-row');
+  if(!row||!t)return;
+  const catLabel=t.category?(CAT_LABELS[t.category]||t.category.replace(/_/g,' ')):'No category';
+  const catItems=[{id:'',label:'No category'},{id:'replacement',label:'Replacement'},...VCAT]
+    .map(c=>`<button class="db-picker-item${t.category===c.id?' active':''}" onclick="detailBadgeClick('category','${c.id}')">${c.label}</button>`).join('');
+  const STATUS_OPTS=[
+    {id:'open',label:'Open',cls:'db-open'},
+    {id:'scheduled',label:'Scheduled',cls:'db-scheduled'},
+    {id:'in_progress',label:'In Progress',cls:'db-inprogress'},
+    {id:'complete',label:'Complete',cls:'db-complete'}
+  ];
+  const statusOpt=STATUS_OPTS.find(s=>s.id===t.status)||STATUS_OPTS[0];
+  const statusItems=STATUS_OPTS.map(s=>`<button class="db-picker-item${t.status===s.id?' active':''}" onclick="detailBadgeClick('status','${s.id}')">${s.label}</button>`).join('');
+  const urgentHtml=t.urgent
+    ?`<button class="db-badge db-urgent" onclick="toggleDetailUrgent()">&#x26A0; Urgent</button>`
+    :`<button class="db-badge db-urgent-off" onclick="toggleDetailUrgent()">Mark as Urgent</button>`;
+  row.innerHTML=`
+    <div class="db-wrap">
+      <button class="db-badge db-cat" onclick="toggleDBPicker('db-picker-cat',event,this)">${catLabel} <span class="db-arrow">&#x25BC;</span></button>
+      <div class="db-picker" id="db-picker-cat">${catItems}</div>
+    </div>
+    <div class="db-wrap">
+      <button class="db-badge ${statusOpt.cls}" onclick="toggleDBPicker('db-picker-status',event,this)">${statusOpt.label} <span class="db-arrow">&#x25BC;</span></button>
+      <div class="db-picker" id="db-picker-status">${statusItems}</div>
+    </div>
+    ${urgentHtml}`;
+}
+
+function toggleDBPicker(id,event,btn){
+  event.stopPropagation();
+  const picker=document.getElementById(id);
+  const isOpen=picker.classList.contains('open');
+  document.querySelectorAll('.db-picker').forEach(p=>p.classList.remove('open'));
+  if(!isOpen){
+    const rect=btn.getBoundingClientRect();
+    picker.style.top=(rect.bottom+4)+'px';
+    picker.style.left=rect.left+'px';
+    picker.classList.add('open');
+  }
+}
+
+async function detailBadgeClick(field,value){
+  const selId=field==='category'?'d-category':'d-status';
+  const sel=document.getElementById(selId);if(sel)sel.value=value;
+  await updateField(field,value);
+  const t=tasks.find(x=>x.id===detailId);if(t)renderDetailBadges(t);
+  document.querySelectorAll('.db-picker').forEach(p=>p.classList.remove('open'));
+}
+
+// Legacy stub — now handled by renderDetailBadges
+function renderUrgentToggle(task){ renderDetailBadges(task); }
+
 async function toggleDetailUrgent(){
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
   t.urgent=!t.urgent;
-  renderUrgentToggle(t);
-  // Re-render badges
-  const nb=getNb(t.property);
-  document.getElementById('d-badges').innerHTML=`
-    ${t.urgent?'<span class="badge b-urgent">Urgent</span>':''}
-    ${t.recurring?'<span class="badge b-rec">Recurring</span>':''}
-    <span class="badge b-${t.status}">${t.status.replace('_',' ')}</span>
-    ${t.category?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${t.category.replace('_',' ')}</span>`:''}
-    ${t.guest?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">Reported by ${t.guest}</span>`:''}
-    ${t.created?`<span class="badge" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${fmtReported(t.created)}</span>`:''}`;
+  renderDetailBadges(t);
   await saveTasks();renderAll();
   showToast(t.urgent?'Marked as urgent.':'Urgent removed.');
 }
@@ -3626,6 +4417,8 @@ async function selectVendorDD(name){
 // Close dropdown on outside click
 document.addEventListener('click',e=>{
   if(vdOpen && !document.getElementById('vd-wrap')?.contains(e.target))closeVendorDD();
+  // Close badge pickers when clicking outside
+  if(!e.target.closest('.db-wrap'))document.querySelectorAll('.db-picker').forEach(p=>p.classList.remove('open'));
 });
 
 async function markComplete(){
@@ -3941,13 +4734,27 @@ function buildHistForm(){
     <button class="btn btn-g" onclick="saveHistTask()">Add Record</button>
   </div>`;
 }
-/* Repeat issue detection — analyzes completed tasks for patterns */
+/* Repeat issue detection — analyzes completed tasks for patterns.
+   Only break/fix categories count; routine recurring services (pest, cleaning,
+   water filtration, landscaping, arcade) and anything stamped via the
+   log-service / recurring-template flow (_loggedService flag) are filtered
+   out so a normal monthly pest schedule doesn't read as a "repeat issue."
+   HVAC filter changes are also stripped — they're routine maintenance. */
+const TREND_ISSUE_CATS = new Set(['plumbing','hvac','handyman','hot_tub','pool','septic','bed_bugs','electrical']);
+function _isTrendIssue(t){
+  if(!t)return false;
+  if(t._loggedService)return false;                          // logged from a recurring template
+  if(!TREND_ISSUE_CATS.has(t.category))return false;          // routine category
+  if(t.category==='hvac' && t.problem && /filter/i.test(t.problem))return false; // HVAC filter swaps
+  return true;
+}
 function buildTrendInsights(doneTasks){
-  if(doneTasks.length<3)return''; // not enough data
+  const issueTasks=doneTasks.filter(_isTrendIssue);
+  if(issueTasks.length<3)return''; // not enough data
   const now=new Date();const sixMonthsAgo=new Date(now);sixMonthsAgo.setMonth(sixMonthsAgo.getMonth()-6);
   // Group by property+category
   const combos={};
-  doneTasks.forEach(t=>{
+  issueTasks.forEach(t=>{
     const d=t.date||t.created;if(!d)return;
     const key=t.property+'||'+t.category;
     if(!combos[key])combos[key]={property:t.property,category:t.category,total:0,recent:0,tasks:[]};
@@ -3958,8 +4765,8 @@ function buildTrendInsights(doneTasks){
   // Find repeat offenders: 3+ same category at same property
   const repeats=Object.values(combos).filter(c=>c.total>=3).sort((a,b)=>b.recent-a.recent||b.total-a.total);
   if(!repeats.length)return'';
-  // Also find properties with the highest total issue count
-  const propTotals={};doneTasks.forEach(t=>{propTotals[t.property]=(propTotals[t.property]||0)+1;});
+  // Also find properties with the highest total issue count (same break/fix filter)
+  const propTotals={};issueTasks.forEach(t=>{propTotals[t.property]=(propTotals[t.property]||0)+1;});
   const topProps=Object.entries(propTotals).sort((a,b)=>b[1]-a[1]).slice(0,3);
   let h=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px;box-shadow:var(--shadow)">`;
   h+=`<div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--green);margin-bottom:10px">Repeat Issue Alerts</div>`;
@@ -4149,14 +4956,58 @@ async function vendorDrop(e,targetVid){
   showToast('Vendor order saved.');
 }
 
+// Vendor Directory search state. Empty string = unfiltered.
+let _vendorSearch='';
+function onVendorSearch(val){
+  _vendorSearch=(val||'').trim();
+  const clr=document.getElementById('vendor-search-clear');
+  if(clr)clr.style.display=_vendorSearch?'':'none';
+  renderVendors();
+}
+function clearVendorSearch(){
+  const inp=document.getElementById('vendor-search');
+  if(inp)inp.value='';
+  _vendorSearch='';
+  const clr=document.getElementById('vendor-search-clear');
+  if(clr)clr.style.display='none';
+  renderVendors();
+  if(inp)inp.focus();
+}
+// Returns true if vendor matches current search string. Searches name, role,
+// phone (digits-only too), email, notes, and category labels.
+function _vendorMatchesSearch(v,q){
+  if(!q)return true;
+  const needle=q.toLowerCase();
+  const phoneDigits=(v.phone||'').replace(/\D/g,'');
+  const needleDigits=needle.replace(/\D/g,'');
+  const hay=[v.name||'',v.role||'',v.phone||'',v.email||'',v.note||'',
+    (v.categories||[]).map(cid=>{const c=VCAT.find(x=>x.id===cid);return c?c.label:'';}).join(' ')
+  ].join(' ').toLowerCase();
+  if(hay.includes(needle))return true;
+  if(needleDigits&&needleDigits.length>=3&&phoneDigits.includes(needleDigits))return true;
+  return false;
+}
+// Wraps the first occurrence of the search term in a vendor field for visual highlight.
+function _vendorHighlight(text,q){
+  if(!q||!text)return text;
+  const idx=text.toLowerCase().indexOf(q.toLowerCase());
+  if(idx<0)return text;
+  const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return esc(text.slice(0,idx))+'<span class="vd-match-hl">'+esc(text.slice(idx,idx+q.length))+'</span>'+esc(text.slice(idx+q.length));
+}
+
 function renderVendors(){
   const c=document.getElementById('vendor-dir');let h='';
   const collapsed=_getVCatCollapsed();
+  const q=_vendorSearch;
   // Display copy only — alphabetized for directory; does not affect VCAT source or other dropdowns
   const sortedCats=[...VCAT].sort((a,b)=>a.label.localeCompare(b.label));
+  let totalMatches=0;
   sortedCats.forEach(cat=>{
-    const cv=vendors.filter(v=>v.categories.includes(cat.id));if(!cv.length)return;
-    const isCollapsed=collapsed.has(cat.id);
+    const cv=vendors.filter(v=>v.categories.includes(cat.id)&&_vendorMatchesSearch(v,q));if(!cv.length)return;
+    totalMatches+=cv.length;
+    // When searching, force categories with matches to be expanded
+    const isCollapsed=q?false:collapsed.has(cat.id);
     h+=`<div class="vs${isCollapsed?' vs-collapsed':''}">`;
     h+=`<div class="vs-hdr" onclick="toggleVCat('${cat.id}')">`;
     h+=`<h3>${cat.label}<span class="vs-cat-count">${cv.length}</span></h3>`;
@@ -4173,7 +5024,7 @@ function renderVendors(){
       h+=`<div class="vc-top">`;
       h+=`<div class="vc-drag-handle" title="Drag to reorder">&#x2807;</div>`;
       h+=`<div class="vc-info">`;
-      h+=`<div class="vc-name">${v.name}</div><div class="vc-role">${v.role}</div>`;
+      h+=`<div class="vc-name">${q?_vendorHighlight(v.name,q):v.name}</div><div class="vc-role">${q?_vendorHighlight(v.role,q):v.role}</div>`;
       h+=`<div class="vc-contact"><span class="vc-phone">${v.phone}</span>${v.email?`<span class="vc-email">${v.email}</span>`:''}</div>`;
       h+=!v.email?`<span class="add-email" onclick="showEmailForm('${v.id}')">+ Add email</span>`:'';
       h+=`<div id="ef-${v.id}" style="display:none" class="email-form">
@@ -4194,15 +5045,19 @@ function renderVendors(){
         h+=`<span class="btn btn-call" style="opacity:.4;cursor:default">Call</span>`;
       }
       h+=`<button class="btn" onclick="generateVendorAgendaLink('${safeName}')">Schedule Link</button>`;
-      h+=`<button class="btn" onclick="openEditVendor('${v.id}')">Edit</button>`;
-      if(v.name==='Lisa Hawthorne'||v.name==='Mammie Johnson'){
-        h+=`<button class="btn btn-inv" onclick="openInvoiceReconciler('${safeName}')">Invoice</button>`;
+      if(v.id==='v10'){
+        h+=`<button class="btn" onclick="openAabImport()" title="Drag and drop completed-service PDFs to log them automatically">Import PDFs</button>`;
       }
+      h+=`<button class="btn" onclick="openEditVendor('${v.id}')">Edit</button>`;
       h+=`</div></div>`; // close vc-btn-row, vc
     });
     h+=`</div></div>`; // close vc-list, vs
   });
-  document.getElementById('vendor-dir').innerHTML=h||'<div class="empty">No vendors yet.</div>';
+  if(!h){
+    if(q)h=`<div class="vd-no-match">No vendors match "<b>${q.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</b>". <a href="#" onclick="clearVendorSearch();return false" style="color:var(--green);font-weight:600">Clear search</a></div>`;
+    else h='<div class="empty">No vendors yet.</div>';
+  }
+  document.getElementById('vendor-dir').innerHTML=h;
 }
 function toggleVendorInvoices(vid){
   const el=document.getElementById('vinv-'+vid);
@@ -4265,7 +5120,365 @@ function showToast(msg,cls='',undoFn=null,duration=0){
 
 // SEED removed — tasks are loaded from server storage
 
-// HOSTBUDDY INTEGRATION
+// ────────────────────────────────────────────────────────────────────────────
+// ALL ABOUT BUGS — IMPORT SERVICE LOGS
+// Drag-and-drop pest control PDFs onto the All About Bugs vendor card.
+// Parser splits each Gmail-export PDF on Account Number boundaries and emits
+// one logged-service record per service block. Mirrors the saveLogTask
+// record shape so logged services thread into the existing tasks list.
+// ────────────────────────────────────────────────────────────────────────────
+
+// Account # → cabin ID. Mapping is by ADDRESS (verified against PROPS), not
+// by the customer-name string in the AAB portal — those names have drifted
+// over time and don't match current cabin names. AAB services every cabin
+// EXCEPT Hillside Haven Big House and Cottage (Alabama — out of service area).
+// Account numbers for prc3, prc4, prc6 aren't listed below because they
+// haven't been seen yet — when they show up the address fallback in
+// _aabAddressToCabin will resolve them, and they should be added here.
+const AAB_ACCT_TO_CABIN = {
+  '3000':'bearadise',     // 734 Heiden Dr
+  '11147':'prc1','11148':'prc2','11151':'prc5',
+  '11154':'umc10','11155':'umc20','11156':'umc30','11157':'umc40','11159':'umc50','11160':'umc60',
+  '11161':'hero',         // 2382 Alpine Village Way
+  '11162':'hibernation',  // 335 Alpine Mountain Way
+  '11163':'magic',        // 1775 Bluff Ridge Rd
+  '11164':'wizards'       // 658 Pinecrest Dr
+};
+
+let _aabPdfLib=null;
+function _aabLoadPdfLib(){
+  if(_aabPdfLib)return Promise.resolve(_aabPdfLib);
+  if(window.pdfjsLib){_aabPdfLib=window.pdfjsLib;return Promise.resolve(_aabPdfLib);}
+  return new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload=()=>{const lib=window.pdfjsLib;lib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';_aabPdfLib=lib;resolve(lib);};
+    s.onerror=()=>reject(new Error('Failed to load pdf.js'));
+    document.head.appendChild(s);
+  });
+}
+
+// In-memory rows for the open import session. Cleared when modal closes.
+let _aabRows=[];
+
+// Pull plain text from a PDF, joined as one string with whitespace between items.
+async function _aabExtractText(file){
+  const lib=await _aabLoadPdfLib();
+  const buf=await file.arrayBuffer();
+  const doc=await lib.getDocument({data:buf}).promise;
+  let out='';
+  for(let i=1;i<=doc.numPages;i++){
+    const pg=await doc.getPage(i);
+    const tc=await pg.getTextContent();
+    out+=tc.items.map(it=>it.str).join(' ')+'\n';
+  }
+  return out;
+}
+
+// Address → cabin id fallback. Normalizes both sides for fuzzy match.
+function _aabAddressToCabin(addr){
+  if(!addr)return null;
+  const n=addr.toLowerCase().replace(/[.,]/g,'').replace(/\s+/g,' ').trim();
+  // Direct address numbers + street stems are unique enough across PROPS
+  if(/1627 paradise ridge/.test(n)){
+    const m=n.match(/(?:unit|#)\s*(\d)/);if(m)return 'prc'+m[1];
+  }
+  if(/1181 upper middle creek/.test(n)){
+    const m=n.match(/(?:cabin|unit|#)\s*(\d{2})/);if(m)return 'umc'+m[1];
+  }
+  if(/1619 rebel hill/.test(n)){
+    const m=n.match(/(?:cabin|unit|#)\s*(\d{2})/);if(m)return 'umc'+m[1];
+  }
+  if(/734 heiden/.test(n))return 'bearadise';
+  if(/658 pinecrest/.test(n))return 'wizards';
+  if(/1775 bluff ridge/.test(n))return 'magic';
+  if(/335 alpine mountain/.test(n))return 'hibernation';
+  if(/2382 alpine village/.test(n))return 'hero';
+  if(/226 oak hill/.test(n))return 'hillside_big';
+  if(/218 oak hill/.test(n))return 'hillside_cottage';
+  return null;
+}
+
+// Resolve the year for a "(M/D)" service date given the email-header date.
+// If service month is far ahead of email month, treat as previous year (Dec service in Jan email).
+function _aabResolveDate(svcMonth,svcDay,emailDate){
+  if(!emailDate||isNaN(emailDate.getTime())){
+    // Fallback: assume current year
+    const now=new Date();
+    return `${now.getFullYear()}-${String(svcMonth).padStart(2,'0')}-${String(svcDay).padStart(2,'0')}`;
+  }
+  let year=emailDate.getFullYear();
+  const emailMonth=emailDate.getMonth()+1;
+  if(svcMonth>emailMonth+1)year-=1;
+  return `${year}-${String(svcMonth).padStart(2,'0')}-${String(svcDay).padStart(2,'0')}`;
+}
+
+// Parse one PDF text dump → array of service records.
+function _aabParseText(text){
+  const records=[];
+  // Split on Account Number boundaries; keep each chunk that follows.
+  // The capture preserves the account number so we can attach it to the chunk.
+  const parts=text.split(/Account\s*Number:\s*(\d+)/i);
+  // parts[0] is preamble before first account number; parts[1]=acct, parts[2]=chunk, parts[3]=acct, parts[4]=chunk...
+  // We also need email date that PRECEDES each Account Number — extract from preamble or prior chunk.
+  let priorText=parts[0]||'';
+  for(let i=1;i<parts.length;i+=2){
+    const acct=parts[i];
+    const chunk=parts[i+1]||'';
+    // Email date is the most recent "DOW, Mon DD, YYYY" found in priorText (or chunk if priorText missed it)
+    const dateRx=/([A-Z][a-z]{2}),\s*([A-Z][a-z]{2})\s*(\d{1,2}),\s*(\d{4})/g;
+    let lastEmail=null,m;const searchSrc=priorText+' '+chunk.slice(0,400);
+    while((m=dateRx.exec(searchSrc))!==null){lastEmail=m[0];}
+    const emailDateObj=lastEmail?new Date(lastEmail):null;
+
+    // Address + service date. "located at <ADDRESS> on <Day> (<M/D>)"
+    let addr=null,svcMonth=null,svcDay=null;
+    const locRx=/located\s+at\s+(.+?)\s+on\s+([A-Z][a-z]+)\s*\((\d{1,2})\/(\d{1,2})\)/i;
+    const locM=chunk.match(locRx);
+    if(locM){
+      addr=locM[1].trim().replace(/\s+/g,' ');
+      svcMonth=parseInt(locM[3],10);
+      svcDay=parseInt(locM[4],10);
+    }
+    // Tech name
+    let tech=null;
+    const techM=chunk.match(/My\s+name\s+is\s+([A-Z][A-Za-z'.\-]+(?:\s+[A-Z][A-Za-z'.\-]+){0,3})/);
+    if(techM)tech=techM[1].trim();
+
+    // Issues Targeted — between heading and Locations Treated
+    // Section terminators include Gmail's "[Quoted text hidden]" because
+    // Gmail-export PDFs collapse repeated boilerplate (Caution block,
+    // sometimes Issues/Locations headers themselves) into that marker.
+    let issues=[];
+    const issM=chunk.match(/Issues\s+Targeted([\s\S]*?)(?:Locations\s+Treated|Technician\s+Notes|\[Quoted text hidden\]|Caution)/i);
+    if(issM){
+      const block=issM[1];
+      // Items appear like "1. Ants 2. Cockroaches" — split on numbers
+      const items=block.split(/\d+\.\s+/).map(s=>s.trim()).filter(Boolean);
+      issues=items.map(s=>s.replace(/\s+/g,' ').trim()).filter(s=>s.length>0&&s.length<60);
+    }
+    // Locations Treated — between heading and Technician Notes (or quoted-collapse marker)
+    let locations=[];
+    const locM2=chunk.match(/Locations\s+Treated([\s\S]*?)(?:Technician\s+Notes|\[Quoted text hidden\]|Caution|Invoice Items)/i);
+    if(locM2){
+      const block=locM2[1];
+      // Lines mix numbered "1. ..." with unnumbered tags like "Bait Station"; capture both
+      const lines=block.split(/(?:\d+\.\s+|\n)/).map(s=>s.trim()).filter(Boolean);
+      locations=lines.map(s=>s.replace(/\s+/g,' ').trim()).filter(s=>s.length>0&&s.length<200);
+    }
+    // Technician Notes — between heading and Caution (or quoted-collapse / Invoice Items / end)
+    let notes='';
+    let truncated=false;
+    const tnM=chunk.match(/Technician\s+Notes([\s\S]*?)(?:Caution|\[Quoted text hidden\]|Invoice Items|$)/i);
+    if(tnM){
+      notes=tnM[1].replace(/\s+/g,' ').trim();
+      // Gmail-export PDFs often truncate the Technician Notes mid-sentence.
+      // Heuristic: a complete note ends in . ! ? or a closing quote/paren.
+      // Anything else is treated as truncated and surfaced in the preview.
+      if(notes&&!/[.!?"')\]]\s*$/.test(notes))truncated=true;
+    }
+
+    // Cabin lookup: account # first, address fallback
+    const cabinFromAcct=AAB_ACCT_TO_CABIN[acct]||null;
+    const cabinFromAddr=_aabAddressToCabin(addr);
+    const cabin=cabinFromAcct||cabinFromAddr||null;
+
+    const date=svcMonth&&svcDay?_aabResolveDate(svcMonth,svcDay,emailDateObj):'';
+
+    records.push({
+      acct,address:addr||'',date,tech:tech||'',issues,locations,notes,truncated,
+      cabin,cabinSource:cabinFromAcct?'account':(cabinFromAddr?'address':null),
+      emailDate:emailDateObj?emailDateObj.toISOString().slice(0,10):null,
+      skip:false,
+    });
+    priorText=chunk;
+  }
+  return records;
+}
+
+function _aabBuildNoteText(r){
+  // Pretty-printed, category-organized note. Renderer respects \n via
+  // .note-text { white-space: pre-wrap }, so blank lines and bullets survive.
+  const sections=[];
+
+  // Header line — Tech + service date readable
+  const headerBits=[];
+  if(r.tech)headerBits.push('Tech: '+r.tech);
+  if(r.date){
+    try{
+      const d=new Date(r.date+'T12:00:00');
+      const ds=d.toLocaleDateString('en-US',{weekday:'short',month:'long',day:'numeric',year:'numeric'});
+      headerBits.push('Date: '+ds);
+    }catch(e){headerBits.push('Date: '+r.date);}
+  }
+  if(headerBits.length)sections.push(headerBits.join(' · '));
+
+  if(r.issues&&r.issues.length){
+    sections.push('Issues Targeted:\n'+r.issues.map(x=>'  • '+x).join('\n'));
+  }
+  if(r.locations&&r.locations.length){
+    sections.push('Locations Treated:\n'+r.locations.map(x=>'  • '+x).join('\n'));
+  }
+  if(r.notes){
+    const body=r.notes+(r.truncated?'  [note truncated by Gmail PDF export]':'');
+    sections.push('Technician Notes:\n'+body);
+  }
+  if(r.acct){
+    sections.push('— AAB account #'+r.acct);
+  }
+  return sections.join('\n\n').trim();
+}
+
+// Duplicate detection: same property + same date + All About Bugs + pest service
+function _aabIsDuplicate(cabin,date){
+  if(!cabin||!date)return false;
+  return tasks.some(t=>t.property===cabin&&t.date===date&&(t.vendor==='All About Bugs'||t.vendor==='v10')&&(t._source==='aab_pdf'||(t.problem&&/pest control/i.test(t.problem))));
+}
+
+// Cabin <option> list for the per-row dropdown: NB-grouped, mirrors populatePropSel.
+function _aabCabinOptionsHtml(selectedId){
+  let h='<option value="">— pick cabin —</option>';
+  NBS.forEach(nb=>{
+    h+=`<optgroup label="${nb.name} — ${nb.sub}">`;
+    nb.props.forEach(pid=>{
+      const p=PROPS.find(x=>x.id===pid);if(!p)return;
+      const display=p.name.replace(/^(PRC|UMC)\s*-\s*\d+\s*[-:]\s*/,'');
+      h+=`<option value="${p.id}"${p.id===selectedId?' selected':''}>${display}</option>`;
+    });
+    h+='</optgroup>';
+  });
+  return h;
+}
+
+function aabRenderRows(){
+  const wrap=document.getElementById('aab-rows');
+  const rowsWrap=document.getElementById('aab-rows-wrap');
+  const actions=document.getElementById('aab-actions');
+  if(!_aabRows.length){
+    rowsWrap.style.display='none';
+    if(actions)actions.style.display='none';
+    return;
+  }
+  rowsWrap.style.display='';
+  if(actions)actions.style.display='';
+  document.getElementById('aab-count').textContent=_aabRows.length;
+  let h='';
+  _aabRows.forEach((r,idx)=>{
+    const dup=_aabIsDuplicate(r.cabin,r.date);
+    if(dup&&r._dupSet!==true){r.skip=true;r._dupSet=true;}
+    const needsCabin=!r.cabin;
+    const needsDate=!r.date;
+    let cls='aab-row';
+    if(r.skip)cls+=' aab-skip';
+    if(needsCabin||needsDate)cls+=' aab-warn';
+    else if(dup)cls+=' aab-dup';
+    const escNotes=_aabBuildNoteText(r).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    h+=`<div class="${cls}" data-idx="${idx}">`;
+    h+=`<div class="aab-row-top">`;
+    h+=`<label>Cabin <select onchange="aabSetCabin(${idx},this.value)">${_aabCabinOptionsHtml(r.cabin)}</select></label>`;
+    h+=`<label>Service date <input type="date" value="${r.date||''}" onchange="aabSetDate(${idx},this.value)"></label>`;
+    h+=`<span class="aab-row-acct">acct ${r.acct||'?'}${r.cabinSource==='address'?' · matched by address':''}</span>`;
+    h+=`<label style="margin-left:auto"><input type="checkbox" class="aab-skip-cb" ${r.skip?'checked':''} onchange="aabToggleSkip(${idx},this.checked)"> Skip</label>`;
+    h+=`</div>`;
+    if(r.tech||r.address){
+      h+=`<div class="aab-row-meta">`;
+      if(r.tech)h+=`<span><b>Tech:</b> ${r.tech}</span>`;
+      if(r.address)h+=`<span><b>Address:</b> ${r.address}</span>`;
+      if(r.issues&&r.issues.length)h+=`<span><b>Issues:</b> ${r.issues.join(', ')}</span>`;
+      h+=`</div>`;
+    }
+    if(needsCabin)h+=`<div class="aab-row-warn">Account # ${r.acct||'(none)'} not recognized — pick a cabin manually.</div>`;
+    else if(needsDate)h+=`<div class="aab-row-warn">Service date couldn't be parsed — set it manually.</div>`;
+    else if(dup)h+=`<div class="aab-row-warn dup">Already logged for this cabin on this date. Pre-skipped — un-check Skip to log anyway.</div>`;
+    if(r.truncated)h+=`<div class="aab-row-warn">Technician note truncated by Gmail's PDF export — captured what's visible.</div>`;
+    h+=`<textarea class="aab-row-notes" rows="4" oninput="aabSetNotes(${idx},this.value)">${escNotes}</textarea>`;
+    h+=`</div>`;
+  });
+  wrap.innerHTML=h;
+}
+
+function aabSetCabin(idx,val){_aabRows[idx].cabin=val;_aabRows[idx].cabinSource=val?'manual':null;_aabRows[idx]._dupSet=false;_aabRows[idx].skip=false;aabRenderRows();}
+function aabSetDate(idx,val){_aabRows[idx].date=val;_aabRows[idx]._dupSet=false;_aabRows[idx].skip=false;aabRenderRows();}
+function aabSetNotes(idx,val){_aabRows[idx]._noteOverride=val;}
+function aabToggleSkip(idx,checked){_aabRows[idx].skip=!!checked;aabRenderRows();}
+function aabClearRows(){_aabRows=[];aabSetStatus('');aabRenderRows();}
+
+function aabSetStatus(msg,isErr){
+  const el=document.getElementById('aab-status');
+  if(!msg){el.style.display='none';el.textContent='';return;}
+  el.style.display='';el.className='aab-status'+(isErr?' err':'');el.textContent=msg;
+}
+
+async function aabHandleFiles(fileList){
+  const files=Array.from(fileList).filter(f=>/pdf$/i.test(f.type)||/\.pdf$/i.test(f.name));
+  if(!files.length){aabSetStatus('No PDF files detected.',true);return;}
+  aabSetStatus(`Parsing ${files.length} PDF${files.length>1?'s':''}…`);
+  let added=0,skipped=0,errors=0;
+  for(const f of files){
+    try{
+      const text=await _aabExtractText(f);
+      const recs=_aabParseText(text);
+      if(!recs.length){skipped++;continue;}
+      // De-dupe within session: skip rows already present (same acct + date)
+      recs.forEach(r=>{
+        const exists=_aabRows.some(x=>x.acct===r.acct&&x.date===r.date&&x.cabin===r.cabin);
+        if(!exists){_aabRows.push(r);added++;}
+      });
+    }catch(e){console.error('[aab] parse failed',f.name,e);errors++;}
+  }
+  const parts=[];
+  parts.push(`${added} service${added===1?'':'s'} added`);
+  if(skipped)parts.push(`${skipped} PDF${skipped>1?'s':''} had no service blocks`);
+  if(errors)parts.push(`${errors} parse error${errors>1?'s':''}`);
+  aabSetStatus(parts.join(' · '),errors>0&&added===0);
+  aabRenderRows();
+}
+
+function openAabImport(){
+  _aabRows=[];aabSetStatus('');aabRenderRows();
+  document.getElementById('aab-import-modal').classList.add('open');
+  // Bind once
+  if(!document.getElementById('aab-drop')._bound){
+    const drop=document.getElementById('aab-drop');
+    const fileInp=document.getElementById('aab-file');
+    drop.addEventListener('click',e=>{if(e.target.tagName!=='SPAN')fileInp.click();});
+    drop.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('aab-drag');});
+    drop.addEventListener('dragleave',()=>drop.classList.remove('aab-drag'));
+    drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('aab-drag');aabHandleFiles(e.dataTransfer.files);});
+    fileInp.addEventListener('change',e=>{aabHandleFiles(e.target.files);e.target.value='';});
+    drop._bound=true;
+  }
+  // Pre-load pdf.js so the first drop is responsive
+  _aabLoadPdfLib().catch(e=>console.warn('[aab] pdf.js preload failed',e));
+}
+
+async function aabLogAll(){
+  const rows=_aabRows.filter(r=>!r.skip);
+  if(!rows.length){showToast('Nothing to log — all rows skipped.','err');return;}
+  // Validate
+  const bad=rows.find(r=>!r.cabin||!r.date);
+  if(bad){showToast('Some rows still need a cabin or date.','err');return;}
+  let logged=0;
+  const nowIso=new Date().toISOString();
+  rows.forEach(r=>{
+    const noteText=(r._noteOverride!=null?r._noteOverride:_aabBuildNoteText(r)).trim();
+    const task={
+      id:Date.now().toString()+Math.random().toString(36).slice(2,6),
+      property:r.cabin,guest:'',problem:'Pest Control — Monthly',category:'pest',
+      status:'complete',date:r.date,vendor:'All About Bugs',urgent:false,recurring:false,
+      notes:noteText?[{text:noteText,type:'admin',time:nowIso}]:[],
+      vendorNotes:'',created:nowIso,_loggedService:true,_source:'aab_pdf',_aabAcct:r.acct||null,
+    };
+    tasks.unshift(task);
+    if(typeof logTaskChange==='function'){try{logTaskChange('log_service',task);}catch(e){}}
+    logged++;
+  });
+  await saveTasks();
+  renderAll();
+  closeModal('aab-import-modal');
+  _aabRows=[];
+  showToast(`${logged} pest control service${logged>1?'s':''} logged.`);
+}
 // ── Configure this after deploying the webhook API ──
 const HB_CONFIG = {
   // Set this to your deployed Vercel URL (e.g. 'https://storybook-webhook.vercel.app')
@@ -5594,410 +6807,9 @@ function cvCopyLink() {
   }).catch(() => { document.execCommand('copy'); });
 }
 
-// ── Guest Feedback (Review Import) ─────────────────────────────
-let rvItems = []; // filtered, maintenance-relevant reviews
-let rvDismissed = [];
-async function loadDismissed(){
-  try{
-    const r=await S.get('se_dismissed');
-    if(r&&r.value)rvDismissed=JSON.parse(r.value);
-  }catch(e){console.warn('[dismissed] Failed to load from KV:',e.message);}
-}
-async function saveDismissed(){try{await S.set('se_dismissed',JSON.stringify(rvDismissed));}catch(e){}}
-
-// Phrases that indicate actionable maintenance, cleaning, or repair issues
-// Deliberately narrow: must suggest something is BROKEN, DIRTY, INFESTED, or MALFUNCTIONING
-const RV_SKIP_RATINGS = new Set(['facilities', 'staff', 'services']);
-const RV_MAINT_KEYWORDS = /\b(broke|broken|leak|leaking|leaks|dirty|filthy|smell|odor|stain|stained|mold|mildew|cobweb|cobwebs|mouse|mice|rat|roach|cockroach|ant infestation|spider|critter|rodent|mouse feces|droppings|not work|doesn.t work|didn.t work|stopped work|won.t work|isn.t work|wasn.t work|needs? (to be )?(fix|replace|repair|clean)|broke down|out of order|clog|clogged|backed up|overflow|rusted|rusty|rotting|rotten|wobbly|wobbles|peeling|cracked|crack in)\b/i;
-
-// Second-pass phrases: only match if they appear in a NEGATIVE context (near a problem indicator)
-const RV_EQUIP_KEYWORDS = /\b(faucet|toilet|shower|hot water|water heater|hvac|furnace|fireplace|a\/c|air condition|dishwasher|washer|dryer|refrigerator|fridge|stove|oven|microwave|hot tub|jacuzzi|tub jets?|pots|pans|cookware|sewage|septic|plumbing|railing|gutter|roof)\b/i;
-const RV_PROBLEM_CONTEXT = /\b(problem|issue|broke|broken|not work|doesn.t|didn.t|won.t|isn.t|wasn.t|poor|bad|cold|weak|low|no |lack|missing|need|replace|old|worn|dated|gross|disgusting|terrible|horrible|awful|disappoint|complain|unfortunately|however|only complaint|only issue|only problem|downside|negative|could improve|suggest|recommend (new|better|replacing|fixing))\b/i;
-
-// Check if a review has actionable maintenance content (NOT cleaning-only)
-// Cleaning-only issues go to the Cleaning Log tab, not here
-function rvIsMaintRelevant(review) {
-  const feedback = review.private?.feedback || '';
-  const ratingComments = (review.private?.detailed_ratings || []).filter(r => r.comment).map(r => r.comment).join(' ');
-  const allPrivateText = (feedback + ' ' + ratingComments).trim();
-
-  // Skip reviews with no private feedback text AND no rating comments
-  if (!allPrivateText) return false;
-
-  // Skip if it's ONLY a cleaning issue (those go to Cleaning Log)
-  const isCleaningOnly = CL_KEYWORDS.test(allPrivateText) && !RV_EQUIP_KEYWORDS.test(allPrivateText);
-  if (isCleaningOnly) return false;
-
-  // 1. Direct maintenance keywords (leak, broken, pests, etc.)
-  if (RV_MAINT_KEYWORDS.test(allPrivateText)) return true;
-
-  // 2. Equipment mentioned + negative context (e.g., "hot water" + "didn't last")
-  if (RV_EQUIP_KEYWORDS.test(allPrivateText) && RV_PROBLEM_CONTEXT.test(allPrivateText)) return true;
-
-  // 3. Purchase/replacement suggestion (route to Replacements tab on import)
-  if (rvIsPurchaseItem(allPrivateText)) return true;
-
-  // 4. Cleanliness rating ≤ 2 with any private text (they left feedback AND rated cleanliness poorly)
-  const cleanRating = (review.private?.detailed_ratings || []).find(r => r.type === 'cleanliness');
-  if (cleanRating && cleanRating.rating > 0 && cleanRating.rating <= 2) return true;
-
-  return false;
-}
-
-// Build a problem description from the review
-function rvBuildProblem(review) {
-  // Prefer private feedback, fall back to public review snippet
-  if (review.private?.feedback) return review.private.feedback;
-  // Check for rating comments
-  const comments = (review.private?.detailed_ratings || []).filter(r => r.comment).map(r => `${r.type}: ${r.comment}`);
-  if (comments.length) return comments.join('; ');
-  return review.public?.review || 'Guest feedback item';
-}
-
-// Guess a category from the review text
-function rvGuessCategory(text) {
-  if (!text) return '';
-  const t = text.toLowerCase();
-  if (/hot tub|jacuzzi|tub jet/i.test(t)) return 'hot_tub';
-  if (/plumb|toilet|faucet|leak|drain|shower|water heater|hot water|sewage|septic/i.test(t)) return 'plumbing';
-  if (/hvac|heat|heater|furnace|ac |a\/c|air condition|fireplace/i.test(t)) return 'hvac';
-  if (/electric|light|outlet|switch|wifi|wi-fi|internet|tv|remote/i.test(t)) return 'electrical';
-  if (/pest|mouse|mice|rat|roach|bug|ant|spider|critter|rodent|bed bug/i.test(t)) return 'pest';
-  if (/clean|dirty|stain|mold|mildew|cobweb|smell|odor/i.test(t)) return 'cleaning';
-  if (/deck|railing|porch|door|window|screen|lock|roof|gutter/i.test(t)) return 'handyman';
-  if (/landscap|yard|tree|bush/i.test(t)) return 'landscaping';
-  if (/pot|pan|cookware|dish|appliance|stove|oven|microwave|fridge|refrigerator|washer|dryer|dishwasher|towel|linen|sheet|mattress|pillow|coffee maker|keurig|toaster|blender/i.test(t)) return 'replacement';
-  return '';
-}
-
-// Reverse-lookup: Hospitable UUID → our property ID
-function rvUuidToPid(uuid) {
-  for (const [pid, uid] of Object.entries(HOSPITABLE_IDS)) {
-    if (uid === uuid) return pid;
-  }
-  return '';
-}
-
-// Fetch reviews for all properties, filter to maintenance-relevant
-async function rvFetch() {
-  const allReviews = [];
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-  const today = new Date().toISOString().slice(0, 10);
-
-  // Fetch reviews for each property (in parallel, batched)
-  const entries = Object.entries(HOSPITABLE_IDS);
-  const batchSize = 4; // limit concurrency
-  for (let i = 0; i < entries.length; i += batchSize) {
-    const batch = entries.slice(i, i + batchSize);
-    const results = await Promise.allSettled(
-      batch.map(async ([pid, uuid]) => {
-        try {
-          const r = await fetch(`${PROXY_BASE}/api/hospitable?action=reviews&pid=${uuid}&start=${thirtyDaysAgo}&end=${today}`, { signal: AbortSignal.timeout(12000) });
-          if (!r.ok) return [];
-          const data = await r.json();
-          return (data.data || []).map(rv => ({ ...rv, _pid: pid }));
-        } catch (e) { return []; }
-      })
-    );
-    for (const r of results) {
-      if (r.status === 'fulfilled' && r.value.length) allReviews.push(...r.value);
-    }
-  }
-
-  // Filter: only maintenance-relevant, not already dismissed, within last 30 days
-  const cutoff = Date.now() - 30 * 86400000;
-  let purchaseCount = 0;
-  rvItems = [];
-  for (const rv of allReviews) {
-    if (rvDismissed.includes(rv.id)) continue;
-    if (new Date(rv.reviewed_at).getTime() < cutoff) continue;
-    if (!rvIsMaintRelevant(rv)) continue;
-
-    // Auto-route purchase items as Replacement tasks
-    // SAFETY: only auto-import if tasks loaded successfully (2026-04-11 fix)
-    const problem = rvBuildProblem(rv);
-    if (rvIsPurchaseItem(problem)) {
-      if (!tasksLoadedOk) {
-        console.warn('[SAFETY] Skipping auto-import of review item — tasks did not load');
-        rvItems.push(rv); // show in review list instead so nothing is lost
-        continue;
-      }
-      await rpImportFromReviewSilent(rv);
-      rvDismissed.push(rv.id);
-      purchaseCount++;
-      continue;
-    }
-
-    rvItems.push(rv);
-  }
-  // Persist dismissed IDs if any purchase items were auto-imported
-  if (purchaseCount) {
-    saveDismissed();
-    renderReplacements();
-  }
-
-  // Sort by date, newest first
-  rvItems.sort((a, b) => new Date(b.reviewed_at) - new Date(a.reviewed_at));
-  renderRV();
-}
-
-function renderRV() {
-  const el = document.getElementById('rv-wrap');
-  if (!rvItems.length) { el.innerHTML = ''; return; }
-  let h = `<div class="rv-banner">
-    <div class="rv-hdr">
-      <div class="rv-title">
-        <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>
-        Guest Feedback — Maintenance Items
-      </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <span class="rv-count">${rvItems.length} flagged</span>
-        <button class="rv-btn rv-btn-import" onclick="rvImportAll()">Import All</button>
-        <button class="rv-btn rv-btn-dismiss" onclick="rvDismissAll()">Dismiss All</button>
-      </div>
-    </div>`;
-  rvItems.forEach(rv => {
-    const prop = getProp(rv._pid);
-    const propName = prop ? prop.name : rv._pid;
-    const problem = rvBuildProblem(rv);
-    const guest = [rv.guest?.first_name, rv.guest?.last_name].filter(Boolean).join(' ') || 'Anonymous';
-    const reviewDate = new Date(rv.reviewed_at);
-    const dateStr = reviewDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    const stayDates = rv.reservation ? `${new Date(rv.reservation.check_in).toLocaleDateString('en-US', {month:'short',day:'numeric'})} – ${new Date(rv.reservation.check_out).toLocaleDateString('en-US', {month:'short',day:'numeric'})}` : '';
-    // Show low ratings
-    const lowRatings = (rv.private?.detailed_ratings || []).filter(r => r.rating > 0 && r.rating <= 3 && !RV_SKIP_RATINGS.has(r.type?.toLowerCase()));
-    const ratingComments = (rv.private?.detailed_ratings || []).filter(r => r.comment && !RV_SKIP_RATINGS.has(r.type?.toLowerCase()));
-
-    h += `<div class="rv-item" id="rv-${rv.id}" style="cursor:pointer" onclick="openRvDetail('${rv.id}')">
-      <div class="rv-item-top">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
-          <div class="rv-item-prop">${escHtml(propName)}</div>
-          <div class="rv-item-btns">
-            <button class="rv-btn rv-btn-import" onclick="event.stopPropagation();rvImport('${rv.id}')">Import</button>
-            <button class="rv-btn rv-btn-replacement" onclick="event.stopPropagation();rvConvertToReplacement('${rv.id}')" style="background:rgba(180,150,60,.15);color:#b8830a;border-color:rgba(180,150,60,.3)">Replacement Task</button>
-            <button class="rv-btn rv-btn-dismiss" onclick="event.stopPropagation();rvDismiss('${rv.id}')">Dismiss</button>
-          </div>
-        </div>
-        <div class="rv-item-prob">${escHtml(problem)}</div>
-        <div class="rv-item-meta">
-          <span>${escHtml(guest)}</span>
-          <span>${dateStr}</span>
-          ${stayDates ? `<span>${stayDates}</span>` : ''}
-          ${rv.public?.rating ? `<span>${'★'.repeat(rv.public.rating)}${'☆'.repeat(5 - rv.public.rating)}</span>` : ''}
-        </div>
-        ${lowRatings.length ? `<div class="rv-item-ratings">${lowRatings.map(r => `<span class="rv-rating low">${r.type}: ${r.rating}/5</span>`).join('')}</div>` : ''}
-        ${ratingComments.length ? `<div class="rv-item-snippet">${ratingComments.map(r => escHtml(r.type + ': ' + r.comment)).join(' · ')}</div>` : ''}
-      </div>
-    </div>`;
-  });
-  h += '</div>';
-  el.innerHTML = h;
-}
-
-function openRvDetail(id) {
-  const rv = rvItems.find(x => x.id === id);
-  if (!rv) return;
-  const prop = getProp(rv._pid);
-  const propName = prop ? prop.name : rv._pid;
-  const guest = [rv.guest?.first_name, rv.guest?.last_name].filter(Boolean).join(' ') || 'Anonymous';
-  const reviewDate = new Date(rv.reviewed_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-  const stayDates = rv.reservation ? `${new Date(rv.reservation.check_in).toLocaleDateString('en-US', {month:'short',day:'numeric'})} – ${new Date(rv.reservation.check_out).toLocaleDateString('en-US', {month:'short',day:'numeric'})}` : '';
-
-  let h = `<div style="margin-bottom:14px">
-    <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:1px;color:#d4a840;font-weight:700;margin-bottom:4px">${escHtml(propName)}</div>
-    <div style="font-size:.72rem;color:#8a7a50">Guest: ${escHtml(guest)} · ${reviewDate}${stayDates ? ' · Stay: ' + stayDates : ''}${rv.reservation?.code ? ' · Res: ' + rv.reservation.code : ''}</div>
-    ${rv.public?.rating ? `<div style="font-size:.78rem;color:#d4a840;margin-top:4px">${'★'.repeat(rv.public.rating)}${'☆'.repeat(5 - rv.public.rating)}</div>` : ''}
-  </div>`;
-
-  // Full private feedback — no truncation
-  const feedback = rv.private?.feedback;
-  if (feedback) {
-    h += `<div style="margin-bottom:14px">
-      <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:1px;color:#8a7a50;font-weight:600;margin-bottom:6px">Private Feedback</div>
-      <div style="background:rgba(0,0,0,.2);border:1px solid rgba(180,150,60,.2);border-radius:8px;padding:14px;font-size:.86rem;color:#e8dcc0;line-height:1.65;white-space:pre-wrap;word-break:break-word">${escHtml(feedback)}</div>
-    </div>`;
-  }
-
-  // Detailed ratings with comments
-  const detailedRatings = (rv.private?.detailed_ratings || []).filter(r => !RV_SKIP_RATINGS.has(r.type?.toLowerCase()));
-  if (detailedRatings.length) {
-    h += `<div style="margin-bottom:14px">
-      <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:1px;color:#8a7a50;font-weight:600;margin-bottom:6px">Rating Breakdown</div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px">`;
-    detailedRatings.forEach(r => {
-      const rColor = r.rating <= 2 ? '#e06050' : r.rating <= 3 ? '#c0a830' : '#6ab06a';
-      h += `<div style="background:rgba(0,0,0,.15);border-radius:6px;padding:6px 10px;font-size:.76rem">
-        <span style="color:#b0a070">${escHtml(r.type)}:</span> <span style="color:${rColor};font-weight:700">${r.rating}/5</span>
-        ${r.comment ? `<div style="font-size:.74rem;color:#c0b080;margin-top:3px;font-style:italic;line-height:1.4">${escHtml(r.comment)}</div>` : ''}
-      </div>`;
-    });
-    h += '</div></div>';
-  }
-
-  // Public review if exists
-  if (rv.public?.review) {
-    h += `<div style="margin-bottom:10px">
-      <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:1px;color:#8a7a50;font-weight:600;margin-bottom:6px">Public Review</div>
-      <div style="font-size:.82rem;color:#b0a070;line-height:1.5;font-style:italic;border-left:2px solid #8a7030;padding-left:10px">${escHtml(rv.public.review)}</div>
-    </div>`;
-  }
-
-  document.getElementById('rv-detail-body').innerHTML = h;
-  document.getElementById('rv-detail-ft').innerHTML = `
-    <button class="rv-btn rv-btn-import" style="flex:1 1 100%;text-align:center" onclick="rvImport('${rv.id}');closeModal('rv-detail-modal')">Import as Task</button>
-    <button class="rv-btn rv-btn-replacement" onclick="rvConvertToReplacement('${rv.id}')" style="background:rgba(180,150,60,.15);color:#b8830a;border-color:rgba(180,150,60,.3);flex:1">Replacement Task</button>
-    <button class="rv-btn rv-btn-dismiss" style="flex:1" onclick="rvDismiss('${rv.id}');closeModal('rv-detail-modal')">Dismiss</button>
-    <button class="rv-btn rv-btn-dismiss" style="flex:1" onclick="closeModal('rv-detail-modal')">Close</button>`;
-  document.getElementById('rv-detail-modal').classList.add('open');
-}
-
-async function rvConvertToReplacement(id) {
-  const rv = rvItems.find(x => x.id === id);
-  if (!rv) return;
-  await rpImportFromReviewSilent(rv);
-  // Mark the card so user knows it's been converted, but don't dismiss — Import as Task still available
-  const card = document.getElementById('rv-' + id);
-  if (card) {
-    const btn = card.querySelector('.rv-btn-replacement');
-    if (btn) { btn.textContent = 'Converted ✓'; btn.disabled = true; btn.style.opacity = '.6'; }
-  }
-  // Also mark in detail modal if open
-  const ftBtns = document.querySelectorAll('#rv-detail-ft .rv-btn-replacement');
-  ftBtns.forEach(btn => { btn.textContent = 'Converted ✓'; btn.disabled = true; btn.style.opacity = '.6'; });
-  renderReplacements(); renderAll();
-  showToast('Replacement task created.');
-}
-
-async function rvImport(id) {
-  const rv = rvItems.find(x => x.id === id);
-  if (!rv) return;
-  const problem = rvBuildProblem(rv);
-
-  // Route purchase/replacement items as replacement tasks (opens task detail)
-  if (rvIsPurchaseItem(problem)) {
-    await rpImportFromReview(rv);
-    rvDismissed.push(id);
-    saveDismissed();
-    rvItems = rvItems.filter(x => x.id !== id);
-    renderRV();
-    return;
-  }
-
-  const cat = rvGuessCategory(problem);
-  const guest = [rv.guest?.first_name, rv.guest?.last_name].filter(Boolean).join(' ') || '';
-  const t = {
-    id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
-    property: rv._pid || '',
-    guest: guest,
-    problem: problem.slice(0, 500),
-    category: cat,
-    status: 'open',
-    date: '',
-    vendor: '',
-    urgent: false,
-    recurring: false,
-    notes: [
-      { text: `Imported from guest review (${new Date(rv.reviewed_at).toLocaleDateString()}).${rv.reservation?.code ? ' Reservation: ' + rv.reservation.code : ''} Private feedback from ${guest || 'guest'}.`, type: 'admin', time: new Date().toISOString() }
-    ],
-    vendorNotes: '',
-    created: rv.reviewed_at || new Date().toISOString(),
-  };
-  tasks.unshift(t);
-  await saveTasks();
-  rvDismissed.push(id);
-  saveDismissed();
-  rvItems = rvItems.filter(x => x.id !== id);
-  renderRV(); renderAll();
-  showToast('Task imported from guest feedback.');
-  detailId = t.id; openDetail(t.id);
-}
-
-async function rvImportAll() {
-  let nTasks = 0, nPurchases = 0;
-  for (const rv of [...rvItems]) {
-    const problem = rvBuildProblem(rv);
-
-    // Route purchase items as replacement tasks (silent for bulk import)
-    if (rvIsPurchaseItem(problem)) {
-      await rpImportFromReviewSilent(rv);
-      rvDismissed.push(rv.id);
-      nPurchases++;
-      continue;
-    }
-
-    const cat = rvGuessCategory(problem);
-    const guest = [rv.guest?.first_name, rv.guest?.last_name].filter(Boolean).join(' ') || '';
-    tasks.unshift({
-      id: Date.now().toString() + Math.random().toString(36).slice(2, 6) + nTasks,
-      property: rv._pid || '', guest: guest,
-      problem: problem.slice(0, 500),
-      category: cat, status: 'open', date: '', vendor: '',
-      urgent: false, recurring: false,
-      notes: [{ text: `Imported from guest review (${new Date(rv.reviewed_at).toLocaleDateString()}).${rv.reservation?.code ? ' Reservation: ' + rv.reservation.code : ''} Private feedback from ${guest || 'guest'}.`, type: 'admin', time: new Date().toISOString() }],
-      vendorNotes: '', created: rv.reviewed_at || new Date().toISOString(),
-    });
-    rvDismissed.push(rv.id);
-    nTasks++;
-  }
-  await saveTasks();
-  saveDismissed();
-  rvItems = [];
-  renderRV(); renderAll(); renderReplacements();
-  const parts = [];
-  if (nTasks) parts.push(`${nTasks} task${nTasks > 1 ? 's' : ''}`);
-  if (nPurchases) parts.push(`${nPurchases} replacement${nPurchases > 1 ? 's' : ''}`);
-  showToast(`${parts.join(' and ')} imported from guest feedback.`);
-}
-
-function rvDismiss(id) {
-  rvDismissed.push(id);
-  saveDismissed();
-  rvItems = rvItems.filter(x => x.id !== id);
-  renderRV();
-  showToast('Feedback dismissed.');
-}
-
-function rvDismissAll() {
-  rvItems.forEach(rv => rvDismissed.push(rv.id));
-  saveDismissed();
-  rvItems = [];
-  renderRV();
-  showToast('All feedback dismissed.');
-}
-
 // ── REPLACEMENTS & PURCHASES (now powered by Tasks with category=replacement) ──
 let rpData = []; // Legacy — kept for migration only
 let rpPhaseFilter = 'needed'; // 'needed'|'purchased'|'delivered'|'all'
-
-const RP_PURCHASE_KEYWORDS = /\b(pots?|pans?|cookware|dishes?|plates?|cups?|glasses?|mugs?|utensils?|silverware|flatware|knife|knives|cutting boards?|bakeware|towels?|linens?|sheets?|bedding|comforters?|blankets?|pillows?|mattress(?:es)?|supplies|toiletries|soap|dish soap|shampoo|conditioner|toilet paper|paper towels?|coffee makers?|keurig|toasters?|blenders?|can openers?|corkscrews?|irons?|ironing boards?|hangers?|curtains?|blinds?|rugs?|mats?|brooms?|mops?|vacuums?|trash cans?|light bulbs?|batteries|remotes?|games?|board games?|puzzles?|toys?|dvds?|books?|decor|decorations?|furniture|chairs?|tables?|shelves?|shelf|mirrors?|pictures?|artwork|signs?|sponges?|dish rack|drying rack|wash cloths?|washcloths?|dish towels?|oven mitts?|pot holders?|shower curtains?|bath mats?|plungers?|fly swatters?|wine opener|bottle opener|colander|strainer|spatulas?|whisks?|tongs?|ladles?|peelers?|graters?|mixing bowls?|baking sheets?|cookie sheets?|tupperware|containers?|storage bins?|trash bags?|ziplock|ziploc|baggies|cleaning supplies|detergent|cleaner|windex|lysol|disinfectant|air freshener|candles?|night lights?|extension cords?|power strips?|surge protectors?|welcome mats?|door mats?|coat hooks?|key hooks?|drawer liners?|placemats?|coasters?|wine glasses|champagne glasses|shot glasses|measuring cups?|measuring spoons?|thermometers?|fire extinguishers?|smoke detectors?|carbon monoxide detectors?|first aid|band.?aids?|medicine)\b/i;
-
-function rpExtractItemName(text) {
-  if (!text) return '';
-  const matches = [];
-  const re = /\b(pots?\s*(?:and|&)?\s*pans?|cookware|dishes?|plates?|cups?|glasses?|wine glasses|champagne glasses|shot glasses|mugs?|utensils?|silverware|flatware|knives?|cutting boards?|bakeware|towels?|dish towels?|linens?|sheets?|bedding|comforters?|blankets?|pillows?|mattress(?:es)?|toiletries|soap|dish soap|shampoo|conditioner|toilet paper|paper towels?|coffee makers?|keurig|toasters?|blenders?|can openers?|corkscrews?|wine openers?|bottle openers?|irons?|ironing boards?|hangers?|curtains?|shower curtains?|blinds?|rugs?|bath mats?|mats?|brooms?|mops?|vacuums?|trash cans?|light bulbs?|batteries|remotes?|board games?|puzzles?|toys?|dvds?|books?|decor|decorations?|furniture|chairs?|tables?|shelves?|shelf|mirrors?|pictures?|artwork|signs?|sponges?|dish racks?|drying racks?|wash cloths?|washcloths?|oven mitts?|pot holders?|plungers?|fly swatters?|colanders?|strainers?|spatulas?|whisks?|tongs?|ladles?|peelers?|graters?|mixing bowls?|baking sheets?|cookie sheets?|tupperware|containers?|storage bins?|trash bags?|cleaning supplies|detergent|cleaner|air fresheners?|candles?|night lights?|extension cords?|power strips?|surge protectors?|welcome mats?|door mats?|coat hooks?|key hooks?|placemats?|coasters?|measuring cups?|measuring spoons?|thermometers?|fire extinguishers?|first aid)\b/gi;
-  let m;
-  while ((m = re.exec(text)) !== null) { matches.push(m[1]); }
-  if (!matches.length) return text.slice(0, 60);
-  const unique = [...new Set(matches.map(s => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()))];
-  const enhanced = unique.map(item => {
-    const itemLower = item.toLowerCase();
-    const idx = text.toLowerCase().indexOf(itemLower);
-    if (idx > 0) {
-      const before = text.slice(Math.max(0, idx - 30), idx).trim();
-      const words = before.split(/\s+/);
-      const qualifiers = /^(new|better|more|extra|additional|replacement|larger|bigger|smaller|nicer|good|real|proper|decent|quality|clean|fresh|matching|stainless\s*steel|nonstick|non-stick)$/i;
-      const contextWords = [];
-      for (let i = words.length - 1; i >= 0 && contextWords.length < 2; i--) {
-        if (qualifiers.test(words[i].replace(/[^a-z\s-]/gi, ''))) {
-          contextWords.unshift(words[i].replace(/[^a-zA-Z\s-]/g, ''));
-        } else break;
-      }
-      if (contextWords.length) return contextWords.join(' ') + ' ' + item.toLowerCase();
-    }
-    return item;
-  });
-  return enhanced.join(', ');
-}
 
 // ── Migration: convert old rpData items into tasks ──
 async function loadReplacements() {
@@ -6223,58 +7035,6 @@ async function rpQuickDelivered(id) {
   showToast('Delivered \u2014 task complete.');
 }
 
-// ── Route purchase-related review items to Replacements ──────────
-function rvIsPurchaseItem(text) {
-  if (!text) return false;
-  const t = text.toLowerCase();
-  // Must mention a purchasable item AND a recommendation/suggestion context
-  const hasItem = RP_PURCHASE_KEYWORDS.test(t);
-  const hasSuggestion = /\b(recommend|suggest|need|new|better|replace|upgrade|get|buy|purchase|supply|provide|add|stock)\b/i.test(t);
-  return hasItem && hasSuggestion;
-}
-
-// Silent import (for auto-routing during rvFetch bulk scan)
-async function rpImportFromReviewSilent(rv) {
-  const problem = rvBuildProblem(rv);
-  const itemName = rpExtractItemName(problem);
-  const guest = [rv.guest?.first_name, rv.guest?.last_name].filter(Boolean).join(' ') || 'Guest';
-  const reviewDate = new Date(rv.reviewed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  // Create a replacement task instead of an rpData entry
-  const t = {
-    id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
-    property: rv._pid || '',
-    guest: guest,
-    problem: itemName || problem.slice(0, 80),
-    category: 'replacement',
-    status: 'open',
-    date: '',
-    vendor: '',
-    urgent: false,
-    recurring: false,
-    purchaseNote: itemName,
-    purchaseStatus: 'needed',
-    purchaser: 'owner',
-    notes: [{
-      text: `From guest review (${reviewDate}).${rv.private?.feedback ? ' Feedback: ' + rv.private.feedback.slice(0, 200) : ''}${rv.reservation?.code ? ' Res: ' + rv.reservation.code : ''}`,
-      type: 'admin',
-      time: rv.reviewed_at || new Date().toISOString()
-    }],
-    vendorNotes: '',
-    created: rv.reviewed_at || new Date().toISOString(),
-  };
-  tasks.unshift(t);logTaskChange('created',t);
-  await saveTasks();
-}
-
-// Interactive import — now creates a replacement task and opens its detail
-async function rpImportFromReview(rv) {
-  await rpImportFromReviewSilent(rv);
-  // Open the newly created task's detail
-  const newest = tasks[0];
-  if (newest) { detailId = newest.id; openDetail(newest.id); }
-  renderReplacements(); renderAll();
-}
-
 // ── Vendor Day Sheet Logic ──────────────────────────────
 (function(){
   if(!window._vendorMode)return;
@@ -6311,6 +7071,8 @@ async function rpImportFromReview(rv) {
   let vByDate={}; // grouped tasks by date (agenda mode)
   let vSheetFields=[]; // custom fields from settings
   let vProjects=[]; // active projects this vendor is assigned to (agenda mode)
+  let vNeedsSched=[]; // undated tasks assigned to this vendor (agenda mode)
+  let vIcalByProp={}; // per-property cached reservations for the scheduling calendar
 
   async function vsLoad(){
     try{
@@ -6326,6 +7088,7 @@ async function rpImportFromReview(rv) {
       vIsAgenda=(data.type==='agenda');
       vByDate=data.byDate||{};
       vProjects=data.projects||[];
+      vNeedsSched=data.needsScheduling||[];
       // Apply logo from API (KV-stored custom logo) if available
       if(data.logo){try{document.getElementById('vs-logo').src=data.logo;}catch(e){}}
       if(vIsAgenda){
@@ -6346,6 +7109,19 @@ async function rpImportFromReview(rv) {
           const first=document.querySelector('.vs-card');
           if(first)first.classList.add('vs-expanded');
         },400);
+      }
+      // Prefetch bookings for every property with an undated task so the
+      // Good Days strip can render instantly inside the calendar modal when
+      // the vendor taps Pick-a-date. Runs async after the agenda paints.
+      if(vIsAgenda&&vNeedsSched&&vNeedsSched.length){
+        (async()=>{
+          try{
+            vBookingsByProp=await vsPrefetchNeedsBookings();
+            // If a picker is already open (e.g. vendor tapped before prefetch
+            // completed), re-render so the strip appears.
+            if(vDpState&&vDpState.taskId)vsRenderPicker();
+          }catch(e){console.warn('[vs-best-days]',e);}
+        })();
       }
     }catch(e){
       console.error('[vendor-sheet]',e);
@@ -6422,18 +7198,414 @@ async function rpImportFromReview(rv) {
     wrap.innerHTML=html;
   }
 
+  // ── Needs-Your-Schedule Render: undated tasks the vendor picks dates for ──
+  // Renders the full vsCard for each task (photos, notes, purchase, filter,
+  // upload, etc.) so vendors see the same context they'd see on a dated task.
+  // "Pick a date" lives inside the expanded card detail (see vsCard).
+  // Shared property header renderer — same fields whether the task is
+  // scheduled or waiting on the vendor's schedule. Fields come from
+  // sanitizeWithFields (vendor.js) which applies uniformly to both buckets.
+  function vsPropMetaParts(t){
+    const parts=[];
+    if(t.address)parts.push('<a href="https://maps.google.com/?q='+encodeURIComponent(t.address)+'" target="_blank">'+t.address+'</a>');
+    if(t.doorCode)parts.push('Code: '+t.doorCode);
+    if(t.wifiName)parts.push('WiFi: '+t.wifiName);
+    if(t.wifiPassword)parts.push('WiFi Pass: '+t.wifiPassword);
+    if(t.checkoutTime)parts.push('Checkout: '+t.checkoutTime);
+    if(t.checkinTime)parts.push('Check-in: '+t.checkinTime);
+    if(t.parking)parts.push('Parking: '+t.parking);
+    if(t.lockbox)parts.push('Lockbox: '+t.lockbox);
+    if(t.trashDay)parts.push('Trash: '+t.trashDay);
+    if(t.specialNotes)parts.push(t.specialNotes);
+    return parts;
+  }
+  function vsPropHeaderHtml(t,shortName,nbCls,alertHtml){
+    const metaParts=vsPropMetaParts(t);
+    return`<div class="vs-prop-header" style="border-left-color:var(--${nbCls||'green'})">
+      <div class="vs-prop-name">${shortName}</div>
+      ${metaParts.length?`<div class="vs-prop-meta">${metaParts.join(' &middot; ')}</div>`:''}
+      ${alertHtml||''}
+    </div>`;
+  }
+
+  // Top-of-page alert: list every open task with a purchase requirement so the
+  // vendor sees them before scrolling. Pulls from both dated tasks and the
+  // needs-schedule bucket. Tapping a row scrolls to that task's card.
+  function vsRenderPurchasesNeededHtml(){
+    const all=[...(vTasks||[]),...(vNeedsSched||[])];
+    const seen=new Set();
+    const purchases=[];
+    all.forEach(t=>{
+      if(!t||!t.purchaseNote||!String(t.purchaseNote).trim())return;
+      if(t.vendorDone)return;
+      if(seen.has(t.id))return;
+      seen.add(t.id);
+      purchases.push(t);
+    });
+    if(!purchases.length)return'';
+    let html=`<div class="vs-purchases-banner">
+      <div class="vs-purchases-hdr">
+        <span class="vs-purchases-title">&#x1F6D2; Purchases needed</span>
+        <span class="vs-purchases-count">${purchases.length}</span>
+      </div>`;
+    purchases.forEach(t=>{
+      const shortName=(t.propertyName||'').replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
+      const nbCls=t.neighborhoodCls||'green';
+      const safeProb=(t.problem||'').replace(/</g,'&lt;');
+      const safeNote=String(t.purchaseNote||'').replace(/</g,'&lt;');
+      // Item leads (the actionable shopping list); property + problem are the
+      // small descriptor below for context.
+      html+=`<div class="vs-pn-item" onclick="window._vsScrollToTask('${t.id}')">
+        <div class="vs-pn-need">${safeNote}</div>
+        <div class="vs-pn-context"><span class="vs-pn-prop" style="color:var(--${nbCls})">${shortName}</span><span class="vs-pn-prob">${safeProb}</span></div>
+      </div>`;
+    });
+    html+=`</div>`;
+    return html;
+  }
+  // Scroll a task card into view and expand its detail if collapsed.
+  window._vsScrollToTask=function(id){
+    const el=document.getElementById('vsc-'+id);
+    if(!el)return;
+    el.scrollIntoView({behavior:'smooth',block:'start'});
+    const detail=el.querySelector('.vs-card-detail');
+    if(detail&&!detail.classList.contains('vs-card-detail-open')&&typeof window._vsToggle==='function'){
+      window._vsToggle(id);
+    }
+  };
+
+  function vsRenderNeedsSchedHtml(){
+    if(!vNeedsSched||!vNeedsSched.length)return'';
+    let html=`<div class="vs-needs-sched">
+      <div class="vs-needs-hdr">
+        <span class="vs-needs-title">Needs Your Schedule</span>
+        <span class="vs-needs-count">${vNeedsSched.length}</span>
+      </div>
+      <div class="vs-needs-help">Tap a task to see details, then pick a date that works for you.</div>`;
+    // Bucket neighborhood → property, preserving pre-sorted order
+    const nbGroups=[];const nbSeen={};
+    vNeedsSched.forEach(t=>{
+      const nb=t.neighborhood||'Other';
+      const nbCls=t.neighborhoodCls||'green';
+      if(!nbSeen[nb]){
+        nbSeen[nb]={nb,nbCls,propSeen:{},props:[]};
+        nbGroups.push(nbSeen[nb]);
+      }
+      const g=nbSeen[nb];
+      if(!g.propSeen[t.propertyName]){
+        g.propSeen[t.propertyName]={propertyName:t.propertyName,items:[]};
+        g.props.push(g.propSeen[t.propertyName]);
+      }
+      g.propSeen[t.propertyName].items.push(t);
+    });
+    nbGroups.forEach(ng=>{
+      html+=`<div class="vs-needs-nb" style="color:var(--${ng.nbCls})">${ng.nb}</div>`;
+      ng.props.forEach(p=>{
+        const shortName=p.propertyName.replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
+        // First task carries the property meta fields (address/codes/WiFi etc.)
+        // — same sanitizeWithFields is applied to needs-sched tasks in vendor.js.
+        const first=p.items[0]||{};
+        html+=vsPropHeaderHtml(first,shortName,ng.nbCls,'');
+        html+=`<div class="vs-needs-prop-group">`;
+        p.items.forEach(t=>{
+          html+=vsCard(t);
+        });
+        html+=`</div>`; // vs-needs-prop-group
+      });
+    });
+    html+=`</div>`; // vs-needs-sched
+    return html;
+  }
+
+  // ── Good Days strip: compute per-day tier across every property with an undated task ──
+  // tier='locked'   → that day is checkout/checkin/turn at that property (ideal — empty 10–4)
+  // tier='open'     → no booking at that property that day (workable but could get booked later)
+  // tier='booked'   → guest in house that day (not schedulable by vendor)
+  async function vsPrefetchNeedsBookings(){
+    if(!vNeedsSched||!vNeedsSched.length)return {};
+    const props=[...new Set(vNeedsSched.map(t=>t.property))];
+    const out={};
+    await Promise.all(props.map(async pid=>{
+      out[pid]=await vsFetchBookings(pid);
+    }));
+    return out;
+  }
+
+  function vsComputeBestDays(bookingsByProp){
+    const today=new Date();today.setHours(12,0,0,0);
+    // Unique properties that have undated tasks in this agenda
+    const propIds=[...new Set(vNeedsSched.map(t=>t.property))];
+    const propMeta={};
+    vNeedsSched.forEach(t=>{
+      if(!propMeta[t.property]){
+        propMeta[t.property]={
+          id:t.property,
+          name:(t.propertyName||'').replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,''),
+          neighborhoodCls:t.neighborhoodCls||'green',
+        };
+      }
+    });
+    const days=[];
+    for(let i=0;i<21;i++){
+      const d=new Date(today.getTime()+i*86400000);d.setHours(12,0,0,0);
+      const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      // For every property with needs-sched tasks, classify the day
+      const perProp=propIds.map(pid=>{
+        const st=vsDayState(d,bookingsByProp[pid]||[]);
+        let tier;
+        if(st==='turn'||st==='checkin'||st==='checkout')tier='locked';
+        else if(st==='booked')tier='booked';
+        else tier='open';
+        return{pid,tier,state:st,meta:propMeta[pid]};
+      });
+      const lockedCount=perProp.filter(p=>p.tier==='locked').length;
+      const bookedCount=perProp.filter(p=>p.tier==='booked').length;
+      const openCount=perProp.filter(p=>p.tier==='open').length;
+      // Overall day tier
+      let overall;
+      if(bookedCount===perProp.length)overall='skip'; // guest-in-house everywhere — useless
+      else if(lockedCount===perProp.length)overall='locked'; // ideal across the board
+      else if(lockedCount>0&&bookedCount===0)overall='partial-locked'; // some ideal, rest open
+      else if(lockedCount>0)overall='partial-mixed'; // some ideal, some blocked
+      else if(openCount===perProp.length)overall='open'; // all workable but none ideal
+      else overall='partial-open'; // some open, some blocked
+      days.push({ds,d,perProp,lockedCount,bookedCount,openCount,overall});
+    }
+    return{days,propIds,propMeta};
+  }
+
+  // Returns the Good Days strip HTML for embedding inside the calendar modal.
+  // Returns '' when there's <2 properties with needs-sched tasks or no data.
+  function vsRenderBestDaysHtml(){
+    if(!vNeedsSched||!vNeedsSched.length)return'';
+    const uniqueProps=[...new Set(vNeedsSched.map(t=>t.property))];
+    if(uniqueProps.length<2)return'';
+    const computed=vsComputeBestDays(vBookingsByProp||{});
+    const {days}=computed;
+    const rank=d=>{
+      if(d.overall==='skip')return-1;
+      return d.lockedCount*3 + d.openCount*1 - d.bookedCount*2;
+    };
+    const candidates=days.filter(d=>d.overall!=='skip').sort((a,b)=>{
+      const r=rank(b)-rank(a);
+      if(r!==0)return r;
+      return a.d-b.d;
+    }).slice(0,8).sort((a,b)=>a.d-b.d);
+    if(!candidates.length){
+      return`<div class="vs-bd-empty">No common workable days found in the next 21 days — guests are in house at every property. Admin will coordinate.</div>`;
+    }
+    const fmt=d=>d.toLocaleDateString('en-US',{weekday:'short',month:'numeric',day:'numeric'});
+    let h=`<div class="vs-best-days">
+      <div class="vs-bd-hdr">Good days for ${uniqueProps.length} properties</div>
+      <div class="vs-bd-help">Turn, checkout, and check-in days are ideal — properties are empty from 10am to 4pm.</div>
+      <div class="vs-bd-strip">`;
+    candidates.forEach(day=>{
+      let chipCls='vs-bd-chip';
+      let tierLabel='';
+      if(day.overall==='locked'){chipCls+=' vs-bd-locked';tierLabel='All ideal';}
+      else if(day.overall==='partial-locked'){chipCls+=' vs-bd-partial-locked';tierLabel=`${day.lockedCount} ideal • ${day.openCount} open`;}
+      else if(day.overall==='partial-mixed'){chipCls+=' vs-bd-partial-mixed';tierLabel=`${day.lockedCount} ideal • ${day.bookedCount} blocked`;}
+      else if(day.overall==='open'){chipCls+=' vs-bd-open';tierLabel='All open';}
+      else{chipCls+=' vs-bd-partial-mixed';tierLabel=`${day.openCount} open • ${day.bookedCount} blocked`;}
+      let dots='';
+      day.perProp.forEach(p=>{
+        const nbCls=p.meta.neighborhoodCls||'green';
+        let dotCls='vs-bd-dot';
+        if(p.tier==='locked')dotCls+=' vs-bd-dot-locked';
+        else if(p.tier==='booked')dotCls+=' vs-bd-dot-booked';
+        else dotCls+=' vs-bd-dot-open';
+        const stLabel=p.state==='turn'?'Turn':p.state==='checkin'?'Check-in':p.state==='checkout'?'Checkout':p.state==='booked'?'Guest in house':'Open';
+        dots+=`<span class="${dotCls}" style="--nb:var(--${nbCls})" title="${p.meta.name} — ${stLabel}"></span>`;
+      });
+      // Only chips that have at least one IDEAL property (turn/checkin/checkout)
+      // are clickable for bulk assign. Pure-open chips can't be bulk-picked;
+      // vendor has to manually pick since those days aren't guaranteed empty.
+      const clickable=day.lockedCount>=1;
+      const click=clickable?` onclick="window._vsPickBulk('${day.ds}')"`:'';
+      if(clickable)chipCls+=' vs-bd-clickable';
+      h+=`<div class="${chipCls}"${click}>
+        <div class="vs-bd-date">${fmt(day.d)}</div>
+        <div class="vs-bd-tier">${tierLabel}</div>
+        <div class="vs-bd-dots">${dots}</div>
+      </div>`;
+    });
+    h+=`</div></div>`;
+    return h;
+  }
+
+  // Bulk-pick: vendor tapped a Good Days chip. Collect every undated task
+  // whose property is IDEAL on that date (turn/checkin/checkout = locked tier),
+  // show a confirmation overlay, then fire one batch call on confirm.
+  window._vsPickBulk=function(ds){
+    if(!vNeedsSched||!vNeedsSched.length)return;
+    // Recompute so we pick the same ideal set that rendered the chip
+    const computed=vsComputeBestDays(vBookingsByProp||{});
+    const day=computed.days.find(d=>d.ds===ds);
+    if(!day)return;
+    // Tasks whose property is IDEAL on this date
+    const idealPropIds=new Set(day.perProp.filter(p=>p.tier==='locked').map(p=>p.pid));
+    const idealTasks=vNeedsSched.filter(t=>idealPropIds.has(t.property));
+    if(!idealTasks.length)return;
+    // Tasks skipped because their property isn't ideal on this date
+    const skippedTasks=vNeedsSched.filter(t=>!idealPropIds.has(t.property));
+    const dateLabel=new Date(ds+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+    // Render confirmation overlay in the modal panel (replaces panel contents)
+    const modal=document.getElementById('vs-dp-modal');
+    if(!modal)return;
+    let taskRows='';
+    idealTasks.forEach(t=>{
+      const shortName=(t.propertyName||'').replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
+      const nbCls=t.neighborhoodCls||'green';
+      taskRows+=`<div class="vs-bulk-row">
+        <div class="vs-bulk-row-prop" style="color:var(--${nbCls})">${shortName}</div>
+        <div class="vs-bulk-row-prob">${t.problem}</div>
+      </div>`;
+    });
+    let skipHtml='';
+    if(skippedTasks.length){
+      const skipNames=[...new Set(skippedTasks.map(t=>(t.propertyName||'').replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'')))];
+      skipHtml=`<div class="vs-bulk-skip">
+        <strong>Not scheduled today:</strong> ${skipNames.join(', ')}.
+        These aren't guaranteed empty on ${dateLabel} — pick a day for each one on the calendar below.
+      </div>`;
+    }
+    const idealIds=JSON.stringify(idealTasks.map(t=>t.id)).replace(/"/g,'&quot;');
+    const h=`<div class="vs-dp-panel" onclick="event.stopPropagation()">
+      <div class="vs-dp-header">
+        <div>
+          <div class="vs-dp-title">Confirm schedule</div>
+          <div class="vs-dp-sub">${dateLabel}</div>
+        </div>
+        <button class="vs-dp-close" onclick="window._vsClosePicker()">&times;</button>
+      </div>
+      <div class="vs-bulk-confirm">
+        <div class="vs-bulk-lead">Schedule ${idealTasks.length} task${idealTasks.length!==1?'s':''} on <strong>${dateLabel}</strong>? These properties are empty from 10am to 4pm that day.</div>
+        <div class="vs-bulk-list">${taskRows}</div>
+        ${skipHtml}
+      </div>
+      <div class="vs-dp-footer">
+        <div class="vs-dp-footer-btns" style="width:100%;justify-content:space-between">
+          <button class="btn" onclick="window._vsCancelBulk()">Back to calendar</button>
+          <button class="btn btn-g" onclick='window._vsConfirmBulk(&quot;${ds}&quot;,${idealIds})'>Schedule ${idealTasks.length}</button>
+        </div>
+      </div>
+    </div>`;
+    modal.innerHTML=h;
+  };
+
+  window._vsCancelBulk=function(){
+    vsRenderPicker(); // re-render the normal calendar view
+  };
+
+  window._vsConfirmBulk=async function(ds,taskIds){
+    const footerBtns=document.querySelector('.vs-dp-footer-btns');
+    if(footerBtns){footerBtns.querySelectorAll('button').forEach(b=>{b.disabled=true;b.style.opacity='.5';});}
+    try{
+      const r=await fetch(VAPI,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,action:'selfScheduleMany',taskIds,date:ds})});
+      if(!r.ok){
+        const err=await r.json().catch(()=>({error:'Unknown error'}));
+        alert('Could not save: '+(err.error||'Please try again.'));
+        if(footerBtns){footerBtns.querySelectorAll('button').forEach(b=>{b.disabled=false;b.style.opacity='';});}
+        return;
+      }
+      // Keep the modal open — show the success panel with addresses, codes,
+      // WiFi etc. (the same info an admin would text). Vendor dismisses when
+      // ready; dismiss triggers refresh + scroll to that day in the agenda.
+      vsRenderScheduledSuccess(taskIds,ds);
+    }catch(e){
+      alert('Network error. Please try again.');
+      if(footerBtns){footerBtns.querySelectorAll('button').forEach(b=>{b.disabled=false;b.style.opacity='';});}
+    }
+  };
+
+  // ── Post-schedule success panel — rendered inside the picker modal after
+  // either single or batch self-schedule. Shows the same info admin would text:
+  // date, property address (tap-to-Maps), door code, WiFi, plus each task.
+  // Source: vNeedsSched snapshot (pre-refresh) since those tasks already carry
+  // full prop fields via sanitizeWithFields in vendor.js.
+  function vsRenderScheduledSuccess(scheduledIds,ds){
+    const modal=document.getElementById('vs-dp-modal');
+    if(!modal)return;
+    const idSet=new Set(scheduledIds);
+    const tasks=(vNeedsSched||[]).filter(t=>idSet.has(t.id));
+    const dateLabel=new Date(ds+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+    // Group by property, preserving first-seen order
+    const propBuckets={};const propOrder=[];
+    tasks.forEach(t=>{
+      if(!propBuckets[t.propertyName]){
+        propBuckets[t.propertyName]={first:t,items:[]};
+        propOrder.push(t.propertyName);
+      }
+      propBuckets[t.propertyName].items.push(t);
+    });
+    let body='';
+    propOrder.forEach(pn=>{
+      const b=propBuckets[pn];
+      const shortName=pn.replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
+      const nbCls=b.first.neighborhoodCls||'green';
+      body+=vsPropHeaderHtml(b.first,shortName,nbCls,'');
+      body+='<div class="vs-success-tasks">';
+      b.items.forEach(t=>{
+        body+=`<div class="vs-success-task">
+          ${t.urgent?'<span class="vs-urgent" style="margin-right:6px">Urgent</span>':''}
+          ${t.problem.replace(/</g,'&lt;')}
+        </div>`;
+      });
+      body+='</div>';
+    });
+    const multi=tasks.length>1;
+    const h=`<div class="vs-dp-panel" onclick="event.stopPropagation()">
+      <div class="vs-dp-header">
+        <div>
+          <div class="vs-dp-title"><span style="color:var(--green)">&#x2713;</span> Scheduled</div>
+          <div class="vs-dp-sub">${dateLabel}</div>
+        </div>
+        <button class="vs-dp-close" onclick="window._vsCloseAndScroll('${ds}')">&times;</button>
+      </div>
+      <div class="vs-success-body">
+        <div class="vs-success-lead">You're set for <strong>${dateLabel}</strong>. Here's what you'll need at ${multi?'each property':'the property'}:</div>
+        ${body}
+      </div>
+      <div class="vs-dp-footer">
+        <div class="vs-dp-footer-btns" style="width:100%;justify-content:flex-end">
+          <button class="btn btn-g" onclick="window._vsCloseAndScroll('${ds}')">Got it &mdash; view my schedule</button>
+        </div>
+      </div>
+    </div>`;
+    modal.innerHTML=h;
+  }
+
+  window._vsCloseAndScroll=async function(ds){
+    vsClosePicker();
+    await vsLoad();
+    // After agenda re-renders, scroll to the day header for that date
+    requestAnimationFrame(()=>{
+      const hdr=document.getElementById('vs-day-'+ds);
+      if(hdr)hdr.scrollIntoView({behavior:'smooth',block:'start'});
+    });
+  };
+
+  // Cache of bookings across all properties with undated tasks; populated during vsLoad
+  let vBookingsByProp={};
+
   // ── Agenda Render: multi-day schedule grouped by date ──
   function vsRenderAgenda(){
     const wrap=document.getElementById('vs-tasks');
-    if(!vTasks.length){wrap.innerHTML='<div style="text-align:center;padding:30px;color:var(--text2)">No upcoming tasks scheduled.</div>';return;}
+    // If nothing to show (no dated tasks AND nothing needs scheduling), empty state.
+    if(!vTasks.length&&(!vNeedsSched||!vNeedsSched.length)){
+      wrap.innerHTML='<div style="text-align:center;padding:30px;color:var(--text2)">No upcoming tasks scheduled.</div>';
+      return;
+    }
     const dates=Object.keys(vByDate).sort();
-    let html='';
+    // Top: purchases needed across all buckets. Middle: dated days. Bottom:
+    // needs-your-schedule (added after the dates loop).
+    let html=vsRenderPurchasesNeededHtml();
     dates.forEach(dateStr=>{
       const dayTasks=vByDate[dateStr]||[];
       if(!dayTasks.length)return;
       const d=new Date(dateStr+'T12:00:00');
       const dayLabel=d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
-      html+=`<div style="margin-top:16px;margin-bottom:6px;padding:8px 12px;background:var(--green);color:#fff;border-radius:8px;font-family:'Cormorant Garamond',serif;font-size:1.1rem;font-weight:600">${dayLabel} <span style="font-size:.78rem;opacity:.8;font-family:'DM Sans',sans-serif;font-weight:400">(${dayTasks.length} task${dayTasks.length!==1?'s':''})</span></div>`;
+      html+=`<div id="vs-day-${dateStr}" style="margin-top:16px;margin-bottom:6px;padding:8px 12px;background:var(--green);color:#fff;border-radius:8px;font-family:'Cormorant Garamond',serif;font-size:1.1rem;font-weight:600;scroll-margin-top:12px">${dayLabel} <span style="font-size:.78rem;opacity:.8;font-family:'DM Sans',sans-serif;font-weight:400">(${dayTasks.length} task${dayTasks.length!==1?'s':''})</span></div>`;
       // Group by neighborhood, then property within each day
       let lastNb='';
       let lastProp='';
@@ -6460,27 +7632,15 @@ async function rpImportFromReview(rv) {
               return `<div class="vs-guest-alert vs-guest-alert-${a.type}">${icon} ${label}</div>`;
             }).join('')+'</div>';
           }
-          let metaParts=[];
-          if(t.address)metaParts.push('<a href="https://maps.google.com/?q='+encodeURIComponent(t.address)+'" target="_blank">'+t.address+'</a>');
-          if(t.doorCode)metaParts.push('Code: '+t.doorCode);
-          if(t.wifiName)metaParts.push('WiFi: '+t.wifiName);
-          if(t.wifiPassword)metaParts.push('WiFi Pass: '+t.wifiPassword);
-          if(t.checkoutTime)metaParts.push('Checkout: '+t.checkoutTime);
-          if(t.checkinTime)metaParts.push('Check-in: '+t.checkinTime);
-          if(t.parking)metaParts.push('Parking: '+t.parking);
-          if(t.lockbox)metaParts.push('Lockbox: '+t.lockbox);
-          if(t.trashDay)metaParts.push('Trash: '+t.trashDay);
-          if(t.specialNotes)metaParts.push(t.specialNotes);
-          html+=`<div class="vs-prop-header" style="border-left-color:var(--${nbCls||'green'})">
-            <div class="vs-prop-name">${shortName}</div>
-            <div class="vs-prop-meta">${metaParts.join(' &middot; ')}</div>
-            ${alertHtml}
-          </div>`;
+          html+=vsPropHeaderHtml(t,shortName,nbCls,alertHtml);
           lastProp=t.propertyName;
         }
         html+=vsCard(t);
       });
     });
+    // Bottom: Needs-Your-Schedule bucket — vendor handles these last after seeing
+    // their actual dated workload and the purchase list at the top.
+    html+=vsRenderNeedsSchedHtml();
     wrap.innerHTML=html;
   }
 
@@ -6796,14 +7956,20 @@ async function rpImportFromReview(rv) {
       const who=n.type==='vendor'?'You':(n.by||'Storybook Escapes');
       return`<div class="vs-note"><div class="vs-note-meta">${who} — ${new Date(n.time).toLocaleString()}</div><div>${n.text.replace(/</g,'&lt;')}</div></div>`;
     }).join('');
+    // Undated tasks can't be marked complete — vendor must pick a date first.
+    // The circle-check is hidden; a "Needs a date" chip takes its slot.
+    const canComplete=!!t.date;
     return`<div class="vs-card ${done?'vs-done':''}" id="vsc-${t.id}" style="border-left:3px solid var(--${nbCls||'green'})">
       <div class="vs-card-banner" onclick="window._vsToggle('${t.id}')">
-        <div class="vs-card-check" onclick="event.stopPropagation();window._vsCircleCheck('${t.id}',${!!done})">${done?'&#x2713;':''}</div>
+        ${canComplete
+          ?`<div class="vs-card-check" onclick="event.stopPropagation();window._vsCircleCheck('${t.id}',${!!done})">${done?'&#x2713;':''}</div>`
+          :`<div class="vs-card-check vs-card-check-locked" title="Pick a date first">&#x1F4C5;</div>`}
         <div class="vs-card-info">
           <div class="vs-card-prob">${t.problem}</div>
           <div class="vs-card-badges">
             ${t.urgent?'<span class="vs-urgent">Urgent</span>':''}
             ${t.purchaseNote?'<span class="vs-purchase-tag">Purchase needed</span>':''}
+            ${!canComplete?'<span class="vs-needs-date-tag">Needs a date</span>':''}
             ${done?'<span style="font-size:.7rem;color:var(--green);font-weight:500">Submitted &#x2713;</span>':''}
           </div>
         </div>
@@ -6824,6 +7990,7 @@ async function rpImportFromReview(rv) {
           <div class="vs-fb-upload-btn" onclick="document.getElementById('vri-${t.id}').click()">&#x1F9FE; Receipt<input type="file" id="vri-${t.id}" accept="image/*" style="display:none" onchange="window._vsUploadPhotos('${t.id}',this.files)"></div>
         </div>
         <div id="vps-${t.id}" style="font-size:.72rem;color:var(--text3);margin:4px 0"></div>
+        ${(vIsAgenda&&!done)?`<div class="vs-change-date-row"><button class="${t.date?'vs-change-date-btn':'vs-pick-date-btn-lg'}" onclick="window._vsPickDate('${t.id}')"><svg viewBox="0 0 24 24" width="${t.date?12:14}" height="${t.date?12:14}" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg> ${t.date?'Change date':'Pick a date'}</button></div>`:''}
         <div class="vs-notes">${notes}
           <div class="vs-note-input">
             <textarea id="vsn-${t.id}" placeholder="Leave a note..." rows="1"></textarea>
@@ -7376,182 +8543,264 @@ async function rpImportFromReview(rv) {
     overlay.addEventListener('click',function(e){if(e.target===overlay)overlay.remove();});
   }
 
+  // ─────────────────────────────────────────────────────────────
+  // VENDOR CALENDAR — self-schedule or reschedule a task
+  // Opens a date picker restricted to a 21-day window from today.
+  // Shows property bookings as bars. Guest-in-house days are hard-blocked
+  // (no click); vendors can only pick turn / checkout / check-in / open days.
+  // ─────────────────────────────────────────────────────────────
+  let vDpState={taskId:null,viewYear:0,viewMonth:0,selected:null,bookings:[],propertyId:null};
+
+  function vsFmtDate(ds){
+    return new Date(ds+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  }
+
+  async function vsFetchBookings(propId){
+    if(vIcalByProp[propId])return vIcalByProp[propId];
+    const hospId=(typeof HOSPITABLE_IDS!=='undefined'?HOSPITABLE_IDS[propId]:null);
+    if(!hospId){vIcalByProp[propId]=[];return[];}
+    try{
+      const url=`${PROXY_BASE}/api/hospitable?action=reservations&pid=${hospId}`;
+      const r=await fetch(url,{signal:AbortSignal.timeout(15000)});
+      if(!r.ok){vIcalByProp[propId]=[];return[];}
+      const json=await r.json();
+      const pd=s=>{const m=(s||'').match(/(\d{4})-(\d{2})-(\d{2})/);return m?new Date(+m[1],+m[2]-1,+m[3],12,0,0):null;};
+      const evs=(json.data||[])
+        .filter(rv=>rv.arrival_date&&rv.departure_date&&rv.status!=='cancelled')
+        .map(rv=>({
+          start:pd(rv.arrival_date),
+          end:pd(rv.departure_date),
+          summary:rv.guest_name||(rv.guest&&rv.guest.name)||'Guest',
+        }))
+        .filter(ev=>ev.start&&ev.end);
+      vIcalByProp[propId]=evs;
+      return evs;
+    }catch(e){
+      console.warn('[vs-bookings]',propId,e.message);
+      vIcalByProp[propId]=[];
+      return[];
+    }
+  }
+
+  window._vsPickDate=async function(taskId){
+    const t=(vNeedsSched||[]).find(x=>x.id===taskId)||vTasks.find(x=>x.id===taskId);
+    if(!t)return;
+    // Ensure the modal container exists
+    let modal=document.getElementById('vs-dp-modal');
+    if(!modal){
+      modal=document.createElement('div');
+      modal.id='vs-dp-modal';
+      modal.className='vs-dp-modal';
+      document.body.appendChild(modal);
+      modal.addEventListener('click',function(e){if(e.target===modal)vsClosePicker();});
+    }
+    // Set initial view = today's month
+    const today=new Date();
+    vDpState.taskId=taskId;
+    vDpState.propertyId=t.property;
+    vDpState.viewYear=today.getFullYear();
+    vDpState.viewMonth=today.getMonth();
+    vDpState.selected=t.date||null; // pre-select the current date if rescheduling
+    // Show loading state immediately so the vendor sees feedback
+    modal.innerHTML=`<div class="vs-dp-panel"><div class="vs-dp-load">Loading calendar...</div></div>`;
+    modal.classList.add('open');
+    document.body.style.overflow='hidden';
+    // Fetch bookings (cached after first fetch per property)
+    vDpState.bookings=await vsFetchBookings(t.property);
+    vsRenderPicker();
+  };
+
+  function vsClosePicker(){
+    const modal=document.getElementById('vs-dp-modal');
+    if(modal){modal.classList.remove('open');modal.innerHTML='';}
+    document.body.style.overflow='';
+    vDpState.taskId=null;
+  }
+  window._vsClosePicker=vsClosePicker;
+
+  // Alias to the module-scope dayState — single source of truth.
+  const vsDayState=dayState;
+
+  function vsRenderPicker(){
+    const modal=document.getElementById('vs-dp-modal');
+    if(!modal)return;
+    const t=(vNeedsSched||[]).find(x=>x.id===vDpState.taskId)||vTasks.find(x=>x.id===vDpState.taskId);
+    if(!t){vsClosePicker();return;}
+    const today=new Date();today.setHours(12,0,0,0);
+    const maxDate=new Date(today.getTime()+21*86400000);maxDate.setHours(12,0,0,0);
+    const y=vDpState.viewYear,mo=vDpState.viewMonth;
+    const first=new Date(y,mo,1,12,0,0);
+    const last=new Date(y,mo+1,0,12,0,0);
+    const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const selVal=vDpState.selected;
+    const bookings=vDpState.bookings||[];
+    // Navigation bounds: can only view months containing any day in [today, maxDate]
+    const minNavY=today.getFullYear(),minNavM=today.getMonth();
+    const maxNavY=maxDate.getFullYear(),maxNavM=maxDate.getMonth();
+    const canGoPrev=(y>minNavY)||(y===minNavY&&mo>minNavM);
+    const canGoNext=(y<maxNavY)||(y===maxNavY&&mo<maxNavM);
+
+    // Build the week grid
+    const sc=first.getDay();
+    const tot=Math.ceil((sc+last.getDate())/7)*7;
+    const weeks=[];let wk=[];
+    for(let i=0;i<tot;i++){
+      const dn=i-sc+1;
+      const d=new Date(y,mo,dn,12,0,0);
+      wk.push({dn,d,isOther:dn<1||dn>last.getDate()});
+      if(wk.length===7){weeks.push(wk);wk=[];}
+    }
+
+    const shortProp=(t.propertyName||'').replace(/^(PRC|UMC)\s*-\s*\d+\s*-\s*/,'');
+    const titleAction=t.date?'Change date':'Pick a date';
+    const sub=t.date?`Currently scheduled for ${vsFmtDate(t.date)}`:'';
+    let h=`<div class="vs-dp-panel" onclick="event.stopPropagation()">
+      <div class="vs-dp-header">
+        <div>
+          <div class="vs-dp-title">${titleAction}</div>
+          <div class="vs-dp-sub">${shortProp} — ${t.problem}${sub?'<br>'+sub:''}</div>
+        </div>
+        <button class="vs-dp-close" onclick="window._vsClosePicker()">&times;</button>
+      </div>
+      <div class="vs-dp-body">
+        <div class="vs-dp-range">You can pick any day from today through ${vsFmtDate(maxDate.toISOString().slice(0,10))}.</div>
+        ${vsRenderBestDaysHtml()}
+        <div class="dp-phdr">
+          <div class="dp-ptitle">${MONTHS[mo]} ${y}</div>
+          <div class="dp-pnav">
+            <button ${canGoPrev?'':'disabled style="opacity:.3;cursor:not-allowed"'} onclick="window._vsDpNav(-1)">&#x2190;</button>
+            <button ${canGoNext?'':'disabled style="opacity:.3;cursor:not-allowed"'} onclick="window._vsDpNav(1)">&#x2192;</button>
+          </div>
+        </div>
+        <div class="dp-cal-wrap"><div class="dp-dow-row">`;
+    ['Su','Mo','Tu','We','Th','Fr','Sa'].forEach(dw=>h+=`<div class="dp-dow">${dw}</div>`);
+    h+=`</div>`;
+    const COL_PCT=100/7;
+    weeks.forEach(wk=>{
+      const wkStart=wk[0].d;
+      const wkEnd=new Date(wk[6].d.getFullYear(),wk[6].d.getMonth(),wk[6].d.getDate()+1,12,0,0);
+      h+=`<div class="dp-week-row">`;
+      wk.forEach(({dn,d,isOther})=>{
+        if(isOther){h+=`<div class="dp-cell dp-other"></div>`;return;}
+        const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        const isSel=selVal===ds;
+        const isPast=d<today;
+        const isToday=d.toDateString()===today.toDateString();
+        const isBeyond=d>maxDate;
+        const st=vsDayState(d,bookings);
+        const isGuestInHouse=st==='booked';
+        // Booked days are hard-blocked for vendors: no click, no "schedule anyway"
+        // option. Admin only can schedule through a guest stay.
+        const disabled=isPast||isBeyond||isGuestInHouse;
+        let cls='dp-cell';
+        if(isToday)cls+=' dp-today-cell';
+        if(isSel)cls+=' dp-selected';
+        if(disabled)cls+=' dp-disabled';
+        if(isGuestInHouse&&!isPast&&!isBeyond)cls+=' dp-guest-locked';
+        const dnCls='dp-dn'+(isToday?' dp-today-num':'');
+        const click=!disabled?`onclick="window._vsSelDate('${ds}')"`:'';
+        h+=`<div class="${cls}" ${click}><div class="${dnCls}">${dn}</div></div>`;
+      });
+      // Render reservation bars overlaying this week
+      bookings.forEach(r=>{
+        if(!r.start||!r.end)return;
+        if(r.start>=wkEnd||r.end<=wkStart)return;
+        const barStart=r.start<wkStart?wkStart:r.start;
+        const barEnd=r.end>wkEnd?wkEnd:r.end;
+        const msPerDay=86400000;
+        const startCol=Math.round((barStart.getTime()-wkStart.getTime())/msPerDay);
+        const endCol=Math.round((barEnd.getTime()-wkStart.getTime())/msPerDay);
+        if(endCol<=startCol)return;
+        const isFirst=r.start>=wkStart;
+        const isLast=r.end<=wkEnd;
+        let left=isFirst?(startCol+0.5)*COL_PCT:0;
+        let right=isLast?Math.min((endCol+0.5)*COL_PCT,100):100;
+        let width=right-left;
+        if(width<=0)return;
+        let barCls='dp-res-bar';
+        if(isFirst)barCls+=' dp-bar-start';
+        if(isLast)barCls+=' dp-bar-end';
+        h+=`<div class="${barCls}" style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%"><span class="dp-res-name">${(r.summary||'').replace(/</g,'&lt;')}</span></div>`;
+      });
+      h+=`</div>`;
+    });
+    h+=`</div>`; // dp-cal-wrap
+    // Legend explaining the day-state colors
+    h+=`<div class="vs-dp-legend">
+      <span class="vs-dp-lg-item"><span class="vs-dp-lg-sw vs-dp-lg-turn"></span>Turn / Checkout / Check-in <em>(ideal — property is empty 10am-4pm)</em></span>
+      <span class="vs-dp-lg-item"><span class="vs-dp-lg-sw vs-dp-lg-open"></span>Open day <em>(could get booked later)</em></span>
+      <span class="vs-dp-lg-item"><span class="vs-dp-lg-sw vs-dp-lg-locked"></span>Guest in house <em>(not schedulable — ask admin)</em></span>
+    </div>`;
+    // Confirm / Cancel footer
+    const selLabel=vDpState.selected?vsFmtDate(vDpState.selected):'—';
+    const canConfirm=!!vDpState.selected;
+    h+=`<div class="vs-dp-footer">
+      <div class="vs-dp-selected">${vDpState.selected?'Selected: <strong>'+selLabel+'</strong>':'No date selected yet'}</div>
+      <div class="vs-dp-footer-btns">
+        <button class="btn" onclick="window._vsClosePicker()">Cancel</button>
+        <button class="btn btn-g" ${canConfirm?'':'disabled style="opacity:.4;cursor:not-allowed"'} onclick="window._vsConfirmPicker()">Confirm</button>
+      </div>
+    </div></div></div>`;
+    modal.innerHTML=h;
+  }
+
+  window._vsDpNav=function(dir){
+    const newMo=vDpState.viewMonth+dir;
+    const d=new Date(vDpState.viewYear,newMo,1);
+    vDpState.viewYear=d.getFullYear();
+    vDpState.viewMonth=d.getMonth();
+    vsRenderPicker();
+  };
+
+  window._vsSelDate=function(ds){
+    // Booked days can't reach this handler — they render without an onclick.
+    vDpState.selected=ds;
+    vsRenderPicker();
+  };
+
+  window._vsConfirmPicker=async function(){
+    if(!vDpState.selected||!vDpState.taskId)return;
+    const taskId=vDpState.taskId;
+    const date=vDpState.selected;
+    // Lock the confirm button to prevent double-submit
+    const footerBtns=document.querySelector('.vs-dp-footer-btns');
+    if(footerBtns){footerBtns.querySelectorAll('button').forEach(b=>{b.disabled=true;b.style.opacity='.5';});}
+    try{
+      const r=await fetch(VAPI,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,action:'selfSchedule',taskId,date})});
+      if(!r.ok){
+        const err=await r.json().catch(()=>({error:'Unknown error'}));
+        alert('Could not save: '+(err.error||'Please try again.'));
+        if(footerBtns){footerBtns.querySelectorAll('button').forEach(b=>{b.disabled=false;b.style.opacity='';});}
+        return;
+      }
+      // Show success panel — same content admin would text if they scheduled.
+      // vNeedsSched still contains the task pre-refresh (full prop fields).
+      // If the task isn't in vNeedsSched (e.g. vendor changing an already-dated
+      // task's date), we still show a success panel using vTasks as fallback.
+      const inNeeds=(vNeedsSched||[]).some(t=>t.id===taskId);
+      if(inNeeds){
+        vsRenderScheduledSuccess([taskId],date);
+      }else{
+        // Rescheduled an already-dated task — pull from vTasks snapshot
+        const t=(vTasks||[]).find(x=>x.id===taskId);
+        if(t){
+          // Prime a temp list so vsRenderScheduledSuccess can find it
+          const prev=vNeedsSched;vNeedsSched=[t];
+          vsRenderScheduledSuccess([taskId],date);
+          vNeedsSched=prev;
+        }else{
+          window._vsCloseAndScroll(date);
+        }
+      }
+    }catch(e){
+      alert('Network error. Please try again.');
+      if(footerBtns){footerBtns.querySelectorAll('button').forEach(b=>{b.disabled=false;b.style.opacity='';});}
+    }
+  };
+
   // Boot vendor sheet
   vsLoad();
 })();
-
-// ── Guest Alert Banner — notify incoming guests about active issues ──
-let gaItems=[]; // array of {task, reservation, propName, guestName, daysOut, message, reservationId}
-let gaDismissed=new Set(); // dismissed alert IDs (persisted via rvDismissed/se_dismissed)
-let gaSent=new Set(); // sent message IDs (transient per session)
-
-async function gaFetch(){
-  // Populate gaDismissed from persisted rvDismissed array
-  rvDismissed.forEach(id=>gaDismissed.add(id));
-  const today=new Date();today.setHours(0,0,0,0);
-  const gaSettings = appSettings.guestAlert || {};
-  const lookAhead = gaSettings.lookAhead || 2; // days to look ahead for arrivals
-  const alerts=[];
-
-  // Find open/scheduled tasks (not complete, not resolved_by_guest)
-  // Exclude routine recurring items that don't affect guest experience (HVAC filters, etc.)
-  const GA_EXCLUDE=/hvac\s*filter|filter\s*replace/i;
-  const excludeCats = gaSettings.excludeCategories || [];
-  const gaMode = gaSettings.mode || 'all'; // 'all' or 'tagged'
-  const activeTasks=tasks.filter(t=>{
-    if(isDone(t)) return false;
-    if(GA_EXCLUDE.test(t.problem||'')) return false;
-    if(t.assignedToGuest) return false;
-    // If 'tagged' mode, only include tasks explicitly flagged for guest alert
-    if(gaMode==='tagged' && !t.guestAlert) return false;
-    // Exclude categories from settings
-    if(excludeCats.length && excludeCats.includes(t.category)) return false;
-    return true;
-  });
-  if(!activeTasks.length){document.getElementById('ga-wrap').innerHTML='';gaItems=[];return;}
-
-  // Group active tasks by property
-  const byProp={};
-  activeTasks.forEach(t=>{
-    if(!byProp[t.property])byProp[t.property]=[];
-    byProp[t.property].push(t);
-  });
-
-  // For each property with active tasks, check for upcoming arrivals
-  for(const [pid,propTasks] of Object.entries(byProp)){
-    const hospId=HOSPITABLE_IDS[pid];
-    if(!hospId)continue;
-    // Use cached reservation data or fetch
-    let evs=icalCache[pid];
-    if(!evs||evs==='error'){evs=await fetchIcal(pid);if(evs==='error')continue;}
-
-    evs.forEach(ev=>{
-      if(!ev.start||!ev.reservationId)return;
-      const arrival=new Date(ev.start);arrival.setHours(0,0,0,0);
-      const diffDays=Math.round((arrival-today)/(86400000));
-      // Check arrivals within lookAhead days (including today)
-      if(diffDays<0||diffDays>lookAhead)return;
-      const p=getProp(pid);
-      const propName=p?p.name:pid;
-      propTasks.forEach(t=>{
-        const alertId=`${t.id}_${ev.reservationId}`;
-        if(gaDismissed.has(alertId))return;
-        const guestFirst=(ev.summary||'Guest').split(' ')[0];
-        const msg=gaGenerateMessage(guestFirst,propName,t.problem,diffDays);
-        alerts.push({
-          id:alertId,
-          task:t,
-          reservation:ev,
-          propName,
-          guestName:ev.summary||'Guest',
-          guestFirst,
-          daysOut:diffDays,
-          message:msg,
-          reservationId:ev.reservationId
-        });
-      });
-    });
-  }
-  gaItems=alerts;
-  renderGA();
-}
-
-function gaGenerateMessage(guestFirst,propName,issue,daysOut){
-  const issueLower=issue.toLowerCase().replace(/\.$/,'');
-  return `Hey ${guestFirst}! Just wanted to give you a heads-up — the last guest mentioned that ${issueLower}. We're looking into it but just in case it gives you any trouble, shoot me a message and I can get someone over to take care of it!`;
-}
-
-function renderGA(){
-  const el=document.getElementById('ga-wrap');
-  const active=gaItems.filter(a=>!gaSent.has(a.id)&&!gaDismissed.has(a.id));
-  if(!active.length){el.innerHTML='';return;}
-  let h=`<div class="ga-banner">
-    <div class="ga-hdr">
-      <div class="ga-title">
-        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-        Guest Heads-Up — Active Issues
-      </div>
-      <span class="ga-count">${active.length} alert${active.length!==1?'s':''}</span>
-    </div>`;
-  active.forEach(a=>{
-    const dayLabel=a.daysOut===0?'Checking in TODAY':a.daysOut===1?'Checking in tomorrow':`Checking in in ${a.daysOut} days`;
-    h+=`<div class="ga-item" id="ga-${a.id.replace(/[^a-zA-Z0-9_]/g,'-')}">
-      <div class="ga-item-top">
-        <div style="flex:1;min-width:0">
-          <div class="ga-item-prop">${escHtml(a.propName)}</div>
-          <div class="ga-item-issue">${escHtml(a.task.problem)}</div>
-          <div class="ga-item-guest"><strong>${escHtml(a.guestName)}</strong> — ${dayLabel}</div>
-        </div>
-      </div>
-      <textarea class="ga-msg-edit" id="ga-edit-${a.id.replace(/[^a-zA-Z0-9_]/g,'-')}" style="display:block">${escHtml(a.message)}</textarea>
-      <div class="ga-item-btns">
-        <button class="ga-btn ga-btn-send" onclick="gaSend('${a.id}')">Send to ${escHtml(a.guestFirst)}</button>
-        <button class="ga-btn ga-btn-dismiss" onclick="gaDismiss('${a.id}')">Dismiss</button>
-        <span class="ga-sent" id="ga-sent-${a.id.replace(/[^a-zA-Z0-9_]/g,'-')}">✓ Sent</span>
-      </div>
-    </div>`;
-  });
-  h+='</div>';
-  el.innerHTML=h;
-}
-
-// gaToggleEdit removed — textarea is now always visible and directly editable
-
-async function gaSend(id){
-  const a=gaItems.find(x=>x.id===id);
-  if(!a||!a.reservationId)return;
-  const safeId=id.replace(/[^a-zA-Z0-9_]/g,'-');
-  // Get message from the always-visible textarea
-  const editEl=document.getElementById('ga-edit-'+safeId);
-  const msg=editEl?editEl.value:a.message;
-  if(!msg.trim()){showToast('Message is empty.');return;}
-
-  // Show sending state
-  const sendBtn=document.querySelector(`#ga-${safeId} .ga-btn-send`);
-  if(sendBtn){sendBtn.textContent='Sending...';sendBtn.disabled=true;}
-
-  try{
-    const r=await fetch(`${PROXY_BASE}/api/hospitable?action=send_message&rid=${a.reservationId}`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({message:msg})
-    });
-    if(!r.ok){
-      const err=await r.json().catch(()=>({}));
-      throw new Error(err.detail||`API returned ${r.status}`);
-    }
-    // Mark sent
-    gaSent.add(id);
-    const sentEl=document.getElementById('ga-sent-'+safeId);
-    if(sentEl)sentEl.style.display='inline';
-    if(sendBtn){sendBtn.textContent='Sent ✓';sendBtn.style.background='#2e7d52';sendBtn.style.borderColor='#2e7d52';}
-    // Add note to the task
-    const t=a.task;
-    if(t){
-      if(!t.notes)t.notes=[];
-      t.notes.push({by:'admin',text:`Guest heads-up sent to ${a.guestName}: "${msg.slice(0,80)}${msg.length>80?'...':''}"`,time:new Date().toISOString()});
-      await saveTasks();
-    }
-    showToast(`Message sent to ${a.guestName}!`);
-    // Re-render after a moment
-    setTimeout(()=>renderGA(),1500);
-  }catch(e){
-    console.error('Failed to send guest message:',e);
-    showToast('Failed to send: '+e.message);
-    if(sendBtn){sendBtn.textContent=`Send to ${a.guestFirst}`;sendBtn.disabled=false;}
-  }
-}
-
-async function gaDismiss(id){
-  gaDismissed.add(id);
-  // Persist to same dismissed store as reviews (se_dismissed via KV)
-  if(!rvDismissed.includes(id)){
-    rvDismissed.push(id);
-    await saveDismissed();
-    console.log('[ga-dismiss] Saved dismissed ID:',id,'Total dismissed:',rvDismissed.length);
-  }
-  renderGA();
-}
 
 // ── Guest Context in Task Detail — show reservation + messages ──
 async function renderGuestContext(t,p){
@@ -7640,11 +8889,8 @@ async function initApp(){
   renderAll();
   hbStartPolling();
   await loadVendorReports(); // load vendor field reports
-  await loadDismissed(); // load dismissed IDs from KV before fetching reviews
-  rvFetch(); // fetch guest feedback reviews
   clFetch(); // pre-load cleaning log in background
   cleanupOldPhotos(); // auto-delete photos from tasks resolved 30+ days ago
-  gaFetch(); // check for active issues at properties with arriving guests
 }
 if(!window._vendorMode && !window._cleanerViewMode) initApp();
 
@@ -9670,659 +10916,860 @@ async function fsEditServiceDate(pid) {
 }
 // ═══════════════  END Filter Service  ═══════════════
 
-// ═══════════════  INVOICE RECONCILIATION  ═══════════════
-// Supports Lisa Hawthorne (PDF upload) and Mammie Johnson (manual entry).
-// Verification uses the Hospitable proxy: hybrid departure-date + calendar approach.
 
-// ── Property metadata for reconciliation ──────────────────────────────────────
-const INV_PROP_INFO = {
-  bearadise:       { name:'Bearadise Lodge',                  group:'individual' },
-  hero:            { name:'Hero Hideout',                     group:'individual' },
-  hibernation:     { name:'Hibernation Station',              group:'individual' },
-  magic:           { name:'Magic Mountain',                   group:'individual' },
-  wizards:         { name:"The Wizard's Edge",                group:'individual' },
-  umc10:           { name:'UMC-10 Whispering Wand',           group:'umc' },
-  umc20:           { name:'UMC-20 Honey Haven',               group:'umc' },
-  umc30:           { name:'UMC-30 Rebel Refuge',              group:'umc' },
-  umc40:           { name:'UMC-40 Lookout on the Roadside',   group:'umc' },
-  umc50:           { name:'UMC-50 Rosy Ridge',                group:'umc' },
-  umc60:           { name:'UMC-60 Hero Hangout',              group:'umc' },
-  prc1:            { name:'PRC-1 Forge in the Forest',        group:'prc' },
-  prc2:            { name:'PRC-2 Bluebird Bungalow',          group:'prc' },
-  prc3:            { name:'PRC-3 The Rustic Rose',            group:'prc' },
-  prc4:            { name:'PRC-4 Snuggle Shack',              group:'prc' },
-  prc5:            { name:'PRC-5 Pink Paradise',              group:'prc' },
-  prc6:            { name:"PRC-6 Ringbearer's Roost",         group:'prc' },
-  hillside_big:    { name:'Hillside Haven - Big House',       group:'individual' },
-  hillside_cottage:{ name:'Hillside Haven - Cottage',         group:'individual' },
-};
+// ═══════════════════════════════════════════════════════════════
+//   REVIEWS PAGE — aggregated ratings over 52 weeks (Hospitable)
+// ═══════════════════════════════════════════════════════════════
+// Entry: switchView('reviews') → rvInit() → (cache hit?) rvRender() : rvFetchAll(false)
+//
+// Caching: localStorage key `se_rv_cache_v1` with 24-hour TTL. First visit
+// each day triggers a fresh pull (~10-20s for 18 properties); subsequent
+// loads are instant. User can force-refresh via the ↻ button.
+//
+// Data shape (rvData):
+//   { generated_at, total_reviews,
+//     weeks: [52 ISO-week-start-dates],
+//     properties: { [pid]: { overall[52], cleanliness[52], counts[52] } } }
+// Sparse weeks are null, NOT zero — excluded from averages and rendered as
+// gaps in the sparkline path.
+//
+// Bucketing: by reservation check_out date (fallback to reviewed_at),
+// Monday-start ISO weeks in UTC.
+//
+// Parent/combo Hospitable listings whose reviews fan out to multiple children
+// are listed in RV_FAN_OUT. Each entry's reviews get duplicated into every
+// child property's weekly bucket. The parent never shows as its own row.
 
-// ── Lisa's invoice property name → propKey ─────────────────────────────────
-// Ordered longest-first to avoid partial matches
-const INV_LISA_PROP_PATTERNS = [
-  { pattern:/Magic Mountain instant booking pool/i,      key:'magic'       },
-  { pattern:/Heros Hideout instant booking/i,            key:'hero'        },
-  { pattern:/Hero's Hideout instant booking/i,           key:'hero'        },
-  { pattern:/Hibernation Station instant booking/i,      key:'hibernation' },
-  { pattern:/Wizards Edge instant booking/i,             key:'wizards'     },
-  { pattern:/Bearadise 1967/i,                           key:'bearadise'   },
-  { pattern:/Bluebird Bungalow\s*\(2\)/i,                key:'prc2'        },
-  { pattern:/Forge in the forest\s*\(1\)/i,              key:'prc1'        },
-  { pattern:/Hero Hangout 3940/i,                        key:'umc60'       },
-  { pattern:/Honey Haven 3940/i,                         key:'umc20'       },
-  { pattern:/Lookout on The Roadside 3940/i,             key:'umc40'       },
-  { pattern:/Pink Paradise\s*\(5\)/i,                    key:'prc5'        },
-  { pattern:/Rebel Refuge 3940/i,                        key:'umc30'       },
-  { pattern:/Ringbearer.s Roost\s*\(6\)/i,               key:'prc6'        },
-  { pattern:/Rosy Ridge 3940/i,                          key:'umc50'       },
-  { pattern:/Rustic Rose\s*\(3\)/i,                      key:'prc3'        },
-  { pattern:/Snuggle Shack\s*\(4\)/i,                    key:'prc4'        },
-  { pattern:/The Whispering Wand 3940/i,                 key:'umc10'       },
+const RV_FAN_OUT = [
+  {
+    key: 'hillside_both_houses',
+    name: 'Hillside Haven - Both Houses',
+    listing_id: 1654976,          // the numeric id Chip sees in Hospitable UI
+    uuid: null,                   // TODO: need Hospitable property UUID for listing 1654976.
+                                  //       Once set, reviews fan out to hillside_big + hillside_cottage.
+    children: ['hillside_big', 'hillside_cottage'],
+  },
 ];
 
-// ── State ─────────────────────────────────────────────────────────────────────
-let _invVendor = '';
-let _invItems  = [];   // [{propKey,propName,propId,group,date,service,amount}]
-let _invMeta   = {};   // {vendor,period,startDate,endDate,totalAmount,totalAppointments}
-let _invResult = null; // verified items array
-let _invRows   = [];   // Mammie manual rows state
+const RV_BUCKET_WEEKS = 52;
+const RV_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const RV_CACHE_KEY = 'se_rv_cache_v1';
+const RV_THRESH_GOOD = 4.8;
+const RV_THRESH_MID  = 4.5;
 
-// ── Utilities ─────────────────────────────────────────────────────────────────
-function _invFmt(n){ return '$' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,','); }
-function _invFmtD(iso){ const [y,m,d]=iso.split('-'); return `${m}/${d}/${y}`; }
-function _invShift(iso,days){
-  const d=new Date(iso+'T12:00:00Z'); d.setUTCDate(d.getUTCDate()+days);
-  return d.toISOString().split('T')[0];
-}
-function _invDaysBetween(a,b){
-  return Math.round((new Date(b+'T12:00:00Z')-new Date(a+'T12:00:00Z'))/86400000);
-}
-function _invFormatPeriod(s,e){
-  const mn=['January','February','March','April','May','June','July','August','September','October','November','December'];
-  const sd=new Date(s+'T12:00:00Z'), ed=new Date(e+'T12:00:00Z');
-  if(sd.getUTCMonth()===ed.getUTCMonth()&&sd.getUTCFullYear()===ed.getUTCFullYear())
-    return mn[sd.getUTCMonth()]+' '+sd.getUTCFullYear();
-  return mn[sd.getUTCMonth()]+' – '+mn[ed.getUTCMonth()]+' '+ed.getUTCFullYear();
-}
-function _invPropId(key){ return HOSPITABLE_IDS[key]||null; }
+let rvData = null;
+let rvFetching = false;
+let rvDrillPid = null;
+let rvActiveSection = 'reviews';  // 'reviews' | 'cleaning'
+let rvCleaningLoaded = false;
+let rvPortfolioView = 'avg';   // 'avg' | 'all' | 'byNb'
 
-// ── Open modal ────────────────────────────────────────────────────────────────
-function openInvoiceReconciler(vendorName){
-  _invVendor=vendorName; _invItems=[]; _invResult=null; _invMeta={}; _invRows=[];
-  document.getElementById('inv-modal-title').textContent='Invoice Reconciliation — '+vendorName;
-  document.getElementById('inv-body').innerHTML=_invStep1HTML();
-  openModal('inv-modal');
+// Neighborhood colors (hex — SVG can't use CSS vars reliably via attributes)
+const RV_NB_COLOR = {
+  prc: '#2d6a3f', umc: '#b8830a', gatlinburg: '#6b3fa0',
+  alpine: '#c0392b', sevierville: '#2471a3', hillside: '#1a3a5c',
+};
+function rvNbForPid(pid) {
+  for (const nb of NBS) if (nb.props.includes(pid)) return nb;
+  return null;
+}
+function rvColorForPid(pid) {
+  const nb = rvNbForPid(pid);
+  return (nb && RV_NB_COLOR[nb.cls]) || '#4a6355';
 }
 
-// ── STEP 1: Upload / Enter ────────────────────────────────────────────────────
-function _invStep1HTML(){
-  if(_invVendor==='Lisa Hawthorne'){
-    return `<div style="padding:4px 0 8px">
-      <p style="font-size:.84rem;color:var(--text2);margin-bottom:16px">Upload Lisa's invoice PDF to automatically extract all line items, then verify each clean against Hospitable.</p>
-      <div class="inv-drop-zone" id="inv-drop"
-        ondragover="invDragOver(event)" ondragleave="invDragLeave(event)" ondrop="invDrop(event)"
-        onclick="document.getElementById('inv-file').click()">
-        <div class="inv-drop-icon">📄</div>
-        <div class="inv-drop-label">Drop LJ Cleaning invoice PDF here</div>
-        <div class="inv-drop-sub">or click to choose file</div>
-        <input type="file" accept=".pdf" id="inv-file" style="display:none" onchange="invHandleFile(this.files[0])">
-      </div>
-      <div id="inv-parse-status" style="display:none"></div>
-    </div>`;
-  } else {
-    // Mammie Johnson — manual entry
-    _invRows=[{date:'',prop:'hillside_big',service:'Departure Clean',amount:''}];
-    return _invMammieHTML();
+// Monday 00:00 UTC of the week containing d
+function rvIsoWeekStart(d) {
+  const dt = new Date(d);
+  const day = dt.getUTCDay();          // 0=Sun..6=Sat
+  const diff = (day === 0 ? -6 : 1 - day);
+  return new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate() + diff));
+}
+function rvWeekKey(d) {
+  return rvIsoWeekStart(d).toISOString().slice(0, 10);
+}
+function rvBuildWeeks() {
+  const weeks = [];
+  const thisWeek = rvIsoWeekStart(new Date());
+  for (let i = RV_BUCKET_WEEKS - 1; i >= 0; i--) {
+    const d = new Date(thisWeek);
+    d.setUTCDate(d.getUTCDate() - i * 7);
+    weeks.push(d.toISOString().slice(0, 10));
   }
+  return weeks;
+}
+function rvAvg(arr) {
+  const v = (arr || []).filter(x => x != null && !isNaN(x));
+  if (!v.length) return null;
+  return v.reduce((s, x) => s + x, 0) / v.length;
+}
+function rvSum(arr) {
+  return (arr || []).reduce((s, x) => s + (x || 0), 0);
+}
+function rvFmt(v) { return v == null ? '—' : v.toFixed(2); }
+function rvBadgeClass(v) {
+  if (v == null) return 'rv-badge-none';
+  if (v >= RV_THRESH_GOOD) return 'rv-badge-good';
+  if (v >= RV_THRESH_MID)  return 'rv-badge-mid';
+  return 'rv-badge-bad';
 }
 
-// ── Lisa PDF drag-drop ─────────────────────────────────────────────────────────
-function invDragOver(e){e.preventDefault();document.getElementById('inv-drop').classList.add('drag-over');}
-function invDragLeave(e){document.getElementById('inv-drop').classList.remove('drag-over');}
-function invDrop(e){
-  e.preventDefault();
-  document.getElementById('inv-drop').classList.remove('drag-over');
-  const f=e.dataTransfer.files[0];
-  if(f&&f.type==='application/pdf') invHandleFile(f);
-  else showToast('Please drop a PDF file.');
-}
-function invHandleFile(file){
-  if(!file)return;
-  const statusEl=document.getElementById('inv-parse-status');
-  statusEl.style.display='block';
-  statusEl.className='inv-parse-notice inv-notice-ok';
-  statusEl.textContent='Reading PDF…';
-  const reader=new FileReader();
-  reader.onload=async(e)=>{
-    try{
-      const arr=e.target.result;
-      statusEl.textContent='Extracting text from PDF…';
-      // Use pdf.js (already loaded globally)
-      const pdf=await pdfjsLib.getDocument({data:arr}).promise;
-      let text='';
-      for(let p=1;p<=pdf.numPages;p++){
-        const page=await pdf.getPage(p);
-        const content=await page.getTextContent();
-        text+=content.items.map(i=>i.str).join(' ')+' ';
+async function rvFetchAll(force) {
+  if (rvFetching) return;
+
+  if (!force) {
+    try {
+      const raw = localStorage.getItem(RV_CACHE_KEY);
+      if (raw) {
+        const cached = JSON.parse(raw);
+        if (cached && cached.generated_at &&
+            Date.now() - new Date(cached.generated_at).getTime() < RV_CACHE_TTL_MS) {
+          rvData = cached;
+          rvRender();
+          return;
+        }
       }
-      statusEl.textContent='Parsing line items…';
-      const items=_invParseLisaPdf(text);
-      if(!items.length){
-        statusEl.className='inv-parse-notice inv-notice-err';
-        statusEl.textContent='Could not find any invoice line items in this PDF. Make sure this is a LJ Cleaning invoice.';
-        return;
+    } catch (e) { /* ignore cache errors */ }
+  }
+
+  rvFetching = true;
+  const statusEl = document.getElementById('rv-status');
+  if (statusEl) statusEl.textContent = 'Loading reviews...';
+  const listEl = document.getElementById('rv-list');
+  if (listEl && !rvData) listEl.innerHTML = '<div class="rv-loading">Loading reviews from Hospitable... this can take 10–20 seconds on first load.</div>';
+
+  // Targets = every known property UUID + any RV_FAN_OUT entries that have a UUID set.
+  const targets = Object.entries(HOSPITABLE_IDS)
+    .filter(([, uuid]) => !!uuid)
+    .map(([pid, uuid]) => ({ pid, uuid, fanOutTo: null }));
+  for (const fo of RV_FAN_OUT) {
+    if (fo.uuid) targets.push({ pid: fo.key, uuid: fo.uuid, fanOutTo: fo.children });
+  }
+
+  const weeks = rvBuildWeeks();
+  const weekIndex = {};
+  for (let i = 0; i < weeks.length; i++) weekIndex[weeks[i]] = i;
+  const cutoff = new Date(weeks[0]);
+
+  const props = {};
+  for (const pid of Object.keys(HOSPITABLE_IDS)) {
+    props[pid] = {
+      overall_sum:   new Array(RV_BUCKET_WEEKS).fill(0),
+      overall_count: new Array(RV_BUCKET_WEEKS).fill(0),
+      clean_sum:     new Array(RV_BUCKET_WEEKS).fill(0),
+      clean_count:   new Array(RV_BUCKET_WEEKS).fill(0),
+    };
+  }
+
+  let totalReviews = 0;
+  const batchSize = 4;
+  for (let i = 0; i < targets.length; i += batchSize) {
+    const batch = targets.slice(i, i + batchSize);
+    if (statusEl) statusEl.textContent = `Loading reviews... ${Math.min(i + batchSize, targets.length)}/${targets.length} properties`;
+    const results = await Promise.allSettled(batch.map(async t => {
+      let page = 1;
+      const revs = [];
+      while (page <= 10) {
+        try {
+          const r = await fetch(
+            `${PROXY_BASE}/api/hospitable?action=reviews&pid=${t.uuid}&start=2020-01-01&end=${new Date().toISOString().slice(0,10)}&page=${page}`,
+            { signal: AbortSignal.timeout(15000) }
+          );
+          if (!r.ok) break;
+          const data = await r.json();
+          const batchR = data.data || [];
+          revs.push(...batchR);
+          if (!data.meta || page >= data.meta.last_page) break;
+          page++;
+        } catch (e) { break; }
       }
-      _invItems=items;
-      // Derive meta from parsed items
-      const dates=items.map(i=>i.date).sort();
-      _invMeta={
-        vendor:'LJ Cleaning and Repair',
-        startDate:dates[0], endDate:dates[dates.length-1],
-        period:_invFormatPeriod(dates[0],dates[dates.length-1]),
-        totalAmount:items.reduce((s,i)=>s+i.amount,0),
-        totalAppointments:items.length
-      };
-      statusEl.className='inv-parse-notice inv-notice-ok';
-      statusEl.textContent=`✓ Parsed ${items.length} line items — $${_invMeta.totalAmount.toFixed(2)} total`;
-      setTimeout(()=>{document.getElementById('inv-body').innerHTML=_invStep2HTML();},500);
-    }catch(err){
-      console.error('Invoice PDF parse error:',err);
-      statusEl.className='inv-parse-notice inv-notice-err';
-      statusEl.textContent='Parse error: '+err.message;
+      return { t, revs };
+    }));
+
+    for (const res of results) {
+      if (res.status !== 'fulfilled') continue;
+      const { t, revs } = res.value;
+      for (const rv of revs) {
+        const bucketDateStr = rv.reservation?.check_out || rv.reviewed_at;
+        if (!bucketDateStr) continue;
+        const d = new Date(bucketDateStr);
+        if (isNaN(d.getTime()) || d < cutoff) continue;
+        const idx = weekIndex[rvWeekKey(d)];
+        if (idx === undefined) continue;
+
+        const overall = (rv.public?.rating != null) ? Number(rv.public.rating) : null;
+        const cleanR = (rv.private?.detailed_ratings || []).find(dr => dr.type === 'cleanliness');
+        const cleanRating = (cleanR && cleanR.rating > 0) ? Number(cleanR.rating) : null;
+
+        const attribTo = t.fanOutTo ? t.fanOutTo : [t.pid];
+        for (const apid of attribTo) {
+          if (!props[apid]) continue;
+          if (overall != null) {
+            props[apid].overall_sum[idx] += overall;
+            props[apid].overall_count[idx] += 1;
+          }
+          if (cleanRating != null) {
+            props[apid].clean_sum[idx] += cleanRating;
+            props[apid].clean_count[idx] += 1;
+          }
+        }
+        totalReviews++;
+      }
     }
+  }
+
+  const propertiesOut = {};
+  for (const pid of Object.keys(props)) {
+    const p = props[pid];
+    propertiesOut[pid] = {
+      overall:     p.overall_count.map((c, i) => c > 0 ? +(p.overall_sum[i] / c).toFixed(3) : null),
+      cleanliness: p.clean_count.map((c, i)   => c > 0 ? +(p.clean_sum[i]   / c).toFixed(3) : null),
+      counts:      p.overall_count.slice(),
+    };
+  }
+
+  rvData = {
+    generated_at: new Date().toISOString(),
+    weeks,
+    properties: propertiesOut,
+    total_reviews: totalReviews,
   };
-  reader.readAsArrayBuffer(file);
+  try { localStorage.setItem(RV_CACHE_KEY, JSON.stringify(rvData)); } catch (e) { /* quota or private mode */ }
+
+  rvFetching = false;
+  if (statusEl) statusEl.textContent = `${totalReviews} reviews · updated ${new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}`;
+  rvRender();
 }
 
-// ── Lisa PDF parser ────────────────────────────────────────────────────────────
-function _invParseLisaPdf(rawText){
-  const text=rawText.replace(/\r\n/g,'\n').replace(/[ \t]+/g,' ');
-  const items=[];
-
-  // Find position of first property name in the text
-  // (everything before this is header/summary — skip dates there)
-  let firstPropPos=Infinity;
-  for(const pp of INV_LISA_PROP_PATTERNS){
-    const m=text.match(pp.pattern);
-    if(m&&text.indexOf(m[0])<firstPropPos) firstPropPos=text.indexOf(m[0]);
-  }
-  if(firstPropPos===Infinity) return items; // no recognizable properties found
-
-  // Find all date occurrences
-  const dateRe=/(\d{2})\/(\d{2})\/(\d{4})/g;
-  const allDates=[];
-  let dm;
-  while((dm=dateRe.exec(text))!==null){
-    allDates.push({pos:dm.index, end:dm.index+dm[0].length, iso:`${dm[3]}-${dm[1]}-${dm[2]}`});
+function rvRender() {
+  if (rvDrillPid) { rvRenderDrill(); return; }
+  const listEl = document.getElementById('rv-list');
+  if (!listEl) return;
+  if (!rvData) {
+    listEl.innerHTML = '<div class="rv-loading">Loading reviews from Hospitable...</div>';
+    const pb = document.getElementById('rv-portfolio-body');
+    if (pb) pb.innerHTML = '';
+    return;
   }
 
-  // Only consider dates that appear AFTER the first property name (skip header dates)
-  const invoiceDates=allDates.filter(d=>d.pos>firstPropPos);
+  rvRenderPortfolio();
 
-  for(let i=0;i<invoiceDates.length;i++){
-    const {pos,end,iso}=invoiceDates[i];
-    const nextPos=invoiceDates[i+1]?.pos??text.length;
-    const beforeText=text.substring(0,pos);
-    const afterText=text.substring(end,nextPos);
+  const sortMode = (document.getElementById('rv-sort') || {}).value || 'lowAvg12';
 
-    // Find the last (closest) property name before this date
-    let propKey=null, lastPropPos=-1;
-    for(const pp of INV_LISA_PROP_PATTERNS){
-      const re=new RegExp(pp.pattern.source,'gi');
-      let pm;
-      while((pm=re.exec(beforeText))!==null){
-        if(pm.index>lastPropPos){lastPropPos=pm.index; propKey=pp.key;}
+  const summaries = {};
+  for (const pid of Object.keys(rvData.properties)) {
+    const p = rvData.properties[pid];
+    const avg12 = rvAvg(p.overall);
+    const avg4  = rvAvg(p.overall.slice(-4));
+    const totalN = rvSum(p.counts);
+    const drop = (avg12 != null && avg4 != null) ? (avg12 - avg4) : 0;
+    summaries[pid] = { avg12, avg4, totalN, drop };
+  }
+
+  let html = '';
+  for (const nb of NBS) {
+    let ids = nb.props.filter(pid => rvData.properties[pid]);
+    if (!ids.length) continue;
+    ids = rvSortIds(ids, summaries, sortMode);
+    html += `<div class="rv-nb-banner ${nb.cls}"><span class="rv-nb-name">${escHtml(nb.name)}</span><span class="rv-nb-sub">${escHtml(nb.sub)}</span></div>`;
+    for (const pid of ids) html += rvRowHtml(pid, summaries[pid]);
+  }
+  if (!html) html = '<div class="rv-empty">No review data yet.</div>';
+  listEl.innerHTML = html;
+}
+
+function rvSortIds(ids, sums, mode) {
+  const arr = ids.slice();
+  arr.sort((a, b) => {
+    const sa = sums[a], sb = sums[b];
+    // Properties with no reviews in the 12-mo window always sink to the bottom.
+    const aEmpty = !sa.totalN, bEmpty = !sb.totalN;
+    if (aEmpty !== bEmpty) return aEmpty ? 1 : -1;
+    switch (mode) {
+      case 'lowAvg12': return (sa.avg12 ?? 99) - (sb.avg12 ?? 99);
+      case 'lowAvg4':  return (sa.avg4  ?? 99) - (sb.avg4  ?? 99);
+      case 'alpha': {
+        const pa = getProp(a)?.name || a;
+        const pb = getProp(b)?.name || b;
+        return pa.localeCompare(pb);
       }
+      case 'reviews':  return (sb.totalN || 0) - (sa.totalN || 0);
+      case 'drop':     return (sb.drop ?? -99) - (sa.drop ?? -99);
+      default:         return (sa.avg12 ?? 99) - (sb.avg12 ?? 99);
     }
-    if(!propKey) continue;
-
-    // Service type
-    const isDep=/Departure\s*Clean/i.test(afterText);
-    const isMisc=/Miscellaneous/i.test(afterText);
-    if(!isDep&&!isMisc) continue;
-    const service=isDep?'Departure Clean':'Miscellaneous';
-
-    // Amount — first $X.XX in afterText
-    const amtM=afterText.match(/\$\s*([\d,]+\.\d{2})/);
-    if(!amtM) continue;
-    const amount=parseFloat(amtM[1].replace(/,/g,''));
-    if(amount>50000) continue; // skip subtotals
-
-    const info=INV_PROP_INFO[propKey];
-    const hospId=_invPropId(propKey);
-    if(!info||!hospId) continue;
-
-    items.push({propKey, propName:info.name, propId:hospId, group:info.group, date:iso, service, amount});
-  }
-  return items;
-}
-
-// ── Mammie manual entry ────────────────────────────────────────────────────────
-function _invMammieHTML(){
-  const total=_invRows.reduce((s,r)=>s+(parseFloat(r.amount)||0),0);
-  const rows=_invRows.map((r,i)=>`<tr>
-    <td><input type="date" class="inv-input" data-idx="${i}" data-field="date" value="${r.date}"></td>
-    <td><select class="inv-input" data-idx="${i}" data-field="prop">
-      <option value="hillside_big"${r.prop==='hillside_big'?' selected':''}>Big House</option>
-      <option value="hillside_cottage"${r.prop==='hillside_cottage'?' selected':''}>Cottage</option>
-    </select></td>
-    <td><select class="inv-input" data-idx="${i}" data-field="service">
-      <option value="Departure Clean"${r.service==='Departure Clean'?' selected':''}>Departure Clean</option>
-      <option value="Miscellaneous"${r.service==='Miscellaneous'?' selected':''}>Miscellaneous</option>
-    </select></td>
-    <td><input type="number" step="0.01" min="0" class="inv-input" data-idx="${i}" data-field="amount" value="${r.amount}" placeholder="0.00" style="width:90px"></td>
-    <td style="width:32px;text-align:center">
-      <button class="btn" style="padding:2px 8px;font-size:.72rem" onclick="invMammieRemove(${i})">✕</button>
-    </td>
-  </tr>`).join('');
-  return `<div style="padding:4px 0 8px">
-    <p style="font-size:.84rem;color:var(--text2);margin-bottom:14px">Enter Mammie's invoice line items, then verify each clean against Hospitable.</p>
-    <div style="overflow-x:auto">
-      <table class="inv-manual-table">
-        <thead><tr><th>Date</th><th>Property</th><th>Service</th><th>Amount</th><th></th></tr></thead>
-        <tbody id="inv-mammie-tbody">${rows}</tbody>
-      </table>
-    </div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
-      <button class="btn" onclick="invMammieAdd()">+ Add Row</button>
-      <span style="font-size:.8rem;color:var(--text2)">${_invRows.length} item${_invRows.length!==1?'s':''} · ${_invFmt(total)}</span>
-    </div>
-    <div style="display:flex;justify-content:flex-end;margin-top:14px">
-      <button class="btn btn-g" onclick="invMammieProceed()">Review Items →</button>
-    </div>
-  </div>`;
-}
-function _invMammieSync(){
-  const tbody=document.getElementById('inv-mammie-tbody');
-  if(!tbody)return;
-  tbody.querySelectorAll('tr').forEach(row=>{
-    const idx=parseInt(row.querySelector('[data-field="date"]')?.dataset.idx??'-1');
-    if(idx<0||idx>=_invRows.length)return;
-    _invRows[idx].date=row.querySelector('[data-field="date"]')?.value||'';
-    _invRows[idx].prop=row.querySelector('[data-field="prop"]')?.value||'hillside_big';
-    _invRows[idx].service=row.querySelector('[data-field="service"]')?.value||'Departure Clean';
-    _invRows[idx].amount=row.querySelector('[data-field="amount"]')?.value||'';
   });
-}
-function invMammieAdd(){
-  _invMammieSync();
-  _invRows.push({date:'',prop:'hillside_big',service:'Departure Clean',amount:''});
-  document.getElementById('inv-body').innerHTML=_invMammieHTML();
-}
-function invMammieRemove(i){
-  _invMammieSync();
-  _invRows.splice(i,1);
-  if(!_invRows.length) _invRows=[{date:'',prop:'hillside_big',service:'Departure Clean',amount:''}];
-  document.getElementById('inv-body').innerHTML=_invMammieHTML();
-}
-function invMammieProceed(){
-  _invMammieSync();
-  _invItems=[];
-  for(const r of _invRows){
-    if(!r.date){showToast('Please fill in all dates.');return;}
-    const amt=parseFloat(r.amount);
-    if(!r.amount||isNaN(amt)||amt<=0){showToast('Please enter a valid amount for each row.');return;}
-    const info=INV_PROP_INFO[r.prop];
-    const hospId=_invPropId(r.prop);
-    if(!info||!hospId) continue;
-    _invItems.push({propKey:r.prop, propName:info.name, propId:hospId, group:info.group, date:r.date, service:r.service, amount:amt});
-  }
-  if(!_invItems.length){showToast('No valid items to process.');return;}
-  _invItems.sort((a,b)=>a.date.localeCompare(b.date));
-  const dates=_invItems.map(i=>i.date).sort();
-  _invMeta={
-    vendor:'Mammie Johnson',
-    startDate:dates[0], endDate:dates[dates.length-1],
-    period:_invFormatPeriod(dates[0],dates[dates.length-1]),
-    totalAmount:_invItems.reduce((s,i)=>s+i.amount,0),
-    totalAppointments:_invItems.length
-  };
-  document.getElementById('inv-body').innerHTML=_invStep2HTML();
+  return arr;
 }
 
-// ── STEP 2: Review parsed items ───────────────────────────────────────────────
-function _invStep2HTML(){
-  const total=_invItems.reduce((s,i)=>s+i.amount,0);
-  const rows=_invItems.map(item=>`<tr>
-    <td style="font-size:.8rem">${item.propName}</td>
-    <td style="white-space:nowrap;font-size:.8rem">${_invFmtD(item.date)}</td>
-    <td><span class="badge ${item.service==='Departure Clean'?'badge-green':'badge-yellow'}" style="font-size:.7rem">${item.service}</span></td>
-    <td style="text-align:right;font-weight:600;font-size:.82rem">${_invFmt(item.amount)}</td>
-  </tr>`).join('');
-  const propCount=[...new Set(_invItems.map(i=>i.propKey))].length;
-  return `<div>
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;gap:12px;flex-wrap:wrap">
+function rvRowHtml(pid, s) {
+  const p = getProp(pid);
+  const name = p ? p.name : pid;
+  const badge = `<span class="rv-badge ${rvBadgeClass(s.avg12)}" title="12-month average">${rvFmt(s.avg12)}</span>`;
+  const series = rvData.properties[pid].overall;
+  const spark = rvSparkSvg(series);
+  const dropTxt = (s.drop != null && s.drop > 0.15)
+    ? `<span class="rv-drop">↓ ${s.drop.toFixed(2)} vs 12-mo</span>`
+    : '';
+  const sub = `
+    <span>${s.totalN} review${s.totalN === 1 ? '' : 's'}</span>
+    <span>4-wk avg: <strong>${rvFmt(s.avg4)}</strong></span>
+    ${dropTxt}`;
+  return `
+    <div class="rv-row" onclick="rvOpenDrill('${pid}')">
+      <div class="rv-row-info">
+        <div class="rv-row-name">${escHtml(name)}</div>
+        <div class="rv-row-sub">${sub}</div>
+      </div>
+      <div class="rv-row-badge">${badge}</div>
+      <div class="rv-row-spark">${spark}</div>
+      <div class="rv-row-arrow">›</div>
+    </div>`;
+}
+
+// Inline SVG sparkline on demerit scale (y=0 at bottom = perfect; spikes up = slips).
+// Nulls render as gaps (no line drawn across them).
+function rvSparkSvg(series, width, height) {
+  width = width || 170;
+  height = height || 34;
+  const pad = 2;
+  const n = series.length;
+  const yMin = 0, yMax = 1.5;
+  const y = v => {
+    const c = Math.max(yMin, Math.min(yMax, v));
+    return pad + (height - 2 * pad) * (1 - (c - yMin) / (yMax - yMin));
+  };
+  const x = i => pad + (width - 2 * pad) * (i / Math.max(1, n - 1));
+  const dem = rvDemeritSeries(series);
+
+  // Inverted threshold bands (green at bottom, red at top)
+  const bGood = `<rect x="0" y="${y(RV_DEM_GOOD).toFixed(1)}" width="${width}" height="${(y(0)         - y(RV_DEM_GOOD)).toFixed(1)}" fill="#d9efe0" opacity=".45"/>`;
+  const bMid  = `<rect x="0" y="${y(RV_DEM_MID).toFixed(1)}"  width="${width}" height="${(y(RV_DEM_GOOD) - y(RV_DEM_MID)).toFixed(1)}"  fill="#fdf3d6" opacity=".45"/>`;
+  const bBad  = `<rect x="0" y="${y(yMax).toFixed(1)}"        width="${width}" height="${(y(RV_DEM_MID)  - y(yMax)).toFixed(1)}"       fill="#fdf0ee" opacity=".45"/>`;
+
+  let d = '';
+  let pen = false;
+  for (let i = 0; i < n; i++) {
+    if (dem[i] == null) { pen = false; continue; }
+    d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(dem[i]).toFixed(1) + ' ';
+    pen = true;
+  }
+  const path = d ? `<path d="${d}" fill="none" stroke="#0d3528" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>` : '';
+
+  // Highlight the latest data point so the viewer knows where "now" is; color by severity.
+  let lastDot = '';
+  for (let i = n - 1; i >= 0; i--) {
+    if (dem[i] != null) {
+      const v = dem[i];
+      const color = v >= RV_DEM_MID ? '#b3331f' : v >= RV_DEM_GOOD ? '#b58410' : '#0d3528';
+      lastDot = `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.4" fill="${color}"/>`;
+      break;
+    }
+  }
+
+  return `<svg class="rv-spark" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">${bGood}${bMid}${bBad}${path}${lastDot}</svg>`;
+}
+
+// ── Drill-in ──
+function rvOpenDrill(pid) {
+  rvDrillPid = pid;
+  const main = document.getElementById('rv-main');
+  const drill = document.getElementById('rv-drill');
+  if (main) main.style.display = 'none';
+  if (drill) drill.style.display = 'block';
+  rvRenderDrill();
+  window.scrollTo(0, 0);
+}
+function rvBack() {
+  rvDrillPid = null;
+  const main = document.getElementById('rv-main');
+  const drill = document.getElementById('rv-drill');
+  if (drill) drill.style.display = 'none';
+  if (main) main.style.display = 'block';
+}
+
+function rvRenderDrill() {
+  const body = document.getElementById('rv-drill-body');
+  if (!body || !rvData || !rvDrillPid) return;
+  const pid = rvDrillPid;
+  const p = getProp(pid);
+  const pd = rvData.properties[pid];
+  if (!pd) { body.innerHTML = '<div class="rv-empty">No data for this property.</div>'; return; }
+
+  const avg12 = rvAvg(pd.overall);
+  const avg4  = rvAvg(pd.overall.slice(-4));
+  const total = rvSum(pd.counts);
+  const recent = rvSum(pd.counts.slice(-4));
+
+  body.innerHTML = `
+    <div class="rv-drill-head">
       <div>
-        <div style="font-size:.9rem;font-weight:700;color:var(--green);font-family:'Cormorant Garamond',serif">${_invMeta.period}</div>
-        <div style="font-size:.78rem;color:var(--text2)">${_invItems.length} items · ${propCount} properties · ${_invFmt(total)} total</div>
+        <div class="rv-drill-name">${escHtml(p?.name || pid)}</div>
+        <div class="rv-drill-meta">${total} review${total === 1 ? '' : 's'} in last 12 months · ${recent} in last 4 weeks</div>
       </div>
+      <span class="rv-badge ${rvBadgeClass(avg12)}" style="font-size:1rem;padding:6px 16px">${rvFmt(avg12)}</span>
     </div>
-    <div style="overflow-x:auto;max-height:380px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius)">
-      <table class="inv-table">
-        <thead><tr><th>Property</th><th>Date</th><th>Service</th><th style="text-align:right">Amount</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
+    <div class="rv-stats">
+      <div class="rv-stat"><div class="rv-stat-lbl">12-mo overall</div><div class="rv-stat-val">${rvFmt(avg12)}</div></div>
+      <div class="rv-stat"><div class="rv-stat-lbl">4-wk overall</div><div class="rv-stat-val">${rvFmt(avg4)}</div></div>
+      <div class="rv-stat"><div class="rv-stat-lbl">Total reviews (12 mo)</div><div class="rv-stat-val">${total}</div></div>
+      <div class="rv-stat"><div class="rv-stat-lbl">Reviews (4 wk)</div><div class="rv-stat-val">${recent}</div></div>
     </div>
-    <div style="display:flex;gap:8px;justify-content:space-between;margin-top:16px">
-      <button class="btn" onclick="invGoBack()">← Back</button>
-      <button class="btn btn-g" onclick="invStartVerification()">Verify with Hospitable →</button>
-    </div>
-  </div>`;
-}
-function invGoBack(){
-  _invItems=[];
-  document.getElementById('inv-body').innerHTML=_invStep1HTML();
-}
-
-// ── STEP 3: Verification + Results ────────────────────────────────────────────
-function invStartVerification(){
-  document.getElementById('inv-body').innerHTML=`
-    <div>
-      <div class="inv-progress" id="inv-pg-box">
-        <div class="inv-progress-track"><div class="inv-progress-fill" id="inv-pg-fill" style="width:0%"></div></div>
-        <div id="inv-pg-steps"></div>
+    <div class="rv-chart-wrap">
+      <div class="rv-chart-title">Stars below 5★ &mdash; <span style="color:var(--text3);font-weight:400">lower is better · flat on the baseline = perfect weeks</span></div>
+      <div class="rv-chart-legend">
+        <span><span class="dot" style="background:#0d3528"></span>≥ 4.8★ week</span>
+        <span><span class="dot" style="background:#b58410"></span>4.5 – 4.8★</span>
+        <span><span class="dot" style="background:#b3331f"></span>&lt; 4.5★</span>
+        <span style="margin-left:auto;color:var(--text3)">Hover a week for detail</span>
       </div>
-      <div id="inv-results" style="display:none"></div>
+      ${rvLineChartSvg(pd.overall, pd.counts, rvData.weeks)}
     </div>`;
-  _invRunVerification();
-}
-function _invSetProgress(pct,steps){
-  const fill=document.getElementById('inv-pg-fill');
-  const stepsEl=document.getElementById('inv-pg-steps');
-  if(fill) fill.style.width=pct+'%';
-  if(stepsEl) stepsEl.innerHTML=steps.map(s=>`<div class="inv-step-line ${s.cls||''}"><div class="inv-step-dot"></div>${s.text}</div>`).join('');
 }
 
-async function _invRunVerification(){
-  const propIds=[...new Set(_invItems.map(i=>i.propId))];
-  const fetchStart=_invShift(_invMeta.startDate,-1);
+// Demerit-scale line chart. y=0 (bottom) = perfect 5★ week. Spikes upward = slips.
+function rvLineChartSvg(overall, counts, weeks) {
+  const W = 720, H = 260;
+  const padL = 50, padR = 14, padT = 14, padB = 34;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const yMin = 0, yMax = 1.5;
+  const y = v => padT + innerH * (1 - (Math.max(yMin, Math.min(yMax, v)) - yMin) / (yMax - yMin));
+  const x = i => padL + innerW * (i / Math.max(1, overall.length - 1));
+  const demSeries = rvDemeritSeries(overall);
 
-  _invSetProgress(5,[{text:`Fetching data for ${propIds.length} properties…`,cls:'active'}]);
-
-  const propDeps={};   // propId → Set<date>
-  const propCal={};    // propId → {date → dayObj}
-  let fetchedD=0, fetchedC=0;
-  const errors=[];
-
-  const updatePg=()=>{
-    const pct=5+Math.round(((fetchedD+fetchedC)/(propIds.length*2))*77);
-    _invSetProgress(pct,[{text:`Departures: ${fetchedD}/${propIds.length} · Calendars: ${fetchedC}/${propIds.length}`,cls:'active'}]);
+  const buildPath = (series, color) => {
+    let d = '', pen = false;
+    for (let i = 0; i < series.length; i++) {
+      if (series[i] == null) { pen = false; continue; }
+      d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(series[i]).toFixed(1) + ' ';
+      pen = true;
+    }
+    return d ? `<path d="${d}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` : '';
   };
 
-  await Promise.all([
-    // ── Departure dates ────────────────────────────────────────────────────
-    ...propIds.map(async pid=>{
-      const deps=new Set();
-      try{
-        const url=new URL(PROXY_BASE+'/api/hospitable');
-        url.searchParams.set('action','reservations');
-        url.searchParams.set('pid',pid);
-        url.searchParams.set('start_date',_invMeta.startDate);
-        url.searchParams.set('end_date',_invMeta.endDate);
-        url.searchParams.set('date_query','checkout');
-        url.searchParams.set('per_page','200');
-        const r=await fetch(url.toString(),{signal:AbortSignal.timeout(20000)});
-        if(!r.ok) throw new Error('HTTP '+r.status);
-        const raw=await r.json();
-        const items=Array.isArray(raw)?raw
-          :Array.isArray(raw?.data)?raw.data
-          :Array.isArray(raw?.data?.data)?raw.data.data:[];
-        items.forEach(res=>{
-          const dep=(res.departure_date||'').split('T')[0];
-          if(dep>=_invMeta.startDate&&dep<=_invMeta.endDate) deps.add(dep);
-        });
-      }catch(e){ errors.push('DEP '+pid.slice(0,8)+': '+(e.message||String(e))); }
-      propDeps[pid]=deps; fetchedD++; updatePg();
-    }),
-    // ── Calendars ─────────────────────────────────────────────────────────
-    ...propIds.map(async pid=>{
-      const cal={};
-      try{
-        const url=new URL(PROXY_BASE+'/api/hospitable');
-        url.searchParams.set('action','calendar');
-        url.searchParams.set('pid',pid);
-        url.searchParams.set('start_date',fetchStart);
-        url.searchParams.set('end_date',_invMeta.endDate);
-        const r=await fetch(url.toString(),{signal:AbortSignal.timeout(20000)});
-        if(!r.ok) throw new Error('HTTP '+r.status);
-        const raw=await r.json();
-        const days=Array.isArray(raw?.data?.days)?raw.data.days
-          :Array.isArray(raw?.days)?raw.days
-          :Array.isArray(raw)?raw:[];
-        days.forEach(d=>{ if(d.date) cal[d.date]=d; });
-      }catch(e){ errors.push('CAL '+pid.slice(0,8)+': '+(e.message||String(e))); }
-      propCal[pid]=cal; fetchedC++; updatePg();
-    })
-  ]);
-
-  if(errors.length){
-    _invSetProgress(100,[
-      {text:`⚠️ ${errors.length} API error(s)`,cls:'active'},
-      ...errors.slice(0,3).map(e=>({text:e,cls:'active'}))
-    ]);
-    if(errors.length>=propIds.length*2){ return; } // everything failed
+  // Y-axis with dual labels (demerit + equivalent star rating)
+  let yAxis = '';
+  const ticks = [0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5];
+  for (const v of ticks) {
+    const yy = y(v);
+    yAxis += `<line x1="${padL}" y1="${yy.toFixed(1)}" x2="${W - padR}" y2="${yy.toFixed(1)}" stroke="#e3e8e4" stroke-width=".6"/>`;
+    const star = (5 - v).toFixed(2);
+    yAxis += `<text x="${padL - 6}" y="${(yy + 3).toFixed(1)}" font-size="10" text-anchor="end" fill="#7a8a80">${star}★</text>`;
   }
 
-  _invSetProgress(84,[
-    {text:`Data fetched for ${propIds.length} properties`,cls:'done'},
-    {text:'Building reservation gaps…',cls:'active'}
-  ]);
+  // Dashed zero-line baseline (perfect week)
+  const yZero = y(0);
+  const zeroLine = `<line x1="${padL}" y1="${yZero.toFixed(1)}" x2="${W - padR}" y2="${yZero.toFixed(1)}" stroke="#1f5a3a" stroke-width="1" stroke-dasharray="3,3" opacity=".5"/>`;
 
-  // ── Build gap map per property ─────────────────────────────────────────────
-  // A gap starts at each confirmed departure and extends through available days.
-  // Same-day turnovers (checkout AM, new guest PM) show as occupied in calendar
-  // but still anchor a gap because we have a confirmed departure for that date.
-  const propGapIds={};    // propId → {date → gapId}
-  const propGapStarts={}; // propId → {gapId → firstDate}
-
-  for(const pid of propIds){
-    const cal=propCal[pid];
-    const deps=propDeps[pid];
-    const allDates=Object.keys(cal)
-      .filter(d=>d>=_invMeta.startDate&&d<=_invMeta.endDate)
-      .sort();
-    let gapId=0;
-    const gapMap={}, gapStarts={};
-    for(const date of allDates){
-      const isDep=deps.has(date);
-      const isAvail=cal[date]?.status?.available===true;
-      const prevInGap=gapMap[_invShift(date,-1)]!=null;
-      if(isDep){
-        // Each departure is its own turnover — always a new gap
-        gapId++; gapStarts[gapId]=date; gapMap[date]=gapId;
-      } else if(isAvail&&prevInGap){
-        gapMap[date]=gapId; // extend current gap
-      } else if(isAvail&&!prevInGap){
-        gapId++; gapStarts[gapId]=date; gapMap[date]=gapId;
-      }
-      // occupied + no departure → not in a gap
-    }
-    propGapIds[pid]=gapMap; propGapStarts[pid]=gapStarts;
+  // x-axis: anchor rightmost label at current week, step backward by 4
+  let xAxis = '';
+  for (let i = weeks.length - 1; i >= 0; i -= 4) {
+    const lbl = new Date(weeks[i]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    xAxis += `<text x="${x(i).toFixed(1)}" y="${H - padB + 16}" font-size="10" text-anchor="middle" fill="#7a8a80">${escHtml(lbl)}</text>`;
   }
 
-  // ── Determine first clean per gap (duplicate detection) ───────────────────
-  const gapFirst={}; // `${propId}_${gapId}` → earliest clean date
-  [..._invItems]
-    .filter(i=>i.service==='Departure Clean')
-    .sort((a,b)=>a.date.localeCompare(b.date))
-    .forEach(item=>{
-      const gid=propGapIds[item.propId]?.[item.date];
-      if(gid!=null){
-        const key=`${item.propId}_${gid}`;
-        if(!gapFirst[key]) gapFirst[key]=item.date;
+  // Points sized by severity — bigger dots for bigger slips
+  let pts = '';
+  for (let i = 0; i < weeks.length; i++) {
+    if (demSeries[i] == null) continue;
+    const d = demSeries[i];
+    const r = d >= RV_DEM_MID ? 4.5 : d >= RV_DEM_GOOD ? 3.2 : 2.3;
+    const color = d >= RV_DEM_MID ? '#b3331f' : d >= RV_DEM_GOOD ? '#b58410' : '#0d3528';
+    pts += `<circle cx="${x(i).toFixed(1)}" cy="${y(d).toFixed(1)}" r="${r}" fill="${color}"/>`;
+  }
+
+  // Hover zones (invisible rects with <title> for native tooltip)
+  let hover = '';
+  const band = innerW / Math.max(1, weeks.length - 1);
+  for (let i = 0; i < weeks.length; i++) {
+    const dateLbl = new Date(weeks[i]).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const parts = [`Week of ${dateLbl}`];
+    if (overall[i] != null) {
+      parts.push(`Avg ${overall[i].toFixed(2)}★  (lost ${demSeries[i].toFixed(2)})`);
+    } else {
+      parts.push('No reviews');
+    }
+    if (counts[i]) parts.push(`${counts[i]} review${counts[i] === 1 ? '' : 's'}`);
+    const tip = parts.join(' · ');
+    hover += `<rect x="${(x(i) - band / 2).toFixed(1)}" y="${padT}" width="${band.toFixed(1)}" height="${innerH}" fill="transparent"><title>${escHtml(tip)}</title></rect>`;
+  }
+
+  return `<svg class="rv-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+    ${yAxis}
+    ${rvThresholdBands(padL, innerW, y, yMin, yMax)}
+    ${zeroLine}
+    ${buildPath(demSeries, '#0d3528')}
+    ${pts}
+    ${xAxis}
+    ${hover}
+  </svg>`;
+}
+
+// ── Portfolio overview (always visible above the property list) ──
+
+function rvSetPortfolioView(view) {
+  rvPortfolioView = view;
+  const tabs = document.querySelectorAll('#rv-tabs .rv-tab');
+  tabs.forEach(t => t.classList.toggle('active', t.getAttribute('data-view') === view));
+  rvRenderPortfolio();
+}
+
+// Weighted weekly portfolio average (weighted by review count) + per-week total volume.
+// Returns { avg: [52 nums|null], totalCounts: [52 ints] }
+function rvPortfolioAvgSeries() {
+  const weeks = rvData.weeks;
+  const avg = new Array(weeks.length).fill(null);
+  const totalCounts = new Array(weeks.length).fill(0);
+  for (let w = 0; w < weeks.length; w++) {
+    let sumRating = 0, sumN = 0;
+    for (const pid of Object.keys(rvData.properties)) {
+      const p = rvData.properties[pid];
+      const n = p.counts[w] || 0;
+      if (n > 0 && p.overall[w] != null) {
+        sumRating += p.overall[w] * n;
+        sumN += n;
       }
-    });
-
-  _invSetProgress(94,[
-    {text:'Data fetched and gaps built',cls:'done'},
-    {text:'Classifying line items…',cls:'active'}
-  ]);
-
-  // ── Classify each line item ───────────────────────────────────────────────
-  _invResult=_invItems.map(item=>{
-    const r={...item};
-
-    if(item.service==='Miscellaneous'){
-      r.status='misc'; r.statusLabel='Reimbursement'; r.statusClass='badge-yellow'; return r;
     }
-
-    const isDep=propDeps[item.propId]?.has(item.date)??false;
-    const calDay=propCal[item.propId]?.[item.date];
-    const isAvail=calDay?.status?.available===true;
-    const isOwner=!isAvail&&calDay?.status?.source_type==='USER';
-    const gid=propGapIds[item.propId]?.[item.date];
-    const gKey=gid!=null?`${item.propId}_${gid}`:null;
-    const isFirst=gKey!=null&&gapFirst[gKey]===item.date;
-
-    if(gKey!=null&&!isFirst){
-      r.status='duplicate'; r.statusLabel='Duplicate in Gap'; r.statusClass='badge-red';
-      r.duplicateOf=gapFirst[gKey]; return r;
-    }
-    if(isDep){ r.status='checkout'; r.statusLabel='Checkout Day'; r.statusClass='badge-green'; return r; }
-    if(isOwner){ r.status='owner_block'; r.statusLabel='Owner Block'; r.statusClass='badge-blue'; return r; }
-    if(isAvail){
-      const gStart=propGapStarts[item.propId]?.[gid];
-      const daysIn=gStart?_invDaysBetween(gStart,item.date):null;
-      r.status='gap_clean'; r.statusClass='badge-blue';
-      r.statusLabel=daysIn?`Gap Clean (+${daysIn}d)`:'Gap Clean';
-      r.daysIn=daysIn; r.gapStart=gStart; return r;
-    }
-    if(!calDay){ r.status='no_cal'; r.statusLabel='No Cal Data'; r.statusClass='badge-gray'; }
-    else { r.status='occupied'; r.statusLabel='Active Reservation'; r.statusClass='badge-red'; }
-    return r;
-  });
-
-  _invSetProgress(100,[
-    {text:'Data fetched and gaps built',cls:'done'},
-    {text:'Reconciliation complete',cls:'done'}
-  ]);
-
-  setTimeout(()=>{
-    document.getElementById('inv-pg-box').style.display='none';
-    const resEl=document.getElementById('inv-results');
-    if(resEl){ resEl.style.display='block'; resEl.innerHTML=_invResultsHTML(); }
-  },350);
+    totalCounts[w] = sumN;
+    avg[w] = sumN > 0 ? +(sumRating / sumN).toFixed(3) : null;
+  }
+  return { avg, totalCounts };
 }
 
-// ── Results rendering ──────────────────────────────────────────────────────────
-function _invResultsHTML(){
-  const actionable=_invResult.filter(i=>['occupied','duplicate','misc','no_cal'].includes(i.status));
-  const flagBadge=actionable.length?` <span style="background:#dc2626;color:#fff;border-radius:99px;padding:1px 7px;font-size:.72rem;font-weight:700">${actionable.length}</span>`:'';
-  return `<div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-      <div>
-        <div style="font-size:.88rem;font-weight:700;color:var(--green);font-family:'Cormorant Garamond',serif">${_invMeta.period} · ${_invMeta.vendor}</div>
-        <div style="font-size:.76rem;color:var(--text2)">${_invResult.length} items · ${_invFmt(_invResult.reduce((s,i)=>s+i.amount,0))}</div>
-      </div>
-      <button class="btn" onclick="invGoBack()" style="font-size:.78rem">← Start Over</button>
+function rvRenderPortfolio() {
+  const body = document.getElementById('rv-portfolio-body');
+  if (!body || !rvData) return;
+  if (rvPortfolioView === 'all')       body.innerHTML = rvRenderPortfolioAll();
+  else if (rvPortfolioView === 'byNb') body.innerHTML = rvRenderPortfolioByNb();
+  else                                 body.innerHTML = rvRenderPortfolioAvg();
+}
+
+// ── Shared SVG helpers for portfolio charts ──
+function rvPathFromSeries(series, x, y) {
+  let d = '', pen = false;
+  for (let i = 0; i < series.length; i++) {
+    if (series[i] == null) { pen = false; continue; }
+    d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(series[i]).toFixed(1) + ' ';
+    pen = true;
+  }
+  return d;
+}
+function rvYAxisSvg(y, yMin, yMax, x0, x1, step) {
+  let s = '';
+  for (let v = yMin; v <= yMax + 1e-6; v += step) {
+    const yy = y(v);
+    s += `<line x1="${x0}" y1="${yy.toFixed(1)}" x2="${x1}" y2="${yy.toFixed(1)}" stroke="#e3e8e4" stroke-width=".6"/>`;
+    s += `<text x="${x0 - 6}" y="${(yy + 3).toFixed(1)}" font-size="10" text-anchor="end" fill="#7a8a80">${v.toFixed(1)}</text>`;
+  }
+  return s;
+}
+function rvXAxisSvg(weeks, x, yBase, everyN) {
+  // Anchor rightmost label at the current week (last element), step backward
+  let s = '';
+  const step = everyN || 4;
+  for (let i = weeks.length - 1; i >= 0; i -= step) {
+    const lbl = new Date(weeks[i]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    s += `<text x="${x(i).toFixed(1)}" y="${yBase}" font-size="10" text-anchor="middle" fill="#7a8a80">${escHtml(lbl)}</text>`;
+  }
+  return s;
+}
+// Demerit-scale thresholds (lower = better).
+// Rating ≥4.8 → demerit ≤0.2 (green). 4.5–4.8 → 0.2–0.5 (yellow). <4.5 → >0.5 (red).
+const RV_DEM_GOOD = 0.2; // 5 - 4.8
+const RV_DEM_MID  = 0.5; // 5 - 4.5
+// Transform a rating (4.0–5.0) to demerit (stars lost below 5). Nulls preserved.
+function rvDemerit(r) { return r == null ? null : Math.max(0, 5 - r); }
+function rvDemeritSeries(series) { return series.map(rvDemerit); }
+// Draw threshold bands on a demerit-scale chart (y(0) = bottom, y(yMax) = top).
+function rvThresholdBands(x0, xW, y, yMin, yMax) {
+  // yMin is 0 for demerit; kept in signature for legacy callers.
+  const good = Math.min(RV_DEM_GOOD, yMax);
+  const mid  = Math.min(RV_DEM_MID, yMax);
+  return `
+    <rect x="${x0}" y="${y(good).toFixed(1)}" width="${xW}" height="${(y(0)    - y(good)).toFixed(1)}" fill="#d9efe0" opacity=".35"/>
+    <rect x="${x0}" y="${y(mid).toFixed(1)}"  width="${xW}" height="${(y(good) - y(mid)).toFixed(1)}"  fill="#fdf3d6" opacity=".35"/>
+    <rect x="${x0}" y="${y(yMax).toFixed(1)}" width="${xW}" height="${(y(mid)  - y(yMax)).toFixed(1)}" fill="#fdf0ee" opacity=".35"/>`;
+}
+
+// View 1: portfolio demerit (stars below 5) + review volume bars
+function rvRenderPortfolioAvg() {
+  const { avg, totalCounts } = rvPortfolioAvgSeries();
+  const weeks = rvData.weeks;
+  const W = 720, H = 240;
+  const padL = 52, padR = 34, padT = 14, padB = 32;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const yMin = 0;
+  const x   = i => padL + innerW * (i / Math.max(1, weeks.length - 1));
+  const maxCount = Math.max(1, ...totalCounts);
+  // Bars occupy bottom 30% of inner area — layered behind the line.
+  const barHMax = innerH * 0.3;
+  const barYBase = padT + innerH;
+  const barW = Math.max(2, (innerW / weeks.length) - 1);
+
+  const demAvg = rvDemeritSeries(avg);
+
+  // Dynamic y-axis ceiling: snap up to nearest 0.1 above the actual peak, min 0.3
+  const peakDem = Math.max(0, ...demAvg.filter(v => v != null));
+  const yMax = Math.max(0.3, Math.ceil((peakDem + 0.05) * 10) / 10);
+  const y   = v => padT + innerH * (1 - (Math.max(yMin, Math.min(yMax, v)) - yMin) / (yMax - yMin));
+
+  let bars = '';
+  for (let i = 0; i < weeks.length; i++) {
+    if (!totalCounts[i]) continue;
+    const h = (totalCounts[i] / maxCount) * barHMax;
+    bars += `<rect x="${(x(i) - barW / 2).toFixed(1)}" y="${(barYBase - h).toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" fill="#c9a84c" opacity=".35"><title>${escHtml(new Date(weeks[i]).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}))} · ${totalCounts[i]} review${totalCounts[i]===1?'':'s'}</title></rect>`;
+  }
+
+  const dPath = rvPathFromSeries(demAvg, x, y);
+  const pathEl = dPath ? `<path d="${dPath}" fill="none" stroke="#0d3528" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>` : '';
+
+  // Dashed zero baseline = perfect week
+  const yZero = y(0);
+  const zeroLine = `<line x1="${padL}" y1="${yZero.toFixed(1)}" x2="${W - padR}" y2="${yZero.toFixed(1)}" stroke="#1f5a3a" stroke-width="1" stroke-dasharray="3,3" opacity=".5"/>`;
+
+  // Severity-colored dots
+  let pts = '';
+  for (let i = 0; i < weeks.length; i++) {
+    if (demAvg[i] == null) continue;
+    const d = demAvg[i];
+    const r = d >= RV_DEM_MID ? 4.2 : d >= RV_DEM_GOOD ? 3.0 : 2.4;
+    const color = d >= RV_DEM_MID ? '#b3331f' : d >= RV_DEM_GOOD ? '#b58410' : '#0d3528';
+    const tip = `${new Date(weeks[i]).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} · avg ${avg[i].toFixed(2)}★ (lost ${d.toFixed(2)}) · ${totalCounts[i]} review${totalCounts[i]===1?'':'s'}`;
+    pts += `<circle cx="${x(i).toFixed(1)}" cy="${y(d).toFixed(1)}" r="${r}" fill="${color}"><title>${escHtml(tip)}</title></circle>`;
+  }
+
+  // Demerit y-axis with star-equivalent labels — ticks at standard thresholds + ceiling
+  let yAxis = '';
+  const stdTicks = [0, 0.2, 0.5, 1.0].filter(v => v < yMax - 1e-6);
+  const ticks = [...new Set([...stdTicks, yMax])].sort((a, b) => a - b);
+  for (const v of ticks) {
+    const yy = y(v);
+    yAxis += `<line x1="${padL}" y1="${yy.toFixed(1)}" x2="${W - padR}" y2="${yy.toFixed(1)}" stroke="#e3e8e4" stroke-width=".6"/>`;
+    yAxis += `<text x="${padL - 6}" y="${(yy + 3).toFixed(1)}" font-size="10" text-anchor="end" fill="#7a8a80">${(5 - v).toFixed(1)}★</text>`;
+  }
+
+  // Right-side count axis (bars)
+  const countTicks = [0, Math.round(maxCount / 2), maxCount];
+  let rightAxis = '';
+  for (const v of countTicks) {
+    if (v === 0) continue;
+    const h = (v / maxCount) * barHMax;
+    const yy = barYBase - h;
+    rightAxis += `<text x="${W - padR + 6}" y="${(yy + 3).toFixed(1)}" font-size="10" text-anchor="start" fill="#8f7624">${v}</text>`;
+  }
+  rightAxis += `<text x="${W - padR + 6}" y="${(barYBase + 3).toFixed(1)}" font-size="10" text-anchor="start" fill="#8f7624">0</text>`;
+
+  const totalReviews = totalCounts.reduce((s, n) => s + n, 0);
+  const weeksWithReviews = totalCounts.filter(n => n > 0).length;
+  const overallWeightedAvg = (() => {
+    let s = 0, n = 0;
+    for (let i = 0; i < avg.length; i++) if (avg[i] != null) { s += avg[i] * totalCounts[i]; n += totalCounts[i]; }
+    return n > 0 ? s / n : null;
+  })();
+  // Count weeks with visible slips (below 4.8★ → demerit > 0.2)
+  const slipWeeks = demAvg.filter(v => v != null && v > RV_DEM_GOOD).length;
+
+  return `
+    <div class="rv-chart-title">Stars below 5★ &mdash; <span style="color:var(--text3);font-weight:400">lower is better · flat on the baseline = perfect week</span></div>
+    <svg class="rv-portfolio-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+      ${yAxis}
+      ${rvThresholdBands(padL, innerW, y, yMin, yMax)}
+      ${bars}
+      ${zeroLine}
+      ${pathEl}
+      ${pts}
+      ${rvXAxisSvg(weeks, x, H - padB + 16, 4)}
+      ${rightAxis}
+    </svg>
+    <div class="rv-portfolio-legend">
+      <span><span class="swatch" style="background:#0d3528;border-radius:50%"></span>Portfolio weekly avg (stars below 5★, count-weighted)</span>
+      <span><span class="swatch" style="background:#b58410;border-radius:50%"></span>4.5 – 4.8★ week</span>
+      <span><span class="swatch" style="background:#b3331f;border-radius:50%"></span>&lt; 4.5★ week</span>
+      <span><span class="swatch" style="background:#c9a84c;opacity:.5"></span>Reviews that week</span>
     </div>
-    <div class="inv-tabs">
-      <div class="inv-tab active" onclick="invTab('summary',this)">Payment Summary</div>
-      <div class="inv-tab" onclick="invTab('flags',this)">⚠ Flags${flagBadge}</div>
-      <div class="inv-tab" onclick="invTab('detail',this)">Full Detail</div>
-    </div>
-    <div id="inv-panel-summary" class="inv-tab-panel active">${_invSummaryHTML()}</div>
-    <div id="inv-panel-flags"   class="inv-tab-panel">${_invFlagsHTML()}</div>
-    <div id="inv-panel-detail"  class="inv-tab-panel">${_invDetailHTML()}</div>
-  </div>`;
-}
-function invTab(name,el){
-  document.querySelectorAll('#inv-body .inv-tab').forEach(t=>t.classList.toggle('active',t===el));
-  ['summary','flags','detail'].forEach(n=>{
-    const p=document.getElementById('inv-panel-'+n);
-    if(p) p.classList.toggle('active',n===name);
-  });
-}
-
-function _invSummaryHTML(){
-  const groups={
-    individual:{label:'Individual Properties',sub:'Separate check per property',props:{},total:0,cleans:0},
-    umc:{label:'Upper Middle Creek (UMC)',sub:'One check — all UMC cabins',props:{},total:0,cleans:0},
-    prc:{label:'Paradise Ridge Cabins (PRC)',sub:'One check — all PRC cabins',props:{},total:0,cleans:0},
-  };
-  _invResult.forEach(item=>{
-    const g=groups[item.group]||groups.individual;
-    if(!g.props[item.propId]) g.props[item.propId]={name:item.propName,total:0,cleans:0,misc:0};
-    g.props[item.propId].total+=item.amount;
-    if(item.service==='Departure Clean') g.props[item.propId].cleans++;
-    else g.props[item.propId].misc+=item.amount;
-    g.total+=item.amount;
-    if(item.service==='Departure Clean') g.cleans++;
-  });
-  const grand=_invResult.reduce((s,i)=>s+i.amount,0);
-  let h='';
-  Object.entries(groups).forEach(([,g])=>{
-    const propList=Object.values(g.props).sort((a,b)=>a.name.localeCompare(b.name));
-    if(!propList.length) return;
-    h+=`<div class="inv-group-card">
-      <div class="inv-group-hdr">
-        <div><div class="inv-group-title">${g.label}</div><div class="inv-group-sub">${g.sub}</div></div>
-        <div style="text-align:right"><div class="inv-group-amt">${_invFmt(g.total)}</div><div class="inv-group-meta">${g.cleans} clean${g.cleans!==1?'s':''}</div></div>
-      </div>
-      ${propList.map(p=>`<div class="inv-prop-row">
-        <div><div class="inv-prop-name">${p.name}</div>${p.misc>0?`<div class="inv-prop-meta">Includes ${_invFmt(p.misc)} reimb.</div>`:''}</div>
-        <div class="inv-prop-amt">${_invFmt(p.total)}<br><span style="font-size:.72rem;color:var(--text2);font-weight:400">${p.cleans} clean${p.cleans!==1?'s':''}</span></div>
-      </div>`).join('')}
+    <div class="rv-portfolio-stats">
+      <span>12-mo portfolio avg: <strong>${rvFmt(overallWeightedAvg)}★</strong></span>
+      <span>Weeks with a slip (&lt; 4.8★): <strong>${slipWeeks} / ${weeksWithReviews}</strong></span>
+      <span>Reviews in window: <strong>${totalReviews}</strong></span>
     </div>`;
-  });
-  h+=`<div class="inv-grand-total"><div class="inv-grand-label">Total — All Properties</div><div class="inv-grand-amt">${_invFmt(grand)}</div></div>`;
-  return h;
 }
 
-function _invFlagsHTML(){
-  const errors=_invResult.filter(i=>['occupied','duplicate'].includes(i.status));
-  const misc=_invResult.filter(i=>i.status==='misc');
-  const unknown=_invResult.filter(i=>i.status==='no_cal');
-  const info=_invResult.filter(i=>['gap_clean','owner_block'].includes(i.status));
-  if(!errors.length&&!misc.length&&!unknown.length&&!info.length)
-    return '<div style="text-align:center;padding:32px;color:var(--text2)">✅ No flags — all items verified clean.</div>';
-  let h='';
-  if(errors.length){
-    h+=`<div class="inv-section-head">🚨 Requires Review Before Paying (${errors.length})</div>`;
-    errors.forEach(i=>{
-      let detail='';
-      if(i.status==='occupied') detail='No checkout found for this property on this date, but it shows an active reservation. Could be a same-day turnover not yet reflected in Hospitable, or a mid-stay clean. Verify with cleaner.';
-      if(i.status==='duplicate') detail=`Another clean already occurred in this same guest gap (first clean ${_invFmtD(i.duplicateOf)}). Two cleans in one open window — confirm both are legitimate.`;
-      h+=`<div class="inv-flag-card inv-flag-err"><div><div class="inv-flag-title">${i.propName} — ${_invFmtD(i.date)}</div><div class="inv-flag-detail">${detail}</div></div><div class="inv-flag-amt">${_invFmt(i.amount)}</div></div>`;
-    });
+// View 2: all 18 lines + bold portfolio avg (demerit scale)
+function rvRenderPortfolioAll() {
+  const weeks = rvData.weeks;
+  const W = 720, H = 260;
+  const padL = 52, padR = 14, padT = 14, padB = 32;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const yMin = 0, yMax = 1.5;
+  const y = v => padT + innerH * (1 - (Math.max(yMin, Math.min(yMax, v)) - yMin) / (yMax - yMin));
+  const x = i => padL + innerW * (i / Math.max(1, weeks.length - 1));
+
+  let thinPaths = '';
+  for (const pid of Object.keys(rvData.properties)) {
+    const series = rvData.properties[pid].overall;
+    const d = rvPathFromSeries(rvDemeritSeries(series), x, y);
+    if (!d) continue;
+    const color = rvColorForPid(pid);
+    const name = (getProp(pid) || {}).name || pid;
+    thinPaths += `<path d="${d}" fill="none" stroke="${color}" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" opacity=".55"><title>${escHtml(name)}</title></path>`;
   }
-  if(misc.length){
-    h+=`<div class="inv-section-head">Reimbursements (${misc.length})</div>`;
-    misc.forEach(i=>{
-      h+=`<div class="inv-flag-card inv-flag-warn"><div><div class="inv-flag-title">${i.propName} — ${_invFmtD(i.date)}</div><div class="inv-flag-detail">Miscellaneous charge — verify receipt and approve before paying.</div></div><div class="inv-flag-amt">${_invFmt(i.amount)}</div></div>`;
-    });
+
+  const { avg, totalCounts } = rvPortfolioAvgSeries();
+  const demAvg = rvDemeritSeries(avg);
+  const dAvg = rvPathFromSeries(demAvg, x, y);
+  const avgPath = dAvg ? `<path d="${dAvg}" fill="none" stroke="#0d3528" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>` : '';
+
+  // Dashed zero baseline
+  const yZero = y(0);
+  const zeroLine = `<line x1="${padL}" y1="${yZero.toFixed(1)}" x2="${W - padR}" y2="${yZero.toFixed(1)}" stroke="#1f5a3a" stroke-width="1" stroke-dasharray="3,3" opacity=".5"/>`;
+
+  // Y-axis with star-equivalent labels
+  let yAxis = '';
+  const ticks = [0, 0.2, 0.5, 1.0, 1.5];
+  for (const v of ticks) {
+    if (v > yMax + 1e-6) continue;
+    const yy = y(v);
+    yAxis += `<line x1="${padL}" y1="${yy.toFixed(1)}" x2="${W - padR}" y2="${yy.toFixed(1)}" stroke="#e3e8e4" stroke-width=".6"/>`;
+    yAxis += `<text x="${padL - 6}" y="${(yy + 3).toFixed(1)}" font-size="10" text-anchor="end" fill="#7a8a80">${(5 - v).toFixed(1)}★</text>`;
   }
-  if(unknown.length){
-    h+=`<div class="inv-section-head">No Calendar Data (${unknown.length})</div>`;
-    unknown.forEach(i=>{
-      h+=`<div class="inv-flag-card inv-flag-warn"><div><div class="inv-flag-title">${i.propName} — ${_invFmtD(i.date)}</div><div class="inv-flag-detail">Could not retrieve calendar data for this date. Manual verification required.</div></div><div class="inv-flag-amt">${_invFmt(i.amount)}</div></div>`;
-    });
+
+  // Hover zones for the portfolio avg line
+  let hover = '';
+  const band = innerW / Math.max(1, weeks.length - 1);
+  for (let i = 0; i < weeks.length; i++) {
+    const dateLbl = new Date(weeks[i]).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    const parts = [dateLbl];
+    if (avg[i] != null) parts.push(`Portfolio avg ${avg[i].toFixed(2)}★ (lost ${demAvg[i].toFixed(2)})`);
+    else parts.push('No reviews');
+    if (totalCounts[i]) parts.push(`${totalCounts[i]} review${totalCounts[i]===1?'':'s'}`);
+    hover += `<rect x="${(x(i) - band / 2).toFixed(1)}" y="${padT}" width="${band.toFixed(1)}" height="${innerH}" fill="transparent"><title>${escHtml(parts.join(' · '))}</title></rect>`;
   }
-  if(info.length){
-    h+=`<div class="inv-section-head">Informational — Valid but Noteworthy (${info.length})</div>`;
-    info.forEach(i=>{
-      let detail='';
-      if(i.status==='gap_clean') detail=i.daysIn?`Clean occurred ${i.daysIn} day${i.daysIn!==1?'s':''} after the previous checkout (gap started ${_invFmtD(i.gapStart)}). Property was open — looks fine.`:'Property was open on this date with no confirmed departure. Gap clean — looks fine.';
-      if(i.status==='owner_block') detail='Property was in an owner-blocked period (maintenance window). Clean during owner block is expected.';
-      h+=`<div class="inv-flag-card inv-flag-info"><div><div class="inv-flag-title">${i.propName} — ${_invFmtD(i.date)}</div><div class="inv-flag-detail">${detail}</div></div><div class="inv-flag-amt">${_invFmt(i.amount)}</div></div>`;
-    });
-  }
-  return h;
+
+  // Build neighborhood legend
+  const legend = NBS.map(nb =>
+    `<span><span class="swatch" style="background:${RV_NB_COLOR[nb.cls]}"></span>${escHtml(nb.name)}</span>`
+  ).join('');
+
+  return `
+    <div class="rv-chart-title">Stars below 5★ per property &mdash; <span style="color:var(--text3);font-weight:400">each thin line = one property · bold = portfolio average</span></div>
+    <svg class="rv-portfolio-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+      ${yAxis}
+      ${rvThresholdBands(padL, innerW, y, yMin, yMax)}
+      ${zeroLine}
+      ${thinPaths}
+      ${avgPath}
+      ${rvXAxisSvg(weeks, x, H - padB + 16, 4)}
+      ${hover}
+    </svg>
+    <div class="rv-portfolio-legend">
+      ${legend}
+      <span style="margin-left:auto"><span class="swatch" style="background:#0d3528;width:18px;height:3px;border-radius:2px;vertical-align:1px"></span>Portfolio avg</span>
+    </div>`;
 }
 
-function _invDetailHTML(){
-  const rows=_invResult.map(i=>`<tr>
-    <td style="font-size:.78rem">${i.propName}</td>
-    <td style="white-space:nowrap;font-size:.78rem">${_invFmtD(i.date)}</td>
-    <td style="font-size:.76rem">${i.service}</td>
-    <td><span class="badge ${i.statusClass}" style="font-size:.68rem">${i.statusLabel}</span></td>
-    <td style="text-align:right;font-weight:600;font-size:.8rem">${_invFmt(i.amount)}</td>
-  </tr>`).join('');
-  return `<div style="overflow-x:auto;max-height:460px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius)">
-    <table class="inv-table">
-      <thead><tr><th>Property</th><th>Date</th><th>Service</th><th>Status</th><th style="text-align:right">Amount</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-  </div>`;
+// View 3: 6 small multiples, one per neighborhood (demerit scale)
+function rvRenderPortfolioByNb() {
+  const weeks = rvData.weeks;
+  const yMin = 0, yMax = 1.5;
+  const cells = NBS.map(nb => {
+    // Build weighted weekly avg for this nb only
+    const nbAvg = new Array(weeks.length).fill(null);
+    const nbCount = new Array(weeks.length).fill(0);
+    for (let w = 0; w < weeks.length; w++) {
+      let sumR = 0, sumN = 0;
+      for (const pid of nb.props) {
+        const p = rvData.properties[pid];
+        if (!p) continue;
+        const n = p.counts[w] || 0;
+        if (n > 0 && p.overall[w] != null) { sumR += p.overall[w] * n; sumN += n; }
+      }
+      nbAvg[w] = sumN > 0 ? +(sumR / sumN).toFixed(3) : null;
+      nbCount[w] = sumN;
+    }
+    const nbTotalN = nbCount.reduce((s, n) => s + n, 0);
+    const nbOverall = (() => {
+      let s = 0, n = 0;
+      for (let i = 0; i < nbAvg.length; i++) if (nbAvg[i] != null) { s += nbAvg[i] * nbCount[i]; n += nbCount[i]; }
+      return n > 0 ? s / n : null;
+    })();
+
+    const W = 280, H = 100;
+    const padL = 28, padR = 4, padT = 6, padB = 14;
+    const innerW = W - padL - padR, innerH = H - padT - padB;
+    const y = v => padT + innerH * (1 - (Math.max(yMin, Math.min(yMax, v)) - yMin) / (yMax - yMin));
+    const x = i => padL + innerW * (i / Math.max(1, weeks.length - 1));
+    const color = RV_NB_COLOR[nb.cls] || '#0d3528';
+
+    let propPaths = '';
+    for (const pid of nb.props) {
+      const p = rvData.properties[pid];
+      if (!p) continue;
+      const d = rvPathFromSeries(rvDemeritSeries(p.overall), x, y);
+      if (!d) continue;
+      propPaths += `<path d="${d}" fill="none" stroke="${color}" stroke-width=".9" opacity=".45"/>`;
+    }
+    const dAvg = rvPathFromSeries(rvDemeritSeries(nbAvg), x, y);
+    const avgPath = dAvg ? `<path d="${dAvg}" fill="none" stroke="${color}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>` : '';
+
+    // Dashed zero baseline
+    const yZero = y(0);
+    const zeroLine = `<line x1="${padL}" y1="${yZero.toFixed(1)}" x2="${W - padR}" y2="${yZero.toFixed(1)}" stroke="${color}" stroke-width=".8" stroke-dasharray="3,3" opacity=".45"/>`;
+
+    // Mini y-axis ticks labeled as stars (0.0 dem → 5★, 0.5 dem → 4.5★, 1.0 dem → 4★)
+    let yticks = '';
+    for (const v of [0, 0.5, 1.0]) {
+      const yy = y(v);
+      yticks += `<line x1="${padL}" y1="${yy.toFixed(1)}" x2="${W - padR}" y2="${yy.toFixed(1)}" stroke="#e3e8e4" stroke-width=".5"/>`;
+      yticks += `<text x="${padL - 3}" y="${(yy + 3).toFixed(1)}" font-size="8" text-anchor="end" fill="#8aaa95">${(5 - v).toFixed(1)}★</text>`;
+    }
+
+    return `
+      <div class="rv-sm-cell">
+        <div class="rv-sm-head">
+          <span class="rv-sm-name" style="color:${color}">${escHtml(nb.name)}</span>
+          <span class="rv-sm-avg"><span class="rv-badge ${rvBadgeClass(nbOverall)}" style="font-size:.7rem;padding:2px 8px">${rvFmt(nbOverall)}</span></span>
+        </div>
+        <svg class="rv-sm-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+          ${rvThresholdBands(padL, innerW, y, yMin, yMax)}
+          ${yticks}
+          ${zeroLine}
+          ${propPaths}
+          ${avgPath}
+        </svg>
+        <div class="rv-sm-meta">${nb.props.length} propert${nb.props.length === 1 ? 'y' : 'ies'} · ${nbTotalN} review${nbTotalN === 1 ? '' : 's'}</div>
+      </div>`;
+  }).join('');
+
+  return `<div class="rv-sm-grid">${cells}</div>`;
 }
-// ═══════════════  END Invoice Reconciliation  ═══════════════
+
+function rvSetSection(name) {
+  if (name !== 'reviews' && name !== 'cleaning') name = 'reviews';
+  rvActiveSection = name;
+  const secR = document.getElementById('rv-section-reviews');
+  const secC = document.getElementById('rv-section-cleaning');
+  if (secR) secR.style.display = (name === 'reviews')  ? '' : 'none';
+  if (secC) secC.style.display = (name === 'cleaning') ? '' : 'none';
+  const tabR = document.getElementById('rv-sec-tab-reviews');
+  const tabC = document.getElementById('rv-sec-tab-cleaning');
+  if (tabR) tabR.classList.toggle('active', name === 'reviews');
+  if (tabC) tabC.classList.toggle('active', name === 'cleaning');
+  // Lazy-load cleaning data on first switch
+  if (name === 'cleaning' && !rvCleaningLoaded) {
+    rvCleaningLoaded = true;
+    if (typeof clLoaded !== 'undefined' && !clLoaded && !clFetching && typeof clFetch === 'function') {
+      clFetch();
+    }
+  }
+}
+
+function rvInit() {
+  // If a drill-in was open and user navigated away and back, restore list view
+  if (rvDrillPid && document.getElementById('rv-main') &&
+      document.getElementById('rv-main').style.display === 'none') {
+    // keep drill open if they left it open — nothing to do
+  }
+  if (!rvData && !rvFetching) rvFetchAll(false);
+  else rvRender();
+}
+
+// ═══════════════  END Reviews  ═══════════════
