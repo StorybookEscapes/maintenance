@@ -11849,7 +11849,7 @@ function openInvoiceReconciler(vendorName){
   _invVendor=vendorName; _invItems=[]; _invResult=null; _invMeta={}; _invRows=[];
   document.getElementById('inv-modal-title').textContent='Invoice Reconciliation — '+vendorName;
   document.getElementById('inv-body').innerHTML=_invStep1HTML();
-  openModal('inv-modal');
+  document.getElementById('inv-modal').classList.add('open');
 }
 
 function _invStep1HTML(){
