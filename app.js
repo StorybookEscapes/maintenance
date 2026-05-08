@@ -11821,11 +11821,12 @@ const INV_LISA_PROP_PATTERNS = [
   { pattern:/The Whispering Wand 3940/i,                 key:'umc10'       },
 ];
 
-let _invVendor = '';
-let _invItems  = [];
-let _invMeta   = {};
-let _invResult = null;
-let _invRows   = [];
+let _invVendor  = '';
+let _invItems   = [];
+let _invMeta    = {};
+let _invResult  = null;
+let _invRows    = [];
+let _invCalMode = 'full'; // 'full' | 'departure_only'
 
 function _invFmt(n){ return '$' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,','); }
 function _invFmtD(iso){ const [y,m,d]=iso.split('-'); return `${m}/${d}/${y}`; }
@@ -11846,7 +11847,7 @@ function _invFormatPeriod(s,e){
 function _invPropId(key){ return HOSPITABLE_IDS[key]||null; }
 
 function openInvoiceReconciler(vendorName){
-  _invVendor=vendorName; _invItems=[]; _invResult=null; _invMeta={}; _invRows=[];
+  _invVendor=vendorName; _invItems=[]; _invResult=null; _invMeta={}; _invRows=[]; _invCalMode='full';
   document.getElementById('inv-modal-title').textContent='Invoice Reconciliation — '+vendorName;
   document.getElementById('inv-body').innerHTML=_invStep1HTML();
   document.getElementById('inv-modal').classList.add('open');
@@ -12108,7 +12109,6 @@ function _invSetProgress(pct,steps){
 
 async function _invRunVerification(){
   const propIds=[...new Set(_invItems.map(i=>i.propId))];
-  const fetchStart=_invShift(_invMeta.startDate,-1);
   _invSetProgress(5,[{text:`Fetching data for ${propIds.length} properties…`,cls:'active'}]);
   const propDeps={};
   const propCal={};
@@ -12125,8 +12125,6 @@ async function _invRunVerification(){
         const url=new URL(PROXY_BASE+'/api/hospitable');
         url.searchParams.set('action','reservations');
         url.searchParams.set('pid',pid);
-        url.searchParams.set('start_date',_invMeta.startDate);
-        url.searchParams.set('end_date',_invMeta.endDate);
         url.searchParams.set('date_query','checkout');
         url.searchParams.set('per_page','200');
         const r=await fetch(url.toString(),{signal:AbortSignal.timeout(20000)});
@@ -12145,12 +12143,10 @@ async function _invRunVerification(){
     ...propIds.map(async pid=>{
       const cal={};
       try{
-        const url=new URL(PROXY_BASE+'/api/hospitable');
-        url.searchParams.set('action','calendar');
-        url.searchParams.set('pid',pid);
-        url.searchParams.set('start_date',fetchStart);
-        url.searchParams.set('end_date',_invMeta.endDate);
-        const r=await fetch(url.toString(),{signal:AbortSignal.timeout(20000)});
+        // No date params — matches how the rest of the app fetches the calendar.
+        // The proxy returns a rolling window; for past invoices we detect coverage below.
+        const url=`${PROXY_BASE}/api/hospitable?action=calendar&pid=${pid}`;
+        const r=await fetch(url,{signal:AbortSignal.timeout(20000)});
         if(!r.ok) throw new Error('HTTP '+r.status);
         const raw=await r.json();
         const days=Array.isArray(raw?.data?.days)?raw.data.days
@@ -12161,6 +12157,16 @@ async function _invRunVerification(){
       propCal[pid]=cal; fetchedC++; updatePg();
     })
   ]);
+  // Detect whether calendar data actually covers the invoice period for each property.
+  // If the calendar only returns future dates (common for past invoices), coverage = 0.
+  const propCalCoverage={};  // propId → true/false
+  for(const pid of propIds){
+    const hasCoverage=Object.keys(propCal[pid]||{})
+      .some(d=>d>=_invMeta.startDate&&d<=_invMeta.endDate);
+    propCalCoverage[pid]=hasCoverage;
+  }
+  const anyCalCoverage=Object.values(propCalCoverage).some(Boolean);
+  _invCalMode = anyCalCoverage ? 'full' : 'departure_only';
   if(errors.length){
     _invSetProgress(100,[
       {text:`⚠️ ${errors.length} API error(s)`,cls:'active'},
@@ -12217,6 +12223,14 @@ async function _invRunVerification(){
       r.status='misc'; r.statusLabel='Reimbursement'; r.statusClass='badge-yellow'; return r;
     }
     const isDep=propDeps[item.propId]?.has(item.date)??false;
+
+    // Departure-only mode: calendar has no data for the invoice period (past invoices)
+    if(!propCalCoverage[item.propId]){
+      if(isDep){ r.status='checkout'; r.statusLabel='Checkout Day'; r.statusClass='badge-green'; return r; }
+      r.status='no_departure'; r.statusLabel='No Checkout on Record'; r.statusClass='badge-gray'; return r;
+    }
+
+    // Full mode: calendar data available
     const calDay=propCal[item.propId]?.[item.date];
     const isAvail=calDay?.status?.available===true;
     const isOwner=!isAvail&&calDay?.status?.source_type==='USER';
@@ -12252,16 +12266,22 @@ async function _invRunVerification(){
 }
 
 function _invResultsHTML(){
-  const actionable=_invResult.filter(i=>['occupied','duplicate','misc','no_cal'].includes(i.status));
+  const actionable=_invResult.filter(i=>['occupied','duplicate','misc','no_cal','no_departure'].includes(i.status));
   const flagBadge=actionable.length?` <span style="background:#dc2626;color:#fff;border-radius:99px;padding:1px 7px;font-size:.72rem;font-weight:700">${actionable.length}</span>`:'';
+  const modeBanner=_invCalMode==='departure_only'
+    ?`<div style="padding:8px 12px;background:#f5e8c8;border:1px solid #d8b97a;border-radius:7px;font-size:.76rem;color:#7a5c00;margin-bottom:12px">
+        📅 <strong>Departure-record mode</strong> — Calendar data isn't available for ${_invMeta.period} (past month). Items verified against Hospitable checkout records only.
+      </div>`
+    :'';
   return `<div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
       <div>
         <div style="font-size:.88rem;font-weight:700;color:var(--green);font-family:'Cormorant Garamond',serif">${_invMeta.period} · ${_invMeta.vendor}</div>
         <div style="font-size:.76rem;color:var(--text2)">${_invResult.length} items · ${_invFmt(_invResult.reduce((s,i)=>s+i.amount,0))}</div>
       </div>
       <button class="btn" onclick="invGoBack()" style="font-size:.78rem">← Start Over</button>
     </div>
+    ${modeBanner}
     <div class="inv-tabs">
       <div class="inv-tab active" onclick="invTab('summary',this)">Payment Summary</div>
       <div class="inv-tab" onclick="invTab('flags',this)">⚠ Flags${flagBadge}</div>
@@ -12318,9 +12338,10 @@ function _invSummaryHTML(){
 function _invFlagsHTML(){
   const errors=_invResult.filter(i=>['occupied','duplicate'].includes(i.status));
   const misc=_invResult.filter(i=>i.status==='misc');
+  const noDep=_invResult.filter(i=>i.status==='no_departure');
   const unknown=_invResult.filter(i=>i.status==='no_cal');
   const info=_invResult.filter(i=>['gap_clean','owner_block'].includes(i.status));
-  if(!errors.length&&!misc.length&&!unknown.length&&!info.length)
+  if(!errors.length&&!misc.length&&!noDep.length&&!unknown.length&&!info.length)
     return '<div style="text-align:center;padding:32px;color:var(--text2)">✅ No flags — all items verified clean.</div>';
   let h='';
   if(errors.length){
@@ -12336,6 +12357,18 @@ function _invFlagsHTML(){
     h+=`<div class="inv-section-head">Reimbursements (${misc.length})</div>`;
     misc.forEach(i=>{
       h+=`<div class="inv-flag-card inv-flag-warn"><div><div class="inv-flag-title">${i.propName} — ${_invFmtD(i.date)}</div><div class="inv-flag-detail">Miscellaneous charge — verify receipt and approve before paying.</div></div><div class="inv-flag-amt">${_invFmt(i.amount)}</div></div>`;
+    });
+  }
+  if(noDep.length){
+    const label=_invCalMode==='departure_only'
+      ?`No Checkout on Record (${noDep.length})`
+      :`No Checkout on Record (${noDep.length})`;
+    h+=`<div class="inv-section-head">${label}</div>`;
+    noDep.forEach(i=>{
+      const detail=_invCalMode==='departure_only'
+        ?'No checkout was recorded in Hospitable for this property on this date. This may be a gap clean, owner-period clean, or a same-day turnover. Cross-check against your calendar before paying.'
+        :'No checkout and no calendar data found for this date. Verify manually.';
+      h+=`<div class="inv-flag-card inv-flag-warn"><div><div class="inv-flag-title">${i.propName} — ${_invFmtD(i.date)}</div><div class="inv-flag-detail">${detail}</div></div><div class="inv-flag-amt">${_invFmt(i.amount)}</div></div>`;
     });
   }
   if(unknown.length){
