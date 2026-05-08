@@ -12122,21 +12122,20 @@ async function _invRunVerification(){
     ...propIds.map(async pid=>{
       const deps=new Set();
       try{
-        const url=new URL(PROXY_BASE+'/api/hospitable');
-        url.searchParams.set('action','reservations');
-        url.searchParams.set('pid',pid);
-        url.searchParams.set('date_query','checkout');
-        url.searchParams.set('per_page','200');
-        const r=await fetch(url.toString(),{signal:AbortSignal.timeout(20000)});
+        // Exact same URL pattern as the rest of the app — no extra params that
+        // the proxy might not support. Filter to invoice period client-side.
+        const url=`${PROXY_BASE}/api/hospitable?action=reservations&pid=${pid}`;
+        const r=await fetch(url,{signal:AbortSignal.timeout(20000)});
         if(!r.ok) throw new Error('HTTP '+r.status);
         const raw=await r.json();
-        const items=Array.isArray(raw)?raw
-          :Array.isArray(raw?.data)?raw.data
-          :Array.isArray(raw?.data?.data)?raw.data.data:[];
-        items.forEach(res=>{
-          const dep=(res.departure_date||'').split('T')[0];
-          if(dep>=_invMeta.startDate&&dep<=_invMeta.endDate) deps.add(dep);
-        });
+        // Response is JSON:API format: { data: [...reservations] }
+        const items=Array.isArray(raw?.data)?raw.data:Array.isArray(raw)?raw:[];
+        items
+          .filter(rv=>rv.status!=='cancelled'&&rv.departure_date)
+          .forEach(rv=>{
+            const dep=rv.departure_date.split('T')[0];
+            if(dep>=_invMeta.startDate&&dep<=_invMeta.endDate) deps.add(dep);
+          });
       }catch(e){ errors.push('DEP '+pid.slice(0,8)+': '+(e.message||String(e))); }
       propDeps[pid]=deps; fetchedD++; updatePg();
     }),
