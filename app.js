@@ -12109,154 +12109,151 @@ function _invSetProgress(pct,steps){
 
 async function _invRunVerification(){
   const propIds=[...new Set(_invItems.map(i=>i.propId))];
-  _invSetProgress(5,[{text:`Fetching data for ${propIds.length} properties…`,cls:'active'}]);
-  const propDeps={};
-  const propCal={};
-  let fetchedD=0, fetchedC=0;
-  const errors=[];
-  const updatePg=()=>{
-    const pct=5+Math.round(((fetchedD+fetchedC)/(propIds.length*2))*77);
-    _invSetProgress(pct,[{text:`Departures: ${fetchedD}/${propIds.length} · Calendars: ${fetchedC}/${propIds.length}`,cls:'active'}]);
-  };
-  await Promise.all([
-    ...propIds.map(async pid=>{
+
+  // ── Determine if this is a past-month invoice ─────────────────────────────
+  // The proxy only returns upcoming reservations/calendar (starting from today),
+  // so Hospitable cross-check is only possible when the invoice period overlaps
+  // with today or the future.
+  const today=new Date().toISOString().split('T')[0];
+  const isPastInvoice=_invMeta.endDate < today;
+
+  if(isPastInvoice){
+    // ── Past-month mode: internal consistency checks only ─────────────────
+    // The proxy cannot return historical data, so we skip API calls entirely
+    // and check the invoice itself for duplicate line items.
+    _invCalMode='past_internal';
+    _invSetProgress(30,[{text:'Past invoice — running internal consistency checks…',cls:'active'}]);
+    await new Promise(r=>setTimeout(r,300));
+    _invSetProgress(80,[{text:'Checking for duplicate line items…',cls:'active'}]);
+    await new Promise(r=>setTimeout(r,200));
+
+    // Build a map of propId+date → first item index to detect duplicates
+    const seen={};
+    _invResult=_invItems.map((item,idx)=>{
+      const r={...item};
+      if(item.service==='Miscellaneous'){
+        r.status='misc'; r.statusLabel='Reimbursement'; r.statusClass='badge-yellow'; return r;
+      }
+      const key=`${item.propId}_${item.date}`;
+      if(seen[key]!=null){
+        // Second (or later) clean for same property on same date → definite duplicate
+        r.status='duplicate'; r.statusLabel='Duplicate Entry'; r.statusClass='badge-red';
+        r.duplicateOf=_invItems[seen[key]].date; return r;
+      }
+      seen[key]=idx;
+      r.status='ok'; r.statusLabel='OK'; r.statusClass='badge-green'; return r;
+    });
+
+  } else {
+    // ── Current/future mode: full Hospitable verification ─────────────────
+    _invCalMode='full';
+    _invSetProgress(5,[{text:`Fetching calendar for ${propIds.length} properties…`,cls:'active'}]);
+    const propDeps={};
+    const propCal={};
+    let fetched=0;
+    const errors=[];
+    const updatePg=()=>{
+      const pct=5+Math.round((fetched/propIds.length)*77);
+      _invSetProgress(pct,[{text:`Calendar: ${fetched}/${propIds.length} properties`,cls:'active'}]);
+    };
+
+    await Promise.all(propIds.map(async pid=>{
+      const cal={};
       const deps=new Set();
       try{
-        // Exact same URL pattern as the rest of the app — no extra params that
-        // the proxy might not support. Filter to invoice period client-side.
-        const url=`${PROXY_BASE}/api/hospitable?action=reservations&pid=${pid}`;
-        const r=await fetch(url,{signal:AbortSignal.timeout(20000)});
-        if(!r.ok) throw new Error('HTTP '+r.status);
-        const raw=await r.json();
-        // Response is JSON:API format: { data: [...reservations] }
-        const items=Array.isArray(raw?.data)?raw.data:Array.isArray(raw)?raw:[];
-        items
-          .filter(rv=>rv.status!=='cancelled'&&rv.departure_date)
-          .forEach(rv=>{
-            const dep=rv.departure_date.split('T')[0];
-            if(dep>=_invMeta.startDate&&dep<=_invMeta.endDate) deps.add(dep);
-          });
-      }catch(e){ errors.push('DEP '+pid.slice(0,8)+': '+(e.message||String(e))); }
-      propDeps[pid]=deps; fetchedD++; updatePg();
-    }),
-    ...propIds.map(async pid=>{
-      const cal={};
-      try{
-        // No date params — matches how the rest of the app fetches the calendar.
-        // The proxy returns a rolling window; for past invoices we detect coverage below.
         const url=`${PROXY_BASE}/api/hospitable?action=calendar&pid=${pid}`;
         const r=await fetch(url,{signal:AbortSignal.timeout(20000)});
         if(!r.ok) throw new Error('HTTP '+r.status);
         const raw=await r.json();
         const days=Array.isArray(raw?.data?.days)?raw.data.days
-          :Array.isArray(raw?.days)?raw.days
-          :Array.isArray(raw)?raw:[];
-        days.forEach(d=>{ if(d.date) cal[d.date]=d; });
-      }catch(e){ errors.push('CAL '+pid.slice(0,8)+': '+(e.message||String(e))); }
-      propCal[pid]=cal; fetchedC++; updatePg();
-    })
-  ]);
-  // Detect whether calendar data actually covers the invoice period for each property.
-  // If the calendar only returns future dates (common for past invoices), coverage = 0.
-  const propCalCoverage={};  // propId → true/false
-  for(const pid of propIds){
-    const hasCoverage=Object.keys(propCal[pid]||{})
-      .some(d=>d>=_invMeta.startDate&&d<=_invMeta.endDate);
-    propCalCoverage[pid]=hasCoverage;
-  }
-  const anyCalCoverage=Object.values(propCalCoverage).some(Boolean);
-  _invCalMode = anyCalCoverage ? 'full' : 'departure_only';
-  if(errors.length){
-    _invSetProgress(100,[
-      {text:`⚠️ ${errors.length} API error(s)`,cls:'active'},
-      ...errors.slice(0,3).map(e=>({text:e,cls:'active'}))
-    ]);
-    if(errors.length>=propIds.length*2){ return; }
-  }
-  _invSetProgress(84,[
-    {text:`Data fetched for ${propIds.length} properties`,cls:'done'},
-    {text:'Building reservation gaps…',cls:'active'}
-  ]);
-  const propGapIds={};
-  const propGapStarts={};
-  for(const pid of propIds){
-    const cal=propCal[pid];
-    const deps=propDeps[pid];
-    const allDates=Object.keys(cal)
-      .filter(d=>d>=_invMeta.startDate&&d<=_invMeta.endDate)
-      .sort();
-    let gapId=0;
-    const gapMap={}, gapStarts={};
-    for(const date of allDates){
-      const isDep=deps.has(date);
-      const isAvail=cal[date]?.status?.available===true;
-      const prevInGap=gapMap[_invShift(date,-1)]!=null;
-      if(isDep){
-        gapId++; gapStarts[gapId]=date; gapMap[date]=gapId;
-      } else if(isAvail&&prevInGap){
-        gapMap[date]=gapId;
-      } else if(isAvail&&!prevInGap){
-        gapId++; gapStarts[gapId]=date; gapMap[date]=gapId;
+          :Array.isArray(raw?.days)?raw.days:[];
+        days.forEach(d=>{
+          if(!d.date) return;
+          cal[d.date]=d;
+          // Calendar's RESERVED-to-available transition = departure
+          // (reason transitions from RESERVED to null/available)
+          if(d.status?.available===true){
+            const prev=_invShift(d.date,-1);
+            // Will be confirmed by gap logic; just note availability
+          }
+        });
+        // Also fetch reservations for departure date confirmation
+        const rRes=await fetch(`${PROXY_BASE}/api/hospitable?action=reservations&pid=${pid}`,
+          {signal:AbortSignal.timeout(20000)});
+        if(rRes.ok){
+          const rRaw=await rRes.json();
+          const items=Array.isArray(rRaw?.data)?rRaw.data:Array.isArray(rRaw)?rRaw:[];
+          items.filter(rv=>rv.status!=='cancelled'&&rv.departure_date).forEach(rv=>{
+            const dep=rv.departure_date.split('T')[0];
+            if(dep>=_invMeta.startDate&&dep<=_invMeta.endDate) deps.add(dep);
+          });
+        }
+      }catch(e){ errors.push(pid.slice(0,8)+': '+(e.message||String(e))); }
+      propCal[pid]=cal; propDeps[pid]=deps; fetched++; updatePg();
+    }));
+
+    _invSetProgress(84,[{text:'Building reservation gaps…',cls:'active'}]);
+
+    const propGapIds={}, propGapStarts={};
+    for(const pid of propIds){
+      const cal=propCal[pid]; const deps=propDeps[pid];
+      const allDates=Object.keys(cal)
+        .filter(d=>d>=_invMeta.startDate&&d<=_invMeta.endDate).sort();
+      let gapId=0;
+      const gapMap={}, gapStarts={};
+      for(const date of allDates){
+        const isDep=deps.has(date);
+        const isAvail=cal[date]?.status?.available===true;
+        const prevInGap=gapMap[_invShift(date,-1)]!=null;
+        if(isDep){ gapId++; gapStarts[gapId]=date; gapMap[date]=gapId; }
+        else if(isAvail&&prevInGap){ gapMap[date]=gapId; }
+        else if(isAvail&&!prevInGap){ gapId++; gapStarts[gapId]=date; gapMap[date]=gapId; }
       }
+      propGapIds[pid]=gapMap; propGapStarts[pid]=gapStarts;
     }
-    propGapIds[pid]=gapMap; propGapStarts[pid]=gapStarts;
-  }
-  const gapFirst={};
-  [..._invItems]
-    .filter(i=>i.service==='Departure Clean')
-    .sort((a,b)=>a.date.localeCompare(b.date))
-    .forEach(item=>{
+
+    const gapFirst={};
+    [..._invItems].filter(i=>i.service==='Departure Clean')
+      .sort((a,b)=>a.date.localeCompare(b.date))
+      .forEach(item=>{
+        const gid=propGapIds[item.propId]?.[item.date];
+        if(gid!=null){ const k=`${item.propId}_${gid}`; if(!gapFirst[k]) gapFirst[k]=item.date; }
+      });
+
+    _invSetProgress(94,[{text:'Classifying line items…',cls:'active'}]);
+
+    _invResult=_invItems.map(item=>{
+      const r={...item};
+      if(item.service==='Miscellaneous'){
+        r.status='misc'; r.statusLabel='Reimbursement'; r.statusClass='badge-yellow'; return r;
+      }
+      const isDep=propDeps[item.propId]?.has(item.date)??false;
+      const calDay=propCal[item.propId]?.[item.date];
+      const isAvail=calDay?.status?.available===true;
+      const isOwner=!isAvail&&calDay?.status?.source_type==='USER';
       const gid=propGapIds[item.propId]?.[item.date];
-      if(gid!=null){
-        const key=`${item.propId}_${gid}`;
-        if(!gapFirst[key]) gapFirst[key]=item.date;
+      const gKey=gid!=null?`${item.propId}_${gid}`:null;
+      const isFirst=gKey!=null&&gapFirst[gKey]===item.date;
+      if(gKey!=null&&!isFirst){
+        r.status='duplicate'; r.statusLabel='Duplicate in Gap'; r.statusClass='badge-red';
+        r.duplicateOf=gapFirst[gKey]; return r;
       }
-    });
-  _invSetProgress(94,[
-    {text:'Data fetched and gaps built',cls:'done'},
-    {text:'Classifying line items…',cls:'active'}
-  ]);
-  _invResult=_invItems.map(item=>{
-    const r={...item};
-    if(item.service==='Miscellaneous'){
-      r.status='misc'; r.statusLabel='Reimbursement'; r.statusClass='badge-yellow'; return r;
-    }
-    const isDep=propDeps[item.propId]?.has(item.date)??false;
-
-    // Departure-only mode: calendar has no data for the invoice period (past invoices)
-    if(!propCalCoverage[item.propId]){
       if(isDep){ r.status='checkout'; r.statusLabel='Checkout Day'; r.statusClass='badge-green'; return r; }
-      r.status='no_departure'; r.statusLabel='No Checkout on Record'; r.statusClass='badge-gray'; return r;
-    }
+      if(isOwner){ r.status='owner_block'; r.statusLabel='Owner Block'; r.statusClass='badge-blue'; return r; }
+      if(isAvail){
+        const gStart=propGapStarts[item.propId]?.[gid];
+        const daysIn=gStart?_invDaysBetween(gStart,item.date):null;
+        r.status='gap_clean'; r.statusClass='badge-blue';
+        r.statusLabel=daysIn?`Gap Clean (+${daysIn}d)`:'Gap Clean';
+        r.daysIn=daysIn; r.gapStart=gStart; return r;
+      }
+      if(!calDay){ r.status='no_cal'; r.statusLabel='No Cal Data'; r.statusClass='badge-gray'; }
+      else { r.status='occupied'; r.statusLabel='Active Reservation'; r.statusClass='badge-red'; }
+      return r;
+    });
+  }
 
-    // Full mode: calendar data available
-    const calDay=propCal[item.propId]?.[item.date];
-    const isAvail=calDay?.status?.available===true;
-    const isOwner=!isAvail&&calDay?.status?.source_type==='USER';
-    const gid=propGapIds[item.propId]?.[item.date];
-    const gKey=gid!=null?`${item.propId}_${gid}`:null;
-    const isFirst=gKey!=null&&gapFirst[gKey]===item.date;
-    if(gKey!=null&&!isFirst){
-      r.status='duplicate'; r.statusLabel='Duplicate in Gap'; r.statusClass='badge-red';
-      r.duplicateOf=gapFirst[gKey]; return r;
-    }
-    if(isDep){ r.status='checkout'; r.statusLabel='Checkout Day'; r.statusClass='badge-green'; return r; }
-    if(isOwner){ r.status='owner_block'; r.statusLabel='Owner Block'; r.statusClass='badge-blue'; return r; }
-    if(isAvail){
-      const gStart=propGapStarts[item.propId]?.[gid];
-      const daysIn=gStart?_invDaysBetween(gStart,item.date):null;
-      r.status='gap_clean'; r.statusClass='badge-blue';
-      r.statusLabel=daysIn?`Gap Clean (+${daysIn}d)`:'Gap Clean';
-      r.daysIn=daysIn; r.gapStart=gStart; return r;
-    }
-    if(!calDay){ r.status='no_cal'; r.statusLabel='No Cal Data'; r.statusClass='badge-gray'; }
-    else { r.status='occupied'; r.statusLabel='Active Reservation'; r.statusClass='badge-red'; }
-    return r;
-  });
-  _invSetProgress(100,[
-    {text:'Data fetched and gaps built',cls:'done'},
-    {text:'Reconciliation complete',cls:'done'}
-  ]);
+  _invSetProgress(100,[{text:'Done',cls:'done'}]);
   setTimeout(()=>{
     document.getElementById('inv-pg-box').style.display='none';
     const resEl=document.getElementById('inv-results');
@@ -12265,11 +12262,11 @@ async function _invRunVerification(){
 }
 
 function _invResultsHTML(){
-  const actionable=_invResult.filter(i=>['occupied','duplicate','misc','no_cal','no_departure'].includes(i.status));
+  const actionable=_invResult.filter(i=>['occupied','duplicate','misc','no_cal'].includes(i.status));
   const flagBadge=actionable.length?` <span style="background:#dc2626;color:#fff;border-radius:99px;padding:1px 7px;font-size:.72rem;font-weight:700">${actionable.length}</span>`:'';
-  const modeBanner=_invCalMode==='departure_only'
+  const modeBanner=_invCalMode==='past_internal'
     ?`<div style="padding:8px 12px;background:#f5e8c8;border:1px solid #d8b97a;border-radius:7px;font-size:.76rem;color:#7a5c00;margin-bottom:12px">
-        📅 <strong>Departure-record mode</strong> — Calendar data isn't available for ${_invMeta.period} (past month). Items verified against Hospitable checkout records only.
+        📅 <strong>Past invoice</strong> — Hospitable only provides upcoming reservation data, so live cross-check isn't available for ${_invMeta.period}. Invoice checked for internal duplicates. Payment summary is accurate — use your calendar to spot-check any line items.
       </div>`
     :'';
   return `<div>
@@ -12340,8 +12337,11 @@ function _invFlagsHTML(){
   const noDep=_invResult.filter(i=>i.status==='no_departure');
   const unknown=_invResult.filter(i=>i.status==='no_cal');
   const info=_invResult.filter(i=>['gap_clean','owner_block'].includes(i.status));
-  if(!errors.length&&!misc.length&&!noDep.length&&!unknown.length&&!info.length)
+  if(!errors.length&&!misc.length&&!noDep.length&&!unknown.length&&!info.length){
+    if(_invCalMode==='past_internal')
+      return '<div style="text-align:center;padding:32px;color:var(--text2)">✅ No duplicate entries found — invoice looks clean. Use Payment Summary to issue checks.</div>';
     return '<div style="text-align:center;padding:32px;color:var(--text2)">✅ No flags — all items verified clean.</div>';
+  }
   let h='';
   if(errors.length){
     h+=`<div class="inv-section-head">🚨 Requires Review Before Paying (${errors.length})</div>`;
@@ -12389,6 +12389,8 @@ function _invFlagsHTML(){
 }
 
 function _invDetailHTML(){
+  const modeNote=_invCalMode==='past_internal'
+    ?`<div style="font-size:.74rem;color:var(--text2);margin-bottom:10px;font-style:italic">Past invoice — status reflects internal duplicate check only, not Hospitable verification.</div>`:'';
   const rows=_invResult.map(i=>`<tr>
     <td style="font-size:.78rem">${i.propName}</td>
     <td style="white-space:nowrap;font-size:.78rem">${_invFmtD(i.date)}</td>
@@ -12396,7 +12398,7 @@ function _invDetailHTML(){
     <td><span class="badge ${i.statusClass}" style="font-size:.68rem">${i.statusLabel}</span></td>
     <td style="text-align:right;font-weight:600;font-size:.8rem">${_invFmt(i.amount)}</td>
   </tr>`).join('');
-  return `<div style="overflow-x:auto;max-height:460px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius)">
+  return `${modeNote}<div style="overflow-x:auto;max-height:460px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius)">
     <table class="inv-table">
       <thead><tr><th>Property</th><th>Date</th><th>Service</th><th>Status</th><th style="text-align:right">Amount</th></tr></thead>
       <tbody>${rows}</tbody>
