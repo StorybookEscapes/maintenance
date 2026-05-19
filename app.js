@@ -523,25 +523,54 @@ async function load() {
 }
 async function save(k,v){try{await S.set(k,JSON.stringify(v));}catch(e){}}
 
-// ── Safe task save with shrinkage guard ──
-// Prevents catastrophic overwrites: if the task array shrank by more than
-// 50% compared to what was loaded, require explicit confirmation.
+// ── Read-before-write merge helper ────────────────────────────────────────────
+// Fetches the current server state and merges any items added by other admins
+// since this page loaded. Local edits always win for items this admin touched;
+// items that exist on the server but not locally (added by another admin) are
+// folded in. Prevents simultaneous admins from clobbering each other's additions.
+async function _rbwMerge(kvKey, localArray, idField='id') {
+  try {
+    const r = await S.get(kvKey);
+    if (!r?.value) return localArray;
+    const serverArray = JSON.parse(r.value);
+    if (!Array.isArray(serverArray)) return localArray;
+    const localIds = new Set(localArray.map(x => x[idField]));
+    const serverOnly = serverArray.filter(x => x[idField] && !localIds.has(x[idField]));
+    if (!serverOnly.length) return localArray;
+    console.log(`[rbw] ${kvKey}: merged ${serverOnly.length} item(s) added by another admin`);
+    return [...localArray, ...serverOnly];
+  } catch(e) {
+    console.warn(`[rbw] ${kvKey}: read-before-write failed, using local state`);
+    return localArray;
+  }
+}
+
+// ── Safe task save with shrinkage guard + read-before-write ──────────────────
 const saveTasks = async () => {
   if (!tasksLoadedOk) {
     console.error('[SAFETY] saveTasks() BLOCKED — initial load failed. Reload the page with a working connection.');
     showToast('\u26a0\ufe0f Task save blocked — data did not load properly. Please reload.','','',8000);
     return;
   }
-  // Shrinkage guard: if we loaded N tasks and now have much fewer, warn
+  // Read-before-write: fold in any tasks added by other admins since page load
+  tasks = await _rbwMerge('se_t', tasks);
+  // Shrinkage guard: if merged result is still drastically smaller than baseline, block
   if (_tasksLoadedCount > 5 && tasks.length < _tasksLoadedCount * 0.5) {
     console.error(`[SAFETY] saveTasks() BLOCKED — drastic shrinkage detected (${_tasksLoadedCount} → ${tasks.length}). This looks like accidental data loss.`);
     showToast(`\u26a0\ufe0f Save blocked: task count dropped from ${_tasksLoadedCount} to ${tasks.length}. This may be a bug — reload to recover.`,'','',10000);
     return;
   }
+  _tasksLoadedCount = tasks.length; // keep baseline current after merge
   await save('se_t', tasks);
 };
-const saveVendors=()=>save('se_v',vendors);
-const saveRec=()=>save('se_r',recurring);
+const saveVendors = async () => {
+  vendors = await _rbwMerge('se_v', vendors);
+  await save('se_v', vendors);
+};
+const saveRec = async () => {
+  recurring = await _rbwMerge('se_r', recurring);
+  await save('se_r', recurring);
+};
 
 // ── Task Change Log ──────────────────────────────────────────
 // Persistent audit trail stored in se_t_log (separate from task data).
