@@ -488,6 +488,10 @@ function updateSyncStatus(state){
 // task list with a small/empty array.  2026-04-11 post-mortem fix.
 let tasksLoadedOk = false;
 let _tasksLoadedCount = 0; // how many tasks were in KV at boot
+// Tombstones: IDs of tasks this admin intentionally deleted this session.
+// The read-before-write merge would otherwise re-add them (they still exist
+// on the server at save time), silently undoing the delete. 2026-06-02 fix.
+const _deletedTaskIds = new Set();
 
 async function load() {
   try {
@@ -528,14 +532,16 @@ async function save(k,v){try{await S.set(k,JSON.stringify(v));}catch(e){}}
 // since this page loaded. Local edits always win for items this admin touched;
 // items that exist on the server but not locally (added by another admin) are
 // folded in. Prevents simultaneous admins from clobbering each other's additions.
-async function _rbwMerge(kvKey, localArray, idField='id') {
+async function _rbwMerge(kvKey, localArray, idField='id', excludeIds=null) {
   try {
     const r = await S.get(kvKey);
     if (!r?.value) return localArray;
     const serverArray = JSON.parse(r.value);
     if (!Array.isArray(serverArray)) return localArray;
     const localIds = new Set(localArray.map(x => x[idField]));
-    const serverOnly = serverArray.filter(x => x[idField] && !localIds.has(x[idField]));
+    let serverOnly = serverArray.filter(x => x[idField] && !localIds.has(x[idField]));
+    // Don't resurrect items this admin intentionally deleted this session.
+    if (excludeIds && excludeIds.size) serverOnly = serverOnly.filter(x => !excludeIds.has(x[idField]));
     if (!serverOnly.length) return localArray;
     console.log(`[rbw] ${kvKey}: merged ${serverOnly.length} item(s) added by another admin`);
     return [...localArray, ...serverOnly];
@@ -553,7 +559,8 @@ const saveTasks = async () => {
     return;
   }
   // Read-before-write: fold in any tasks added by other admins since page load
-  tasks = await _rbwMerge('se_t', tasks);
+  // (but never resurrect tasks this admin just deleted — see _deletedTaskIds).
+  tasks = await _rbwMerge('se_t', tasks, 'id', _deletedTaskIds);
   // Shrinkage guard: if merged result is still drastically smaller than baseline, block
   if (_tasksLoadedCount > 5 && tasks.length < _tasksLoadedCount * 0.5) {
     console.error(`[SAFETY] saveTasks() BLOCKED — drastic shrinkage detected (${_tasksLoadedCount} → ${tasks.length}). This looks like accidental data loss.`);
@@ -1862,7 +1869,7 @@ window._gsAssignVendor=function(taskIds){
 function bulkDelete(){
   const sel=_getSelectedTasks();if(!sel.length){showToast('No tasks selected');return;}
   if(!confirm('Permanently delete '+sel.length+' task(s)? This cannot be undone.'))return;
-  sel.forEach(t=>{logTaskChange('bulk_delete',t);const idx=tasks.indexOf(t);if(idx!==-1)tasks.splice(idx,1);});
+  sel.forEach(t=>{logTaskChange('bulk_delete',t);_deletedTaskIds.add(t.id);const idx=tasks.indexOf(t);if(idx!==-1)tasks.splice(idx,1);});
   _selectedTasks.clear();
   saveTasks();renderAll();updateBulkBar();
   showToast(sel.length+' task'+(sel.length!==1?'s':'')+' deleted');
@@ -2205,6 +2212,7 @@ async function clearDate(px){
   disp.textContent='Select a date...';disp.className='dp-ph';
   document.getElementById('d-dp-btn').classList.remove('has-val');
   document.getElementById('d-dp-popup').style.display='none';
+  const _clrBtn=document.getElementById('d-clear-inline');if(_clrBtn)_clrBtn.style.display='none';
   document.getElementById('d-status').value=t.status;
   await saveTasks();
   renderDetailBadges(t);
@@ -2894,6 +2902,8 @@ async function openDetail(id){
   document.getElementById('d-date').value=dv;
   if(dv){document.getElementById('d-dp-display').textContent=fmtDate(dv);document.getElementById('d-dp-display').className='';document.getElementById('d-dp-btn').classList.add('has-val');}
   else{document.getElementById('d-dp-display').textContent='Select a date...';document.getElementById('d-dp-display').className='dp-ph';document.getElementById('d-dp-btn').classList.remove('has-val');}
+  // Show the inline "Clear date" control only when a date is set.
+  const _clrBtn=document.getElementById('d-clear-inline');if(_clrBtn)_clrBtn.style.display=dv?'block':'none';
   // Interactive badge row (category + status + urgent)
   renderDetailBadges(t);
   // Vendor contact row
@@ -4720,9 +4730,10 @@ async function deleteTask(){
   const deleted=tasks.find(x=>x.id===detailId);if(!deleted)return;
   const idx=tasks.indexOf(deleted);
   logTaskChange('deleted',deleted);
+  _deletedTaskIds.add(deleted.id);                 // tombstone so the rbw merge can't resurrect it
   tasks=tasks.filter(x=>x.id!==detailId);await saveTasks();
   closeModal('detail-modal');renderAll();
-  showToast('Task deleted.','',async()=>{tasks.splice(idx,0,deleted);await saveTasks();renderAll();showToast('Task restored.');});
+  showToast('Task deleted.','',async()=>{_deletedTaskIds.delete(deleted.id);tasks.splice(idx,0,deleted);await saveTasks();renderAll();showToast('Task restored.');});
 }
 
 // PROPERTY HISTORY
