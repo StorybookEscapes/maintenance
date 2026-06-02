@@ -90,6 +90,15 @@ main{flex:1;padding:22px;max-width:1440px;margin:0 auto;width:100%}
 .nbb-sevierville{background:var(--sevierville)}
 .nbb-hillside{background:var(--hillside)}
 .nbb-other{background:#6b7c6e}
+/* Two-column status view: Unscheduled (left) | Scheduled (right), neighborhood-aligned */
+.cat-grid{display:grid;grid-template-columns:1fr 1fr;column-gap:24px;align-items:start}
+.cat-col-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid var(--border)}
+.cat-col-title{font-size:.68rem;text-transform:uppercase;letter-spacing:1.5px;color:var(--green);font-weight:700}
+.cat-col-count{font-size:.68rem;background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:20px;padding:2px 9px;font-weight:700;letter-spacing:.5px}
+.nb-cell{margin-bottom:14px}
+.nb-cell:empty{margin-bottom:0}
+.nb-cell>.nb-banner:first-child{margin-top:0}
+@media(max-width:780px){.cat-grid{grid-template-columns:1fr;column-gap:0}}
 .tc{background:var(--white);border:1px solid var(--border);border-left-width:3px;border-radius:var(--radius);padding:9px 12px;cursor:pointer;transition:all .15s;box-shadow:var(--shadow)}
 .tc:hover{box-shadow:var(--shadow-md)}
 .tc.done{opacity:.5}

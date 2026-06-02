@@ -1053,71 +1053,45 @@ function renderTasks(){
     const da=a.date||'9999';const db=b.date||'9999';return da.localeCompare(db);
   });
 
-  let html='';
-  if(needsScheduling.length){
-    // Urgent floats to top as flat list; non-urgent grouped by property A→Z
-    // with a colored neighborhood banner inserted at each boundary.
-    const urgentList=needsScheduling.filter(t=>t.urgent);
-    const nonUrgent=needsScheduling.filter(t=>!t.urgent);
-    const nsGroups={};
-    nonUrgent.forEach(t=>{if(!nsGroups[t.property])nsGroups[t.property]=[];nsGroups[t.property].push(t);});
-    const nsPropIds=Object.keys(nsGroups).sort((a,b)=>{const pa=getProp(a);const pb=getProp(b);return(pa?pa.name:a).localeCompare(pb?pb.name:b);});
-    let nsInner='';
-    if(urgentList.length)nsInner+=`<div class="task-list">${urgentList.map(taskCard).join('')}</div>`;
-    let nsCurNb=null,nsBucket=[];
-    const nsFlush=()=>{
-      if(!nsBucket.length)return;
-      const nb=nsCurNb,nbName=nb?nb.name:'Other',nbCls=nb?nb.cls:'other';
-      const nbTaskCount=nsBucket.reduce((s,pid)=>s+nsGroups[pid].length,0);
-      const cabinCount=nsBucket.length;
-      const countLabel=cabinCount>1?`${nbTaskCount} task${nbTaskCount!==1?'s':''} · ${cabinCount} cabins`:`${nbTaskCount} task${nbTaskCount!==1?'s':''}`;
-      nsInner+=`<div class="nb-banner nbb-${nbCls}"><span>${nbName}</span><span class="nb-banner-count">${countLabel}</span></div>`;
-      nsInner+=`<div class="task-list">${nsBucket.map(pid=>nsGroups[pid].map(taskCard).join('')).join('')}</div>`;
-      nsBucket=[];
-    };
-    nsPropIds.forEach(pid=>{
-      const nb=getNb(pid),curId=nsCurNb?nsCurNb.id:null,newId=nb?nb.id:null;
-      if(curId!==newId){nsFlush();nsCurNb=nb;}
-      nsBucket.push(pid);
+  // ── Neighborhood-aligned two-column layout ──
+  // Unscheduled (left) and Scheduled (right) sit side by side. Both columns
+  // walk neighborhoods in the same canonical NBS order, so each neighborhood
+  // occupies one aligned row across the two columns (Gatlinburg-left lines up
+  // with Gatlinburg-right). Within a neighborhood, properties sort A→Z; task
+  // order within a property is preserved from the pre-group sort (urgent
+  // first, then date ascending) so overdue items still surface near the top.
+  const buildNbCells=(arr)=>{
+    const groups={};
+    arr.forEach(t=>{(groups[t.property]=groups[t.property]||[]).push(t);});
+    const cells={}; // nbId -> {nb, pids:[], html}
+    Object.keys(groups).forEach(pid=>{
+      const nb=getNb(pid),nbId=nb?nb.id:'__other';
+      (cells[nbId]=cells[nbId]||{nb,pids:[]}).pids.push(pid);
     });
-    nsFlush();
-    html+=`<div class="cat-section">
-      <div class="cat-section-hdr"><span class="cat-section-title">Needs Scheduling</span><span class="cat-section-count">${needsScheduling.length}</span></div>
-      ${nsInner}
-    </div>`;
-  }
-  if(scheduled.length){
-    // Same treatment as Needs Scheduling: grouped by property A→Z with a
-    // colored neighborhood banner at each boundary. Within each property
-    // group, tasks keep the pre-group sort order (urgent first, then date
-    // ascending) so overdue items still surface near the top of their group.
-    const scGroups={};
-    scheduled.forEach(t=>{if(!scGroups[t.property])scGroups[t.property]=[];scGroups[t.property].push(t);});
-    const scPropIds=Object.keys(scGroups).sort((a,b)=>{const pa=getProp(a);const pb=getProp(b);return(pa?pa.name:a).localeCompare(pb?pb.name:b);});
-    let scInner='';
-    let scCurNb=null,scBucket=[];
-    const scFlush=()=>{
-      if(!scBucket.length)return;
-      const nb=scCurNb,nbName=nb?nb.name:'Other',nbCls=nb?nb.cls:'other';
-      const nbTaskCount=scBucket.reduce((s,pid)=>s+scGroups[pid].length,0);
-      const cabinCount=scBucket.length;
-      const countLabel=cabinCount>1?`${nbTaskCount} task${nbTaskCount!==1?'s':''} · ${cabinCount} cabins`:`${nbTaskCount} task${nbTaskCount!==1?'s':''}`;
-      scInner+=`<div class="nb-banner nbb-${nbCls}"><span>${nbName}</span><span class="nb-banner-count">${countLabel}</span></div>`;
-      scInner+=`<div class="task-list">${scBucket.map(pid=>scGroups[pid].map(taskCard).join('')).join('')}</div>`;
-      scBucket=[];
-    };
-    scPropIds.forEach(pid=>{
-      const nb=getNb(pid),curId=scCurNb?scCurNb.id:null,newId=nb?nb.id:null;
-      if(curId!==newId){scFlush();scCurNb=nb;}
-      scBucket.push(pid);
+    Object.values(cells).forEach(c=>{
+      c.pids.sort((a,b)=>{const pa=getProp(a),pb=getProp(b);return(pa?pa.name:a).localeCompare(pb?pb.name:b);});
+      const nb=c.nb,nbName=nb?nb.name:'Other',nbCls=nb?nb.cls:'other';
+      const taskCount=c.pids.reduce((s,pid)=>s+groups[pid].length,0);
+      const cabinCount=c.pids.length;
+      const countLabel=cabinCount>1?`${taskCount} task${taskCount!==1?'s':''} · ${cabinCount} cabins`:`${taskCount} task${taskCount!==1?'s':''}`;
+      const cards=c.pids.map(pid=>groups[pid].map(taskCard).join('')).join('');
+      c.html=`<div class="nb-banner nbb-${nbCls}"><span>${nbName}</span><span class="nb-banner-count">${countLabel}</span></div><div class="task-list">${cards}</div>`;
     });
-    scFlush();
-    html+=`<div class="cat-section">
-      <div class="cat-section-hdr"><span class="cat-section-title">Scheduled</span><span class="cat-section-count">${scheduled.length}</span></div>
-      ${scInner}
-    </div>`;
-  }
-  el.innerHTML=html;
+    return cells;
+  };
+  const nsCells=buildNbCells(needsScheduling);
+  const scCells=buildNbCells(scheduled);
+  const orderedNbIds=[...NBS.map(nb=>nb.id),'__other'];
+  const seenIds=new Set([...Object.keys(nsCells),...Object.keys(scCells)]);
+  let gridInner='';
+  gridInner+=`<div class="cat-col-hdr"><span class="cat-col-title">Unscheduled</span><span class="cat-col-count">${needsScheduling.length}</span></div>`;
+  gridInner+=`<div class="cat-col-hdr"><span class="cat-col-title">Scheduled</span><span class="cat-col-count">${scheduled.length}</span></div>`;
+  orderedNbIds.forEach(nbId=>{
+    if(!seenIds.has(nbId))return;
+    const L=nsCells[nbId],R=scCells[nbId];
+    gridInner+=`<div class="nb-cell">${L?L.html:''}</div><div class="nb-cell">${R?R.html:''}</div>`;
+  });
+  el.innerHTML=`<div class="cat-grid">${gridInner}</div>`;
 }
 function setCatFilter(c,btn){catFilter=c;document.querySelectorAll('.fb').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderTasks();}
 function setPropFilter(v){propFilter=v;renderTasks();}
