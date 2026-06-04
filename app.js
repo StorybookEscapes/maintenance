@@ -4467,6 +4467,9 @@ async function vdQuickComplete(id,e){
 }
 
 function checkAdminPaymentPrompt(justCompleted){
+  // Venmo/Cash App payment-request feature SUNSET 2026-06-04 — admin "Open
+  // Venmo to Pay" banner disabled. Code retained for revert; delete this return to re-enable.
+  return;
   if(!justCompleted.vendorPaymentRequested)return;
   if(!justCompleted.vendor||!justCompleted.date)return;
   const group=PAY_GROUPS.find(g=>g.props.includes(justCompleted.property));
@@ -8459,6 +8462,9 @@ async function rpQuickDelivered(id) {
   }
 
   function checkPaymentPrompt(justCompletedTaskId){
+    // Venmo/Cash App payment-request feature SUNSET 2026-06-04 — vendor-facing
+    // request popup disabled. Code retained for revert; delete this return to re-enable.
+    return;
     // Skip payment prompt entirely if no payment methods enabled for this vendor
     if(!vPayMethods||vPayMethods.length===0)return;
     const justDone=vTasks.find(t=>t.id===justCompletedTaskId);
