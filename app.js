@@ -11922,22 +11922,29 @@ function invHandleFile(file){
       }
       statusEl.textContent='Parsing line items…';
       const items=_invParseLisaPdf(text);
-      if(!items.length){
+      // Adjustments live in a separate table at the bottom of the invoice
+      // ("Adjustment Note / type / Amount") — e.g. an extra Bearadise clean
+      // booked as "Bearadise 5/31/2026 ( + ) $800.00". Parse them separately
+      // so they're never silently dropped. 2026-06-05 fix.
+      const adjustments=_invParseAdjustments(text);
+      if(!items.length&&!adjustments.length){
         statusEl.className='inv-parse-notice inv-notice-err';
         statusEl.textContent='Could not find any invoice line items in this PDF. Make sure this is a LJ Cleaning invoice.';
         return;
       }
-      _invItems=items;
-      const dates=items.map(i=>i.date).sort();
+      _invItems=[...items,...adjustments].sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+      const dates=_invItems.map(i=>i.date).filter(Boolean).sort();
       _invMeta={
         vendor:'LJ Cleaning and Repair',
         startDate:dates[0], endDate:dates[dates.length-1],
         period:_invFormatPeriod(dates[0],dates[dates.length-1]),
-        totalAmount:items.reduce((s,i)=>s+i.amount,0),
-        totalAppointments:items.length
+        totalAmount:_invItems.reduce((s,i)=>s+i.amount,0),
+        totalAppointments:_invItems.length,
+        adjustmentCount:adjustments.length
       };
       statusEl.className='inv-parse-notice inv-notice-ok';
-      statusEl.textContent=`✓ Parsed ${items.length} line items — $${_invMeta.totalAmount.toFixed(2)} total`;
+      const adjNote=adjustments.length?` + ${adjustments.length} adjustment${adjustments.length!==1?'s':''}`:'';
+      statusEl.textContent=`✓ Parsed ${items.length} line item${items.length!==1?'s':''}${adjNote} — $${_invMeta.totalAmount.toFixed(2)} total`;
       setTimeout(()=>{document.getElementById('inv-body').innerHTML=_invStep2HTML();},500);
     }catch(err){
       console.error('Invoice PDF parse error:',err);
@@ -11992,6 +11999,69 @@ function _invParseLisaPdf(rawText){
     items.push({propKey, propName:info.name, propId:hospId, group:info.group, date:iso, service, amount});
   }
   return items;
+}
+
+// Map an adjustment-row property label (often a short nickname like "Bearadise"
+// rather than the full line-item name "Bearadise 1967") to a property key.
+function _invAdjPropKey(name){
+  if(!name) return null;
+  // 1) exact line-item pattern (in case the full name is present)
+  for(const pp of INV_LISA_PROP_PATTERNS){ if(pp.pattern.test(name)) return pp.key; }
+  // 2) lenient: compare against the leading alpha words of each pattern
+  const n=name.trim().toLowerCase();
+  for(const pp of INV_LISA_PROP_PATTERNS){
+    const lead=pp.pattern.source.toLowerCase()
+      .replace(/\\s\*/g,' ')
+      .replace(/instant booking.*$/,'')
+      .replace(/[0-9].*$/,'')        // drop trailing unit numbers ("1967","3940","(2)")
+      .replace(/[^a-z' ]/g,' ')
+      .replace(/\s+/g,' ').trim();
+    if(lead.length>=4&&(n.startsWith(lead)||lead.startsWith(n))) return pp.key;
+  }
+  return null;
+}
+
+// Parse the invoice's separate Adjustments table (bottom of the PDF):
+//   "Adjustment Note | Adjustment type | Adjustment Amount"
+//   "Bearadise 5/31/2026 ( + ) $800.00"
+// A "( + )" adjustment is treated as an extra clean (reconciled like a normal
+// line item); "( - )" is a credit. Either way it carries isAdjustment so it's
+// always surfaced in the Flags tab. Note the adjustment date may use a single
+// digit month (5/31/2026), which the main line-item date regex rejects.
+function _invParseAdjustments(rawText){
+  const text=rawText.replace(/\r\n/g,'\n').replace(/[ \t]+/g,' ');
+  const hdr=text.search(/Adjustment\s+Note\s+Adjustment\s+type\s+Adjustment\s+Amount/i);
+  if(hdr===-1) return [];
+  let region=text.slice(hdr).replace(/Adjustment\s+Note\s+Adjustment\s+type\s+Adjustment\s+Amount/i,'');
+  // stop at the summary footer ("Adjustment( + ) = $...")
+  const foot=region.search(/Adjustment\s*\(\s*[+\-]\s*\)\s*=/i);
+  if(foot!==-1) region=region.slice(0,foot);
+  const out=[];
+  const re=/([A-Za-z][A-Za-z'()&.\- ]+?)\s+(\d{1,2})\/(\d{1,2})\/(\d{4})\s*\(\s*([+\-])\s*\)\s*\$\s*([\d,]+\.\d{2})/g;
+  let m;
+  while((m=re.exec(region))!==null){
+    const name=m[1].trim();
+    const iso=`${m[4]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
+    const sign=m[5];
+    const amt=parseFloat(m[6].replace(/,/g,''));
+    if(isNaN(amt)) continue;
+    const propKey=_invAdjPropKey(name);
+    const info=propKey?INV_PROP_INFO[propKey]:null;
+    const propId=propKey?_invPropId(propKey):null;
+    out.push({
+      propKey:propKey||null,
+      propName:info?info.name:name,
+      propId:propId||null,
+      group:info?info.group:'individual',
+      date:iso,
+      service: sign==='-'?'Adjustment':'Departure Clean',
+      amount: sign==='-'?-amt:amt,
+      isAdjustment:true,
+      adjSign:sign,
+      adjNote:`${name} ${m[2]}/${m[3]}/${m[4]}`
+    });
+  }
+  return out;
 }
 
 function _invMammieHTML(){
@@ -12081,7 +12151,7 @@ function _invStep2HTML(){
   const rows=_invItems.map(item=>`<tr>
     <td style="font-size:.8rem">${item.propName}</td>
     <td style="white-space:nowrap;font-size:.8rem">${_invFmtD(item.date)}</td>
-    <td><span class="badge ${item.service==='Departure Clean'?'badge-green':'badge-yellow'}" style="font-size:.7rem">${item.service}</span></td>
+    <td><span class="badge ${item.service==='Departure Clean'?'badge-green':'badge-yellow'}" style="font-size:.7rem">${item.service}</span>${item.isAdjustment?` <span class="badge badge-yellow" style="font-size:.62rem" title="${item.adjNote||'Adjustment'}">ADJ ${item.adjSign||'+'}</span>`:''}</td>
     <td style="text-align:right;font-weight:600;font-size:.82rem">${_invFmt(item.amount)}</td>
   </tr>`).join('');
   const propCount=[...new Set(_invItems.map(i=>i.propKey))].length;
@@ -12151,6 +12221,9 @@ async function _invRunVerification(){
     const seen={};
     _invResult=_invItems.map((item,idx)=>{
       const r={...item};
+      if(item.isAdjustment&&item.adjSign==='-'){
+        r.status='adj_credit'; r.statusLabel='Adjustment (credit)'; r.statusClass='badge-yellow'; return r;
+      }
       if(item.service==='Miscellaneous'){
         r.status='misc'; r.statusLabel='Reimbursement'; r.statusClass='badge-yellow'; return r;
       }
@@ -12244,6 +12317,9 @@ async function _invRunVerification(){
 
     _invResult=_invItems.map(item=>{
       const r={...item};
+      if(item.isAdjustment&&item.adjSign==='-'){
+        r.status='adj_credit'; r.statusLabel='Adjustment (credit)'; r.statusClass='badge-yellow'; return r;
+      }
       if(item.service==='Miscellaneous'){
         r.status='misc'; r.statusLabel='Reimbursement'; r.statusClass='badge-yellow'; return r;
       }
@@ -12282,7 +12358,7 @@ async function _invRunVerification(){
 }
 
 function _invResultsHTML(){
-  const actionable=_invResult.filter(i=>['occupied','duplicate','misc','no_cal'].includes(i.status));
+  const actionable=_invResult.filter(i=>i.isAdjustment||['occupied','duplicate','misc','no_cal'].includes(i.status));
   const flagBadge=actionable.length?` <span style="background:#dc2626;color:#fff;border-radius:99px;padding:1px 7px;font-size:.72rem;font-weight:700">${actionable.length}</span>`:'';
   const modeBanner=_invCalMode==='past_internal'
     ?`<div style="padding:8px 12px;background:#f5e8c8;border:1px solid #d8b97a;border-radius:7px;font-size:.76rem;color:#7a5c00;margin-bottom:12px">
@@ -12357,12 +12433,21 @@ function _invFlagsHTML(){
   const noDep=_invResult.filter(i=>i.status==='no_departure');
   const unknown=_invResult.filter(i=>i.status==='no_cal');
   const info=_invResult.filter(i=>['gap_clean','owner_block'].includes(i.status));
-  if(!errors.length&&!misc.length&&!noDep.length&&!unknown.length&&!info.length){
+  const adjustments=_invResult.filter(i=>i.isAdjustment);
+  if(!errors.length&&!misc.length&&!noDep.length&&!unknown.length&&!info.length&&!adjustments.length){
     if(_invCalMode==='past_internal')
       return '<div style="text-align:center;padding:32px;color:var(--text2)">✅ No duplicate entries found — invoice looks clean. Use Payment Summary to issue checks.</div>';
     return '<div style="text-align:center;padding:32px;color:var(--text2)">✅ No flags — all items verified clean.</div>';
   }
   let h='';
+  if(adjustments.length){
+    h+=`<div class="inv-section-head">⚙ Invoice Adjustments (${adjustments.length})</div>`;
+    adjustments.forEach(i=>{
+      const calNote=(i.statusLabel&&i.statusLabel!=='OK')?` Calendar check: <strong>${i.statusLabel}</strong>.`:'';
+      const kind=i.adjSign==='-'?'credit':'extra clean';
+      h+=`<div class="inv-flag-card inv-flag-warn"><div><div class="inv-flag-title">${i.propName} — ${_invFmtD(i.date)} <span class="badge badge-yellow" style="font-size:.6rem">ADJ ${i.adjSign||'+'}</span></div><div class="inv-flag-detail">Booked in the invoice's separate <strong>Adjustments</strong> table (not a normal line item): ${i.adjNote||''}.${calNote} Confirm this ${kind} is legitimate before paying.</div></div><div class="inv-flag-amt">${_invFmt(i.amount)}</div></div>`;
+    });
+  }
   if(errors.length){
     h+=`<div class="inv-section-head">🚨 Requires Review Before Paying (${errors.length})</div>`;
     errors.forEach(i=>{
@@ -12414,7 +12499,7 @@ function _invDetailHTML(){
   const rows=_invResult.map(i=>`<tr>
     <td style="font-size:.78rem">${i.propName}</td>
     <td style="white-space:nowrap;font-size:.78rem">${_invFmtD(i.date)}</td>
-    <td style="font-size:.76rem">${i.service}</td>
+    <td style="font-size:.76rem">${i.service}${i.isAdjustment?` <span class="badge badge-yellow" style="font-size:.6rem">ADJ ${i.adjSign||'+'}</span>`:''}</td>
     <td><span class="badge ${i.statusClass}" style="font-size:.68rem">${i.statusLabel}</span></td>
     <td style="text-align:right;font-weight:600;font-size:.8rem">${_invFmt(i.amount)}</td>
   </tr>`).join('');
