@@ -56,7 +56,7 @@ const PROPS = [
   {id:'hero',name:'Hero Hideout',address:'2382 Alpine Village Way, Pigeon Forge, TN',door:'3940'},
   {id:'magic',name:'Magic Mountain',address:'1775 Bluff Ridge Rd. Sevierville, TN',door:'4558'},
   {id:'hillside_big',name:'Hillside Haven - The Big House',address:'226 Oak Hill, Jacksons Gap, AL',door:'4425'},
-  {id:'hillside_cottage',name:'Hillside Haven - The Cottage',address:'218 Oak Hill, Jacksons Gap, AL',door:'O812'},
+  {id:'hillside_cottage',name:'Hillside Haven - The Cottage',address:'218 Oak Hill, Jacksons Gap, AL',door:'0812'},
 ];
 const DEF_VENDORS = [
   {id:'v1',name:'Lisa Hawthorne',phone:'(936) 648-3940',email:'',role:'Head Cleaner',categories:['cleaning'],note:'Primary cleaner for all Smokies properties. Provides linens, soaps, paper products.'},
@@ -830,11 +830,20 @@ const getProp=id=>_propMap[id]||_nbVirtualProps[id]||null;
 // substitutions. Falls back to the legacy hardcoded PROPS.door so any
 // cabin whose profile isn't migrated still works.
 function getDoorCode(propOrId){
+  // 2026-10-04: door code comes from Hospitable (the custom code guests receive),
+  // falling back to the built-in PROPS list if Hospitable hasn't loaded.
   const prop=typeof propOrId==='string'?getProp(propOrId):propOrId;
   const id=prop&&prop.id;
-  const profile=(typeof PP!=='undefined'&&PP&&id)?PP[id]:null;
-  const fromBible=profile&&profile.access&&profile.access.front_door&&profile.access.front_door.code;
-  return fromBible||(prop&&prop.door)||'';
+  const fromHosp=id&&HOSP_INFO[id]&&HOSP_INFO[id].doorCode;
+  return fromHosp||(prop&&prop.door)||'';
+}
+// WiFi + door codes per cabin from Hospitable (via /api/hospitable?action=propinfo).
+let HOSP_INFO={};
+async function loadHospInfo(){
+  try{
+    const r=await hospFetch(`${PROXY_BASE}/api/hospitable?action=propinfo`);
+    if(r.ok){const j=await r.json();if(j&&j.data&&typeof j.data==='object')HOSP_INFO=j.data;}
+  }catch(e){console.warn('[hosp-info] load failed',e.message);}
 }
 const getNbCls=id=>{if(_nbById[id])return _nbById[id].cls;const n=_nbMap[id];return n?n.cls:'other';};
 const DONE_STATUSES=['complete','resolved_by_guest'];
@@ -9513,6 +9522,7 @@ async function initApp(){
   await loadSettings();
   await loadReplacements();
   await rpCleanupOnce();
+  loadHospInfo(); // not awaited — door codes fall back to PROPS until it lands
   await loadSmsTemplate();
   await loadCombinedSmsTemplate();
   await loadLogo();
