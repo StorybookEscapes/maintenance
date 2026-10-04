@@ -2906,7 +2906,7 @@ async function saveLogTask(){
   if(!date){showToast('Please select a date.','err');return;}
   const vendor=getLogTaskVendorValue();
   const notes=document.getElementById('lt-notes').value.trim();
-  const isFilterTask=r.category==='hvac'&&/filter/i.test(r.name);
+  const isFilterTask=FILTER_SERVICE_ENABLED&&r.category==='hvac'&&/filter/i.test(r.name); // SUNSET 2026-10-04 (filter service)
 
   const task={
     id:Date.now().toString()+Math.random().toString(36).slice(2,6),
@@ -4715,7 +4715,7 @@ async function markComplete(){
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
   // Deploy 3: gate filter tasks on a recount close-out before marking complete.
   // Vendor must enter how many filters of each size are left at the cabin.
-  if(typeof fsPromptRecount==='function' && (t.filter_service_bundled || t.filter_auto_generated) && !t.filter_recount_submitted_by_vendor){
+  if(FILTER_SERVICE_ENABLED && typeof fsPromptRecount==='function' && (t.filter_service_bundled || t.filter_auto_generated) && !t.filter_recount_submitted_by_vendor){ // SUNSET 2026-10-04 (filter service)
     const ok=await fsPromptRecount(t);
     if(!ok)return; // cancelled — stay open
   }
@@ -4734,7 +4734,7 @@ async function vdQuickComplete(id,e){
   e.stopPropagation();
   const t=tasks.find(x=>x.id===id);if(!t)return;
   // Deploy 3: filter tasks get the recount modal even on quick-complete path
-  if(typeof fsPromptRecount==='function' && (t.filter_service_bundled || t.filter_auto_generated) && !t.filter_recount_submitted_by_vendor){
+  if(FILTER_SERVICE_ENABLED && typeof fsPromptRecount==='function' && (t.filter_service_bundled || t.filter_auto_generated) && !t.filter_recount_submitted_by_vendor){ // SUNSET 2026-10-04 (filter service)
     const ok=await fsPromptRecount(t);
     if(!ok)return;
   }
@@ -10976,6 +10976,10 @@ function ppRenderInbox() {
 //          written into each profile in se_pp.
 // Task flag: filter_service_bundled = true  (on tasks that include filters)
 
+// SUNSET 2026-10-04 (filter service): filters are changed by the cleaners during cleans, not bundled into
+// maintenance tasks. Everything below is switched off by this flag but kept in place.
+// Set it back to true (and unhide the Filter Inventory tab in index.html) to re-enable.
+const FILTER_SERVICE_ENABLED = false;
 const FS_BUNDLE_DAYS = 30;
 const FS_EXTREME_DAYS = 60;
 
@@ -11057,6 +11061,7 @@ function fsStateLabel(state) {
 
 // Property Bible detail-view panel (inserted by ppRenderDetail).
 function fsRenderPanel(profile) {
+  if (!FILTER_SERVICE_ENABLED) return ''; // SUNSET 2026-10-04 (filter service)
   const s = fsStatus(profile);
   if (s.state === 'none') return '';
   const lab = fsStateLabel(s.state);
@@ -11086,6 +11091,7 @@ function fsRenderPanel(profile) {
 function fsRenderBundlerInline() {
   const wrap = document.getElementById('f-fs-bundler');
   if (!wrap) return;
+  if (!FILTER_SERVICE_ENABLED) { wrap.innerHTML = ''; return; } // SUNSET 2026-10-04 (filter service)
   const pid = document.getElementById('f-property').value;
   if (!pid || !PP || !PP[pid]) { wrap.innerHTML = ''; return; }
   const s = fsStatus(PP[pid]);
@@ -11168,7 +11174,7 @@ function fsRequiredBySize(profile) {
 function taskEffectivePurchaseNote(task) {
   if (!task) return '';
   if (task.purchaseNote) return task.purchaseNote;
-  const isFilter = !!(task.filter_service_bundled || task.filter_auto_generated);
+  const isFilter = FILTER_SERVICE_ENABLED && !!(task.filter_service_bundled || task.filter_auto_generated); // SUNSET 2026-10-04 (filter service)
   if (!isFilter) return '';
   try {
     if (typeof PP === 'undefined' || !PP || !PP[task.property]) return '';
@@ -11184,7 +11190,7 @@ function taskEffectivePurchaseNote(task) {
 // 'vendor' for any filter task regardless of stored value.
 function taskEffectivePurchaser(task) {
   if (!task) return 'owner';
-  const isFilter = !!(task.filter_service_bundled || task.filter_auto_generated);
+  const isFilter = FILTER_SERVICE_ENABLED && !!(task.filter_service_bundled || task.filter_auto_generated); // SUNSET 2026-10-04 (filter service)
   if (isFilter) return 'vendor';
   return task.purchaser || 'owner';
 }
@@ -11235,6 +11241,7 @@ function fsBuildNotesBlock(profile) {
 // task with filter_service_bundled, append a notes block, and auto-populate
 // Purchase Required from shortfall.
 function fsMaybeStampTask(task) {
+  if (!FILTER_SERVICE_ENABLED) return; // SUNSET 2026-10-04 (filter service)
   const cb = document.getElementById('f-fs-bundle-cb');
   if (!cb || !cb.checked) return;
   if (!PP || !PP[task.property]) return;
@@ -11260,7 +11267,7 @@ function fsMaybeStampTask(task) {
 // bundled with filter service (or is an auto-generated filter task), write
 // today's date back into the cabin profile + append a change log entry.
 async function fsOnTaskComplete(task) {
-  if (!task) return;
+  if (!task || !FILTER_SERVICE_ENABLED) return; // SUNSET 2026-10-04 (filter service)
   const isFilterTask = !!task.filter_service_bundled || !!task.filter_auto_generated;
   if (!isFilterTask) return;
   if (!PP || !PP[task.property]) return;
@@ -11450,7 +11457,7 @@ function fsRecountClose(ok) {
 
 // Needs Attention rollup. Extreme cabins only — bundle cabins stay quiet.
 function fsRenderNeedsAttention() {
-  if (!PP) return '';
+  if (!PP || !FILTER_SERVICE_ENABLED) return ''; // SUNSET 2026-10-04 (filter service)
   const extremes = [];
   Object.keys(PP).forEach((pid) => {
     const s = fsStatus(PP[pid]);
