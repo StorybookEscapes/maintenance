@@ -3085,6 +3085,7 @@ function onCatChange(){
 }
 function openAddTask(propId){
   document.getElementById('task-modal-title').textContent='New Task';
+  _cqEditingId=null;const _sb=document.getElementById('f-save-btn');if(_sb)_sb.textContent='Save Task'; // 2026-10-04
   ['f-guest','f-problem','f-category','f-vendor','f-notes'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('f-status').value='open';document.getElementById('f-urgent').checked=false;
   document.getElementById('f-date').value='';
@@ -3111,7 +3112,9 @@ async function saveTask(){
   if(fCat==='replacement'){t.purchaseNote=prob;t.purchaseStatus='needed';t.purchaser='owner';}
   // Deploy 2: bundle filter service into this task if the user checked the bundler
   if(typeof fsMaybeStampTask==='function')fsMaybeStampTask(t);
-  tasks.unshift(t);logTaskChange('created',t);await saveTasks();closeModal('task-modal');renderAll();renderReplacements();showToast('Task created.');
+  const _cqId=_cqEditingId; if(_cqId)_cqDecorateTask(t,_cqId); // 2026-10-04: editing a Claude suggestion before import
+  tasks.unshift(t);logTaskChange('created',t);const _saved=await saveTasks();closeModal('task-modal');renderAll();renderReplacements();showToast('Task created.');
+  if(_cqId){_cqEditingId=null;const _sb=document.getElementById('f-save-btn');if(_sb)_sb.textContent='Save Task';if(_saved)await _cqRemoveImported(_cqId);}
 }
 
 // DETAIL
@@ -6374,6 +6377,40 @@ async function cqRestore(id) {
     showToast('Task imported.');
   } finally { cqBusy = false; }
 }
+// Edit before import: opens the normal New Task form filled in from the suggestion.
+// Saving the form creates the task and clears the suggestion; Cancel leaves it waiting.
+let _cqEditingId = null;
+function cqEdit(id) {
+  const item = cqItems.find(x => x.id === id);
+  if (!item || !cqLoadedOk) return;
+  openAddTask(item.property);
+  _cqEditingId = id;
+  document.getElementById('task-modal-title').textContent = 'Edit & Import Suggestion';
+  const sb = document.getElementById('f-save-btn'); if (sb) sb.textContent = 'Import Task';
+  document.getElementById('f-problem').value = item.problem || '';
+  document.getElementById('f-category').value = item.category || '';
+  document.getElementById('f-urgent').checked = !!item.urgent;
+  const extra = item.category === 'replacement' && item.purchaseNote && item.purchaseNote !== item.problem ? 'Buy: ' + item.purchaseNote : '';
+  document.getElementById('f-notes').value = [item.note || '', extra].filter(Boolean).join('\n');
+}
+function _cqDecorateTask(t, id) {
+  const item = cqItems.find(x => x.id === id);
+  if (!item) return;
+  t._source = 'claude-review';
+  if (item.ref) t._ref = item.ref;
+  const head = 'Suggested by Claude' + (item.source ? ' (' + item.source + ')' : '') + ', edited and imported after review.';
+  t.notes = [{ text: head, type: 'admin', time: t.created }, ...(t.notes || [])];
+  if (t.category === 'replacement') {
+    t.purchaseNote = (t.problem === item.problem && item.purchaseNote) ? item.purchaseNote : t.problem;
+    t.purchaser = item.purchaser === 'vendor' ? 'vendor' : 'owner';
+  }
+}
+async function _cqRemoveImported(id) {
+  let ok = false;
+  try { ok = await _cqUpdate(q => q.filter(x => x.id !== id)); } catch (e) { ok = false; }
+  if (!ok) { cqItems = cqItems.filter(x => x.id !== id); showToast('Task created, but the review list did not update — reload before importing again.', '', '', 8000); }
+  renderCQ();
+}
 const cqImportAll = () => cqImport(cqItems.map(x => x.id));
 const cqDismissAll = () => cqDismiss(cqItems.map(x => x.id));
 function toggleCqDismissed() {
@@ -6415,6 +6452,7 @@ function renderCQ() {
           </div>
           <div class="hb-item-btns">
             <button class="hb-btn hb-btn-dismiss" onclick="cqDismiss(['${id}'])">Dismiss</button>
+            <button class="hb-btn hb-btn-dismiss" onclick="cqEdit('${id}')">Edit</button>
             <button class="hb-btn hb-btn-import" onclick="cqImport(['${id}'])">Import</button>
           </div>
         </div>
