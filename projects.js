@@ -6,15 +6,26 @@
 
 let projects = [];
 const PJ_KEY = 'se_projects';
-const savePJ = () => save(PJ_KEY, projects);
+// 2026-10-04: saves are blocked if se_projects could not be read, so a failed load
+// can never overwrite existing projects (and their PDFs) with an empty list.
+let projectsLoadedOk = false;
+const savePJ = async () => {
+  if (!projectsLoadedOk) {
+    console.error('[projects] save blocked — projects did not load');
+    if (typeof showToast === 'function') showToast('\u26a0\ufe0f Project save blocked — projects did not load. Please reload.', '', '', 8000);
+    return false;
+  }
+  return save(PJ_KEY, projects);
+};
 
 // ── LOAD ────────────────────────────────────────────────────
 async function pjLoad() {
   try {
-    const r = await S.get(PJ_KEY);
+    const r = await _kvGetStrict(PJ_KEY);
     if (r && r.value) projects = JSON.parse(r.value);
     else projects = [];
-  } catch (e) { projects = []; }
+    projectsLoadedOk = true;
+  } catch (e) { projects = []; projectsLoadedOk = false; console.error('[projects] load failed — saves blocked until reload', e); }
   // Rehydrate blob URLs from stored base64 PDF data
   projects.forEach(p => {
     if (p._pdf_data && p.source) {
@@ -320,7 +331,7 @@ function pjShowDetail(pid) {
   html += `<div class="pj-notes"><div class="pj-notes-title">Project Notes</div>`;
   if (p.notes && p.notes.length) {
     p.notes.forEach(n => {
-      html += `<div class="pj-note"><div class="pj-note-text">${n.text}</div><div class="pj-note-meta">${n.by} · ${new Date(n.time).toLocaleDateString()}</div></div>`;
+      html += `<div class="pj-note"><div class="pj-note-text">${escHtml(n.text)}</div><div class="pj-note-meta">${escHtml(n.by)} · ${new Date(n.time).toLocaleDateString()}</div></div>`;
     });
   }
   html += `<div style="margin-top:10px;display:flex;gap:8px">

@@ -129,9 +129,11 @@ let appSettings = {
   ],
 };
 
+// Saves are blocked if se_settings could not be read, so defaults never overwrite real settings. (2026-10-04)
+let settingsLoadedOk = false;
 async function loadSettings() {
   try {
-    const raw = await S.get('se_settings');
+    const raw = await _kvGetStrict('se_settings');
     if (raw && raw.value) {
       const parsed = typeof raw.value === 'string' ? JSON.parse(raw.value) : raw.value;
       // Merge with defaults (so new fields don't break old saved settings)
@@ -139,7 +141,8 @@ async function loadSettings() {
       if (parsed.projectTypes) appSettings.projectTypes = parsed.projectTypes;
       if (parsed.vendorSheetFields) appSettings.vendorSheetFields = parsed.vendorSheetFields;
     }
-  } catch (e) { console.warn('Failed to load settings:', e.message); }
+    settingsLoadedOk = true;
+  } catch (e) { settingsLoadedOk = false; console.warn('Failed to load settings — settings saves are paused until reload:', e.message); }
 
   // Apply dynamic categories
   if (appSettings.vendorCategories && appSettings.vendorCategories.length) {
@@ -180,6 +183,10 @@ function populateCategoryDropdowns() {
 }
 
 async function saveSettings() {
+  if (!settingsLoadedOk) {
+    showToast('\u26a0\ufe0f Settings did not load — reload the page before changing settings.','','',8000);
+    return;
+  }
   try {
     const ok = await S.set('se_settings', JSON.stringify(appSettings));
     if (ok) {
@@ -514,6 +521,9 @@ let _tasksLoadedCount = 0; // how many tasks were in KV at boot
 // The read-before-write merge would otherwise re-add them (they still exist
 // on the server at save time), silently undoing the delete. 2026-06-02 fix.
 const _deletedTaskIds = new Set();
+// Same protection for vendors and recurring templates (2026-10-04 fix).
+const _deletedVendorIds = new Set();
+const _deletedRecIds = new Set();
 
 async function load() {
   try {
@@ -600,7 +610,7 @@ const saveTasks = async () => {
   if (!tasksLoadedOk) {
     console.error('[SAFETY] saveTasks() BLOCKED — initial load failed. Reload the page with a working connection.');
     showToast('\u26a0\ufe0f Task save blocked — data did not load properly. Please reload.','','',8000);
-    return;
+    return false;
   }
   // Read-before-write: fold in any tasks added by other admins since page load
   // (but never resurrect tasks this admin just deleted — see _deletedTaskIds).
@@ -609,10 +619,11 @@ const saveTasks = async () => {
   if (_tasksLoadedCount > 5 && tasks.length < _tasksLoadedCount * 0.5) {
     console.error(`[SAFETY] saveTasks() BLOCKED — drastic shrinkage detected (${_tasksLoadedCount} → ${tasks.length}). This looks like accidental data loss.`);
     showToast(`\u26a0\ufe0f Save blocked: task count dropped from ${_tasksLoadedCount} to ${tasks.length}. This may be a bug — reload to recover.`,'','',10000);
-    return;
+    return false;
   }
   _tasksLoadedCount = tasks.length; // keep baseline current after merge
-  await save('se_t', tasks);
+  // Returns true only when the server confirmed the write (2026-10-04)
+  try { return await S.set('se_t', JSON.stringify(tasks)); } catch (e) { return false; }
 };
 const saveVendors = async () => {
   if (!vendorsLoadedOk) {
@@ -620,7 +631,7 @@ const saveVendors = async () => {
     showToast('\u26a0\ufe0f Vendor save blocked — vendor list did not load properly. Please reload.','','',8000);
     return;
   }
-  vendors = await _rbwMerge('se_v', vendors);
+  vendors = await _rbwMerge('se_v', vendors, 'id', _deletedVendorIds);
   if (_vendorsLoadedCount > 5 && vendors.length < _vendorsLoadedCount * 0.5) {
     console.error(`[SAFETY] saveVendors() BLOCKED — drastic shrinkage (${_vendorsLoadedCount} → ${vendors.length}).`);
     showToast(`\u26a0\ufe0f Save blocked: vendor count dropped from ${_vendorsLoadedCount} to ${vendors.length}. Reload to recover.`,'','',10000);
@@ -635,7 +646,7 @@ const saveRec = async () => {
     showToast('\u26a0\ufe0f Recurring save blocked — templates did not load properly. Please reload.','','',8000);
     return;
   }
-  recurring = await _rbwMerge('se_r', recurring);
+  recurring = await _rbwMerge('se_r', recurring, 'id', _deletedRecIds);
   if (_recurringLoadedCount > 5 && recurring.length < _recurringLoadedCount * 0.5) {
     console.error(`[SAFETY] saveRec() BLOCKED — drastic shrinkage (${_recurringLoadedCount} → ${recurring.length}).`);
     showToast(`\u26a0\ufe0f Save blocked: recurring template count dropped from ${_recurringLoadedCount} to ${recurring.length}. Reload to recover.`,'','',10000);
@@ -654,11 +665,12 @@ let _taskLogLoaded = false;
 
 async function loadTaskLog() {
   try {
-    const r = await S.get('se_t_log');
+    const r = await _kvGetStrict('se_t_log');
     if (r) _taskLog = JSON.parse(r.value);
     else _taskLog = [];
+    if (!Array.isArray(_taskLog)) _taskLog = [];
     _taskLogLoaded = true;
-  } catch(e) { _taskLog = []; _taskLogLoaded = true; }
+  } catch(e) { _taskLog = []; _taskLogLoaded = false; console.warn('[task-log] did not load — log writes paused', e); }
 }
 
 async function saveTaskLog() {
@@ -845,10 +857,12 @@ async function vscAck(id,e){
 
 // VENDOR REPORTS BANNER — field observations from vendors
 let vendorReports=[];
+let vendorReportsLoadedOk=false; // 2026-10-04: block saves if the list did not load
 async function loadVendorReports(){
-  try{const r=await S.get('se_vendor_reports');if(r&&r.value){vendorReports=JSON.parse(r.value)||[];}else{vendorReports=[];}}catch(e){vendorReports=[];}
+  try{const r=await _kvGetStrict('se_vendor_reports');if(r&&r.value){vendorReports=JSON.parse(r.value)||[];}else{vendorReports=[];}vendorReportsLoadedOk=true;}catch(e){vendorReports=[];vendorReportsLoadedOk=false;console.warn('[vr] vendor reports did not load — saves paused',e);}
 }
 async function saveVendorReports(){
+  if(!vendorReportsLoadedOk){console.error('[vr] save blocked — vendor reports did not load');return;}
   try{await S.set('se_vendor_reports',JSON.stringify(vendorReports));}catch(e){console.error('[vr] save error',e);}
 }
 function renderVR(){
@@ -870,10 +884,10 @@ function renderVR(){
           <div class="vr-item-prob">${r.description.replace(/</g,'&lt;')}</div>
           <div class="vr-item-meta">
             ${typeBadge}
-            <span>${r.vendor}</span>
+            <span>${escHtml(r.vendor)}</span>
             <span>${ago}</span>
           </div>
-          ${r.photoUrl?(Array.isArray(r.photoUrl)?r.photoUrl:r.photoUrl?[r.photoUrl]:[]).map(u=>`<img class="vr-photo-thumb" src="${u}" onclick="window.open('${u}','_blank')" title="Click to view full size">`).join(''):''}
+          ${r.photoUrl?(Array.isArray(r.photoUrl)?r.photoUrl:r.photoUrl?[r.photoUrl]:[]).filter(_isSafeHttpsUrl).map(u=>`<img class="vr-photo-thumb" src="${u}" onclick="window.open('${u}','_blank')" title="Click to view full size">`).join(''):''}
         </div>
         <div class="vr-item-btns">
           ${actionBtn}
@@ -902,7 +916,7 @@ async function vrImport(id){
     photos:[],
     created:new Date().toISOString()
   };
-  if(r.photoUrl){if(Array.isArray(r.photoUrl))newTask.photos.push(...r.photoUrl);else newTask.photos.push(r.photoUrl);}
+  if(r.photoUrl){if(Array.isArray(r.photoUrl))newTask.photos.push(...r.photoUrl.filter(_isSafeHttpsUrl));else if(_isSafeHttpsUrl(r.photoUrl))newTask.photos.push(r.photoUrl);}
   tasks.push(newTask);logTaskChange('created',newTask);
   r.status='imported';
   await saveTasks();await saveVendorReports();
@@ -2661,8 +2675,9 @@ async function saveRecurring(){
 async function delRec(id){
   const deleted=recurring.find(r=>r.id===id);if(!deleted)return;
   const idx=recurring.indexOf(deleted);
+  _deletedRecIds.add(deleted.id);
   recurring=recurring.filter(r=>r.id!==id);await saveRec();renderRecurring();
-  showToast('Recurring task removed.','',async()=>{recurring.splice(idx,0,deleted);await saveRec();renderRecurring();showToast('Recurring task restored.');});
+  showToast('Recurring task removed.','',async()=>{_deletedRecIds.delete(deleted.id);recurring.splice(idx,0,deleted);await saveRec();renderRecurring();showToast('Recurring task restored.');});
 }
 // ── LOG TASK (record a completed service from a recurring template) ──────────
 let _logTaskRecId=null;
@@ -2705,7 +2720,7 @@ function openLogTask(id){
   document.getElementById('log-task-title').textContent='Log: '+r.name;
   const taskProps=r.properties.includes('all')?PROPS.map(p=>p.id):r.properties;
   populateLogTaskProp('lt-prop',taskProps);
-  document.getElementById('lt-date').value=new Date().toISOString().slice(0,10);
+  document.getElementById('lt-date').value=fsTodayISO(); // local date, not UTC (2026-10-04)
   // Vendor uses shared builder with category filter so "Recommended" group matches the service type
   populateVendorSelect('lt-vendor',r.vendor||'',r.category,'lt-vendor-custom-wrap','lt-vendor-custom');
   document.getElementById('lt-notes').value='';
@@ -2742,22 +2757,34 @@ async function saveLogTask(){
   await saveTasks();
   if(typeof logTaskChange==='function')logTaskChange('log_service',task);
 
-  // For filter tasks logged against a specific cabin: reset filter clock to logged date (supports backdating)
-  if(isFilterTask&&typeof PP!=='undefined'&&PP&&PP[prop]){
-    const p=PP[prop];
-    if(!p.hvac)p.hvac={};if(!p.hvac.filter_service)p.hvac.filter_service={};
-    const prev=p.hvac.filter_service.last_service_date||null;
-    p.hvac.filter_service.last_service_date=date;
-    p.last_updated=date;
-    p.last_updated_by=typeof getCurrentUserName==='function'?(getCurrentUserName()||'user'):'user';
-    try{
+  // For filter tasks: reset each cabin's filter clock to the logged date (supports backdating).
+  // 2026-10-04 fix: a resort choice (umc / prc / hillside) now covers every cabin in it that this
+  // template applies to, and the clock only moves forward — logging an older service never
+  // overwrites a newer service date.
+  if(isFilterTask&&typeof PP!=='undefined'&&PP){
+    const tmplProps=r.properties.includes('all')?PROPS.map(p=>p.id):r.properties;
+    const nbGroup=NBS.find(n=>n.id===prop);
+    const cabins=nbGroup?nbGroup.props.filter(pid=>tmplProps.includes(pid)):[prop];
+    const user=typeof getCurrentUserName==='function'?(getCurrentUserName()||'user'):'user';
+    let changed=false;
+    cabins.forEach(pid=>{
+      const p=PP[pid];if(!p)return;
+      if(!p.hvac)p.hvac={};if(!p.hvac.filter_service)p.hvac.filter_service={};
+      const prev=p.hvac.filter_service.last_service_date||null;
+      if(prev&&prev>=date)return;
+      p.hvac.filter_service.last_service_date=date;
+      p.last_updated=date;
+      p.last_updated_by=user;
       if(!Array.isArray(PP_LOG))PP_LOG=[];
       PP_LOG.push({id:'chg_'+Date.now()+'_'+Math.random().toString(36).slice(2,8),ts:new Date().toISOString(),
-        user:p.last_updated_by,property_id:prop,path:'hvac.filter_service.last_service_date',
+        user,property_id:pid,path:'hvac.filter_service.last_service_date',
         old_value:prev,new_value:date,source:'log_service',task_id:task.id});
-      await ppSave('se_pp_log',PP_LOG);
-    }catch(e){console.warn('[log-task] log save failed',e);}
-    try{await ppSave('se_pp',PP);}catch(e){console.warn('[log-task] profile save failed',e);}
+      changed=true;
+    });
+    if(changed){
+      try{await ppSave('se_pp_log',PP_LOG);}catch(e){console.warn('[log-task] log save failed',e);}
+      try{await ppSave('se_pp',PP);}catch(e){console.warn('[log-task] profile save failed',e);}
+    }
   }
 
   renderAll();
@@ -3271,37 +3298,41 @@ async function removeTaskPhoto(url){
 }
 /* Auto-cleanup: delete photos from tasks resolved more than 30 days ago */
 async function cleanupOldPhotos(){
+  // 2026-10-04 fixes: (1) never run when the task list failed to load — the URL changes
+  // could not be saved; (2) only tasks with a real YYYY-MM-DD date qualify — undated tasks
+  // previously hit an invalid date and lost their photos on the next load; (3) a photo is
+  // removed from the task only after the server confirms the delete.
+  // The 30-day retention rule itself is unchanged.
+  if(!tasksLoadedOk)return;
   const cutoff=Date.now()-30*24*60*60*1000;
   const token=localStorage.getItem('se_auth_token')||'';
+  const delBlob=async url=>{
+    try{
+      const r=await fetch(`${PROXY_BASE}/api/photo?url=${encodeURIComponent(url)}`,{
+        method:'DELETE',headers:{'Authorization':'Bearer '+token}
+      });
+      return r.ok;
+    }catch(e){return false;}
+  };
   let changed=false;
   for(const t of tasks){
     if(!isDone(t))continue;
-    const resolved=t.date||t.created;
-    if(!resolved)continue;
-    if(new Date(resolved+'T12:00:00').getTime()>cutoff)continue;
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(t.date||''))continue;
+    if(new Date(t.date+'T12:00:00').getTime()>cutoff)continue;
     // This task was resolved 30+ days ago — delete admin photo
-    if(t.photoUrl){
-      try{
-        await fetch(`${PROXY_BASE}/api/photo?url=${encodeURIComponent(t.photoUrl)}`,{
-          method:'DELETE',headers:{'Authorization':'Bearer '+token}
-        });
-      }catch(e){}
+    if(t.photoUrl&&await delBlob(t.photoUrl)){
       t.photoUrl=null;
       changed=true;
       console.log(`[photo] Cleaned up admin photo for task ${t.id}`);
     }
-    // Delete vendor photos too
+    // Delete vendor photos too — keep any whose delete did not succeed
     if(t.vendorPhotos&&t.vendorPhotos.length){
+      const kept=[];
       for(const vp of t.vendorPhotos){
-        try{
-          await fetch(`${PROXY_BASE}/api/photo?url=${encodeURIComponent(vp.url)}`,{
-            method:'DELETE',headers:{'Authorization':'Bearer '+token}
-          });
-        }catch(e){}
-        console.log(`[photo] Cleaned up vendor photo for task ${t.id}`);
+        if(vp&&vp.url&&await delBlob(vp.url))console.log(`[photo] Cleaned up vendor photo for task ${t.id}`);
+        else kept.push(vp);
       }
-      t.vendorPhotos=[];
-      changed=true;
+      if(kept.length!==t.vendorPhotos.length){t.vendorPhotos=kept;changed=true;}
     }
   }
   if(changed)await saveTasks();
@@ -4256,7 +4287,7 @@ function renderNotes(t){
     const name=isAdmin?(n.by||getCurrentUserName()):'Vendor';
     const time=new Date(n.time).toLocaleString();
     const actions=isAdmin?`<span class="note-actions"><button class="note-action-btn" onclick="event.stopPropagation();editNoteInline(${i})" title="Edit">Edit</button><button class="note-action-btn del" onclick="event.stopPropagation();deleteNoteInline(${i})" title="Delete">Delete</button></span>`:'';
-    return`<div class="note ${n.type}" id="detail-note-${i}" style="position:relative"><div class="note-meta" style="display:flex;align-items:center;gap:6px"><span>${name} — ${time}</span>${actions}</div><div class="note-text" id="nt-${i}">${n.text}</div><div class="note-edit-area" id="ne-${i}" style="display:none"><textarea id="nei-${i}">${n.text}</textarea><div class="note-edit-btns"><button class="btn btn-g" onclick="saveNoteEdit(${i})">Save</button><button class="btn" onclick="cancelNoteEdit(${i})">Cancel</button></div></div></div>`;
+    return`<div class="note ${n.type}" id="detail-note-${i}" style="position:relative"><div class="note-meta" style="display:flex;align-items:center;gap:6px"><span>${escHtml(name)} — ${time}</span>${actions}</div><div class="note-text" id="nt-${i}">${escHtml(n.text)}</div><div class="note-edit-area" id="ne-${i}" style="display:none"><textarea id="nei-${i}">${escHtml(n.text)}</textarea><div class="note-edit-btns"><button class="btn btn-g" onclick="saveNoteEdit(${i})">Save</button><button class="btn" onclick="cancelNoteEdit(${i})">Cancel</button></div></div></div>`;
   }).join('');
 }
 function editNoteInline(i){document.getElementById('nt-'+i).style.display='none';document.getElementById('ne-'+i).style.display='';const ta=document.getElementById('nei-'+i);ta.focus();ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';}
@@ -4762,7 +4793,11 @@ async function addTaskToProject(projectId, projectTitle){
     page: null,
     task_id: t.id,
   });
+  // Keep both sides of the link in sync (2026-10-04)
+  t.project_id = p.id;
+  t.project_title = p.title;
   await savePJ();
+  await saveTasks();
   showToast(`Added to "${projectTitle}"`);
   // Refresh the button to confirm state
   const btn=document.getElementById('add-to-project-btn');
@@ -5186,8 +5221,9 @@ async function saveVendor(){
 async function deleteVendor(){
   const deleted=vendors.find(v=>v.id===editVendorId);if(!deleted)return;
   const idx=vendors.indexOf(deleted);
+  _deletedVendorIds.add(deleted.id);
   vendors=vendors.filter(v=>v.id!==editVendorId);await saveVendors();closeModal('vendor-modal');renderVendors();
-  showToast('Vendor deleted.','',async()=>{vendors.splice(idx,0,deleted);await saveVendors();renderVendors();showToast('Vendor restored.');});
+  showToast('Vendor deleted.','',async()=>{_deletedVendorIds.delete(deleted.id);vendors.splice(idx,0,deleted);await saveVendors();renderVendors();showToast('Vendor restored.');});
 }
 
 function closeModal(id){document.getElementById(id).classList.remove('open');}
@@ -5576,6 +5612,11 @@ const HB_CONFIG = {
 };
 let hbItems = [];
 let hbDismissed = []; // dismissed items (persisted to KV)
+let hbDismissedLoadedOk = false; // 2026-10-04
+async function hbSaveDismissed() {
+  if (!hbDismissedLoadedOk) { console.error('[hb] dismissed-list save blocked — list did not load'); return; }
+  try { await S.set('se_hb_dismissed', JSON.stringify(hbDismissed)); } catch (e) {}
+}
 let hbPollTimer = null;
 
 // ── Cleaning Alerts helpers (filter HostBuddy items for cleaning page) ──
@@ -5636,9 +5677,10 @@ async function hbStartPolling() {
   if (!HB_CONFIG.apiUrl) return;
   // Load dismissed items from KV
   try {
-    const raw = await S.get('se_hb_dismissed');
-    if (raw) { const arr = JSON.parse(raw); if (Array.isArray(arr)) hbDismissed = arr; }
-  } catch (e) {}
+    const raw = await _kvGetStrict('se_hb_dismissed');
+    if (raw && raw.value) { const arr = JSON.parse(raw.value); if (Array.isArray(arr)) hbDismissed = arr; }
+    hbDismissedLoadedOk = true;
+  } catch (e) { hbDismissedLoadedOk = false; console.warn('[hb] dismissed list did not load — history saves paused', e); }
   hbFetch(); // initial fetch
   hbPollTimer = setInterval(hbFetch, HB_CONFIG.pollInterval);
 }
@@ -5790,7 +5832,9 @@ function renderHB() {
   el.innerHTML = h;
 }
 
-function escHtml(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function escHtml(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+// Only plain https URLs (no quotes, spaces or angle brackets) may be placed in src/onclick attributes. (2026-10-04)
+function _isSafeHttpsUrl(u) { return typeof u === 'string' && /^https:\/\/[^\s"'<>\\]+$/.test(u); }
 function toggleHbRaw(id) { document.getElementById('hb-raw-' + id)?.classList.toggle('show'); }
 
 function getTimeAgo(iso) {
@@ -5840,8 +5884,14 @@ async function hbImport(id) {
     vendorNotes: '',
     created: item.receivedAt || new Date().toISOString(),
   };
-  tasks.unshift(t);logTaskChange('created',t);
-  await saveTasks();
+  tasks.unshift(t);
+  // 2026-10-04: only remove the item from the HostBuddy queue once the task is safely saved
+  if (!(await saveTasks())) {
+    tasks = tasks.filter(x => x.id !== t.id);
+    showToast('\u26a0\ufe0f Import not saved — the HostBuddy item was kept so you can try again.','','',8000);
+    return;
+  }
+  logTaskChange('created',t);
   // Remove from incoming queue on server
   await hbRemoveFromServer(id);
   hbItems = hbItems.filter(x => x.id !== id);
@@ -5875,7 +5925,16 @@ async function hbImportAll() {
     ids.push(item.id);
     n++;
   }
-  await saveTasks();
+  // 2026-10-04: keep the HostBuddy queue intact unless the new tasks were saved
+  const added = tasks.slice(0, n);
+  if (!(await saveTasks())) {
+    const addedIds = new Set(added.map(x => x.id));
+    tasks = tasks.filter(x => !addedIds.has(x.id));
+    renderAll();
+    showToast('\u26a0\ufe0f Import not saved — the HostBuddy items were kept so you can try again.','','',8000);
+    return;
+  }
+  added.forEach(x => logTaskChange('created', x));
   await hbRemoveFromServer(ids.join(','));
   hbItems = [];
   renderHB(); renderAll();
@@ -5888,7 +5947,7 @@ async function hbDismiss(id) {
     hbDismissed.unshift({ ...item, dismissedAt: new Date().toISOString() });
     // Cap at 50 dismissed items
     if (hbDismissed.length > 50) hbDismissed = hbDismissed.slice(0, 50);
-    try { await S.set('se_hb_dismissed', JSON.stringify(hbDismissed)); } catch (e) {}
+    await hbSaveDismissed();
   }
   await hbRemoveFromServer(id);
   hbItems = hbItems.filter(x => x.id !== id);
@@ -5900,7 +5959,7 @@ async function hbDismissAll() {
   const now = new Date().toISOString();
   hbItems.forEach(item => hbDismissed.unshift({ ...item, dismissedAt: now }));
   if (hbDismissed.length > 50) hbDismissed = hbDismissed.slice(0, 50);
-  try { await S.set('se_hb_dismissed', JSON.stringify(hbDismissed)); } catch (e) {}
+  await hbSaveDismissed();
   await hbRemoveFromServer('all');
   hbItems = [];
   renderHB();
@@ -5932,7 +5991,7 @@ async function hbRestore(id) {
   await saveTasks();
   // Remove from dismissed
   hbDismissed = hbDismissed.filter(x => x.id !== id);
-  try { await S.set('se_hb_dismissed', JSON.stringify(hbDismissed)); } catch (e) {}
+  await hbSaveDismissed();
   renderHB(); renderAll();
   showToast('Task restored from dismissed.');
   if (!pid) { detailId = t.id; openDetail(t.id); }
@@ -5940,7 +5999,7 @@ async function hbRestore(id) {
 
 async function hbClearDismissed() {
   hbDismissed = [];
-  try { await S.set('se_hb_dismissed', JSON.stringify(hbDismissed)); } catch (e) {}
+  await hbSaveDismissed();
   renderHB();
   showToast('Dismissed history cleared.');
 }
@@ -8394,7 +8453,7 @@ async function rpQuickDelivered(id) {
           token,action:'filter_recount',taskId:id,counts:filterCounts,storage_location:filterStorageLoc,note:txt
         })});
       }else{
-        r=await fetch(VAPI,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,action:'markDone',taskId:id})});
+        r=await fetch(VAPI,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,action:'markDone',taskId:id,text:txt})});
       }
       if(!r.ok){alert('Failed to submit. Please try again.');return;}
       const data=await r.json();
@@ -9462,7 +9521,7 @@ async function ppLoadIfNeeded() {
   const wrap = document.getElementById('pp-list-wrap');
   if (wrap) wrap.innerHTML = '<div class="pp-empty">Loading Property Bible…</div>';
   try {
-    const [pp, stashes, log] = await Promise.all([S.get('se_pp'), S.get('se_pp_stashes'), S.get('se_pp_log')]);
+    const [pp, stashes, log] = await Promise.all([_kvGetStrict('se_pp'), _kvGetStrict('se_pp_stashes'), _kvGetStrict('se_pp_log')]);
     PP = pp && pp.value ? JSON.parse(pp.value) : {};
     PP_STASHES = stashes && stashes.value ? JSON.parse(stashes.value) : {};
     PP_LOG = log && log.value ? JSON.parse(log.value) : [];
@@ -9479,9 +9538,14 @@ async function ppLoadIfNeeded() {
 }
 
 async function ppSave(key, value) {
+  // 2026-10-04: never write Property Bible keys unless they loaded successfully
+  if (!ppLoaded) {
+    console.error('[pp] save blocked — Property Bible did not load', key);
+    if (typeof showToast === 'function') showToast('\u26a0\ufe0f Property Bible did not load — reload before editing.','','',8000);
+    return false;
+  }
   try {
-    await S.set(key, JSON.stringify(value));
-    return true;
+    return await S.set(key, JSON.stringify(value));
   } catch (e) {
     console.error('[pp] save failed', key, e);
     if (typeof showToast === 'function') showToast('❌ Property save failed','','',5000);
