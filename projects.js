@@ -777,7 +777,8 @@ async function pjShareVendor(pid, idx, btnEl) {
         project_id: pid,
         project_title: p.title,
         vendor_name: v.name,
-        created: new Date().toISOString()
+        created: new Date().toISOString(),
+        v: 2
       };
       await S.set('se_vs_' + token, JSON.stringify(kvPayload));
       p.vendors[idx].token = token;

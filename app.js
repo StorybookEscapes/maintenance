@@ -375,6 +375,13 @@ function dayState(d,bookings){
 
 // STORAGE
 const STORAGE_API = 'https://storybook-webhook.vercel.app/api/storage';
+// Hospitable proxy calls from the admin app carry the sign-in token (required since 2026-10-04).
+function hospFetch(url, opts){
+  opts = opts || {};
+  const t = getAuthToken();
+  const headers = Object.assign({}, opts.headers || {}, t ? { 'Authorization': 'Bearer ' + t } : {});
+  return fetch(url, Object.assign({}, opts, { headers }));
+}
 function getAuthToken(){
   try{const a=localStorage.getItem('se_auth_token');return a||null;}catch(e){return null;}
 }
@@ -544,6 +551,7 @@ async function load() {
     tasks = [];
     tasksLoadedOk = false;
   }
+  _snapshotTaskBaseline(tasks); // server state as loaded (2026-10-04 merge)
   // Vendors — defaults are written ONLY when the server confirms se_v is empty.
   // A failed read leaves the list empty and blocks saves. 2026-09-29 fix.
   try{
@@ -605,26 +613,117 @@ async function _rbwMerge(kvKey, localArray, idField='id', excludeIds=null) {
   }
 }
 
-// ── Safe task save with shrinkage guard + read-before-write ──────────────────
-const saveTasks = async () => {
+// ── Task save: three-way merge + one save at a time (2026-10-04) ─────────────
+// _taskBaseline holds every task exactly as the server had it when this page last
+// loaded or saved. At save time the current server copy is compared with that
+// baseline, so changes made elsewhere since then — vendor completions, notes,
+// photos, self-scheduled dates, another admin tab — are kept instead of being
+// overwritten by this page's older copy:
+//   • unchanged on this page                 → take the server's version
+//   • changed here, unchanged on the server  → keep this page's version
+//   • changed in both places                 → keep this page's edits and add the
+//                                              server's other field changes; notes and
+//                                              photos added on the server are appended
+//   • deleted elsewhere, untouched here      → stays deleted
+//   • added elsewhere                        → added here
+// Task objects are updated in place so open dialogs keep pointing at the same task.
+let _taskBaseline = new Map();
+function _snapshotTaskBaseline(arr){ _taskBaseline = new Map((arr||[]).map(t=>[t.id, JSON.stringify(t)])); }
+function _sameJSON(a,b){ return JSON.stringify(a)===JSON.stringify(b); }
+function _replaceTaskInPlace(target, src){
+  Object.keys(target).forEach(k=>{ if(!(k in src)) delete target[k]; });
+  Object.assign(target, src);
+}
+function _mergeListKey(item){
+  if(item&&typeof item==='object') return item.url || ((item.time||'')+'|'+(item.text||''));
+  return String(item);
+}
+const _APPEND_MERGE_FIELDS = new Set(['notes','vendorPhotos','photos']);
+function _mergeTaskFields(base, local, server){
+  const keys = new Set([...Object.keys(base), ...Object.keys(local), ...Object.keys(server)]);
+  keys.forEach(k=>{
+    const bv=base[k], lv=local[k], sv=server[k];
+    if(_sameJSON(sv,bv)) return;                       // server didn't change this field
+    if(_sameJSON(lv,bv)){                              // only the server changed it
+      if(sv===undefined) delete local[k]; else local[k]=sv;
+      return;
+    }
+    if(_APPEND_MERGE_FIELDS.has(k) && Array.isArray(sv)){ // both changed a list: append server additions
+      const baseKeys=new Set((Array.isArray(bv)?bv:[]).map(_mergeListKey));
+      const localArr=Array.isArray(lv)?lv:[];
+      const localKeys=new Set(localArr.map(_mergeListKey));
+      const added=sv.filter(x=>!baseKeys.has(_mergeListKey(x))&&!localKeys.has(_mergeListKey(x)));
+      if(added.length) local[k]=[...localArr, ...added];
+    }
+    // any other field changed in both places: this page's value wins
+  });
+}
+function _mergeTasksWithServer(localArr, serverArr, deletedIds){
+  const serverById=new Map(serverArr.filter(t=>t&&t.id).map(t=>[t.id,t]));
+  const out=[]; const seen=new Set();
+  let fromServer=0, merged=0, removedElsewhere=0, added=0;
+  for(const lt of localArr){
+    const id=lt.id; seen.add(id);
+    const st=serverById.get(id);
+    const base=_taskBaseline.get(id);
+    const lj=JSON.stringify(lt);
+    if(!st){
+      if(base!==undefined && lj===base){ removedElsewhere++; continue; }
+      out.push(lt); continue;                           // new on this page, or edited here
+    }
+    if(base===undefined){ out.push(lt); continue; }
+    const sj=JSON.stringify(st);
+    if(sj!==base){
+      if(lj===base){ _replaceTaskInPlace(lt, st); fromServer++; }
+      else { _mergeTaskFields(JSON.parse(base), lt, st); merged++; }
+    }
+    out.push(lt);
+  }
+  for(const st of serverArr){
+    if(!st||!st.id||seen.has(st.id)) continue;
+    if(deletedIds&&deletedIds.has(st.id)) continue;     // deleted on this page
+    if(_taskBaseline.has(st.id)) continue;               // removed on this page
+    out.push(st); added++;
+  }
+  if(fromServer||merged||removedElsewhere||added){
+    console.log(`[merge] se_t: ${fromServer} updated from server, ${merged} merged, ${added} added, ${removedElsewhere} removed elsewhere`);
+  }
+  return out;
+}
+// Saves run one at a time, in order; each resolves to true only when the server confirmed it.
+let _taskSaveChain = Promise.resolve();
+const saveTasks = () => {
+  const run = _taskSaveChain.then(_saveTasksNow, _saveTasksNow);
+  _taskSaveChain = run.catch(()=>{});
+  return run;
+};
+async function _saveTasksNow(){
   if (!tasksLoadedOk) {
     console.error('[SAFETY] saveTasks() BLOCKED — initial load failed. Reload the page with a working connection.');
-    showToast('\u26a0\ufe0f Task save blocked — data did not load properly. Please reload.','','',8000);
+    showToast('⚠️ Task save blocked — data did not load properly. Please reload.','','',8000);
     return false;
   }
-  // Read-before-write: fold in any tasks added by other admins since page load
-  // (but never resurrect tasks this admin just deleted — see _deletedTaskIds).
-  tasks = await _rbwMerge('se_t', tasks, 'id', _deletedTaskIds);
-  // Shrinkage guard: if merged result is still drastically smaller than baseline, block
+  // Read the server copy and merge (see above). If the read fails, save this page's copy as before.
+  try {
+    const r = await S.get('se_t');
+    if (r && r.value) {
+      const serverArr = JSON.parse(r.value);
+      if (Array.isArray(serverArr)) tasks = _mergeTasksWithServer(tasks, serverArr, _deletedTaskIds);
+    }
+  } catch(e) { console.warn('[merge] se_t: read-before-write failed, using local state'); }
+  // Shrinkage guard: if the result is drastically smaller than the baseline, block
   if (_tasksLoadedCount > 5 && tasks.length < _tasksLoadedCount * 0.5) {
     console.error(`[SAFETY] saveTasks() BLOCKED — drastic shrinkage detected (${_tasksLoadedCount} → ${tasks.length}). This looks like accidental data loss.`);
-    showToast(`\u26a0\ufe0f Save blocked: task count dropped from ${_tasksLoadedCount} to ${tasks.length}. This may be a bug — reload to recover.`,'','',10000);
+    showToast(`⚠️ Save blocked: task count dropped from ${_tasksLoadedCount} to ${tasks.length}. This may be a bug — reload to recover.`,'','',10000);
     return false;
   }
-  _tasksLoadedCount = tasks.length; // keep baseline current after merge
-  // Returns true only when the server confirmed the write (2026-10-04)
-  try { return await S.set('se_t', JSON.stringify(tasks)); } catch (e) { return false; }
-};
+  _tasksLoadedCount = tasks.length;
+  const payload = JSON.stringify(tasks);
+  let ok = false;
+  try { ok = await S.set('se_t', payload); } catch (e) { ok = false; }
+  if (ok) _snapshotTaskBaseline(JSON.parse(payload));
+  return ok;
+}
 const saveVendors = async () => {
   if (!vendorsLoadedOk) {
     console.error('[SAFETY] saveVendors() BLOCKED — initial vendor load failed.');
@@ -1364,6 +1463,7 @@ function bulkMarkComplete(){
   sel.forEach(t=>{t.status='complete';logTaskChange('bulk_complete',t);});
   _selectedTasks.clear();
   saveTasks();renderAll();updateBulkBar();
+  advanceRecurringForTasks(sel);
   showToast(sel.length+' task'+(sel.length!==1?'s':'')+' marked complete');
 }
 
@@ -1990,7 +2090,7 @@ async function fetchIcal(pid){
   try{
     const resUrl=`${PROXY_BASE}/api/hospitable?action=reservations&pid=${hospId}`;
     console.log(`Fetching reservations for ${pid} (hospitable id: ${hospId.slice(0,8)}...)`);
-    const r=await fetch(resUrl,{signal:AbortSignal.timeout(15000)});
+    const r=await hospFetch(resUrl,{signal:AbortSignal.timeout(15000)});
     if(r.ok){
       const json=await r.json();
       if(json.data&&Array.isArray(json.data)&&json.data.length>0){
@@ -2032,7 +2132,7 @@ async function fetchIcal(pid){
   try{
     const url=`${PROXY_BASE}/api/hospitable?action=calendar&pid=${hospId}`;
     console.log(`Fetching calendar for ${pid} (fallback)`);
-    const r=await fetch(url,{signal:AbortSignal.timeout(15000)});
+    const r=await hospFetch(url,{signal:AbortSignal.timeout(15000)});
     if(!r.ok){
       const detail=await r.text().catch(()=>'');
       console.error(`Hospitable API ${r.status} for ${pid}: ${detail.slice(0,200)}`);
@@ -2679,6 +2779,45 @@ async function delRec(id){
   recurring=recurring.filter(r=>r.id!==id);await saveRec();renderRecurring();
   showToast('Recurring task removed.','',async()=>{_deletedRecIds.delete(deleted.id);recurring.splice(idx,0,deleted);await saveRec();renderRecurring();showToast('Recurring task restored.');});
 }
+// ── Recurring: advance "next due" when a service is logged or completed (2026-10-04) ──
+// Next due = service date + the template's frequency, and only ever moves forward.
+// A service date in the future (completed early) counts as today.
+const _REC_MONTHS={monthly:1,quarterly:3,biannual:6,annual:12,biennial:24};
+function _addMonthsISO(ds,months){
+  const [y,m,d]=ds.split('-').map(Number);
+  const t=new Date(y,m-1+months,1,12);
+  const last=new Date(t.getFullYear(),t.getMonth()+1,0).getDate();
+  t.setDate(Math.min(d,last));
+  return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+}
+function _recurringForTask(t){
+  if(!t||!t.recurring||!Array.isArray(recurring))return null;
+  return recurring.find(r=>{
+    if(r.name!==t.problem||!Array.isArray(r.properties))return false;
+    if(r.properties.includes('all')||r.properties.includes(t.property))return true;
+    const nb=NBS.find(n=>n.id===t.property);
+    return !!(nb&&nb.props.some(p=>r.properties.includes(p)));
+  })||null;
+}
+async function advanceRecurringForTasks(list){
+  const today=fsTodayISO();
+  const latest=new Map();
+  (list||[]).forEach(t=>{
+    const r=_recurringForTask(t);if(!r||!_REC_MONTHS[r.frequency])return;
+    let d=/^\d{4}-\d{2}-\d{2}$/.test(t.date||'')?t.date:today;
+    if(d>today)d=today;
+    const prev=latest.get(r.id);
+    if(!prev||d>prev.d)latest.set(r.id,{r,d});
+  });
+  let changed=false;
+  latest.forEach(({r,d})=>{
+    const next=_addMonthsISO(d,_REC_MONTHS[r.frequency]);
+    if(!r.nextDue||r.nextDue<next){r.nextDue=next;changed=true;}
+  });
+  if(changed){await saveRec();if(typeof renderRecurring==='function')renderRecurring();}
+  return changed;
+}
+
 // ── LOG TASK (record a completed service from a recurring template) ──────────
 let _logTaskRecId=null;
 
@@ -2756,6 +2895,7 @@ async function saveLogTask(){
   tasks.unshift(task);
   await saveTasks();
   if(typeof logTaskChange==='function')logTaskChange('log_service',task);
+  await advanceRecurringForTasks([task]);
 
   // For filter tasks: reset each cabin's filter clock to the logged date (supports backdating).
   // 2026-10-04 fix: a resort choice (umc / prc / hillside) now covers every cabin in it that this
@@ -3457,7 +3597,7 @@ async function sendGuestCommMsg(rid,guestFirst){
   const msg=inp.value.trim();if(!msg)return;
   const btn=inp.nextElementSibling;btn.textContent='Sending...';btn.disabled=true;
   try{
-    const r=await fetch(`${PROXY_BASE}/api/hospitable?action=send_message&rid=${rid}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg})});
+    const r=await hospFetch(`${PROXY_BASE}/api/hospitable?action=send_message&rid=${rid}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg})});
     if(!r.ok)throw new Error('API '+r.status);
     inp.value='';btn.textContent='Sent ✓';btn.style.background='#2e7d52';btn.style.borderColor='#2e7d52';
     // Add note to task
@@ -4010,23 +4150,36 @@ function rmItemHtml(item,tab){
 }
 
 // ── Vendor Share Token ──
+// 2026-10-04: links use 96 random bits from the browser's crypto generator.
+// Old name-based links keep working until the cutoff date set in api/_auth.js.
 function generateVendorToken(){
-  const chars='abcdefghijklmnopqrstuvwxyz0123456789';
-  let t='';for(let i=0;i<12;i++)t+=chars[Math.floor(Math.random()*chars.length)];
-  return t;
+  const b=new Uint8Array(12);crypto.getRandomValues(b);
+  return Array.from(b,x=>x.toString(16).padStart(2,'0')).join('');
+}
+function _vendorRecByName(name){
+  const n=(name||'').toLowerCase();
+  return (typeof vendors!=='undefined'&&Array.isArray(vendors))?vendors.find(v=>(v.name||'').toLowerCase()===n):null;
+}
+// Reuse a vendor's saved link if it still exists on the server; otherwise mint a new one.
+async function _linkStillValid(token){
+  if(!token)return false;
+  try{const r=await S.get('se_vs_'+token);return !!(r&&r.value);}catch(e){return false;}
 }
 async function createVendorSheet(vendorName,date,taskIds){
-  // Deterministic token based on vendor+date so the same link is reused
-  // (adding/removing tasks from their day is reflected automatically)
-  const raw=vendorName.toLowerCase().replace(/\s+/g,'')+':'+date;
-  let hash=0;for(let i=0;i<raw.length;i++){hash=((hash<<5)-hash)+raw.charCodeAt(i);hash|=0;}
-  const token='vd'+Math.abs(hash).toString(36)+date.replace(/-/g,'');
-  const key='se_vs_'+token;
-  // Only write if token doesn't already exist
-  const existing=await S.get(key);
-  if(!existing||!existing.value){
-    const sheet={vendor:vendorName,date:date,created:new Date().toISOString()};
-    await S.set(key,JSON.stringify(sheet));
+  // One random link per vendor per date, remembered on the vendor record so the same
+  // link is reused (adding/removing tasks from their day is reflected automatically).
+  const v=_vendorRecByName(vendorName);
+  const days=(v&&v.links&&v.links.days)||{};
+  if(await _linkStillValid(days[date]))return days[date];
+  const token='vd'+generateVendorToken();
+  const ok=await S.set('se_vs_'+token,JSON.stringify({vendor:vendorName,date:date,created:new Date().toISOString(),v:2}));
+  if(!ok)throw new Error('Could not save the link');
+  if(v){
+    const keepFrom=new Date(Date.now()-8*86400000).toISOString().slice(0,10);
+    const kept=Object.fromEntries(Object.entries(days).filter(([d])=>d>=keepFrom));
+    kept[date]=token;
+    v.links=Object.assign({},v.links||{},{days:kept});
+    await saveVendors();
   }
   return token;
 }
@@ -4082,15 +4235,14 @@ async function autoInjectSheetLink(vendorName,task){
 // ── Vendor Multi-Day Schedule Link ─────────────────────────────
 // Creates a persistent, bookmarkable link showing ALL upcoming tasks for a vendor
 async function createVendorAgenda(vendorName){
-  const raw=vendorName.toLowerCase().replace(/\s+/g,'');
-  let hash=0;for(let i=0;i<raw.length;i++){hash=((hash<<5)-hash)+raw.charCodeAt(i);hash|=0;}
-  const token='va'+Math.abs(hash).toString(36);
-  const key='se_vs_'+token;
-  const existing=await S.get(key);
-  if(!existing||!existing.value){
-    const sheet={vendor:vendorName,type:'agenda',created:new Date().toISOString()};
-    await S.set(key,JSON.stringify(sheet));
-  }
+  // One permanent random schedule link per vendor, remembered on the vendor record.
+  const v=_vendorRecByName(vendorName);
+  const saved=v&&v.links&&v.links.agenda;
+  if(await _linkStillValid(saved))return saved;
+  const token='va'+generateVendorToken();
+  const ok=await S.set('se_vs_'+token,JSON.stringify({vendor:vendorName,type:'agenda',created:new Date().toISOString(),v:2}));
+  if(!ok)throw new Error('Could not save the link');
+  if(v){v.links=Object.assign({},v.links||{},{agenda:token});await saveVendors();}
   return token;
 }
 
@@ -4544,6 +4696,7 @@ async function markComplete(){
   logTaskChange('completed',t);await saveTasks();closeModal('detail-modal');renderAll();showToast('Task marked complete.');
   // Deploy 2: if this task carried filter service, writeback profile last_service_date
   if(typeof fsOnTaskComplete==='function')fsOnTaskComplete(t);
+  advanceRecurringForTasks([t]);
   // Check if this completes a payment group where vendor requested payment
   checkAdminPaymentPrompt(t);
 }
@@ -4560,6 +4713,7 @@ async function vdQuickComplete(id,e){
   t.status='complete';logTaskChange('completed',t);
   await saveTasks();renderAll();showToast('Task marked complete.');
   if(typeof fsOnTaskComplete==='function')fsOnTaskComplete(t);
+  advanceRecurringForTasks([t]);
   checkAdminPaymentPrompt(t);
 }
 
@@ -6185,7 +6339,7 @@ async function clFetch() {
           let page = 1;
           let allReviews = [];
           while (page <= 10) { // safety cap at 10 pages (~500 reviews per property)
-            const r = await fetch(`${PROXY_BASE}/api/hospitable?action=reviews&pid=${uuid}&start=2020-01-01&end=${new Date().toISOString().slice(0,10)}&page=${page}`, { signal: AbortSignal.timeout(15000) });
+            const r = await hospFetch(`${PROXY_BASE}/api/hospitable?action=reviews&pid=${uuid}&start=2020-01-01&end=${new Date().toISOString().slice(0,10)}&page=${page}`, { signal: AbortSignal.timeout(15000) });
             if (!r.ok) break;
             const data = await r.json();
             const reviews = data.data || [];
@@ -6894,17 +7048,15 @@ async function cvGenerateLink() {
   if (btn) { btn.textContent = 'Generating...'; btn.disabled = true; }
 
   try {
-    // Deterministic token based on name + sorted property list
+    // Random token (2026-10-04)
     const props = [...cvSelectedProps].sort();
-    const rawKey = name.toLowerCase().replace(/\s+/g, '') + ':' + props.join(',');
-    let hash = 0;
-    for (let i = 0; i < rawKey.length; i++) { hash = ((hash << 5) - hash) + rawKey.charCodeAt(i); hash |= 0; }
-    const token = 'cv' + Math.abs(hash).toString(36) + Date.now().toString(36).slice(-4);
+    const token = 'cv' + generateVendorToken();
 
     // Save link data to KV
     const created = new Date().toISOString();
-    const data = { name, properties: props, created };
-    await S.set('se_cv_' + token, JSON.stringify(data));
+    const data = { name, properties: props, created, v: 2 };
+    const saved = await S.set('se_cv_' + token, JSON.stringify(data));
+    if (!saved) throw new Error('Could not save the cleaner link');
 
     // Update saved index — replace existing entry for this name or add new
     cvSavedLinks = cvSavedLinks.filter(l => l.name.toLowerCase() !== name.toLowerCase());
@@ -8708,7 +8860,7 @@ async function rpQuickDelivered(id) {
     const hospId=(typeof HOSPITABLE_IDS!=='undefined'?HOSPITABLE_IDS[propId]:null);
     if(!hospId){vIcalByProp[propId]=[];return[];}
     try{
-      const url=`${PROXY_BASE}/api/hospitable?action=reservations&pid=${hospId}`;
+      const url=`${PROXY_BASE}/api/hospitable?action=reservations&pid=${hospId}&token=${encodeURIComponent(token)}`;
       const r=await fetch(url,{signal:AbortSignal.timeout(15000)});
       if(!r.ok){vIcalByProp[propId]=[];return[];}
       const json=await r.json();
@@ -8993,7 +9145,7 @@ async function renderGuestContext(t,p){
 
   // Fetch message thread in background
   try{
-    const r=await fetch(`${PROXY_BASE}/api/hospitable?action=messages&rid=${bestRes.reservationId}`);
+    const r=await hospFetch(`${PROXY_BASE}/api/hospitable?action=messages&rid=${bestRes.reservationId}`);
     if(!r.ok)throw new Error('API '+r.status);
     const json=await r.json();
     const msgsEl=document.getElementById('d-gc-msgs');
@@ -9085,7 +9237,7 @@ if (window._cleanerViewMode) {
         const batch = hospEntries.slice(i, i + batchSize);
         const results = await Promise.allSettled(
           batch.map(async ([pid, hospId]) => {
-            const url = `${API}/api/hospitable?action=reviews&pid=${hospId}&start=${sixMonthStart}&end=${today}`;
+            const url = `${API}/api/hospitable?action=reviews&pid=${hospId}&start=${sixMonthStart}&end=${today}&cvtoken=${encodeURIComponent(token)}`;
             const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
             if (!r.ok) return [];
             const d = await r.json();
@@ -11224,7 +11376,7 @@ async function rvFetchAll(force) {
       const revs = [];
       while (page <= 10) {
         try {
-          const r = await fetch(
+          const r = await hospFetch(
             `${PROXY_BASE}/api/hospitable?action=reviews&pid=${t.uuid}&start=2020-01-01&end=${new Date().toISOString().slice(0,10)}&page=${page}`,
             { signal: AbortSignal.timeout(15000) }
           );
@@ -12385,7 +12537,7 @@ async function _invRunVerification(){
       const deps=new Set();
       try{
         const url=`${PROXY_BASE}/api/hospitable?action=calendar&pid=${pid}`;
-        const r=await fetch(url,{signal:AbortSignal.timeout(20000)});
+        const r=await hospFetch(url,{signal:AbortSignal.timeout(20000)});
         if(!r.ok) throw new Error('HTTP '+r.status);
         const raw=await r.json();
         const days=Array.isArray(raw?.data?.days)?raw.data.days
@@ -12401,7 +12553,7 @@ async function _invRunVerification(){
           }
         });
         // Also fetch reservations for departure date confirmation
-        const rRes=await fetch(`${PROXY_BASE}/api/hospitable?action=reservations&pid=${pid}`,
+        const rRes=await hospFetch(`${PROXY_BASE}/api/hospitable?action=reservations&pid=${pid}`,
           {signal:AbortSignal.timeout(20000)});
         if(rRes.ok){
           const rRaw=await rRes.json();
