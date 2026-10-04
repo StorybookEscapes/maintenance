@@ -884,7 +884,7 @@ function populatePropMulti(id){
   });
 }
 
-function renderAll(){renderVR();renderVD();renderVSC();renderUB();renderTasks();renderCalendar();renderRecurring();renderHistory();renderVendors();if(typeof pjRenderList==='function')pjRenderList();}
+function renderAll(){renderShoppingList();renderVR();renderVD();renderVSC();renderUB();renderTasks();renderCalendar();renderRecurring();renderHistory();renderVendors();if(typeof pjRenderList==='function')pjRenderList();}
 
 // URGENT BANNER
 function renderUB(){
@@ -1108,7 +1108,7 @@ function taskCard(t){
         <span class="badge b-${t.status}">${t.status.replace('_',' ')}</span>
         ${t.date?`<span class="tmi">${t.date}</span>${overdueBadge(t)}`:(t.status!=='scheduled'?'<span class="tmi" style="color:var(--text3)">Not scheduled</span>':'')}
         ${t.vendor?`<span class="tmi">${t.vendor}</span>`:''}${t.vendorDone?'<span class="vd-badge">Vendor Done</span>':''}${(t.vendor&&!t.date)?'<span class="avs-badge" title="Vendor asked to pick a date">Awaiting vendor schedule</span>':''}${t.selfScheduledAt?'<span class="ss-badge" title="Vendor self-scheduled this date">Self-scheduled</span>':''}
-        ${taskEffectivePurchaseNote(t)?`<span style="font-size:.62rem;color:#e65100;font-weight:600;background:#fff3e0;padding:1px 6px;border-radius:10px;border:1px solid #ffcc80">&#x1F6D2; ${t.purchaseStatus==='delivered'?'Delivered':t.purchaseStatus==='purchased'?'Purchased — deliver':'Buy'}${taskEffectivePurchaser(t)==='vendor'?' (vendor)':''}</span>`:''}
+        ${purchaseBadge(t)}
         ${t.guest?`<span class="tmi">Reported by ${t.guest}</span>`:''}
         ${t.project_title?`<span style="font-size:.62rem;color:var(--green);font-weight:600;background:var(--green-light);padding:1px 6px;border-radius:10px;border:1px solid var(--border)">📋 ${t.project_title}</span>`:''}
       </div>
@@ -2561,7 +2561,7 @@ function renderDayDetail(ds){
             ${t.urgent?'<span class="badge b-urgent">Urgent</span>':''}
             <span class="badge b-${t.status}">${t.status.replace('_',' ')}</span>
             ${t.vendor?`<span class="tmi">${t.vendor}</span>`:''}
-            ${taskEffectivePurchaseNote(t)?`<span style="font-size:.62rem;color:#e65100;font-weight:600;background:#fff3e0;padding:1px 6px;border-radius:10px;border:1px solid #ffcc80">&#x1F6D2; ${t.purchaseStatus==='delivered'?'Delivered':t.purchaseStatus==='purchased'?'Purchased — deliver':'Buy'}${taskEffectivePurchaser(t)==='vendor'?' (vendor)':''}</span>`:''}
+            ${purchaseBadge(t)}
           </div>
         </div></div></div>`;
     });
@@ -3087,6 +3087,7 @@ function openAddTask(propId){
   document.getElementById('task-modal-title').textContent='New Task';
   _cqEditingId=null;const _sb=document.getElementById('f-save-btn');if(_sb)_sb.textContent='Save Task'; // 2026-10-04
   ['f-guest','f-problem','f-category','f-vendor','f-notes'].forEach(id=>document.getElementById(id).value='');
+  const _fb=document.getElementById('f-buy');if(_fb)_fb.value=''; // 2026-10-04 shopping list
   document.getElementById('f-status').value='open';document.getElementById('f-urgent').checked=false;
   document.getElementById('f-date').value='';
   document.getElementById('f-dp-display').textContent='Select a date...';
@@ -3110,6 +3111,9 @@ async function saveTask(){
   const t={id:Date.now().toString(),property:pid,guest:document.getElementById('f-guest').value.trim(),problem:prob,category:fCat,status:fStatus,date:fDate,vendor:document.getElementById('f-vendor').value.trim(),urgent:document.getElementById('f-urgent').checked,recurring:false,notes:nt?[{text:nt,type:'admin',time:new Date().toISOString()}]:[],vendorNotes:'',created:new Date().toISOString()};
   // Auto-init purchase tracking for replacement tasks
   if(fCat==='replacement'){t.purchaseNote=prob;t.purchaseStatus='needed';t.purchaser='owner';}
+  // 2026-10-04: any task can carry something to buy — goes on the shopping list
+  const fBuy=(document.getElementById('f-buy')?.value||'').trim();
+  if(fBuy){t.purchaseNote=fBuy;t.purchaseStatus='needed';t.purchaser=t.purchaser||'owner';}
   // Deploy 2: bundle filter service into this task if the user checked the bundler
   if(typeof fsMaybeStampTask==='function')fsMaybeStampTask(t);
   const _cqId=_cqEditingId; if(_cqId)_cqDecorateTask(t,_cqId); // 2026-10-04: editing a Claude suggestion before import
@@ -3255,20 +3259,35 @@ function renderPurchaseWorkflow(t){
   const show=t.category==='replacement'||!!t.purchaseNote;
   wrap.style.display=show?'':'none';
   if(!show)return;
-  // Status buttons
-  const st=t.purchaseStatus||'needed';
-  ['needed','purchased','delivered'].forEach(s=>{
-    const btn=document.getElementById('d-purch-status-'+s);if(!btn)return;
-    if(s===st){btn.style.background='#e65100';btn.style.color='#fff';btn.style.borderColor='#e65100';}
-    else{btn.style.background='';btn.style.color='';btn.style.borderColor='';}
-  });
-  // Purchaser buttons
-  const who=t.purchaser||'owner';
+  // 2026-10-04 rebuild: Who buys (Me / vendor) + one Bought box. Delivery = completing the task.
+  const who=taskEffectivePurchaser(t);
+  const vName=t.vendor||'Vendor';
+  const vBtn=document.getElementById('d-purchaser-vendor');if(vBtn)vBtn.textContent=vName;
   ['owner','vendor'].forEach(s=>{
     const btn=document.getElementById('d-purchaser-'+s);if(!btn)return;
     if(s===who){btn.style.background='var(--green)';btn.style.color='#fff';btn.style.borderColor='var(--green)';}
     else{btn.style.background='';btn.style.color='';btn.style.borderColor='';}
   });
+  const st=purchaseState(t);
+  const cb=document.getElementById('d-purch-bought');
+  if(cb){cb.checked=st==='bought'||st==='closed';cb.disabled=st==='closed';}
+  const lbl=document.getElementById('d-purch-bought-label');
+  if(lbl)lbl.textContent=who==='vendor'?'Bought by '+vName:'Bought';
+  const hint=document.getElementById('d-purch-hint');
+  if(hint){
+    hint.textContent=st==='closed'?'Task complete — purchase is done.'
+      :st==='bought'?'Bought. Schedule the task to get it placed — completing the task finishes it.'
+      :who==='vendor'?vName+' picks it up on the way. Completing the task finishes it.'
+      :'On your shopping list until you check Bought.';
+  }
+}
+async function setPurchaseBought(on){
+  const t=tasks.find(x=>x.id===detailId);if(!t)return;
+  if(isDone(t)){renderPurchaseWorkflow(t);return;}
+  if(on){t.purchaseStatus='purchased';t.purchasedAt=t.purchasedAt||new Date().toISOString();}
+  else{t.purchaseStatus='needed';t.purchasedAt='';}
+  await saveTasks();renderPurchaseWorkflow(t);renderAll();
+  showToast(on?'Bought — off the shopping list.':'Back on the shopping list.');
 }
 async function setPurchaseStatus(status){
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
@@ -6390,8 +6409,8 @@ function cqEdit(id) {
   document.getElementById('f-problem').value = item.problem || '';
   document.getElementById('f-category').value = item.category || '';
   document.getElementById('f-urgent').checked = !!item.urgent;
-  const extra = item.category === 'replacement' && item.purchaseNote && item.purchaseNote !== item.problem ? 'Buy: ' + item.purchaseNote : '';
-  document.getElementById('f-notes').value = [item.note || '', extra].filter(Boolean).join('\n');
+  document.getElementById('f-notes').value = item.note || '';
+  const _fb = document.getElementById('f-buy'); if (_fb) _fb.value = item.category === 'replacement' ? (item.purchaseNote || '') : '';
 }
 function _cqDecorateTask(t, id) {
   const item = cqItems.find(x => x.id === id);
@@ -6401,7 +6420,8 @@ function _cqDecorateTask(t, id) {
   const head = 'Suggested by Claude' + (item.source ? ' (' + item.source + ')' : '') + ', edited and imported after review.';
   t.notes = [{ text: head, type: 'admin', time: t.created }, ...(t.notes || [])];
   if (t.category === 'replacement') {
-    t.purchaseNote = (t.problem === item.problem && item.purchaseNote) ? item.purchaseNote : t.problem;
+    const _fb = (document.getElementById('f-buy')?.value || '').trim();
+    if (!_fb) t.purchaseNote = (t.problem === item.problem && item.purchaseNote) ? item.purchaseNote : t.problem;
     t.purchaser = item.purchaser === 'vendor' ? 'vendor' : 'owner';
   }
 }
@@ -9492,6 +9512,7 @@ async function initApp(){
   await load();
   await loadSettings();
   await loadReplacements();
+  await rpCleanupOnce();
   await loadSmsTemplate();
   await loadCombinedSmsTemplate();
   await loadLogo();
@@ -11193,6 +11214,74 @@ function taskEffectivePurchaser(task) {
   const isFilter = FILTER_SERVICE_ENABLED && !!(task.filter_service_bundled || task.filter_auto_generated); // SUNSET 2026-10-04 (filter service)
   if (isFilter) return 'vendor';
   return task.purchaser || 'owner';
+}
+
+// ── Purchase stage + Shopping List (2026-10-04) ──
+// A purchase is part of its task. 'none' nothing to buy · 'needed' not bought ·
+// 'bought' bought (or vendor marked the job done) · 'closed' task complete.
+function purchaseState(t){
+  if(!t||!taskEffectivePurchaseNote(t))return 'none';
+  if(isDone(t))return 'closed';
+  if(t.purchaseStatus==='purchased'||t.purchaseStatus==='delivered'||t.vendorDone)return 'bought';
+  return 'needed';
+}
+function purchaseBadge(t){
+  const s=purchaseState(t);
+  if(s==='none'||s==='closed')return '';
+  const v=taskEffectivePurchaser(t)==='vendor';
+  const label=s==='bought'?'Bought':v?'Vendor picking up':'Not bought';
+  return `<span class="pbadge ${s==='bought'?'pb-bought':'pb-needed'}">&#x1F6D2; ${label}</span>`;
+}
+let _shopOpen=(()=>{try{return localStorage.getItem('se_shop_open')!=='0';}catch(e){return true;}})();
+function toggleShopList(){
+  _shopOpen=!_shopOpen;
+  try{localStorage.setItem('se_shop_open',_shopOpen?'1':'0');}catch(e){}
+  renderShoppingList();
+}
+function renderShoppingList(){
+  const el=document.getElementById('shop-wrap');if(!el)return;
+  const hidden=typeof projects!=='undefined'?new Set(projects.filter(p=>p.visible===false).map(p=>p.id)):new Set();
+  const items=tasks.filter(t=>purchaseState(t)==='needed'&&!(t.project_id&&hidden.has(t.project_id)));
+  if(!items.length){el.innerHTML='';return;}
+  const order=[];NBS.forEach(nb=>nb.props.forEach(pid=>order.push(pid)));
+  const rank=pid=>{const i=order.indexOf(pid);return i<0?999:i;};
+  items.sort((a,b)=>(b.urgent?1:0)-(a.urgent?1:0)||rank(a.property)-rank(b.property)||new Date(a.created)-new Date(b.created));
+  const row=t=>{
+    const p=getProp(t.property);const nb=getNb(t.property);
+    const v=taskEffectivePurchaser(t)==='vendor';
+    return `<div class="shop-row" onclick="openDetail('${t.id}')">
+      <button class="shop-check" title="Mark bought" onclick="event.stopPropagation();shopMarkBought('${t.id}')">&#10003;</button>
+      <div class="shop-main">
+        <div class="shop-item">${escHtml(taskEffectivePurchaseNote(t))}</div>
+        <div class="shop-meta"><span class="shop-prop ${nb?'pl-'+nb.cls:''}">${escHtml(p?p.name:t.property)}</span>${v&&t.vendor?`<span>${escHtml(t.vendor)}</span>`:''}${t.urgent?'<span class="shop-urgent">Urgent</span>':''}</div>
+      </div>
+    </div>`;
+  };
+  const group=(title,arr)=>arr.length?`<div class="shop-group"><div class="shop-group-hdr">${title} <span>(${arr.length})</span></div>${arr.map(row).join('')}</div>`:'';
+  const mine=items.filter(t=>taskEffectivePurchaser(t)!=='vendor');
+  const vend=items.filter(t=>taskEffectivePurchaser(t)==='vendor');
+  el.innerHTML=`<div class="shop-list${_shopOpen?' open':''}">
+    <button class="shop-hdr" onclick="toggleShopList()"><span>&#x1F6D2; Shopping List <span class="shop-count">${items.length}</span></span><span class="shop-arrow">&#x25BA;</span></button>
+    <div class="shop-body">${group('To buy',mine)}${group('Vendor picking up',vend)}</div>
+  </div>`;
+}
+async function shopMarkBought(id){
+  const t=tasks.find(x=>x.id===id);if(!t)return;
+  t.purchaseStatus='purchased';t.purchasedAt=t.purchasedAt||new Date().toISOString();
+  await saveTasks();renderAll();
+  showToast('Bought: '+taskEffectivePurchaseNote(t));
+}
+// One-time (2026-10-04): Chip asked to remove the old Bearadise weather-stripping
+// item when the Replacements tab was retired. Closes it once; safe to delete later.
+async function rpCleanupOnce(){
+  if(!tasksLoadedOk)return;
+  const t=tasks.find(x=>x.id==='1776268991342');
+  if(!t||t._rpCleanup20261004||isDone(t))return;
+  t.status='complete';t._rpCleanup20261004=true;
+  if(!t.notes)t.notes=[];
+  t.notes.push({text:'Closed when the Replacements tab was retired (Oct 4, 2026).',type:'admin',time:new Date().toISOString()});
+  logTaskChange('completed',t);
+  await saveTasks();
 }
 
 // Buy list from shortfall only (no opportunistic restocking). Uses assume-zero

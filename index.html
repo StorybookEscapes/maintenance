@@ -31,7 +31,8 @@
       <button class="nav-btn" onclick="switchView('history',this)">Service History</button>
       <button class="nav-btn" onclick="switchView('vendors',this)">Vendors</button>
       <button class="nav-btn" onclick="switchView('reviews',this)">Reviews</button>
-      <button class="nav-btn" onclick="switchView('replacements',this)">Replacements</button>
+      <!-- SUNSET 2026-10-04: Replacements tab retired — buying now lives on Tasks (shopping list + task window). View + code kept. -->
+      <button class="nav-btn" style="display:none" onclick="switchView('replacements',this)">Replacements</button>
       <button class="nav-btn" onclick="switchView('properties',this)">Properties</button>
       <button class="nav-btn" onclick="switchView('projects',this)">Projects</button>
       <button class="nav-btn" onclick="switchView('settings',this)">Settings</button>
@@ -73,6 +74,9 @@
         </div>
         <div id="day-detail-tasks"></div>
       </div>
+
+      <!-- Shopping List (2026-10-04) — open tasks with something not yet bought -->
+      <div id="shop-wrap"></div>
 
       <!-- Task Lists -->
       <input type="hidden" id="search-input" value="">
@@ -477,6 +481,10 @@
         <input type="text" id="f-vendor" placeholder="Vendor name">
       </div>
       <div class="fgr full">
+        <label>Need to buy? <span style="font-weight:400;opacity:.7">(optional — adds it to the shopping list)</span></label>
+        <input type="text" id="f-buy" placeholder="e.g. Coffee maker, baking pans, broom">
+      </div>
+      <div class="fgr full">
         <label>Notes <span style="font-weight:400;opacity:.7">(the assigned vendor can see these)</span></label>
         <textarea id="f-notes" rows="2" placeholder="Notes for your team..."></textarea>
       </div>
@@ -603,23 +611,21 @@
             <input type="text" id="d-purchase" placeholder="e.g. Coffee maker, bath towels, 4x12 vent..." style="flex:1" onkeydown="if(event.key==='Enter')savePurchaseNote()" oninput="clearTimeout(this._debounce);this._debounce=setTimeout(()=>savePurchaseNote(),1200)">
             <button class="btn btn-g" onclick="savePurchaseNote()" style="padding:5px 11px;font-size:.72rem;white-space:nowrap">Save</button>
           </div>
-          <div id="d-purchase-saved" style="font-size:.62rem;color:var(--green-mid);margin-bottom:6px;display:none">Saved — vendor will be notified to purchase this.</div>
+          <div id="d-purchase-saved" style="font-size:.62rem;color:var(--green-mid);margin-bottom:6px;display:none">Saved — on the shopping list until it's bought.</div>
           <div id="d-purchase-workflow" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
-              <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:1px;font-weight:700;color:#e65100">Purchase Tracking</div>
-              <div style="display:flex;gap:4px;margin-left:auto">
-                <button class="btn" id="d-purch-status-needed" onclick="setPurchaseStatus('needed')" style="padding:3px 10px;font-size:.68rem">Needs Buying</button>
-                <button class="btn" id="d-purch-status-purchased" onclick="setPurchaseStatus('purchased')" style="padding:3px 10px;font-size:.68rem">Purchased</button>
-                <button class="btn" id="d-purch-status-delivered" onclick="setPurchaseStatus('delivered')" style="padding:3px 10px;font-size:.68rem">Delivered</button>
+            <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:1px;font-weight:700;color:#e65100;margin-bottom:10px">Purchase</div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+              <div style="font-size:.74rem;color:var(--text2);min-width:70px">Who buys?</div>
+              <div style="display:flex;gap:4px;flex-wrap:wrap">
+                <button class="btn" id="d-purchaser-owner" onclick="setPurchaser('owner')" style="padding:3px 12px;font-size:.7rem">Me</button>
+                <button class="btn" id="d-purchaser-vendor" onclick="setPurchaser('vendor')" style="padding:3px 12px;font-size:.7rem">Vendor</button>
               </div>
             </div>
-            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-              <div style="font-size:.72rem;color:var(--text2)">Who's buying?</div>
-              <div style="display:flex;gap:4px">
-                <button class="btn" id="d-purchaser-owner" onclick="setPurchaser('owner')" style="padding:3px 10px;font-size:.68rem">I'll buy it</button>
-                <button class="btn" id="d-purchaser-vendor" onclick="setPurchaser('vendor')" style="padding:3px 10px;font-size:.68rem">Vendor buys</button>
-              </div>
-            </div>
+            <label class="pw-bought" for="d-purch-bought">
+              <input type="checkbox" id="d-purch-bought" onchange="setPurchaseBought(this.checked)">
+              <span id="d-purch-bought-label">Bought</span>
+            </label>
+            <div id="d-purch-hint" class="pw-hint"></div>
           </div>
         </div>
       </div>

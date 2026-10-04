@@ -2194,3 +2194,31 @@ textarea{resize:vertical;min-height:76px}
 .inv-notice-err{background:#fef2f2;color:#991b1b;border:1px solid #fca5a5}
 .btn-inv{background:var(--green);color:#fff;border:none}
 .btn-inv:hover{background:var(--green-mid)}
+
+/* ── Shopping List + purchase badges (2026-10-04) ── */
+.pbadge{font-size:.62rem;font-weight:600;padding:1px 6px;border-radius:10px;border:1px solid}
+.pb-needed{color:#e65100;background:#fff3e0;border-color:#ffcc80}
+.pb-bought{color:var(--green-mid);background:var(--green-light);border-color:var(--border)}
+.shop-list{background:var(--surface);border:1px solid var(--border);border-left:3px solid #e65100;border-radius:var(--radius);margin-bottom:18px}
+.shop-hdr{width:100%;display:flex;justify-content:space-between;align-items:center;background:none;border:none;padding:11px 14px;cursor:pointer;font-family:inherit;font-size:.86rem;font-weight:700;color:var(--text)}
+.shop-count{display:inline-block;min-width:20px;margin-left:6px;padding:1px 7px;border-radius:10px;background:#e65100;color:#fff;font-size:.7rem;text-align:center}
+.shop-arrow{font-size:.7rem;color:var(--text3);transition:transform .15s}
+.shop-list.open .shop-arrow{transform:rotate(90deg)}
+.shop-body{display:none;padding:0 14px 10px}
+.shop-list.open .shop-body{display:block}
+.shop-group{margin-top:4px}
+.shop-group+.shop-group{margin-top:10px}
+.shop-group-hdr{font-size:.66rem;text-transform:uppercase;letter-spacing:1px;font-weight:700;color:var(--text2);padding:4px 0 6px}
+.shop-group-hdr span{font-weight:400}
+.shop-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--border);cursor:pointer}
+.shop-row:hover .shop-item{color:var(--green-mid)}
+.shop-check{flex-shrink:0;width:30px;height:30px;border-radius:50%;border:1.5px solid var(--border);background:var(--surface);color:var(--text3);font-size:.85rem;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+.shop-check:hover{background:var(--green);border-color:var(--green);color:#fff}
+.shop-main{flex:1;min-width:0}
+.shop-item{font-size:.88rem;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.shop-meta{display:flex;gap:8px;flex-wrap:wrap;font-size:.7rem;color:var(--text2);margin-top:1px}
+.shop-prop{text-transform:uppercase;letter-spacing:.8px;font-weight:700;font-size:.62rem}
+.shop-urgent{color:var(--red);font-weight:700}
+.pw-bought{display:inline-flex;align-items:center;gap:8px;font-size:.84rem;font-weight:600;color:var(--text);cursor:pointer;text-transform:none;letter-spacing:0;margin:0}
+.pw-bought input{width:18px;height:18px;accent-color:var(--green);cursor:pointer}
+.pw-hint{font-size:.68rem;color:var(--text3);margin-top:6px}
