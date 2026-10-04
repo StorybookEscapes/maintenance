@@ -473,6 +473,26 @@ const S = {
     }
   }
 };
+// ── Strict KV read (2026-09-29 fix) ──
+// S.get() returns null for BOTH "key is empty" and "request failed", so boot
+// code could not tell them apart and overwrote se_v / se_r with the built-in
+// defaults whenever a read failed. _kvGetStrict() returns null ONLY when the
+// server confirms the key is empty (HTTP 200, value null) and THROWS on any
+// failure (no/expired token, 401, non-200, timeout, network error).
+async function _kvGetStrict(k){
+  const token = getAuthToken();
+  if (!token) throw new Error('no auth token');
+  if (isTokenExpired()) throw new Error('auth token expired');
+  const r = await fetch(STORAGE_API + '?key=' + encodeURIComponent(k), {
+    headers: { 'Authorization': 'Bearer ' + token },
+    signal: AbortSignal.timeout(8000)
+  });
+  if (r.status === 401) { showReAuthPrompt(); throw new Error('401 unauthorized'); }
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const d = await r.json();
+  if (!d || !('value' in d)) throw new Error('malformed storage response');
+  return d.value ? { value: d.value } : null;
+}
 // ── Sync status indicator ──
 function updateSyncStatus(state){
   const dot=document.getElementById('sync-status');if(!dot)return;
@@ -487,6 +507,8 @@ function updateSyncStatus(state){
 // processes (HostBuddy auto-import, migrations) from overwriting the real
 // task list with a small/empty array.  2026-04-11 post-mortem fix.
 let tasksLoadedOk = false;
+let vendorsLoadedOk = false, _vendorsLoadedCount = 0;     // 2026-09-29 fix
+let recurringLoadedOk = false, _recurringLoadedCount = 0; // 2026-09-29 fix
 let _tasksLoadedCount = 0; // how many tasks were in KV at boot
 // Tombstones: IDs of tasks this admin intentionally deleted this session.
 // The read-before-write merge would otherwise re-add them (they still exist
@@ -495,7 +517,7 @@ const _deletedTaskIds = new Set();
 
 async function load() {
   try {
-    const r = await S.get('se_t');
+    const r = await _kvGetStrict('se_t');
     if (r) {
       tasks = JSON.parse(r.value);
       tasksLoadedOk = true;
@@ -512,8 +534,30 @@ async function load() {
     tasks = [];
     tasksLoadedOk = false;
   }
-  try{const r=await S.get('se_v');if(r)vendors=JSON.parse(r.value);else{vendors=JSON.parse(JSON.stringify(DEF_VENDORS));await save('se_v',vendors);}}catch(e){vendors=JSON.parse(JSON.stringify(DEF_VENDORS));}
-  try{const r=await S.get('se_r');if(r)recurring=JSON.parse(r.value);else{recurring=JSON.parse(JSON.stringify(DEF_RECURRING));await save('se_r',recurring);}}catch(e){recurring=JSON.parse(JSON.stringify(DEF_RECURRING));}
+  // Vendors — defaults are written ONLY when the server confirms se_v is empty.
+  // A failed read leaves the list empty and blocks saves. 2026-09-29 fix.
+  try{
+    const r=await _kvGetStrict('se_v');
+    if(r){vendors=JSON.parse(r.value);}
+    else{vendors=JSON.parse(JSON.stringify(DEF_VENDORS));await save('se_v',vendors);}
+    vendorsLoadedOk=true;_vendorsLoadedCount=vendors.length;
+  }catch(e){
+    console.error('[SAFETY] se_v load failed — vendor writes are BLOCKED until page reload:',e);
+    vendors=[];vendorsLoadedOk=false;
+  }
+  // Recurring templates — same rule.
+  try{
+    const r=await _kvGetStrict('se_r');
+    if(r){recurring=JSON.parse(r.value);}
+    else{recurring=JSON.parse(JSON.stringify(DEF_RECURRING));await save('se_r',recurring);}
+    recurringLoadedOk=true;_recurringLoadedCount=recurring.length;
+  }catch(e){
+    console.error('[SAFETY] se_r load failed — recurring writes are BLOCKED until page reload:',e);
+    recurring=[];recurringLoadedOk=false;
+  }
+  if(!tasksLoadedOk||!vendorsLoadedOk||!recurringLoadedOk){
+    setTimeout(()=>showToast('\u26a0\ufe0f Some data did not load. Saving is paused to protect your data \u2014 please reload the page.','','',15000),500);
+  }
   // Property Bible (se_pp) is normally lazy-loaded when Chip opens the
   // Properties tab, but taskEffectivePurchaseNote() reads PP to synthesize
   // shortfall-based purchase alerts for filter tasks on the dispatch/task
@@ -571,11 +615,33 @@ const saveTasks = async () => {
   await save('se_t', tasks);
 };
 const saveVendors = async () => {
+  if (!vendorsLoadedOk) {
+    console.error('[SAFETY] saveVendors() BLOCKED — initial vendor load failed.');
+    showToast('\u26a0\ufe0f Vendor save blocked — vendor list did not load properly. Please reload.','','',8000);
+    return;
+  }
   vendors = await _rbwMerge('se_v', vendors);
+  if (_vendorsLoadedCount > 5 && vendors.length < _vendorsLoadedCount * 0.5) {
+    console.error(`[SAFETY] saveVendors() BLOCKED — drastic shrinkage (${_vendorsLoadedCount} → ${vendors.length}).`);
+    showToast(`\u26a0\ufe0f Save blocked: vendor count dropped from ${_vendorsLoadedCount} to ${vendors.length}. Reload to recover.`,'','',10000);
+    return;
+  }
+  _vendorsLoadedCount = vendors.length;
   await save('se_v', vendors);
 };
 const saveRec = async () => {
+  if (!recurringLoadedOk) {
+    console.error('[SAFETY] saveRec() BLOCKED — initial recurring load failed.');
+    showToast('\u26a0\ufe0f Recurring save blocked — templates did not load properly. Please reload.','','',8000);
+    return;
+  }
   recurring = await _rbwMerge('se_r', recurring);
+  if (_recurringLoadedCount > 5 && recurring.length < _recurringLoadedCount * 0.5) {
+    console.error(`[SAFETY] saveRec() BLOCKED — drastic shrinkage (${_recurringLoadedCount} → ${recurring.length}).`);
+    showToast(`\u26a0\ufe0f Save blocked: recurring template count dropped from ${_recurringLoadedCount} to ${recurring.length}. Reload to recover.`,'','',10000);
+    return;
+  }
+  _recurringLoadedCount = recurring.length;
   await save('se_r', recurring);
 };
 
