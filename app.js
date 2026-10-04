@@ -6248,6 +6248,203 @@ async function hbRemoveFromServer(id) {
   } catch (e) { console.warn('Failed to remove item from server:', e.message); }
 }
 
+// ── Suggested by Claude: review list (2026-10-04) ─────────────
+// Claude never adds tasks directly. Its suggestions wait in se_cq until someone clicks
+// Import or Dismiss here. Dismissed suggestions are kept in se_cq_dismissed so Claude
+// does not suggest them again.
+let cqItems = [];
+let cqDismissed = [];
+let cqLoadedOk = false;
+let cqBusy = false;
+let cqLastLoad = 0;
+async function _cqRead(key) {
+  const raw = await _kvGetStrict(key);
+  if (!raw || !raw.value) return [];
+  const arr = JSON.parse(raw.value);
+  if (!Array.isArray(arr)) throw new Error(key + ' is not a list');
+  return arr;
+}
+async function cqLoad() {
+  if (cqBusy) return;
+  cqLastLoad = Date.now();
+  try {
+    const q = await _cqRead('se_cq');
+    const d = await _cqRead('se_cq_dismissed');
+    cqItems = q; cqDismissed = d; cqLoadedOk = true;
+  } catch (e) { cqLoadedOk = false; console.warn('[cq] review list did not load', e); }
+  renderCQ();
+}
+function cqStart() {
+  cqLoad();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && Date.now() - cqLastLoad > 60000) cqLoad();
+  });
+}
+// Re-reads both lists before writing so suggestions Claude added since this page loaded are kept.
+async function _cqUpdate(changeQueue, changeDismissed) {
+  const q = await _cqRead('se_cq');
+  const d = await _cqRead('se_cq_dismissed');
+  const nq = changeQueue ? changeQueue(q) : q;
+  const nd = changeDismissed ? changeDismissed(d) : d;
+  if (changeDismissed && !(await S.set('se_cq_dismissed', JSON.stringify(nd)))) return false;
+  if (changeQueue && !(await S.set('se_cq', JSON.stringify(nq)))) return false;
+  cqItems = nq; cqDismissed = nd;
+  return true;
+}
+function _cqTaskFromItem(item, n) {
+  const now = new Date().toISOString();
+  const note = 'Suggested by Claude' + (item.source ? ' (' + item.source + ')' : '') + ', imported after review.' + (item.note ? ' ' + item.note : '');
+  const t = {
+    id: Date.now().toString() + Math.random().toString(36).slice(2, 6) + (n || ''),
+    property: item.property || '', guest: '',
+    problem: item.problem || 'Suggested task',
+    category: item.category || '', status: 'open', date: '', vendor: '',
+    urgent: !!item.urgent, recurring: false,
+    notes: [{ text: note, type: 'admin', time: now }],
+    vendorNotes: '', created: now, _source: 'claude-review',
+  };
+  if (item.ref) t._ref = item.ref;
+  if (t.category === 'replacement') {
+    t.purchaseNote = item.purchaseNote || t.problem;
+    t.purchaseStatus = 'needed';
+    t.purchaser = item.purchaser === 'vendor' ? 'vendor' : 'owner';
+  }
+  return t;
+}
+async function _cqAddTasks(items) {
+  const newTasks = items.map((it, i) => _cqTaskFromItem(it, i));
+  newTasks.forEach(t => tasks.unshift(t));
+  if (!(await saveTasks())) {
+    const ids = new Set(newTasks.map(t => t.id));
+    tasks = tasks.filter(t => !ids.has(t.id));
+    renderAll();
+    return null;
+  }
+  newTasks.forEach(t => { try { logTaskChange('created', t); } catch (e) {} });
+  return newTasks;
+}
+async function cqImport(ids) {
+  if (cqBusy || !cqLoadedOk) return;
+  const items = cqItems.filter(x => ids.includes(x.id));
+  if (!items.length) return;
+  cqBusy = true;
+  try {
+    const added = await _cqAddTasks(items);
+    if (!added) { showToast('⚠️ Import not saved — the suggestions were kept so you can try again.', '', '', 8000); return; }
+    const idSet = new Set(items.map(x => x.id));
+    let ok = false;
+    try { ok = await _cqUpdate(q => q.filter(x => !idSet.has(x.id))); } catch (e) { ok = false; }
+    if (!ok) {
+      cqItems = cqItems.filter(x => !idSet.has(x.id));
+      showToast('Imported, but the review list did not update — reload before importing again.', '', '', 8000);
+    } else {
+      showToast(added.length === 1 ? 'Task imported.' : `${added.length} tasks imported.`);
+    }
+    renderCQ(); renderAll();
+  } finally { cqBusy = false; }
+}
+async function cqDismiss(ids) {
+  if (cqBusy || !cqLoadedOk) return;
+  const items = cqItems.filter(x => ids.includes(x.id));
+  if (!items.length) return;
+  cqBusy = true;
+  try {
+    const now = new Date().toISOString();
+    const idSet = new Set(items.map(x => x.id));
+    let ok = false;
+    try {
+      ok = await _cqUpdate(q => q.filter(x => !idSet.has(x.id)),
+        d => [...items.map(x => ({ ...x, dismissedAt: now })), ...d.filter(x => !idSet.has(x.id))].slice(0, 300));
+    } catch (e) { ok = false; }
+    if (!ok) { showToast('⚠️ Dismiss not saved — please try again.', '', '', 8000); return; }
+    renderCQ();
+    showToast(items.length === 1 ? 'Suggestion dismissed.' : `${items.length} suggestions dismissed.`);
+  } finally { cqBusy = false; }
+}
+async function cqRestore(id) {
+  if (cqBusy || !cqLoadedOk) return;
+  const item = cqDismissed.find(x => x.id === id);
+  if (!item) return;
+  cqBusy = true;
+  try {
+    const added = await _cqAddTasks([item]);
+    if (!added) { showToast('⚠️ Import not saved — please try again.', '', '', 8000); return; }
+    try { await _cqUpdate(null, d => d.filter(x => x.id !== id)); } catch (e) { cqDismissed = cqDismissed.filter(x => x.id !== id); }
+    renderCQ(); renderAll();
+    showToast('Task imported.');
+  } finally { cqBusy = false; }
+}
+const cqImportAll = () => cqImport(cqItems.map(x => x.id));
+const cqDismissAll = () => cqDismiss(cqItems.map(x => x.id));
+function toggleCqDismissed() {
+  document.getElementById('cq-dismissed-toggle')?.classList.toggle('open');
+  document.getElementById('cq-dismissed-list')?.classList.toggle('show');
+}
+function _cqPropName(pid) { const p = typeof getProp === 'function' ? getProp(pid) : null; return p ? p.name : (pid || 'No property'); }
+function _cqCatName(c) { return c ? (CAT_LABELS[c] || c.replace(/_/g, ' ')) : 'No category'; }
+function renderCQ() {
+  const el = document.getElementById('cq-wrap');
+  if (!el) return;
+  if (!cqItems.length && !cqDismissed.length) { el.innerHTML = ''; return; }
+  let h = '';
+  if (cqItems.length) {
+    h += `<div class="hb-banner" style="background:linear-gradient(135deg,#2a2438 0%,#33294a 100%);border-color:#6a5a9a">
+      <div class="hb-hdr" style="flex-wrap:wrap;gap:8px">
+        <div class="hb-title" style="color:#b9a6ee">Suggested by Claude — review</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="hb-count">${cqItems.length} waiting</span>
+          <button class="hb-btn hb-btn-dismiss" onclick="cqDismissAll()">Dismiss All</button>
+          <button class="hb-btn hb-btn-import" onclick="cqImportAll()">Import All</button>
+        </div>
+      </div>`;
+    cqItems.forEach(item => {
+      const id = escHtml(item.id);
+      h += `<div class="hb-item" id="cq-${id}">
+        <div class="hb-item-top">
+          <div style="flex:1">
+            <div class="hb-item-prop">${escHtml(_cqPropName(item.property))}</div>
+            <div class="hb-item-prob">${escHtml(item.problem)}</div>
+            <div class="hb-item-meta">
+              <span>${escHtml(_cqCatName(item.category))}</span>
+              ${item.purchaseNote && item.purchaseNote !== item.problem ? `<span>Buy: ${escHtml(item.purchaseNote)}</span>` : ''}
+              ${item.urgent ? '<span style="color:#e06050;font-weight:700">URGENT</span>' : ''}
+              ${item.source ? `<span>From: ${escHtml(item.source)}</span>` : ''}
+              <span>${getTimeAgo(item.suggestedAt)}</span>
+            </div>
+            ${item.note ? `<div class="hb-item-snippet">${escHtml(item.note)}</div>` : ''}
+          </div>
+          <div class="hb-item-btns">
+            <button class="hb-btn hb-btn-dismiss" onclick="cqDismiss(['${id}'])">Dismiss</button>
+            <button class="hb-btn hb-btn-import" onclick="cqImport(['${id}'])">Import</button>
+          </div>
+        </div>
+      </div>`;
+    });
+    h += '</div>';
+  }
+  if (cqDismissed.length) {
+    const shown = cqDismissed.slice(0, 50);
+    h += `<div style="padding:0 2px">
+      <button class="hb-dismissed-toggle" id="cq-dismissed-toggle" onclick="toggleCqDismissed()">
+        <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
+        ${cqDismissed.length} dismissed Claude suggestion${cqDismissed.length !== 1 ? 's' : ''}
+      </button>
+      <div class="hb-dismissed-list" id="cq-dismissed-list">`;
+    shown.forEach(item => {
+      h += `<div class="hb-dismissed-item">
+        <div class="hb-dismissed-item-info">
+          <div class="hb-dismissed-item-prop">${escHtml(_cqPropName(item.property))}</div>
+          <div class="hb-dismissed-item-prob">${escHtml(String(item.problem || '').slice(0, 90))}</div>
+          <div class="hb-dismissed-item-meta">Dismissed ${getTimeAgo(item.dismissedAt)}</div>
+        </div>
+        <button class="hb-btn hb-btn-restore" onclick="cqRestore('${escHtml(item.id)}')">Import</button>
+      </div>`;
+    });
+    h += '</div></div>';
+  }
+  el.innerHTML = h;
+}
+
 // Test: simulate a HostBuddy notification (call from console: hbTest())
 async function hbTest() {
   if (!HB_CONFIG.apiUrl) { console.log('Set HB_CONFIG.apiUrl first.'); return; }
@@ -9266,6 +9463,7 @@ async function initApp(){
   populatePropFilter();
   renderAll();
   hbStartPolling();
+  cqStart(); // Claude review list (2026-10-04)
   await loadVendorReports(); // load vendor field reports
   // Cleaning reviews now load when the Cleaning Flags tab is opened (2026-10-04)
   cleanupOldPhotos(); // auto-delete photos from tasks resolved 30+ days ago
