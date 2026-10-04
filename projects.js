@@ -15,8 +15,61 @@ const savePJ = async () => {
     if (typeof showToast === 'function') showToast('\u26a0\ufe0f Project save blocked — projects did not load. Please reload.', '', '', 8000);
     return false;
   }
-  return save(PJ_KEY, projects);
+  return save(PJ_KEY, pjSerializable());
 };
+// Inspection PDFs live in their own keys (se_pdf_<projectId>) once moved, so se_projects
+// stays small. A project keeps its embedded copy until the move has been verified. 2026-10-04
+function pjSerializable() {
+  return projects.map(p => {
+    const { _pdfLoading, ...rest } = p;
+    if (p.pdf_key) delete rest._pdf_data;
+    return rest;
+  });
+}
+function pjRehydratePdf(p) {
+  if (!p._pdf_data || !p.source) return;
+  try {
+    const byteStr = atob(p._pdf_data.split(',')[1]);
+    const bytes = new Uint8Array(byteStr.length);
+    for (let i = 0; i < byteStr.length; i++) bytes[i] = byteStr.charCodeAt(i);
+    p.source.pdf_url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+  } catch (e) { /* if base64 is bad, leave pdf_url as-is */ }
+}
+function pjUnquote(v) {
+  if (typeof v === 'string' && v.charAt(0) === '"') { try { return JSON.parse(v); } catch (e) {} }
+  return v;
+}
+// Load a moved PDF on demand (when the project is opened).
+async function pjEnsurePdf(p) {
+  if (p._pdf_data) return true;
+  if (!p.pdf_key || p._pdfLoading) return false;
+  p._pdfLoading = true;
+  try {
+    const r = await _kvGetStrict(p.pdf_key);
+    const v = pjUnquote(r && r.value);
+    if (!v || v.indexOf('data:') !== 0) return false;
+    p._pdf_data = v;
+    pjRehydratePdf(p);
+    return true;
+  } catch (e) { console.warn('[projects] PDF load failed', e); return false; }
+  finally { p._pdfLoading = false; }
+}
+// One-time move of embedded PDFs into their own keys; verified by reading the copy back.
+async function pjMigratePdfs() {
+  if (!projectsLoadedOk) return;
+  let changed = false;
+  for (const p of projects) {
+    if (!p._pdf_data || p.pdf_key) continue;
+    const key = 'se_pdf_' + String(p.id).replace(/[^a-zA-Z0-9_]/g, '');
+    try {
+      if (!(await S.set(key, p._pdf_data))) continue;
+      const back = await _kvGetStrict(key);
+      if (pjUnquote(back && back.value) === p._pdf_data) { p.pdf_key = key; changed = true; console.log('[projects] PDF moved to ' + key); }
+      else console.warn('[projects] PDF copy did not verify — left embedded', key);
+    } catch (e) { console.warn('[projects] PDF move failed', e); }
+  }
+  if (changed) await savePJ();
+}
 
 // ── LOAD ────────────────────────────────────────────────────
 async function pjLoad() {
@@ -28,15 +81,8 @@ async function pjLoad() {
   } catch (e) { projects = []; projectsLoadedOk = false; console.error('[projects] load failed — saves blocked until reload', e); }
   // Rehydrate blob URLs from stored base64 PDF data
   projects.forEach(p => {
-    if (p._pdf_data && p.source) {
-      try {
-        const byteStr = atob(p._pdf_data.split(',')[1]);
-        const bytes = new Uint8Array(byteStr.length);
-        for (let i = 0; i < byteStr.length; i++) bytes[i] = byteStr.charCodeAt(i);
-        const blob = new Blob([bytes], { type: 'application/pdf' });
-        p.source.pdf_url = URL.createObjectURL(blob);
-      } catch (e) { /* if base64 is bad, leave pdf_url as-is */ }
-    }
+    if (p.source && p.pdf_key && !p._pdf_data) p.source.pdf_url = null; // loads when the project is opened
+    pjRehydratePdf(p);
   });
 }
 
@@ -122,6 +168,10 @@ function pjShowDetail(pid) {
   const p = projects.find(x => x.id === pid);
   if (!p) return;
   const el = document.getElementById('pj-detail');
+  el.dataset.pid = pid;
+  if (p.pdf_key && !p._pdf_data && !p._pdfLoading) {
+    pjEnsurePdf(p).then(ok => { if (ok && el.dataset.pid === pid && el.style.display !== 'none') pjShowDetail(pid); });
+  }
   const list = document.getElementById('pj-list');
   list.style.display = 'none';
   el.style.display = '';
@@ -1337,7 +1387,7 @@ function pjCreateProject() {
   };
 
   projects.push(project);
-  savePJ();
+  savePJ().then(() => pjMigratePdfs());
   saveTasks();
   closeModal('pj-import-modal');
   pjRenderList();

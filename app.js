@@ -373,6 +373,19 @@ function dayState(d,bookings){
   return'available';
 }
 
+// Reservation statuses that do not occupy a cabin. One rule for every calendar in the app
+// (admin date picker, Group Scheduler, vendor picker, invoice check). 2026-10-04
+const _INACTIVE_RES=new Set(['cancelled','canceled','declined','expired','not_accepted','denied','withdrawn','inquiry']);
+function _isActiveReservation(rv){
+  const a=String((rv&&rv.status)||'').toLowerCase();
+  const b=String((rv&&rv.reservation_status&&rv.reservation_status.current&&rv.reservation_status.current.category)||'').toLowerCase();
+  return !_INACTIVE_RES.has(a)&&!_INACTIVE_RES.has(b);
+}
+// Booking data older than this is fetched again, so new or changed reservations show up
+// without reloading the page.
+const ICAL_TTL_MS=10*60*1000;
+const _icalFetchedAt={};
+
 // STORAGE
 const STORAGE_API = 'https://storybook-webhook.vercel.app/api/storage';
 // Hospitable proxy calls from the admin app carry the sign-in token (required since 2026-10-04).
@@ -584,6 +597,8 @@ async function load() {
   try{if(typeof ppLoadIfNeeded==='function')await ppLoadIfNeeded();}catch(e){}
   // Projects
   try{if(typeof pjLoad==='function')await pjLoad();}catch(e){}
+  // Move inspection PDFs into their own keys in the background (2026-10-04)
+  setTimeout(()=>{try{if(typeof pjMigratePdfs==='function')pjMigratePdfs();}catch(e){}},4000);
   // Task change log
   try{await loadTaskLog();}catch(e){}
 }
@@ -1569,7 +1584,7 @@ async function _gsLoadBookings(){
   _gsRender();
   await Promise.all(fresh.map(async pid=>{
     const evs=await fetchIcal(pid);
-    _gsState.bookingsByProp[pid]=(evs==='error'?[]:(Array.isArray(evs)?evs:[]));
+    _gsState.bookingsByProp[pid]=(evs==='error'?null:(Array.isArray(evs)?evs:[])); // null = could not load (2026-10-04)
   }));
   _gsState.loading=false;
   _gsRender();
@@ -1585,7 +1600,8 @@ function _gsComputeDays(matchingTasks){
     const d=new Date(today.getTime()+i*86400000);d.setHours(12,0,0,0);
     const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     const perProp=propIds.map(pid=>{
-      const st=dayState(d,_gsState.bookingsByProp[pid]||[]);
+      const bk=_gsState.bookingsByProp[pid];
+      const st=bk===null?'booked':dayState(d,bk||[]); // unknown bookings never look open
       let tier;
       if(st==='turn'||st==='checkin'||st==='checkout')tier='locked';
       else if(st==='booked')tier='booked';
@@ -1608,6 +1624,14 @@ function _gsComputeDays(matchingTasks){
 }
 
 function _gsRenderBestDaysHtml(matching){
+  if(!matching.length)return'';
+  const failed=[...new Set(matching.map(t=>t.property))].filter(pid=>_gsState.bookingsByProp[pid]===null);
+  const warn=failed.length
+    ?`<div style="margin:6px 0 10px;padding:8px 12px;border-radius:8px;background:#fdf3e1;color:#7a4b00;font-size:.78rem">Bookings couldn't load for ${failed.map(pid=>escHtml((getProp(pid)||{}).name||pid)).join(', ')} — those cabins are treated as booked. Close and reopen to try again.</div>`
+    :'';
+  return warn+_gsRenderBestDaysHtmlInner(matching);
+}
+function _gsRenderBestDaysHtmlInner(matching){
   if(!matching.length)return'';
   const propIds=[...new Set(matching.map(t=>t.property))];
   if(!propIds.length)return'';
@@ -2024,6 +2048,7 @@ function bulkDelete(){
   const sel=_getSelectedTasks();if(!sel.length){showToast('No tasks selected');return;}
   if(!confirm('Permanently delete '+sel.length+' task(s)? This cannot be undone.'))return;
   sel.forEach(t=>{logTaskChange('bulk_delete',t);_deletedTaskIds.add(t.id);const idx=tasks.indexOf(t);if(idx!==-1)tasks.splice(idx,1);});
+  if(_unlinkTasksFromProjects(sel.map(t=>t.id)).length&&typeof savePJ==='function')savePJ(); // 2026-10-04
   _selectedTasks.clear();
   saveTasks();renderAll();updateBulkBar();
   showToast(sel.length+' task'+(sel.length!==1?'s':'')+' deleted');
@@ -2081,7 +2106,7 @@ function adaptCalendar(data){
 }
 
 async function fetchIcal(pid){
-  if(icalCache[pid]&&icalCache[pid]!=='error')return icalCache[pid];
+  if(icalCache[pid]&&icalCache[pid]!=='error'&&(Date.now()-(_icalFetchedAt[pid]||0))<ICAL_TTL_MS)return icalCache[pid];
   const hospId=HOSPITABLE_IDS[pid];
   if(!hospId){console.warn(`No Hospitable ID for property "${pid}"`);return[];}
   // Try reservations endpoint first (gives individual bookings with separate check-in/out dates)
@@ -2102,7 +2127,7 @@ async function fetchIcal(pid){
           });
         }
         const evs=json.data
-          .filter(rv=>rv.arrival_date&&rv.departure_date&&rv.status!=='cancelled')
+          .filter(rv=>rv.arrival_date&&rv.departure_date&&_isActiveReservation(rv))
           .map(rv=>{
             // Try multiple paths for guest phone: inline guest object, included data, or top-level fields
             const guestRel=rv.relationships?.guest?.data;
@@ -2124,7 +2149,7 @@ async function fetchIcal(pid){
           .filter(ev=>ev.start&&ev.end)
           .filter(ev=>ev.start&&ev.end);
         console.log(`Loaded ${pid}: ${evs.length} individual reservations via API`);
-        icalCache[pid]=evs;return evs;
+        icalCache[pid]=evs;_icalFetchedAt[pid]=Date.now();return evs;
       }
     }
   }catch(e){console.warn(`Reservations endpoint failed for ${pid}, trying calendar:`,e.message);}
@@ -2141,7 +2166,7 @@ async function fetchIcal(pid){
     const json=await r.json();
     const evs=adaptCalendar(json);
     console.log(`Loaded ${pid}: ${evs.length} reservation blocks via calendar fallback`);
-    icalCache[pid]=evs;return evs;
+    icalCache[pid]=evs;_icalFetchedAt[pid]=Date.now();return evs;
   }catch(e){
     console.error(`Hospitable API failed for ${pid}: ${e.message}`);
     icalCache[pid]='error';return'error';
@@ -4958,14 +4983,23 @@ async function addTaskToProject(projectId, projectTitle){
   if(btn){btn.textContent='✓ In Project';btn.disabled=true;btn.style.color='var(--green)';}
 }
 
+// Clear project checklist links that point at deleted tasks. Returns what was cleared so undo can restore it.
+function _unlinkTasksFromProjects(ids){
+  const set=new Set(ids);const out=[];
+  if(typeof projects==='undefined'||!Array.isArray(projects))return out;
+  projects.forEach(p=>(p.items||[]).forEach(item=>{if(item.task_id&&set.has(item.task_id)){out.push({item,taskId:item.task_id});item.task_id=null;}}));
+  return out;
+}
 async function deleteTask(){
   const deleted=tasks.find(x=>x.id===detailId);if(!deleted)return;
   const idx=tasks.indexOf(deleted);
   logTaskChange('deleted',deleted);
   _deletedTaskIds.add(deleted.id);                 // tombstone so the rbw merge can't resurrect it
+  const unlinked=_unlinkTasksFromProjects([deleted.id]); // 2026-10-04
   tasks=tasks.filter(x=>x.id!==detailId);await saveTasks();
+  if(unlinked.length&&typeof savePJ==='function')await savePJ();
   closeModal('detail-modal');renderAll();
-  showToast('Task deleted.','',async()=>{_deletedTaskIds.delete(deleted.id);tasks.splice(idx,0,deleted);await saveTasks();renderAll();showToast('Task restored.');});
+  showToast('Task deleted.','',async()=>{_deletedTaskIds.delete(deleted.id);tasks.splice(idx,0,deleted);unlinked.forEach(u=>{u.item.task_id=u.taskId;});await saveTasks();if(unlinked.length&&typeof savePJ==='function')await savePJ();renderAll();showToast('Task restored.');});
 }
 
 // PROPERTY HISTORY
@@ -5368,9 +5402,48 @@ function openEditVendor(id){
 async function saveVendor(){
   const name=document.getElementById('v-name').value.trim();if(!name){showToast('Name required.','err');return;}
   const pm=[];if(document.getElementById('v-pay-venmo').checked)pm.push('venmo');if(document.getElementById('v-pay-cashapp').checked)pm.push('cashapp');
-  const v={id:editVendorId||'v'+Date.now(),name,role:document.getElementById('v-role').value.trim(),phone:document.getElementById('v-phone').value.trim(),email:document.getElementById('v-email').value.trim(),categories:[document.getElementById('v-cat').value],note:document.getElementById('v-notes').value.trim(),paymentMethods:pm};
-  if(editVendorId){const i=vendors.findIndex(x=>x.id===editVendorId);if(i>=0){v.invoices=vendors[i].invoices;vendors[i]=v;}}else vendors.push(v);
-  await saveVendors();closeModal('vendor-modal');renderVendors();showToast(editVendorId?'Vendor updated.':'Vendor added.');
+  const old=editVendorId?vendors.find(x=>x.id===editVendorId):null;
+  const cat=document.getElementById('v-cat').value;
+  // 2026-10-04: the form edits the primary category only; other categories are kept.
+  const oldCats=(old&&Array.isArray(old.categories))?old.categories:[];
+  const categories=oldCats.includes(cat)?[cat,...oldCats.filter(c=>c!==cat)]:[cat,...oldCats.slice(1).filter(c=>c!==cat)];
+  const fields={name,role:document.getElementById('v-role').value.trim(),phone:document.getElementById('v-phone').value.trim(),email:document.getElementById('v-email').value.trim(),categories,note:document.getElementById('v-notes').value.trim(),paymentMethods:pm};
+  let renamed=null;
+  if(old){
+    const oldName=old.name||'';
+    Object.assign(old,fields); // keeps invoices, saved links and any other fields
+    if(oldName&&oldName.toLowerCase()!==name.toLowerCase())renamed=oldName;
+  }else vendors.push({id:'v'+Date.now(),...fields});
+  await saveVendors();closeModal('vendor-modal');renderVendors();
+  if(renamed){await _cascadeVendorRename(renamed,name,old);}
+  else showToast(old?'Vendor updated.':'Vendor added.');
+}
+// A vendor's name is how tasks, recurring templates, projects and their links find them,
+// so a rename is carried to all of those. (2026-10-04)
+async function _cascadeVendorRename(oldName,newName,v){
+  const o=oldName.toLowerCase();
+  let tc=0,rc=0,pc=0;
+  tasks.forEach(t=>{if((t.vendor||'').toLowerCase()===o){t.vendor=newName;tc++;}});
+  (recurring||[]).forEach(r=>{if((r.vendor||'').toLowerCase()===o){r.vendor=newName;rc++;}});
+  const projTokens=[];
+  if(typeof projects!=='undefined')projects.forEach(p=>(p.vendors||[]).forEach(pv=>{
+    if((pv.name||'').toLowerCase()===o){pv.name=newName;pc++;if(pv.token)projTokens.push(pv.token);}
+  }));
+  const linkTokens=[];
+  if(v&&v.links){if(v.links.agenda)linkTokens.push(v.links.agenda);Object.values(v.links.days||{}).forEach(x=>linkTokens.push(x));}
+  for(const tok of [...linkTokens,...projTokens]){
+    try{
+      const r=await S.get('se_vs_'+tok);if(!r||!r.value)continue;
+      const sheet=JSON.parse(r.value);
+      if(sheet.type==='project')sheet.vendor_name=newName;else sheet.vendor=newName;
+      await S.set('se_vs_'+tok,JSON.stringify(sheet));
+    }catch(e){console.warn('[vendor-rename] link update failed',tok,e);}
+  }
+  if(tc)await saveTasks();
+  if(rc)await saveRec();
+  if(pc&&typeof savePJ==='function')await savePJ();
+  renderAll();
+  showToast(`Vendor renamed — updated ${tc} task${tc!==1?'s':''}, ${rc} recurring template${rc!==1?'s':''}, ${pc} project${pc!==1?'s':''}.`);
 }
 async function deleteVendor(){
   const deleted=vendors.find(v=>v.id===editVendorId);if(!deleted)return;
@@ -7648,7 +7721,8 @@ async function rpQuickDelivered(id) {
       const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
       // For every property with needs-sched tasks, classify the day
       const perProp=propIds.map(pid=>{
-        const st=vsDayState(d,bookingsByProp[pid]||[]);
+        const bk=bookingsByProp[pid];
+        const st=bk===null?'booked':vsDayState(d,bk||[]); // unknown bookings never look open
         let tier;
         if(st==='turn'||st==='checkin'||st==='checkout')tier='locked';
         else if(st==='booked')tier='booked';
@@ -8862,11 +8936,11 @@ async function rpQuickDelivered(id) {
     try{
       const url=`${PROXY_BASE}/api/hospitable?action=reservations&pid=${hospId}&token=${encodeURIComponent(token)}`;
       const r=await fetch(url,{signal:AbortSignal.timeout(15000)});
-      if(!r.ok){vIcalByProp[propId]=[];return[];}
+      if(!r.ok)return null; // could not load — never treat as "no bookings" (2026-10-04)
       const json=await r.json();
       const pd=s=>{const m=(s||'').match(/(\d{4})-(\d{2})-(\d{2})/);return m?new Date(+m[1],+m[2]-1,+m[3],12,0,0):null;};
       const evs=(json.data||[])
-        .filter(rv=>rv.arrival_date&&rv.departure_date&&rv.status!=='cancelled')
+        .filter(rv=>rv.arrival_date&&rv.departure_date&&_isActiveReservation(rv))
         .map(rv=>({
           start:pd(rv.arrival_date),
           end:pd(rv.departure_date),
@@ -8877,8 +8951,7 @@ async function rpQuickDelivered(id) {
       return evs;
     }catch(e){
       console.warn('[vs-bookings]',propId,e.message);
-      vIcalByProp[propId]=[];
-      return[];
+      return null;
     }
   }
 
@@ -8906,7 +8979,12 @@ async function rpQuickDelivered(id) {
     modal.classList.add('open');
     document.body.style.overflow='hidden';
     // Fetch bookings (cached after first fetch per property)
-    vDpState.bookings=await vsFetchBookings(t.property);
+    const bk=await vsFetchBookings(t.property);
+    if(bk===null){
+      modal.innerHTML=`<div class="vs-dp-panel" onclick="event.stopPropagation()"><div class="vs-dp-load" style="line-height:1.5">This cabin's booking calendar couldn't load, so a date can't be picked right now.<div style="margin-top:14px;display:flex;gap:8px;justify-content:center"><button style="padding:8px 16px;border-radius:8px;border:1px solid #2d6a3f;background:#2d6a3f;color:#fff" onclick="window._vsPickDate('${t.id}')">Try again</button><button style="padding:8px 16px;border-radius:8px;border:1px solid #ccc;background:#fff" onclick="window._vsClosePicker()">Close</button></div></div></div>`;
+      return;
+    }
+    vDpState.bookings=bk;
     vsRenderPicker();
   };
 
@@ -9189,7 +9267,7 @@ async function initApp(){
   renderAll();
   hbStartPolling();
   await loadVendorReports(); // load vendor field reports
-  clFetch(); // pre-load cleaning log in background
+  // Cleaning reviews now load when the Cleaning Flags tab is opened (2026-10-04)
   cleanupOldPhotos(); // auto-delete photos from tasks resolved 30+ days ago
 }
 if(!window._vendorMode && !window._cleanerViewMode) initApp();
@@ -11377,7 +11455,7 @@ async function rvFetchAll(force) {
       while (page <= 10) {
         try {
           const r = await hospFetch(
-            `${PROXY_BASE}/api/hospitable?action=reviews&pid=${t.uuid}&start=2020-01-01&end=${new Date().toISOString().slice(0,10)}&page=${page}`,
+            `${PROXY_BASE}/api/hospitable?action=reviews&pid=${t.uuid}&start=${new Date(Date.now()-400*86400000).toISOString().slice(0,10)}&end=${new Date().toISOString().slice(0,10)}&page=${page}`,
             { signal: AbortSignal.timeout(15000) }
           );
           if (!r.ok) break;
@@ -12558,7 +12636,7 @@ async function _invRunVerification(){
         if(rRes.ok){
           const rRaw=await rRes.json();
           const items=Array.isArray(rRaw?.data)?rRaw.data:Array.isArray(rRaw)?rRaw:[];
-          items.filter(rv=>rv.status!=='cancelled'&&rv.departure_date).forEach(rv=>{
+          items.filter(rv=>_isActiveReservation(rv)&&rv.departure_date).forEach(rv=>{
             const dep=rv.departure_date.split('T')[0];
             if(dep>=_invMeta.startDate&&dep<=_invMeta.endDate) deps.add(dep);
           });
