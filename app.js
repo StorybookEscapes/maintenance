@@ -13357,7 +13357,9 @@ function tvOnSearch(v) {
 
 function tvTable(rows) {
   rows = rows.slice().sort((a, b) => String(a.name).localeCompare(String(b.name)));
-  let h = `<div class="tv-table-box"><table class="tv-table"><thead><tr>`;
+  let h = `<div class="tv-table-box"><table class="tv-table">`;
+  // Fixed column widths so every property's table lines up
+  h += `<colgroup><col style="width:25%"><col style="width:17%"><col style="width:9%"><col style="width:19%"><col style="width:12%"><col style="width:11%"><col style="width:7%"></colgroup><thead><tr>`;
   h += `<th>Roku name / location</th><th>Model</th><th>Guest Mode</th><th>Account</th><th>Serial</th><th>Linked</th><th></th>`;
   h += `</tr></thead><tbody>`;
   rows.forEach((t) => {

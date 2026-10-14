@@ -2239,13 +2239,14 @@ textarea{resize:vertical;min-height:76px}
 .tv-prop-hdr{font-weight:600;font-size:.86rem;color:var(--text);margin-bottom:6px}
 .tv-prop-hdr span{font-weight:400;font-size:.74rem;color:var(--text3);margin-left:6px}
 .tv-table-box{overflow-x:auto;background:var(--white);border:1px solid var(--border);border-radius:8px}
-.tv-table{border-collapse:collapse;width:100%;min-width:860px;font-size:.8rem}
+.tv-table{border-collapse:collapse;width:100%;min-width:860px;font-size:.8rem;table-layout:fixed}
 .tv-table th{text-align:left;font-size:.64rem;text-transform:uppercase;letter-spacing:1px;color:var(--text2);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
 .tv-table td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top}
 .tv-table tr:last-child td{border-bottom:0}
 .tv-name{font-weight:500}
 .tv-loc{font-size:.72rem;color:var(--text3)}
-.tv-mono{font-variant-numeric:tabular-nums;color:var(--text2);white-space:nowrap}
+.tv-mono{font-variant-numeric:tabular-nums;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tv-table td:last-child{text-align:right}
 .tv-pill{display:inline-block;font-size:.68rem;font-weight:600;padding:2px 8px;border-radius:999px}
 .tv-pill.on{background:var(--green-light);color:var(--green-mid)}
 .tv-pill.off{background:var(--gold-pale);color:#8a6a1a;border:1px solid var(--gold-light)}
