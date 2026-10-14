@@ -13334,12 +13334,9 @@ function tvMatches(t) {
 function tvRender() {
   const wrap = document.getElementById('tv-wrap');
   if (!wrap || !TVS) return;
-  const accounts = new Set(TVS.map((t) => t.account).filter(Boolean));
-  const offCount = TVS.filter((t) => !t.guestMode).length;
   let h = `<div class="tv-hdr" onclick="tvToggle()">`;
   h += `<span class="tv-chev">${tvOpen ? '▾' : '▸'}</span>`;
   h += `<span class="tv-title">Roku TVs</span>`;
-  h += `<span class="tv-meta">${TVS.length} TVs · ${accounts.size} Roku account${accounts.size === 1 ? '' : 's'} · ${offCount} with Guest Mode off</span>`;
   h += `<button class="btn btn-g tv-add" onclick="event.stopPropagation();tvOpenModal(null)">+ Add TV</button>`;
   h += `</div>`;
   if (tvOpen) {
