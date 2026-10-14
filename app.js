@@ -864,6 +864,8 @@ function switchView(name,btn){
   if (name === 'replacements') renderReplacements();
   // Property Bible (Deploy 1) — lazy load on first open
   if (name === 'properties' && typeof ppLoadIfNeeded === 'function') ppLoadIfNeeded();
+  // Roku TV Directory (2026-10-14) — top of Properties page
+  if (name === 'properties' && typeof tvLoadIfNeeded === 'function') tvLoadIfNeeded();
   // Projects — refresh list
   if (name === 'projects' && typeof pjRenderList === 'function') pjRenderList();
   // Settings — render dynamic settings panels
@@ -13213,3 +13215,253 @@ function _invDetailHTML(){
   </div>`;
 }
 // ═══════════════  END Invoice Reconciliation  ═══════════════
+
+// ═══════════════  Roku TV Directory (2026-10-14)  ═══════════════
+// Every Roku TV across the portfolio, which Roku account it is signed into,
+// model, Guest Mode, serial (ESN) and the date it was linked to the account.
+// Shown at the top of the Properties page, grouped by neighborhood → property.
+// KV key: se_tv = [{id, property (app prop id, '' = unassigned), account, name,
+//   location, model, guestMode, serial, linkDate, rokuId}]
+// TV_SEED is written to se_tv once, only when the key has never been saved.
+// Serials / link dates pulled from my.roku.com on 2026-10-14.
+const TV_SEED = [
+  {"id":"tv_fhc_bearadise_graceland","property":"bearadise","account":"freedomholdingco@gmail.com","name":"Bearadise - Graceland","location":"Bedroom","model":"Roku Express","guestMode":false,"serial":"X0040064S7KU","linkDate":"2024-08-22T20:15:52Z","rokuId":"d5bfc797-e632-4eed-ae83-b17600ec3803"},
+  {"id":"tv_fhc_bighouse_bed3","property":"hillside_big","account":"freedomholdingco@gmail.com","name":"Big House - Bed 3","location":"Bedroom","model":"50\" Roku Select Series 4K TV","guestMode":true,"serial":"X01200N3FCLM","linkDate":"2024-04-09T03:30:51Z","rokuId":"4a63a7f3-b182-49e1-9009-b14d0038cc92"},
+  {"id":"tv_fhc_bighouse_rec_room","property":"hillside_big","account":"freedomholdingco@gmail.com","name":"Big House - Rec Room","location":"Game Room","model":"55\" TCL Roku TV","guestMode":true,"serial":"X01200A02DG5","linkDate":"2024-04-09T03:43:04Z","rokuId":"7000c816-cb8c-459d-878c-b14d003cfaad"},
+  {"id":"tv_fhc_cottage_living","property":"hillside_cottage","account":"freedomholdingco@gmail.com","name":"Cottage -Living","location":"Living room","model":"55\" TCL Roku TV","guestMode":true,"serial":"X0120034AAVV","linkDate":"2024-10-13T17:07:39Z","rokuId":"67b34083-e3fb-4a8a-a77a-b12f0033c75f"},
+  {"id":"tv_fhc_hibernation_back_left","property":"hibernation","account":"freedomholdingco@gmail.com","name":"Hibernation - Back left bedroom upstairs","location":"Bedroom","model":"50\" TCL Roku TV","guestMode":true,"serial":"X03200H6L57V","linkDate":"2025-06-16T14:14:59Z","rokuId":"edd683db-8c09-4039-892a-b2fe00e9f81f"},
+  {"id":"tv_fhc_hillside_master","property":"hillside_big","account":"freedomholdingco@gmail.com","name":"Hillside - Master Bedroom","location":"Bedroom","model":"50\" Roku Select Series 4K TV","guestMode":true,"serial":"X01200W0H6FU","linkDate":"2025-08-05T03:37:47Z","rokuId":"2f92a8e2-3052-488f-971d-b14b005913e5"},
+  {"id":"tv_fhc_prc2","property":"prc2","account":"freedomholdingco@gmail.com","name":"PRC - 2","location":"Bluebird Bungalow","model":"Streaming Stick 4K","guestMode":true,"serial":"X0250037E268","linkDate":"2025-07-20T23:16:52Z","rokuId":"92ae63c0-461c-4f7c-97dd-b320017ef584"},
+  {"id":"tv_fhc_prc3","property":"prc3","account":"freedomholdingco@gmail.com","name":"PRC - 3","location":"Rustic Rose","model":"50\" Hisense Roku TV","guestMode":true,"serial":"X01900DSC9KL","linkDate":"2025-07-20T22:40:23Z","rokuId":"058b4d10-5f78-4631-9709-b17f015f3e9d"},
+  {"id":"tv_fhc_prc5","property":"prc5","account":"freedomholdingco@gmail.com","name":"PRC - 5","location":"Pink Paradise","model":"Streaming Stick 4K","guestMode":true,"serial":"X02500PTL8EX","linkDate":"2025-07-21T15:16:00Z","rokuId":"ba6fa68e-c1b6-417e-9601-b32100fb1bcb"},
+  {"id":"tv_fhc_wizards_movie_room","property":"wizards","account":"freedomholdingco@gmail.com","name":"Wizards - Movie Room","location":"Media room","model":"75\" TCL Roku TV","guestMode":true,"serial":"X01200DFGVY7","linkDate":"2024-11-04T13:11:06Z","rokuId":"f98a6276-0c43-4424-add2-afe40118aeb3"},
+  {"id":"tv_h734_bears_den","property":"bearadise","account":"734heiden@chipburns.com","name":"Bear's Den","location":"Bear's Den","model":"Roku Premiere","guestMode":false,"serial":"YH00GM309008","linkDate":"2021-01-13T02:27:58Z","rokuId":"0857c568-feb7-4a13-b982-acaf00283458"},
+  {"id":"tv_h734_chalet_tv_test","property":"bearadise","account":"734heiden@chipburns.com","name":"The Chalet TV (Test)","location":"The Chalet TV","model":"43\" TCL Roku TV","guestMode":false,"serial":"YN00C6714766","linkDate":"2021-01-13T18:35:19Z","rokuId":"d2ca39fb-ca54-43e8-bd9b-a9c1006096ff"},
+  {"id":"tv_h734_colossal","property":"bearadise","account":"734heiden@chipburns.com","name":"Colossal","location":"Colossal","model":"Roku Premiere","guestMode":false,"serial":"YH0059715182","linkDate":"2021-01-13T04:13:47Z","rokuId":"40f9be79-cff5-49b2-a67b-acaf00457660"},
+  {"id":"tv_h734_daniel_boone","property":"bearadise","account":"734heiden@chipburns.com","name":"Daniel Boone","location":"Daniel Boone","model":"43\" Hisense Roku TV","guestMode":false,"serial":"YK00UL011549","linkDate":"2021-01-13T17:23:51Z","rokuId":"384fbad2-15f1-461c-bb0a-ac64012941ea"},
+  {"id":"tv_h734_mammoth","property":"bearadise","account":"734heiden@chipburns.com","name":"Mammoth","location":"Mammoth","model":"Roku Premiere","guestMode":true,"serial":"YH00GA618285","linkDate":"2021-01-13T03:53:23Z","rokuId":"1679500c-d3c2-469e-9583-acaf003fea1c"},
+  {"id":"tv_h734_opry","property":"bearadise","account":"734heiden@chipburns.com","name":"Opry","location":"Opry","model":"Roku Premiere","guestMode":false,"serial":"YH0064612633","linkDate":"2021-01-13T04:53:59Z","rokuId":"766dfc06-2601-4adc-a0b2-ac190163557b"},
+  {"id":"tv_h734_the_alpine","property":"bearadise","account":"734heiden@chipburns.com","name":"The Alpine","location":"The Alpine","model":"Roku Premiere","guestMode":true,"serial":"YH00GG551570","linkDate":"2021-01-13T04:38:54Z","rokuId":"18b6a563-aa40-4fde-903e-acaf004c57c7"},
+  {"id":"tv_h734_the_cave_theater","property":"bearadise","account":"734heiden@chipburns.com","name":"The Cave (Theater)","location":"The Cave (Theater)","model":"Roku Premiere","guestMode":false,"serial":"YH006K641001","linkDate":"2021-01-13T16:12:59Z","rokuId":"dbace69e-a4b7-4b57-af94-acaf010af630"},
+  {"id":"tv_h734_the_chalet","property":"bearadise","account":"734heiden@chipburns.com","name":"The Chalet","location":"The Chalet","model":"Roku Premiere","guestMode":false,"serial":"YH00GL278111","linkDate":"2021-01-13T03:33:22Z","rokuId":"f1cccb0e-a1f9-4c8d-a16c-acaf003a6727"},
+  {"id":"tv_h734_wolfs_lair","property":"bearadise","account":"734heiden@chipburns.com","name":"Wolf's Lair","location":"Wolf's Lair","model":"Roku Premiere","guestMode":false,"serial":"YH00H3175563","linkDate":"2021-01-13T02:46:59Z","rokuId":"010eed05-4fbd-415d-bcac-acaf002d9584"},
+  {"id":"tv_prop_bearadise_game_room","property":"bearadise","account":"properties@chipburns.com","name":"Bearadise game room","location":"Living room","model":"Roku Premiere","guestMode":false,"serial":"YH005C478299","linkDate":"2024-04-04T17:24:29Z","rokuId":"e24f5539-571f-413c-aef9-acaf0123934b"},
+  {"id":"tv_prop_bighouse_bed2","property":"hillside_big","account":"properties@chipburns.com","name":"Big House - Bed 2","location":"Bedroom","model":"43\" TCL Roku TV","guestMode":true,"serial":"X01200TFMJ1P","linkDate":"2024-04-09T03:25:02Z","rokuId":"e76c71b1-c88d-4433-8d31-b14d00379904"},
+  {"id":"tv_prop_bighouse_bed5","property":"hillside_big","account":"properties@chipburns.com","name":"Big House - Bed 5","location":"Bedroom","model":"43\" TCL Roku TV","guestMode":true,"serial":"X01200LRT5XD","linkDate":"2024-04-09T03:23:57Z","rokuId":"1daaf00d-29a1-4c91-8494-b14d00378f48"},
+  {"id":"tv_prop_cottage_bed1","property":"hillside_cottage","account":"properties@chipburns.com","name":"Cottage - Bed 1","location":"Bedroom","model":"50\" Roku Select Series 4K TV","guestMode":true,"serial":"X01200JHY082","linkDate":"2024-04-09T03:10:27Z","rokuId":"7871ebae-af14-4e03-a601-b14d00341b78"},
+  {"id":"tv_prop_cottage_bed3","property":"hillside_cottage","account":"properties@chipburns.com","name":"Cottage - Bed 3","location":"Bedroom","model":"43\" TCL Roku TV","guestMode":true,"serial":"X01200NDHUSR","linkDate":"2024-04-09T03:04:43Z","rokuId":"4320d0e4-74ee-401b-9aa9-b14d00327d05"},
+  {"id":"tv_prop_forge_in_the_forest","property":"prc1","account":"properties@chipburns.com","name":"Forge In the Forest","location":"Living room","model":"Streaming Stick 4K","guestMode":true,"serial":"X02500KG08NH","linkDate":"2026-07-31T23:32:09Z","rokuId":"48f6a00d-2a87-4d85-ae07-b3200188b435"},
+  {"id":"tv_prop_hero_hideout_downstairs","property":"hero","account":"properties@chipburns.com","name":"Hero Hideout - Downstairs Bed","location":"Bedroom","model":"50\" Hisense Roku TV","guestMode":false,"serial":"X01200W70VKL","linkDate":"2026-06-02T18:35:19Z","rokuId":"41493264-ba40-41b1-9ba0-b45d012f5830"},
+  {"id":"tv_prop_hero_iron_man","property":"hero","account":"properties@chipburns.com","name":"55 inch Roku Hero - Iron Man","location":"Bedroom","model":"55\" TCL Roku TV","guestMode":false,"serial":"X01200J63GD9","linkDate":"2023-12-01T17:34:47Z","rokuId":"c15dbdf0-c1d5-4936-b658-b0cb012153a7"},
+  {"id":"tv_prop_hero_living_room","property":"hero","account":"properties@chipburns.com","name":"Hero - Living Room","location":"Living room","model":"65\" TCL Roku TV","guestMode":false,"serial":"X01200TWP3FY","linkDate":"2024-10-22T20:22:14Z","rokuId":"84e3b532-ecd4-4d02-b5a9-af3c01443219"},
+  {"id":"tv_prop_hibernation_living_room","property":"hibernation","account":"properties@chipburns.com","name":"Hibernation- Living Room","location":"Living room","model":"65\" TCL Roku TV","guestMode":true,"serial":"X01200WAPU3X","linkDate":"2023-10-24T15:39:31Z","rokuId":"26af2d2b-719d-46c6-91a6-b095000c9ae7"},
+  {"id":"tv_prop_hillside_haven_living","property":"hillside_big","account":"properties@chipburns.com","name":"Hillside Haven - Living","location":"Living room","model":"65\" TCL Roku TV","guestMode":true,"serial":"X01200HLM273","linkDate":"2024-04-07T01:05:55Z","rokuId":"a706e1c7-2a35-4f94-91c6-b14b0010f21d"},
+  {"id":"tv_prop_hillside_outdoor_tv","property":"hillside_big","account":"properties@chipburns.com","name":"Hillside - Outdoor TV","location":"Outdoor TV","model":"75\" Hisense Roku TV","guestMode":true,"serial":"X03500M6CY0N","linkDate":"2026-10-14T13:40:07Z","rokuId":"ddb8bb99-1f8e-49aa-9500-b4e300dfb6fa"},
+  {"id":"tv_prop_prc6","property":"prc6","account":"properties@chipburns.com","name":"PRC - 6","location":"Living room","model":"Streaming Stick 4K","guestMode":true,"serial":"X025009PT0CX","linkDate":"2025-07-20T20:39:05Z","rokuId":"1a45ad36-26e4-4bb5-8af2-b32001538ca6"},
+  {"id":"tv_prop_rosy_upstairs_bedroom","property":"umc50","account":"properties@chipburns.com","name":"Rosy Ridge - Upstairs Bedroom","location":"Bedroom","model":"Roku Streaming Stick","guestMode":false,"serial":"X0260093GN54","linkDate":"2026-09-08T17:54:19Z","rokuId":"8ca209e3-d754-426b-a88d-b4bf01254426"},
+  {"id":"tv_prop_wizards_living_room","property":"wizards","account":"properties@chipburns.com","name":"Wizards - Living Room","location":"Backyard","model":"65\" TCL Roku TV","guestMode":true,"serial":"X01200L6KD5P","linkDate":"2023-06-03T20:10:21Z","rokuId":"6100e9ec-691a-486b-af50-b016014c2cc8"},
+  {"id":"tv_umc_10_living_room","property":"umc10","account":"umccabins@gmail.com","name":"10 - Whispering - Living Room","location":"Living room","model":"Roku Streaming Stick 4K","guestMode":true,"serial":"X02500A1PSR6","linkDate":"2025-02-15T15:03:03Z","rokuId":"7b939588-dd9e-4276-a3aa-b28500f75e7a"},
+  {"id":"tv_umc_20_bedroom","property":"umc20","account":"umccabins@gmail.com","name":"20 - Honey - Bedroom","location":"20 - Honey - Bedroom","model":"32\" TCL Roku TV","guestMode":false,"serial":"YK00TY826939","linkDate":"2025-02-15T14:29:36Z","rokuId":"0b44d189-c012-48e4-88a4-aad001177d2f"},
+  {"id":"tv_umc_20_living_room","property":"umc20","account":"umccabins@gmail.com","name":"20 - Honey - Living Room","location":"20 - Honey - Living Room","model":"50\" TCL Roku TV","guestMode":true,"serial":"X01200TKT98M","linkDate":"2025-02-15T14:13:55Z","rokuId":"2624783c-52d9-4cda-aee2-b28500e9f11f"},
+  {"id":"tv_umc_30_living_room","property":"umc30","account":"umccabins@gmail.com","name":"Rebel - Living Room","location":"Living room","model":"55\" TCL Roku TV","guestMode":true,"serial":"X03200KSYM0N","linkDate":"2025-05-31T23:57:47Z","rokuId":"1406aecb-69fa-4ebc-87ae-b2850028d3d7"},
+  {"id":"tv_umc_30_master_bedroom","property":"umc30","account":"umccabins@gmail.com","name":"30 - Rebel - Master Bedroom","location":"30 - Rebel - Master Bedroom","model":"55\" TCL Roku TV","guestMode":true,"serial":"X03200NADCC1","linkDate":"2025-02-14T05:23:15Z","rokuId":"50dabf4c-d147-431b-8f65-b28400577f98"},
+  {"id":"tv_umc_40_living_room","property":"umc40","account":"umccabins@gmail.com","name":"40 - Lookout - Living Room","location":"Living room","model":"Roku Streaming Stick 4K","guestMode":true,"serial":"X02500JCC300","linkDate":"2025-02-16T16:21:57Z","rokuId":"bf607f57-327e-4031-958d-b286010ce00a"},
+  {"id":"tv_umc_50_living_room","property":"umc50","account":"umccabins@gmail.com","name":"50 - Rosy - Living Room","location":"Living room","model":"55\" TCL Roku TV","guestMode":true,"serial":"X03200982UT7","linkDate":"2025-02-15T01:29:15Z","rokuId":"3929a7da-5cff-4783-970e-b285001819cc"},
+  {"id":"tv_umc_50_upstairs_bedroom","property":"umc50","account":"umccabins@gmail.com","name":"50 - Rosy - Upstairs Bedroom","location":"Bedroom","model":"Roku Streaming Stick 4K","guestMode":true,"serial":"X025003K0M4H","linkDate":"2025-02-15T00:45:35Z","rokuId":"7fa1e9b3-97c1-44c0-b980-b285000bc2f4"},
+  {"id":"tv_umc_60_capt_america","property":"umc60","account":"umccabins@gmail.com","name":"60 - Hero Hang - Capt America","location":"60 - Hero Hang - Capt America","model":"55\" TCL Roku TV","guestMode":true,"serial":"X03200J5HSNK","linkDate":"2025-02-14T18:25:43Z","rokuId":"c15f0191-5593-4c48-9c96-b284012e8964"},
+  {"id":"tv_umc_60_living_room","property":"umc60","account":"umccabins@gmail.com","name":"60 - Hero Hang - Living Room","location":"Living room","model":"50\" TCL Roku TV","guestMode":true,"serial":"X01200A18HGD","linkDate":"2025-02-14T19:33:18Z","rokuId":"fdec53fc-9e91-4743-9083-b2840141b86b"}
+];
+let TVS = null;
+let tvLoaded = false;
+let tvLoading = false;
+let tvEditId = null;
+let tvQuery = '';
+let tvOpen = (() => { try { return localStorage.getItem('se_tv_open') === '1'; } catch (e) { return false; } })();
+
+async function tvLoadIfNeeded() {
+  if (tvLoaded || tvLoading) { if (tvLoaded) tvRender(); return; }
+  tvLoading = true;
+  const wrap = document.getElementById('tv-wrap');
+  if (wrap) wrap.innerHTML = '<div class="tv-loading">Loading Roku TVs…</div>';
+  try {
+    const r = await _kvGetStrict('se_tv');
+    if (r && r.value) {
+      TVS = JSON.parse(r.value);
+      if (!Array.isArray(TVS)) TVS = [];
+      tvLoaded = true;
+    } else {
+      // Key has never been written — seed it once
+      TVS = TV_SEED.map((t) => Object.assign({}, t));
+      tvLoaded = true;
+      await tvSave();
+    }
+  } catch (e) {
+    console.error('[tv] load failed', e);
+    if (wrap) wrap.innerHTML = '<div class="tv-loading">Failed to load Roku TVs. Check your connection and reload.</div>';
+    tvLoading = false;
+    return;
+  }
+  tvLoading = false;
+  tvRender();
+}
+
+async function tvSave() {
+  if (!tvLoaded || !Array.isArray(TVS)) { console.error('[tv] save blocked — TVs did not load'); return false; }
+  try { return await S.set('se_tv', JSON.stringify(TVS)); }
+  catch (e) { console.error('[tv] save failed', e); return false; }
+}
+
+function tvToggle() {
+  tvOpen = !tvOpen;
+  try { localStorage.setItem('se_tv_open', tvOpen ? '1' : '0'); } catch (e) {}
+  tvRender();
+}
+
+function tvFmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d)) return '—';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function tvMatches(t) {
+  if (!tvQuery) return true;
+  const p = t.property ? getProp(t.property) : null;
+  return [t.name, t.location, t.model, t.account, t.serial, p ? p.name : '', t.guestMode ? 'guest mode on' : 'guest mode off']
+    .join(' ').toLowerCase().includes(tvQuery);
+}
+
+function tvRender() {
+  const wrap = document.getElementById('tv-wrap');
+  if (!wrap || !TVS) return;
+  const accounts = new Set(TVS.map((t) => t.account).filter(Boolean));
+  const offCount = TVS.filter((t) => !t.guestMode).length;
+  let h = `<div class="tv-hdr" onclick="tvToggle()">`;
+  h += `<span class="tv-chev">${tvOpen ? '▾' : '▸'}</span>`;
+  h += `<span class="tv-title">Roku TVs</span>`;
+  h += `<span class="tv-meta">${TVS.length} TVs · ${accounts.size} Roku account${accounts.size === 1 ? '' : 's'} · ${offCount} with Guest Mode off</span>`;
+  h += `<button class="btn btn-g tv-add" onclick="event.stopPropagation();tvOpenModal(null)">+ Add TV</button>`;
+  h += `</div>`;
+  if (tvOpen) {
+    h += `<div class="tv-search-row"><input type="text" id="tv-search" class="vd-search" placeholder="Search TVs by property, room, model, account or serial…" value="${ppEsc(tvQuery)}" oninput="tvOnSearch(this.value)" autocomplete="off"></div>`;
+    h += `<div id="tv-body"></div>`;
+  }
+  wrap.innerHTML = h;
+  if (tvOpen) tvRenderBody();
+}
+
+function tvOnSearch(v) {
+  tvQuery = String(v || '').trim().toLowerCase();
+  tvRenderBody();
+}
+
+function tvTable(rows) {
+  rows = rows.slice().sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  let h = `<div class="tv-table-box"><table class="tv-table"><thead><tr>`;
+  h += `<th>Roku name / location</th><th>Model</th><th>Guest Mode</th><th>Account</th><th>Serial</th><th>Linked</th><th></th>`;
+  h += `</tr></thead><tbody>`;
+  rows.forEach((t) => {
+    h += `<tr>`;
+    h += `<td><div class="tv-name">${ppEsc(t.name)}</div><div class="tv-loc">${ppEsc(t.location)}</div></td>`;
+    h += `<td class="tv-mono">${ppEsc(t.model)}</td>`;
+    h += `<td>${t.guestMode ? '<span class="tv-pill on">ON</span>' : '<span class="tv-pill off">OFF</span>'}</td>`;
+    h += `<td class="tv-mono">${ppEsc(t.account)}</td>`;
+    h += `<td class="tv-mono">${ppEsc(t.serial) || '—'}</td>`;
+    h += `<td class="tv-mono">${tvFmtDate(t.linkDate)}</td>`;
+    h += `<td><button class="btn tv-edit" onclick="tvOpenModal('${ppEsc(t.id)}')">Edit</button></td>`;
+    h += `</tr>`;
+  });
+  h += `</tbody></table></div>`;
+  return h;
+}
+
+function tvRenderBody() {
+  const body = document.getElementById('tv-body');
+  if (!body || !TVS) return;
+  const shown = TVS.filter(tvMatches);
+  if (!shown.length) {
+    body.innerHTML = `<div class="tv-loading">${TVS.length ? 'No TVs match your search.' : 'No TVs yet. Use + Add TV to enter the first one.'}</div>`;
+    return;
+  }
+  let h = '';
+  const placed = new Set();
+  NBS.forEach((nb) => {
+    const nbRows = shown.filter((t) => nb.props.includes(t.property));
+    if (!nbRows.length) return;
+    h += `<div class="tv-nb">`;
+    h += `<div class="nb-banner nbb-${nb.cls}"><span>${ppEsc(nb.name)}</span><span class="nb-banner-count">${nbRows.length} TV${nbRows.length === 1 ? '' : 's'}</span></div>`;
+    nb.props.forEach((pid) => {
+      const rows = nbRows.filter((t) => t.property === pid);
+      if (!rows.length) return;
+      rows.forEach((t) => placed.add(t.id));
+      const p = getProp(pid);
+      h += `<div class="tv-prop nb-${nb.cls}"><div class="tv-prop-hdr">${ppEsc(p ? p.name : pid)} <span>${rows.length} TV${rows.length === 1 ? '' : 's'}</span></div>${tvTable(rows)}</div>`;
+    });
+    h += `</div>`;
+  });
+  const rest = shown.filter((t) => !placed.has(t.id));
+  if (rest.length) {
+    h += `<div class="tv-nb"><div class="nb-banner tv-nb-unassigned"><span>No property set</span><span class="nb-banner-count">${rest.length} TV${rest.length === 1 ? '' : 's'}</span></div>`;
+    h += `<div class="tv-prop">${tvTable(rest)}</div></div>`;
+  }
+  body.innerHTML = h;
+}
+
+function tvOpenModal(id) {
+  if (!tvLoaded) return;
+  tvEditId = id;
+  const t = id ? TVS.find((x) => x.id === id) : null;
+  if (id && !t) return;
+  document.getElementById('tv-modal-title').textContent = t ? 'Edit TV' : 'Add TV';
+  populatePropSel('tv-prop');
+  document.getElementById('tv-prop').value = t ? (t.property || '') : '';
+  document.getElementById('tv-account').value = t ? (t.account || '') : '';
+  document.getElementById('tv-name').value = t ? (t.name || '') : '';
+  document.getElementById('tv-location').value = t ? (t.location || '') : '';
+  document.getElementById('tv-model').value = t ? (t.model || '') : '';
+  document.getElementById('tv-guest').value = t && !t.guestMode ? 'off' : 'on';
+  document.getElementById('tv-serial').value = t ? (t.serial || '') : '';
+  const dl = document.getElementById('tv-account-list');
+  if (dl) dl.innerHTML = [...new Set(TVS.map((x) => x.account).filter(Boolean))].sort().map((a) => `<option value="${ppEsc(a)}">`).join('');
+  const del = document.getElementById('tv-del-btn');
+  del.style.display = t ? '' : 'none';
+  del.textContent = 'Delete TV';
+  del.dataset.armed = '';
+  document.getElementById('tv-modal').classList.add('open');
+}
+
+async function tvSaveModal() {
+  const name = document.getElementById('tv-name').value.trim();
+  if (!name) { showToast('Enter the Roku device name', '', '', 3000); return; }
+  const fields = {
+    property: document.getElementById('tv-prop').value,
+    account: document.getElementById('tv-account').value.trim().toLowerCase(),
+    name,
+    location: document.getElementById('tv-location').value.trim(),
+    model: document.getElementById('tv-model').value.trim(),
+    guestMode: document.getElementById('tv-guest').value === 'on',
+    serial: document.getElementById('tv-serial').value.trim().toUpperCase()
+  };
+  if (tvEditId) {
+    const t = TVS.find((x) => x.id === tvEditId);
+    if (!t) return;
+    Object.assign(t, fields);
+  } else {
+    TVS.push(Object.assign({ id: 'tv_' + Date.now().toString(36), linkDate: '', rokuId: '' }, fields));
+  }
+  const ok = await tvSave();
+  if (ok) { closeModal('tv-modal'); showToast(tvEditId ? 'TV updated' : 'TV added', '', '', 2500); }
+  tvRender();
+}
+
+async function tvDeleteFromModal() {
+  const btn = document.getElementById('tv-del-btn');
+  if (!btn.dataset.armed) { btn.dataset.armed = '1'; btn.textContent = 'Confirm delete'; return; }
+  const t = TVS.find((x) => x.id === tvEditId);
+  if (!t) return;
+  TVS = TVS.filter((x) => x.id !== tvEditId);
+  const ok = await tvSave();
+  if (ok) { closeModal('tv-modal'); showToast('TV deleted', '', '', 2500); }
+  tvRender();
+}
+// ═══════════════  END Roku TV Directory  ═══════════════

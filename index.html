@@ -232,6 +232,7 @@
     </div>
 
     <div class="view" id="view-properties">
+      <div id="tv-wrap" class="tv-wrap"></div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
         <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--green);font-weight:600">Property Bible</h2>
         <div class="pp-tabs">
@@ -774,6 +775,31 @@
 </div>
 
 <!-- VENDOR MODAL -->
+<div class="mo" id="tv-modal">
+  <div class="modal" style="max-width:560px">
+    <div class="mhdr">
+      <div class="mtitle" id="tv-modal-title">Add TV</div>
+      <button class="mclose" onclick="closeModal('tv-modal')">&#x2715;</button>
+    </div>
+    <div class="fg">
+      <div class="fgr full"><label>Property</label><select id="tv-prop"></select></div>
+      <div class="fgr full"><label>Roku account email</label><input type="text" id="tv-account" list="tv-account-list" autocomplete="off"><datalist id="tv-account-list"></datalist></div>
+      <div class="fgr"><label>Roku device name</label><input type="text" id="tv-name" placeholder="e.g. Big House - Bed 3" autocomplete="off"></div>
+      <div class="fgr"><label>Roku location</label><input type="text" id="tv-location" placeholder="e.g. Bedroom" autocomplete="off"></div>
+      <div class="fgr"><label>Model</label><input type="text" id="tv-model" placeholder='e.g. 50" TCL Roku TV' autocomplete="off"></div>
+      <div class="fgr"><label>Guest Mode</label><select id="tv-guest"><option value="on">ON</option><option value="off">OFF</option></select></div>
+      <div class="fgr full"><label>Serial (ESN)</label><input type="text" id="tv-serial" autocomplete="off"></div>
+    </div>
+    <div style="display:flex;gap:9px;margin-top:20px;justify-content:space-between;align-items:center">
+      <button class="btn btn-red" id="tv-del-btn" onclick="tvDeleteFromModal()" style="display:none">Delete TV</button>
+      <div style="display:flex;gap:7px;margin-left:auto">
+        <button class="btn" onclick="closeModal('tv-modal')">Cancel</button>
+        <button class="btn btn-g" onclick="tvSaveModal()">Save TV</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="mo" id="vendor-modal">
   <div class="modal">
     <div class="mhdr">
