@@ -2761,13 +2761,68 @@ function vendorsForCat(cat){
     return (idx.get(a.id)||0)-(idx.get(b.id)||0);
   });
 }
-function populateVendorSelect(selId,selectedVendor,catFilter,customWrapId,customInputId){
+// ── Properties each vendor serves (2026-10-24) ──────────────────────────────
+// v.properties = [app property ids]. Missing = not set yet, treated as serving everything.
+// A resort-level task (prc / umc / hillside) counts if the vendor serves any house there.
+function vendorServes(v,pid){
+  if(!pid||!v||!Array.isArray(v.properties))return true;
+  if(v.properties.includes(pid))return true;
+  const nb=_nbById[pid];
+  return !!(nb&&nb.props.some(x=>v.properties.includes(x)));
+}
+function shortPropName(pid){
+  const p=getProp(pid);if(!p)return pid;
+  const m=/^(PRC|UMC)\s*-\s*(\d+)/.exec(p.name);if(m)return m[1]+' '+m[2];
+  if(/^Hillside Haven/.test(p.name))return p.name.split(/\s*[-:]\s*/).pop();
+  return p.name;
+}
+function vendorCoverageText(v){
+  if(!Array.isArray(v.properties))return 'Not set';
+  const s=new Set(v.properties);
+  if(activePropIds().every(x=>s.has(x)))return 'All properties';
+  const parts=[];
+  NBS.forEach(nb=>{
+    const ps=nb.props.filter(x=>{const pp=getProp(x);return pp&&!pp.retired;});
+    const got=ps.filter(x=>s.has(x));if(!got.length)return;
+    parts.push(got.length===ps.length?nb.name:nb.name+': '+got.map(shortPropName).join(', '));
+  });
+  return parts.join(' · ')||'No properties';
+}
+// Edit Vendor form: one checkbox per property, a check-all box per neighborhood, and All properties.
+function renderVendorPropChecks(selected){
+  const wrap=document.getElementById('v-props');if(!wrap)return;
+  const sel=new Set(selected==null?activePropIds():selected);
+  let h=`<label class="v-prop-allbox"><input type="checkbox" data-all="1" onchange="vpcToggleAll(this.checked)"> All properties</label>`;
+  NBS.forEach(nb=>{
+    const ps=nb.props.filter(x=>{const pp=getProp(x);return pp&&!pp.retired;});if(!ps.length)return;
+    h+=`<div class="v-prop-nb"><label class="v-prop-nbhdr"><input type="checkbox" data-nb="${nb.id}" onchange="vpcToggleNb('${nb.id}',this.checked)"> ${nb.name} <span>all ${ps.length}</span></label><div class="v-prop-list">`;
+    ps.forEach(pid=>{h+=`<label class="v-cat-check"><input type="checkbox" data-pid="${pid}" data-nbof="${nb.id}"${sel.has(pid)?' checked':''} onchange="vpcSync()"> ${shortPropName(pid)}</label>`;});
+    h+=`</div></div>`;
+  });
+  wrap.innerHTML=h;vpcSync();
+}
+function vpcSync(){
+  const wrap=document.getElementById('v-props');if(!wrap)return;
+  const setBox=(box,list)=>{const n=list.filter(i=>i.checked).length;box.checked=n===list.length&&n>0;box.indeterminate=n>0&&n<list.length;};
+  wrap.querySelectorAll('input[data-nb]').forEach(b=>setBox(b,[...wrap.querySelectorAll(`input[data-nbof="${b.dataset.nb}"]`)]));
+  const all=wrap.querySelector('input[data-all]');if(all)setBox(all,[...wrap.querySelectorAll('input[data-pid]')]);
+}
+function vpcToggleNb(nbId,on){
+  document.querySelectorAll(`#v-props input[data-nbof="${nbId}"]`).forEach(i=>{i.checked=on;});vpcSync();
+}
+function vpcToggleAll(on){
+  document.querySelectorAll('#v-props input[data-pid]').forEach(i=>{i.checked=on;});vpcSync();
+}
+function readVendorPropChecks(){
+  return Array.from(document.querySelectorAll('#v-props input[data-pid]:checked')).map(i=>i.dataset.pid);
+}
+function populateVendorSelect(selId,selectedVendor,catFilter,customWrapId,customInputId,propFilter){
   const sel=document.getElementById(selId);
   const prev=selectedVendor!==undefined?selectedVendor:sel.value;
   sel.innerHTML='<option value="">— None —</option>';
   if(catFilter){
-    const matched=vendorsForCat(catFilter);
-    const others=vendors.filter(v=>!v.categories.includes(catFilter));
+    const matched=vendorsForCat(catFilter).filter(v=>vendorServes(v,propFilter));
+    const others=vendors.filter(v=>!matched.includes(v));
     if(matched.length){const og=document.createElement('optgroup');og.label='Recommended';matched.forEach((v,i)=>{const o=document.createElement('option');o.value=v.name;o.textContent=(i+1)+'. '+v.name+(v.role?' — '+v.role:'');og.appendChild(o);});sel.appendChild(og);}
     if(others.length){const og=document.createElement('optgroup');og.label='Other Vendors';others.forEach(v=>{const o=document.createElement('option');o.value=v.name;o.textContent=v.name+' — '+v.role;og.appendChild(o);});sel.appendChild(og);}
   }else{
@@ -3094,6 +3149,7 @@ async function combineTask(rid,date){
 // ADD TASK
 function toggleUrgent(){const cb=document.getElementById('f-urgent');cb.checked=!cb.checked;}
 function onPropChange(){
+  if(document.getElementById('f-category').value)onCatChange(); // refresh vendor suggestions for the new property (2026-10-24)
   document.getElementById('f-date').value='';
   document.getElementById('f-dp-display').textContent='Select a date...';
   document.getElementById('f-dp-display').className='dp-ph';
@@ -3104,7 +3160,8 @@ function onCatChange(){
   const cat=document.getElementById('f-category').value;
   const area=document.getElementById('f-vendor-suggest');
   if(!cat){area.innerHTML='';return;}
-  const m=vendorsForCat(cat);
+  const fp=document.getElementById('f-property').value;
+  const m=vendorsForCat(cat).filter(v=>vendorServes(v,fp)); // only vendors who serve this property (2026-10-24)
   if(!m.length){area.innerHTML='';return;}
   if(!document.getElementById('f-vendor').value&&m.length)document.getElementById('f-vendor').value=m[0].name;
   area.innerHTML='<label style="margin-bottom:6px">Suggested Vendors</label>'+m.slice(0,3).map(v=>`
@@ -3702,7 +3759,7 @@ async function renderDetailVendors(t,p){
     return;
   }
 
-  const m=vendorsForCat(t.category);
+  const m=vendorsForCat(t.category).filter(v=>vendorServes(v,t.property));
   const assignedVendor=t.vendor?vendors.find(v=>v.name.toLowerCase()===t.vendor.toLowerCase()):null;
 
   // Pre-generate vendor sheet URL if we have an assigned vendor + date
@@ -4716,8 +4773,9 @@ function buildVendorDD(filter=''){
   // Group vendors by category
   let html='';
   let anyMatch=false;
+  const _dt=tasks.find(x=>x.id===detailId),_dpid=_dt&&_dt.property; // vendors who serve this property first (2026-10-24)
   for(const cat of VCAT){
-    const catVendors=vendorsForCat(cat.id);
+    const catVendors=vendorsForCat(cat.id).sort((a,b)=>(vendorServes(b,_dpid)?1:0)-(vendorServes(a,_dpid)?1:0));
     const matched=catVendors.filter(v=>{
       if(!q)return true;
       return v.name.toLowerCase().includes(q)||v.role.toLowerCase().includes(q)||cat.label.toLowerCase().includes(q);
@@ -4728,8 +4786,9 @@ function buildVendorDD(filter=''){
     const currentVendor=document.getElementById('d-vendor').value;
     for(const v of matched){
       const sel=v.name===currentVendor?'sel':'';
-      html+=`<div class="vd-item ${sel}" onclick="selectVendorDD('${v.name.replace(/'/g,"\\'")}')">
-        <span>${v.name}</span><span class="vd-role">${v.role}</span>
+      const _out=!vendorServes(v,_dpid);
+      html+=`<div class="vd-item ${sel}${_out?' vd-out':''}" onclick="selectVendorDD('${v.name.replace(/'/g,"\\'")}')">
+        <span>${v.name}</span><span class="vd-role">${_out?'Not set up for this property':v.role}</span>
       </div>`;
     }
   }
@@ -5348,7 +5407,7 @@ function _vendorMatchesSearch(v,q){
   const needle=q.toLowerCase();
   const phoneDigits=(v.phone||'').replace(/\D/g,'');
   const needleDigits=needle.replace(/\D/g,'');
-  const hay=[v.name||'',v.role||'',v.phone||'',v.email||'',v.note||'',(v.notesLog||[]).map(n=>n.text||'').join(' '),
+  const hay=[v.name||'',v.role||'',v.phone||'',v.email||'',v.note||'',(v.notesLog||[]).map(n=>n.text||'').join(' '),vendorCoverageText(v),
     (v.categories||[]).map(cid=>{const c=VCAT.find(x=>x.id===cid);return c?c.label:'';}).join(' ')
   ].join(' ').toLowerCase();
   if(hay.includes(needle))return true;
@@ -5396,6 +5455,7 @@ function renderVendors(){
       h+=`<div class="vc-info">`;
       h+=`<div class="vc-name">${q?_vendorHighlight(v.name,q):v.name}</div><div class="vc-role">${q?_vendorHighlight(v.role,q):v.role}</div>`;
       h+=`<div class="vc-contact"><span class="vc-phone">${v.phone}</span>${v.email?`<span class="vc-email">${v.email}</span>`:''}</div>`;
+      h+=`<div class="vc-serves">Serves: ${vendorCoverageText(v)}</div>`;
       h+=!v.email?`<span class="add-email" onclick="showEmailForm('${v.id}')">+ Add email</span>`:'';
       h+=`<div id="ef-${v.id}" style="display:none" class="email-form">
         <input type="email" placeholder="vendor@email.com" id="ei-${v.id}">
@@ -5456,7 +5516,7 @@ function readVendorCatChecks(){
 function openAddVendor(){
   editVendorId=null;document.getElementById('vendor-modal-title').textContent='Add Vendor';
   ['v-name','v-role','v-phone','v-email','v-notes'].forEach(id=>document.getElementById(id).value='');
-  renderVendorCatChecks(['handyman']);document.getElementById('v-del-btn').style.display='none';
+  renderVendorCatChecks(['handyman']);renderVendorPropChecks([]);document.getElementById('v-del-btn').style.display='none';
   document.getElementById('v-pay-venmo').checked=false;document.getElementById('v-pay-cashapp').checked=false;
   document.getElementById('vendor-modal').classList.add('open');
 }
@@ -5465,7 +5525,7 @@ function openEditVendor(id){
   document.getElementById('vendor-modal-title').textContent='Edit Vendor';
   document.getElementById('v-name').value=v.name;document.getElementById('v-role').value=v.role;
   document.getElementById('v-phone').value=v.phone;document.getElementById('v-email').value=v.email||'';
-  document.getElementById('v-notes').value=v.note||'';renderVendorCatChecks(v.categories||[]);
+  document.getElementById('v-notes').value=v.note||'';renderVendorCatChecks(v.categories||[]);renderVendorPropChecks(Array.isArray(v.properties)?v.properties:null);
   // Payment methods — default none for vendors without the field (opt-in)
   const pm=v.paymentMethods||[];
   document.getElementById('v-pay-venmo').checked=pm.includes('venmo');
@@ -5479,9 +5539,11 @@ async function saveVendor(){
   // 2026-10-24: every category is a checkbox. Categories not in the current list are kept.
   const picked=readVendorCatChecks();
   if(!picked.length){showToast('Pick at least one category.','err');return;}
+  const servedProps=readVendorPropChecks();
+  if(!servedProps.length){showToast('Pick at least one property this vendor serves.','err');return;}
   const oldCats=(old&&Array.isArray(old.categories))?old.categories:[];
   const categories=[...picked,...oldCats.filter(c=>!VCAT.some(x=>x.id===c)&&!picked.includes(c))];
-  const fields={name,role:document.getElementById('v-role').value.trim(),phone:document.getElementById('v-phone').value.trim(),email:document.getElementById('v-email').value.trim(),categories,note:document.getElementById('v-notes').value.trim(),paymentMethods:pm};
+  const fields={name,role:document.getElementById('v-role').value.trim(),phone:document.getElementById('v-phone').value.trim(),email:document.getElementById('v-email').value.trim(),categories,properties:servedProps,note:document.getElementById('v-notes').value.trim(),paymentMethods:pm};
   let renamed=null;
   if(old){
     const oldName=old.name||'';
@@ -5595,6 +5657,7 @@ function renderVendorProfile(){
       <div class="vp-role">${_vpEsc(v.role||'')}</div>
       <div class="vp-contact">${_vpEsc(v.phone||'')}${v.email?' · '+_vpEsc(v.email):''}</div>
       <div class="vp-chips">${cats}</div>
+      <div class="vp-serves">Serves: ${_vpEsc(vendorCoverageText(v))}</div>
       ${v.note?`<div class="vp-summary">${_vpEsc(v.note)}</div>`:''}
     </div>
     <div class="vp-sec"><h4>Notes</h4>
@@ -11465,6 +11528,17 @@ async function dataSetup20261024(){
   addNote(ai,'Contact: Cory Wells.');
   addNote(javier,'Electrical: light work only.');
   addNote(michael,'Electrical: simple hanging fixtures and very basic electric only.');
+  // Properties served (Chip, Oct 24): only these work Hillside Haven; John covers everything;
+  // every other vendor works the Tennessee properties.
+  const HH=['hillside_big','hillside_cottage'],TN=activePropIds().filter(x=>!HH.includes(x));
+  const hhOnly=['will kinnebrew','tony pennington','mammie johnson','sunshine heating','envirocare','william yaegar'];
+  vendors.forEach(v=>{
+    if(Array.isArray(v.properties))return;
+    const nm=(v.name||'').toLowerCase();
+    if(nm.startsWith('john villaraza'))v.properties=activePropIds();
+    else if(hhOnly.some(n=>nm.startsWith(n)))v.properties=[...HH];
+    else v.properties=[...TN];
+  });
   if(james){_deletedVendorIds.add(james.id);vendors=vendors.filter(v=>v!==james);}
   if(recChanged)await saveRec();
   await saveVendors();

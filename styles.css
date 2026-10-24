@@ -2295,3 +2295,14 @@ textarea{resize:vertical;min-height:76px}
 .vp-job-note{font-size:.74rem;color:var(--text2);margin-top:2px}
 .vp-routine summary{cursor:pointer;font-size:.74rem;font-weight:600;color:var(--text2);margin:12px 0 6px}
 @media (max-width:600px){.vp-stats{grid-template-columns:repeat(2,1fr)}.vp-note-add{flex-direction:column}.vp-note-add .btn{align-self:flex-end}}
+
+/* ── 2026-10-24: properties each vendor serves ── */
+.v-props{border:1px solid var(--border);border-radius:8px;padding:10px 12px;max-height:340px;overflow-y:auto;margin-top:4px}
+.v-prop-allbox{display:flex;align-items:center;gap:6px;font-size:.82rem;font-weight:600;cursor:pointer;padding-bottom:8px;margin-bottom:8px;border-bottom:1px solid var(--border);text-transform:none;letter-spacing:0}
+.v-prop-nb{margin-bottom:8px}
+.v-prop-nbhdr{display:flex;align-items:center;gap:6px;font-size:.8rem;font-weight:600;color:var(--green);cursor:pointer;text-transform:none;letter-spacing:0}
+.v-prop-nbhdr span{font-weight:400;font-size:.66rem;color:var(--text3)}
+.v-prop-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:4px 12px;padding:4px 0 0 22px}
+.vc-serves{font-size:.72rem;color:var(--text2);margin-top:3px}
+.vp-serves{font-size:.78rem;color:var(--text2);margin-bottom:4px}
+.vd-item.vd-out{opacity:.55}
