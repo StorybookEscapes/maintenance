@@ -2306,3 +2306,12 @@ textarea{resize:vertical;min-height:76px}
 .vc-serves{font-size:.72rem;color:var(--text2);margin-top:3px}
 .vp-serves{font-size:.78rem;color:var(--text2);margin-bottom:4px}
 .vd-item.vd-out{opacity:.55}
+
+/* ── 2026-10-24: texts Claude drafted for Chip to send ── */
+.dr-banner{background:linear-gradient(135deg,#0d3528 0%,#1a5240 100%);border-color:#2f6b55}
+.dr-title{color:#e8d5a3}
+.dr-to{font-size:.78rem;font-weight:600;color:#fff;margin-bottom:4px}
+.dr-items{display:flex;flex-wrap:wrap;gap:4px 12px;margin-bottom:6px}
+.dr-ta{width:100%;box-sizing:border-box;font-size:.84rem;line-height:1.4;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.95);color:var(--text);padding:8px 10px;margin:4px 0 8px;font-family:inherit}
+.dr-btns{display:flex;gap:6px;flex-wrap:wrap}
+.dr-btns a.hb-btn{text-decoration:none;display:inline-flex;align-items:center}

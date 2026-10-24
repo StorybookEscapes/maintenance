@@ -576,7 +576,7 @@ async function load() {
     const r=await _kvGetStrict('se_v');
     if(r){vendors=JSON.parse(r.value);}
     else{vendors=JSON.parse(JSON.stringify(DEF_VENDORS));await save('se_v',vendors);}
-    vendorsLoadedOk=true;_vendorsLoadedCount=vendors.length;
+    vendorsLoadedOk=true;_vendorsLoadedCount=vendors.length;_vendorBaseline=_snapById(vendors);
   }catch(e){
     console.error('[SAFETY] se_v load failed — vendor writes are BLOCKED until page reload:',e);
     vendors=[];vendorsLoadedOk=false;
@@ -586,7 +586,7 @@ async function load() {
     const r=await _kvGetStrict('se_r');
     if(r){recurring=JSON.parse(r.value);}
     else{recurring=JSON.parse(JSON.stringify(DEF_RECURRING));await save('se_r',recurring);}
-    recurringLoadedOk=true;_recurringLoadedCount=recurring.length;
+    recurringLoadedOk=true;_recurringLoadedCount=recurring.length;_recBaseline=_snapById(recurring);
   }catch(e){
     console.error('[SAFETY] se_r load failed — recurring writes are BLOCKED until page reload:',e);
     recurring=[];recurringLoadedOk=false;
@@ -614,6 +614,40 @@ async function save(k,v){try{await S.set(k,JSON.stringify(v));}catch(e){}}
 // since this page loaded. Local edits always win for items this admin touched;
 // items that exist on the server but not locally (added by another admin) are
 // folded in. Prevents simultaneous admins from clobbering each other's additions.
+// ── Three-way merge for vendors and recurring templates (2026-10-24) ──────────
+// Claude can now change these on the server while this page is open. At save time:
+//   • a record this page didn't change → the server's copy is kept
+//   • a record changed here → this page's edits win, plus any fields only the server changed
+//   • notes added on the server (unionField, by id) are kept
+//   • records added on the server are added; records deleted here stay deleted (excludeIds)
+let _vendorBaseline=new Map(), _recBaseline=new Map();
+const _snapById=arr=>new Map((arr||[]).filter(x=>x&&x.id).map(x=>[x.id,JSON.stringify(x)]));
+async function _rbw3Merge(kvKey, localArr, baseline, excludeIds, unionField){
+  let server;
+  try{
+    const r=await S.get(kvKey);if(!r||!r.value)return localArr;
+    server=JSON.parse(r.value);if(!Array.isArray(server))return localArr;
+  }catch(e){console.warn(`[rbw3] ${kvKey}: read failed, using local state`);return localArr;}
+  const sMap=new Map(server.filter(x=>x&&x.id).map(x=>[x.id,x]));
+  const J=x=>JSON.stringify(x);
+  const out=[];
+  localArr.forEach(l=>{
+    const s=sMap.get(l.id),bStr=baseline.get(l.id);
+    if(!s){if(bStr&&J(l)===bStr)return;out.push(l);return;}   // gone on server and untouched here → stays gone
+    if(!bStr){out.push(l);return;}                              // new on this page
+    if(J(l)===bStr){out.push(s);return;}                        // untouched here → server copy
+    const b=JSON.parse(bStr),m=Object.assign({},l);
+    Object.keys(s).forEach(k=>{if(J(s[k])!==J(b[k])&&J(l[k])===J(b[k]))m[k]=s[k];});
+    if(unionField&&Array.isArray(s[unionField])){
+      const have=new Set((m[unionField]||[]).map(n=>n&&n.id)),was=new Set((b[unionField]||[]).map(n=>n&&n.id));
+      s[unionField].forEach(n=>{if(n&&n.id&&!have.has(n.id)&&!was.has(n.id))(m[unionField]=m[unionField]||[]).push(n);});
+    }
+    out.push(m);
+  });
+  const localIds=new Set(localArr.map(x=>x&&x.id));
+  server.forEach(s=>{if(s&&s.id&&!localIds.has(s.id)&&!(excludeIds&&excludeIds.has(s.id)))out.push(s);});
+  return out;
+}
 async function _rbwMerge(kvKey, localArray, idField='id', excludeIds=null) {
   try {
     const r = await S.get(kvKey);
@@ -750,7 +784,7 @@ const saveVendors = async () => {
     showToast('\u26a0\ufe0f Vendor save blocked — vendor list did not load properly. Please reload.','','',8000);
     return;
   }
-  vendors = await _rbwMerge('se_v', vendors, 'id', _deletedVendorIds);
+  vendors = await _rbw3Merge('se_v', vendors, _vendorBaseline, _deletedVendorIds, 'notesLog');
   if (_vendorsLoadedCount > 5 && vendors.length < _vendorsLoadedCount * 0.5) {
     console.error(`[SAFETY] saveVendors() BLOCKED — drastic shrinkage (${_vendorsLoadedCount} → ${vendors.length}).`);
     showToast(`\u26a0\ufe0f Save blocked: vendor count dropped from ${_vendorsLoadedCount} to ${vendors.length}. Reload to recover.`,'','',10000);
@@ -758,6 +792,7 @@ const saveVendors = async () => {
   }
   _vendorsLoadedCount = vendors.length;
   await save('se_v', vendors);
+  _vendorBaseline = _snapById(vendors);
 };
 const saveRec = async () => {
   if (!recurringLoadedOk) {
@@ -765,7 +800,7 @@ const saveRec = async () => {
     showToast('\u26a0\ufe0f Recurring save blocked — templates did not load properly. Please reload.','','',8000);
     return;
   }
-  recurring = await _rbwMerge('se_r', recurring, 'id', _deletedRecIds);
+  recurring = await _rbw3Merge('se_r', recurring, _recBaseline, _deletedRecIds, null);
   if (_recurringLoadedCount > 5 && recurring.length < _recurringLoadedCount * 0.5) {
     console.error(`[SAFETY] saveRec() BLOCKED — drastic shrinkage (${_recurringLoadedCount} → ${recurring.length}).`);
     showToast(`\u26a0\ufe0f Save blocked: recurring template count dropped from ${_recurringLoadedCount} to ${recurring.length}. Reload to recover.`,'','',10000);
@@ -773,6 +808,7 @@ const saveRec = async () => {
   }
   _recurringLoadedCount = recurring.length;
   await save('se_r', recurring);
+  _recBaseline = _snapById(recurring);
 };
 
 // ── Task Change Log ──────────────────────────────────────────
@@ -6660,6 +6696,75 @@ function toggleCqDismissed() {
 }
 function _cqPropName(pid) { const p = typeof getProp === 'function' ? getProp(pid) : null; return p ? p.name : (pid || 'No property'); }
 function _cqCatName(c) { return c ? (CAT_LABELS[c] || c.replace(/_/g, ' ')) : 'No category'; }
+// ── Texts to send: drafts Claude wrote (KV se_drafts, 2026-10-24) ─────────────
+// Claude never sends texts. It saves drafts here; Chip edits if needed, taps Text to open
+// Messages with the recipients and words filled in, sends, then taps Mark sent.
+let drItems=[],drLastLoad=0;
+async function drLoad(){
+  drLastLoad=Date.now();
+  try{const r=await _kvGetStrict('se_drafts');const a=r&&r.value?JSON.parse(r.value):[];drItems=Array.isArray(a)?a:[];}
+  catch(e){console.warn('[drafts] did not load',e);}
+  renderDrafts();
+}
+function drStart(){
+  drLoad();
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&Date.now()-drLastLoad>60000)drLoad();});
+}
+function _drPhones(d){
+  return (d.to||[]).map(x=>String(x.phone||'').replace(/\D/g,'')).filter(Boolean).map(n=>n.length===10?'+1'+n:'+'+n);
+}
+function _drHref(d,text){
+  const nums=_drPhones(d),body=encodeURIComponent(text||'');
+  return nums.length>1?'sms://open?addresses='+nums.join(',')+'&body='+body:'sms:'+(nums[0]||'')+'?body='+body;
+}
+function drSyncLink(id){
+  const d=drItems.find(x=>x.id===id),ta=document.getElementById('dr-ta-'+id),a=document.getElementById('dr-send-'+id);
+  if(d&&ta&&a)a.href=_drHref(d,ta.value);
+}
+async function _drUpdate(id,changes){
+  let arr;
+  try{const r=await _kvGetStrict('se_drafts');arr=r&&r.value?JSON.parse(r.value):[];}catch(e){showToast('Drafts did not load — try again.','err');return false;}
+  const d=arr.find(x=>x.id===id);if(!d){drItems=arr;renderDrafts();return false;}
+  Object.assign(d,changes);
+  if(!(await S.set('se_drafts',JSON.stringify(arr)))){showToast('Could not save — try again.','err');return false;}
+  drItems=arr;renderDrafts();return true;
+}
+async function drMarkSent(id){
+  const ta=document.getElementById('dr-ta-'+id);
+  if(await _drUpdate(id,{status:'sent',sentAt:new Date().toISOString(),sentBy:getCurrentUserName(),text:ta?ta.value:undefined}))showToast('Marked sent.');
+}
+async function drDiscard(id){
+  if(await _drUpdate(id,{status:'discarded',discardedAt:new Date().toISOString(),discardedBy:getCurrentUserName()}))showToast('Draft discarded.');
+}
+async function drCopy(id){
+  const ta=document.getElementById('dr-ta-'+id);if(!ta)return;
+  try{await navigator.clipboard.writeText(ta.value);showToast('Text copied.');}catch(e){ta.select();showToast('Select and copy the text.');}
+}
+function renderDrafts(){
+  const el=document.getElementById('dr-wrap');if(!el)return;
+  const open=drItems.filter(d=>d.status==='draft');
+  if(!open.length){el.innerHTML='';return;}
+  let h=`<div class="hb-banner dr-banner"><div class="hb-hdr" style="flex-wrap:wrap;gap:8px">
+    <div class="hb-title dr-title">Texts to send — drafted by Claude</div><span class="hb-count">${open.length} waiting</span></div>`;
+  open.forEach(d=>{
+    const id=escHtml(d.id);
+    const items=(d.taskIds||[]).map(tid=>tasks.find(t=>t.id===tid)).filter(Boolean)
+      .map(t=>`<span>${escHtml(shortPropName(t.property))}: ${escHtml(t.problem.length>60?t.problem.slice(0,60)+'…':t.problem)}</span>`).join('');
+    h+=`<div class="hb-item dr-item"><div class="dr-to">To: ${escHtml((d.to||[]).map(x=>x.name).join(', '))}</div>
+      ${items?`<div class="hb-item-meta dr-items">${items}</div>`:''}
+      <textarea id="dr-ta-${id}" class="dr-ta" rows="${Math.min(8,Math.max(3,Math.ceil(String(d.text||'').length/70)))}" oninput="drSyncLink('${id}')">${escHtml(d.text)}</textarea>
+      ${d.note?`<div class="hb-item-snippet">${escHtml(d.note)}</div>`:''}
+      <div class="hb-item-btns dr-btns">
+        <a id="dr-send-${id}" class="hb-btn hb-btn-import" href="${escHtml(_drHref(d,d.text))}">Text</a>
+        <button class="hb-btn hb-btn-dismiss" onclick="drCopy('${id}')">Copy</button>
+        <button class="hb-btn hb-btn-import" onclick="drMarkSent('${id}')">Mark sent</button>
+        <button class="hb-btn hb-btn-dismiss" onclick="drDiscard('${id}')">Discard</button>
+      </div></div>`;
+  });
+  h+='</div>';
+  el.innerHTML=h;
+}
+
 function renderCQ() {
   const el = document.getElementById('cq-wrap');
   if (!el) return;
@@ -9745,6 +9850,7 @@ async function initApp(){
   renderAll();
   hbStartPolling();
   cqStart(); // Claude review list (2026-10-04)
+  drStart(); // Texts Claude drafted for Chip to send (2026-10-24)
   await loadVendorReports(); // load vendor field reports
   // Cleaning reviews now load when the Cleaning Flags tab is opened (2026-10-04)
   cleanupOldPhotos(); // auto-delete photos from tasks resolved 30+ days ago
