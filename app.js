@@ -14,7 +14,6 @@ const HOSPITABLE_IDS = {
   "hibernation":"1f6c5121-d938-49a8-9a6d-b705b13287e0",
   "hillside_big":"3ab44a3c-4a48-4783-b3d5-aa1c58d1ad97",
   "hillside_cottage":"f11403bb-2281-4aab-8e5b-f13078ca4dee",
-  "magic":"255cae9a-e83c-4c03-bef6-81241309894e",
   "prc1":"c3555d02-6b66-4ef2-a0c0-f08db7eb365f",
   "prc2":"e0599c7e-a9d8-4a4c-b5af-69beb2528d66",
   "prc3":"9cf9010d-421c-4cb8-aa09-22c71258069d",
@@ -34,7 +33,6 @@ const NBS = [
   {id:'umc',name:'Upper Middle Creek',sub:'Sevierville, TN',cls:'umc',props:['umc10','umc20','umc30','umc40','umc50','umc60']},
   {id:'gatlinburg',name:'Gatlinburg',sub:'Gatlinburg, TN',cls:'gatlinburg',props:['bearadise','wizards']},
   {id:'alpine',name:'Alpine Mountain Village',sub:'Pigeon Forge, TN',cls:'alpine',props:['hero','hibernation']},
-  {id:'sevierville',name:'Sevierville',sub:'Sevierville, TN',cls:'sevierville',props:['magic']},
   {id:'hillside',name:'Hillside Haven',sub:'Lake Martin, AL',cls:'hillside',props:['hillside_big','hillside_cottage']},
 ];
 const PROPS = [
@@ -54,13 +52,14 @@ const PROPS = [
   {id:'wizards',name:"The Wizard's Edge",address:'658 Pinecrest Dr., Gatlinburg, TN',door:'4558'},
   {id:'hibernation',name:'Hibernation Station',address:'335 Alpine Mountain Way, Pigeon Forge, TN',door:'4558'},
   {id:'hero',name:'Hero Hideout',address:'2382 Alpine Village Way, Pigeon Forge, TN',door:'3940'},
-  {id:'magic',name:'Magic Mountain',address:'1775 Bluff Ridge Rd. Sevierville, TN',door:'4558'},
+  // SOLD June 2026. Kept only so its past records still show a name; it is in no neighborhood,
+  // so it appears in no lists, pickers or calendars. (2026-10-24)
+  {id:'magic',name:'Magic Mountain (sold)',address:'1775 Bluff Ridge Rd. Sevierville, TN',door:'4558',retired:true},
   {id:'hillside_big',name:'Hillside Haven - The Big House',address:'226 Oak Hill, Jacksons Gap, AL',door:'4425'},
   {id:'hillside_cottage',name:'Hillside Haven - The Cottage',address:'218 Oak Hill, Jacksons Gap, AL',door:'0812'},
 ];
 const DEF_VENDORS = [
   {id:'v1',name:'Lisa Hawthorne',phone:'(936) 648-3940',email:'',role:'Head Cleaner',categories:['cleaning'],note:'Primary cleaner for all Smokies properties. Provides linens, soaps, paper products.'},
-  {id:'v2',name:'James Hawthorne',phone:'(936) 714-7249',email:'',role:'Light Handyman / Hot Tub',categories:['cleaning','handyman','hot_tub'],note:"Lisa's husband. First call for hot tub Vapor Lock / Flo code issues. Can respond same night."},
   {id:'v3',name:'Alisha Brown',phone:'(517) 320-6670',email:'',role:'Cleaning Coordinator',categories:['cleaning'],note:"Lisa's daughter and inspector. Contact when Lisa is unavailable."},
   {id:'v4',name:'Michael Gilchrist',phone:'(423) 608-4516',email:'',role:'Handyman',categories:['handyman','electrical'],note:'$65 service fee plus hourly. Light carpentry, electrical, and plumbing repairs.'},
   {id:'v5',name:'Justin Nelson',phone:'(865) 801-1338',email:'',role:'Handyman / Landscaping',categories:['handyman','landscaping'],note:'Maintains several properties. Available for light handyman work.'},
@@ -85,15 +84,14 @@ const DEF_RECURRING = [
   {id:'rc1',name:'HVAC Filter Replacement',properties:['all'],category:'hvac',frequency:'monthly',vendor:'Whaley Mechanical (Brandon)',notes:'Replace all HVAC filters monthly.',nextDue:'2026-05-01'},
   {id:'rc2',name:'Pre-Summer HVAC Check + Drain Line Flush',properties:['all'],category:'hvac',frequency:'biannual',vendor:'Whaley Mechanical (Brandon)',notes:'Flush drain lines to prevent summer shutdowns.',nextDue:'2026-04-15'},
   {id:'rc3',name:'Pre-Winter HVAC Check',properties:['all'],category:'hvac',frequency:'biannual',vendor:'Whaley Mechanical (Brandon)',notes:'Pre-winter heating system check.',nextDue:'2026-10-01'},
-  {id:'rc4',name:'Aqua Clear — Magic Mountain',properties:['magic'],category:'water',frequency:'quarterly',vendor:'Aqua Clear Water Systems',notes:'Magic Mountain water is highly sulfuric. Regular visits required.',nextDue:'2026-04-01'},
   {id:'rc5',name:'Aqua Clear — PRC Well',properties:['prc1','prc2','prc3','prc4','prc5','prc6'],category:'water',frequency:'quarterly',vendor:'Aqua Clear Water Systems',notes:'6 PRC cabins share a single well. Equipment in shed next to Cabin 6. Notify guests.',nextDue:'2026-04-01'},
-  {id:'rc6',name:'Septic System Service',properties:['wizards','magic','prc1','prc2','prc3','prc4','prc5','prc6','umc10','umc20','umc30','umc40','umc50','umc60'],category:'septic',frequency:'biennial',vendor:'Top Septic',notes:'Every 2 years for all properties with septic systems.',nextDue:'2027-01-01'},
+  {id:'rc6',name:'Septic System Service',properties:['wizards','prc1','prc2','prc3','prc4','prc5','prc6','umc10','umc20','umc30','umc40','umc50','umc60'],category:'septic',frequency:'biennial',vendor:'Top Septic',notes:'Every 2 years for all properties with septic systems.',nextDue:'2027-01-01'},
   {id:'rc7',name:'Smoke & CO Detector Battery Replacement',properties:['all'],category:'electrical',frequency:'annual',vendor:'',notes:'Replace batteries in all smoke and CO detectors.',nextDue:'2026-10-01'},
   {id:'rc8',name:'Bed Bug Prevention — Bearadise Lodge',properties:['bearadise'],category:'bed_bugs',frequency:'monthly',vendor:'All About Bugs',notes:'Bearadise Lodge had bed bugs twice (2023, 2025). Monthly prevention treatment.',nextDue:'2026-05-01'},
 ];
 const DEFAULT_VCAT = [
   {id:'cleaning',label:'Cleaning'},{id:'handyman',label:'Handyman'},
-  {id:'plumbing',label:'Plumbing'},{id:'hvac',label:'HVAC / Electrical'},
+  {id:'plumbing',label:'Plumbing'},{id:'hvac',label:'HVAC'},{id:'electrical',label:'Electrical'},
   {id:'pest',label:'Pest Control'},{id:'landscaping',label:'Landscaping'},
   {id:'hot_tub',label:'Hot Tub'},{id:'pool',label:'Pool'},
   {id:'arcade',label:'Arcade / Billiards'},{id:'septic',label:'Septic'},
@@ -114,6 +112,7 @@ let PROJECT_TYPES = [...DEFAULT_PROJECT_TYPES];
 let appSettings = {
   vendorCategories: null,      // null = use DEFAULT_VCAT
   projectTypes: null,          // null = use DEFAULT_PROJECT_TYPES
+  migrations: {},              // one-time data setup flags (2026-10-24)
   vendorSheetFields: ['address','doorCode'],  // which fields to show on vendor task sheets
   vendorSheetFieldOptions: [
     {id:'address',label:'Address',default:true},
@@ -140,6 +139,7 @@ async function loadSettings() {
       if (parsed.vendorCategories) appSettings.vendorCategories = parsed.vendorCategories;
       if (parsed.projectTypes) appSettings.projectTypes = parsed.projectTypes;
       if (parsed.vendorSheetFields) appSettings.vendorSheetFields = parsed.vendorSheetFields;
+      if (parsed.migrations && typeof parsed.migrations === 'object') appSettings.migrations = parsed.migrations;
     }
     settingsLoadedOk = true;
   } catch (e) { settingsLoadedOk = false; console.warn('Failed to load settings — settings saves are paused until reload:', e.message); }
@@ -147,6 +147,12 @@ async function loadSettings() {
   // Apply dynamic categories
   if (appSettings.vendorCategories && appSettings.vendorCategories.length) {
     VCAT = appSettings.vendorCategories;
+  }
+  // 2026-10-24: Electrical is its own vendor category (it used to share "HVAC / Electrical").
+  if (!VCAT.some(c => c.id === 'electrical')) {
+    const hi = VCAT.findIndex(c => c.id === 'hvac');
+    if (hi >= 0 && VCAT[hi].label === 'HVAC / Electrical') VCAT[hi] = { ...VCAT[hi], label: 'HVAC' };
+    VCAT.splice(hi >= 0 ? hi + 1 : VCAT.length, 0, { id: 'electrical', label: 'Electrical' });
   }
   // Apply dynamic project types
   if (appSettings.projectTypes && appSettings.projectTypes.length) {
@@ -345,7 +351,6 @@ const PAY_GROUPS=[
   {id:'wizards',label:"The Wizard's Edge",props:['wizards']},
   {id:'hibernation',label:'Hibernation Station',props:['hibernation']},
   {id:'hero',label:'Hero Hideout',props:['hero']},
-  {id:'magic',label:'Magic Mountain',props:['magic']},
 ];
 const VENMO_USER='Chip-Burns';
 const CASHAPP_TAG='chipburns';
@@ -816,6 +821,10 @@ function logTaskChange(action, t) {
 const _propMap=Object.fromEntries(PROPS.map(p=>[p.id,p]));
 const _nbMap={};NBS.forEach(n=>n.props.forEach(pid=>{_nbMap[pid]=n;}));
 const _nbById=Object.fromEntries(NBS.map(n=>[n.id,n]));
+// Sold properties: shown only in Service History so their past records stay visible. (2026-10-24)
+const RETIRED_NB={id:'sold',name:'Sold',sub:'No longer in the portfolio',cls:'sold',props:PROPS.filter(p=>p.retired).map(p=>p.id)};
+RETIRED_NB.props.forEach(pid=>{_nbMap[pid]=RETIRED_NB;});
+function activePropIds(){return PROPS.filter(p=>!p.retired).map(p=>p.id);}
 // Virtual "neighborhood-level" properties for log entries covering an entire resort
 const _nbVirtualProps={
   umc:{id:'umc',name:'UMC — Resort (All Cabins)'},
@@ -2521,7 +2530,7 @@ function renderCalendar(){
         });
       }
       recurring.filter(r=>r.nextDue===ds).forEach(r=>{
-        const pids=r.properties.includes('all')?PROPS.map(p=>p.id):r.properties;
+        const pids=r.properties.includes('all')?activePropIds():r.properties;
         const alreadyScheduled=tasks.some(x=>x.recurring&&x.problem===r.name&&x.date===ds&&pids.some(pid=>x.property===pid));
         if(alreadyScheduled)return;
         const nc=pids.length===1?getNbCls(pids[0]):'other';
@@ -2629,7 +2638,7 @@ function buildMonth(){
         });
       }
       recurring.filter(r=>r.nextDue===ds).forEach(r=>{
-        const pids=r.properties.includes('all')?PROPS.map(p=>p.id):r.properties;
+        const pids=r.properties.includes('all')?activePropIds():r.properties;
         // Skip if a real task already exists for this recurring item on this date
         const alreadyScheduled=tasks.some(x=>x.recurring&&x.problem===r.name&&x.date===ds&&pids.some(pid=>x.property===pid));
         if(alreadyScheduled)return;
@@ -2676,7 +2685,7 @@ function buildWeek(ws){
       });
     }
     recurring.filter(r=>r.nextDue===ds).forEach(r=>{
-      const pids=r.properties.includes('all')?PROPS.map(p=>p.id):r.properties;
+      const pids=r.properties.includes('all')?activePropIds():r.properties;
       // Skip if a real task already exists for this recurring item on this date
       const alreadyScheduled=tasks.some(x=>x.recurring&&x.problem===r.name&&x.date===ds&&pids.some(pid=>x.property===pid));
       if(alreadyScheduled)return;
@@ -2739,14 +2748,27 @@ let editRecId=null;
 // selectedVendor — vendor name to pre-select (pass '' for none)
 // catFilter   — category string for Recommended / Other grouping (pass null to skip grouping)
 // customWrapId / customInputId — ids of the custom-vendor row + input
+// ── Per-category vendor ranking (2026-10-24) ─────────────────────────────────
+// v.rank = {electrical:1, plumbing:3}. Ranked vendors come first in rank order; unranked
+// vendors follow in directory order. Dragging inside a category renumbers that category only.
+function vendorsForCat(cat){
+  const idx=new Map(vendors.map((v,i)=>[v.id,i]));
+  return vendors.filter(v=>(v.categories||[]).includes(cat)).sort((a,b)=>{
+    const ra=a.rank&&a.rank[cat],rb=b.rank&&b.rank[cat];
+    if(ra&&rb&&ra!==rb)return ra-rb;
+    if(ra&&!rb)return -1;
+    if(rb&&!ra)return 1;
+    return (idx.get(a.id)||0)-(idx.get(b.id)||0);
+  });
+}
 function populateVendorSelect(selId,selectedVendor,catFilter,customWrapId,customInputId){
   const sel=document.getElementById(selId);
   const prev=selectedVendor!==undefined?selectedVendor:sel.value;
   sel.innerHTML='<option value="">— None —</option>';
   if(catFilter){
-    const matched=vendors.filter(v=>v.categories.includes(catFilter));
+    const matched=vendorsForCat(catFilter);
     const others=vendors.filter(v=>!v.categories.includes(catFilter));
-    if(matched.length){const og=document.createElement('optgroup');og.label='Recommended';matched.forEach(v=>{const o=document.createElement('option');o.value=v.name;o.textContent=v.name+' — '+v.role;og.appendChild(o);});sel.appendChild(og);}
+    if(matched.length){const og=document.createElement('optgroup');og.label='Recommended';matched.forEach((v,i)=>{const o=document.createElement('option');o.value=v.name;o.textContent=(i+1)+'. '+v.name+(v.role?' — '+v.role:'');og.appendChild(o);});sel.appendChild(og);}
     if(others.length){const og=document.createElement('optgroup');og.label='Other Vendors';others.forEach(v=>{const o=document.createElement('option');o.value=v.name;o.textContent=v.name+' — '+v.role;og.appendChild(o);});sel.appendChild(og);}
   }else{
     vendors.forEach(v=>{const o=document.createElement('option');o.value=v.name;o.textContent=v.name+' — '+v.role;sel.appendChild(o);});
@@ -2893,7 +2915,7 @@ function openLogTask(id){
   _logTaskRecId=id;
   document.getElementById('lt-service-name').textContent=r.name;
   document.getElementById('log-task-title').textContent='Log: '+r.name;
-  const taskProps=r.properties.includes('all')?PROPS.map(p=>p.id):r.properties;
+  const taskProps=r.properties.includes('all')?activePropIds():r.properties;
   populateLogTaskProp('lt-prop',taskProps);
   document.getElementById('lt-date').value=fsTodayISO(); // local date, not UTC (2026-10-04)
   // Vendor uses shared builder with category filter so "Recommended" group matches the service type
@@ -2938,7 +2960,7 @@ async function saveLogTask(){
   // template applies to, and the clock only moves forward — logging an older service never
   // overwrites a newer service date.
   if(isFilterTask&&typeof PP!=='undefined'&&PP){
-    const tmplProps=r.properties.includes('all')?PROPS.map(p=>p.id):r.properties;
+    const tmplProps=r.properties.includes('all')?activePropIds():r.properties;
     const nbGroup=NBS.find(n=>n.id===prop);
     const cabins=nbGroup?nbGroup.props.filter(pid=>tmplProps.includes(pid)):[prop];
     const user=typeof getCurrentUserName==='function'?(getCurrentUserName()||'user'):'user';
@@ -2970,7 +2992,7 @@ async function saveLogTask(){
 
 async function genFromRec(id){
   const r=recurring.find(x=>x.id===id);if(!r)return;
-  const ps=r.properties.includes('all')?PROPS.map(p=>p.id):r.properties;let n=0;let skipped=0;
+  const ps=r.properties.includes('all')?activePropIds():r.properties;let n=0;let skipped=0;
   ps.forEach(pid=>{
     // Prevent duplicates: skip if a task for this recurring item already exists on this date for this property
     const dup=tasks.some(x=>x.property===pid&&x.date===(r.nextDue||'')&&x.recurring&&x.problem===r.name&&!isDone(x));
@@ -2992,7 +3014,7 @@ function checkCombine(){
   const nearby=recurring.filter(r=>{
     if(!r.nextDue)return false;
     const diff=Math.abs(td-new Date(r.nextDue+'T12:00:00'))/(864e5);if(diff>10)return false;
-    const ps=r.properties.includes('all')?PROPS.map(p=>p.id):r.properties;if(!ps.includes(t.property))return false;
+    const ps=r.properties.includes('all')?activePropIds():r.properties;if(!ps.includes(t.property))return false;
     // Fuzzy match: recurring task names may be longer than the task problem (e.g. "HVAC Filter Replacement" vs "HVAC Filter Replacement – Write date...")
     const rLow=(r.name||'').toLowerCase();
     const matchesRecurring=(prob)=>{const p=(prob||'').toLowerCase();return p===rLow||rLow.startsWith(p)||p.startsWith(rLow);};
@@ -3082,7 +3104,7 @@ function onCatChange(){
   const cat=document.getElementById('f-category').value;
   const area=document.getElementById('f-vendor-suggest');
   if(!cat){area.innerHTML='';return;}
-  const m=vendors.filter(v=>v.categories.includes(cat));
+  const m=vendorsForCat(cat);
   if(!m.length){area.innerHTML='';return;}
   if(!document.getElementById('f-vendor').value&&m.length)document.getElementById('f-vendor').value=m[0].name;
   area.innerHTML='<label style="margin-bottom:6px">Suggested Vendors</label>'+m.slice(0,3).map(v=>`
@@ -3141,7 +3163,7 @@ async function openDetail(id){
   document.getElementById('d-prop').style.display='';
   // Populate property dropdown
   const propSel=document.getElementById('d-prop-select');
-  propSel.innerHTML=PROPS.map(pr=>`<option value="${pr.id}"${pr.id===t.property?' selected':''}>${pr.name}</option>`).join('');
+  propSel.innerHTML=PROPS.filter(pr=>!pr.retired||pr.id===t.property).map(pr=>`<option value="${pr.id}"${pr.id===t.property?' selected':''}>${pr.name}</option>`).join('');
   propSel.style.display='none';
   document.getElementById('d-title').textContent=t.problem;
   document.getElementById('d-status').value=t.status;
@@ -3680,7 +3702,7 @@ async function renderDetailVendors(t,p){
     return;
   }
 
-  const m=vendors.filter(v=>v.categories.includes(t.category));
+  const m=vendorsForCat(t.category);
   const assignedVendor=t.vendor?vendors.find(v=>v.name.toLowerCase()===t.vendor.toLowerCase()):null;
 
   // Pre-generate vendor sheet URL if we have an assigned vendor + date
@@ -4695,7 +4717,7 @@ function buildVendorDD(filter=''){
   let html='';
   let anyMatch=false;
   for(const cat of VCAT){
-    const catVendors=vendors.filter(v=>v.categories.includes(cat.id));
+    const catVendors=vendorsForCat(cat.id);
     const matched=catVendors.filter(v=>{
       if(!q)return true;
       return v.name.toLowerCase().includes(q)||v.role.toLowerCase().includes(q)||cat.label.toLowerCase().includes(q);
@@ -5133,7 +5155,9 @@ function renderHistory(){
   const container=document.getElementById('hist-container');
   // Property grid grouped by neighborhood — with detail slots
   let gridHtml='';
-  NBS.forEach(nb=>{
+  const histNbs=[...NBS];
+  if(RETIRED_NB.props.some(pid=>tasks.some(t=>t.property===pid&&isDone(t))))histNbs.push(RETIRED_NB); // sold properties keep their history (2026-10-24)
+  histNbs.forEach(nb=>{
     const cards=nb.props.map(pid=>{
       const p=getProp(pid);if(!p)return'';
       const done=tasks.filter(t=>t.property===pid&&isDone(t)).length;
@@ -5260,8 +5284,9 @@ function toggleVCat(catId){
   renderVendors();
 }
 
-let _dragVid=null;
-function vendorDragStart(e,vid){
+let _dragVid=null,_dragCat=null;
+function vendorDragStart(e,vid,cat){
+  _dragCat=cat||null;
   // Don't drag when clicking action buttons
   if(e.target.closest('button')||e.target.closest('a')){e.preventDefault();return;}
   _dragVid=vid;
@@ -5279,20 +5304,24 @@ function vendorDragOver(e,vid){
   document.querySelectorAll('.vc-drag-over').forEach(el=>el.classList.remove('vc-drag-over'));
   e.currentTarget.classList.add('vc-drag-over');
 }
-async function vendorDrop(e,targetVid){
+async function vendorDrop(e,targetVid,cat){
   e.preventDefault();
   document.querySelectorAll('.vc-drag-over').forEach(el=>el.classList.remove('vc-drag-over'));
-  if(!_dragVid||_dragVid===targetVid){_dragVid=null;return;}
-  const from=vendors.findIndex(v=>v.id===_dragVid);
-  if(from<0){_dragVid=null;return;}
-  const [moved]=vendors.splice(from,1);
-  const to=vendors.findIndex(v=>v.id===targetVid); // re-find after splice
-  if(to<0){vendors.splice(from,0,moved);_dragVid=null;return;}
-  vendors.splice(to,0,moved);
-  _dragVid=null;
+  const dragVid=_dragVid,dragCat=_dragCat;_dragVid=null;_dragCat=null;
+  if(!dragVid||dragVid===targetVid)return;
+  if(!cat||dragCat!==cat){showToast('Drag within one category to change its order.');return;}
+  // 2026-10-24: the order is kept per category (v.rank[cat]); other categories are untouched.
+  const order=vendorsForCat(cat).map(v=>v.id);
+  const from=order.indexOf(dragVid),toOrig=order.indexOf(targetVid);
+  if(from<0||toOrig<0)return;
+  order.splice(from,1);
+  let to=order.indexOf(targetVid);if(from<toOrig)to+=1;
+  order.splice(to,0,dragVid);
+  order.forEach((id,i)=>{const v=vendors.find(x=>x.id===id);if(v)v.rank=Object.assign({},v.rank,{[cat]:i+1});});
   await saveVendors();
   renderVendors();
-  showToast('Vendor order saved.');
+  const lbl=(VCAT.find(c=>c.id===cat)||{}).label||cat;
+  showToast(lbl+' order saved.');
 }
 
 // Vendor Directory search state. Empty string = unfiltered.
@@ -5319,7 +5348,7 @@ function _vendorMatchesSearch(v,q){
   const needle=q.toLowerCase();
   const phoneDigits=(v.phone||'').replace(/\D/g,'');
   const needleDigits=needle.replace(/\D/g,'');
-  const hay=[v.name||'',v.role||'',v.phone||'',v.email||'',v.note||'',
+  const hay=[v.name||'',v.role||'',v.phone||'',v.email||'',v.note||'',(v.notesLog||[]).map(n=>n.text||'').join(' '),
     (v.categories||[]).map(cid=>{const c=VCAT.find(x=>x.id===cid);return c?c.label:'';}).join(' ')
   ].join(' ').toLowerCase();
   if(hay.includes(needle))return true;
@@ -5343,7 +5372,8 @@ function renderVendors(){
   const sortedCats=[...VCAT].sort((a,b)=>a.label.localeCompare(b.label));
   let totalMatches=0;
   sortedCats.forEach(cat=>{
-    const cv=vendors.filter(v=>v.categories.includes(cat.id)&&_vendorMatchesSearch(v,q));if(!cv.length)return;
+    const fullOrder=vendorsForCat(cat.id);
+    const cv=fullOrder.filter(v=>_vendorMatchesSearch(v,q));if(!cv.length)return;
     totalMatches+=cv.length;
     // When searching, force categories with matches to be expanded
     const isCollapsed=q?false:collapsed.has(cat.id);
@@ -5356,12 +5386,13 @@ function renderVendors(){
       const phone=v.phone.replace(/\D/g,'');
       const safeName=v.name.replace(/'/g,"\\'");
       h+=`<div class="vc" draggable="true" data-vid="${v.id}"
-        ondragstart="vendorDragStart(event,'${v.id}')"
+        ondragstart="vendorDragStart(event,'${v.id}','${cat.id}')"
         ondragend="vendorDragEnd(event)"
         ondragover="vendorDragOver(event,'${v.id}')"
-        ondrop="vendorDrop(event,'${v.id}')">`;
+        ondrop="vendorDrop(event,'${v.id}','${cat.id}')">`;
       h+=`<div class="vc-top">`;
-      h+=`<div class="vc-drag-handle" title="Drag to reorder">&#x2807;</div>`;
+      h+=`<div class="vc-drag-handle" title="Drag to change the order in ${cat.label}">&#x2807;</div>`;
+      h+=`<div class="vc-rank" title="${cat.label} order">${fullOrder.indexOf(v)+1}</div>`;
       h+=`<div class="vc-info">`;
       h+=`<div class="vc-name">${q?_vendorHighlight(v.name,q):v.name}</div><div class="vc-role">${q?_vendorHighlight(v.role,q):v.role}</div>`;
       h+=`<div class="vc-contact"><span class="vc-phone">${v.phone}</span>${v.email?`<span class="vc-email">${v.email}</span>`:''}</div>`;
@@ -5390,6 +5421,7 @@ function renderVendors(){
       if(v.name==='Lisa Hawthorne'||v.name==='Mammie Johnson'){
         h+=`<button class="btn btn-inv" onclick="openInvoiceReconciler('${safeName}')">Invoice</button>`;
       }
+      h+=`<button class="btn" onclick="openVendorProfile('${v.id}')">Profile</button>`;
       h+=`<button class="btn" onclick="openEditVendor('${v.id}')">Edit</button>`;
       h+=`</div></div>`; // close vc-btn-row, vc
     });
@@ -5413,10 +5445,18 @@ async function saveEmail(id){
   const inp=document.getElementById('ei-'+id);const email=inp.value.trim();if(!email)return;
   const v=vendors.find(x=>x.id===id);if(!v)return;v.email=email;await saveVendors();renderVendors();showToast('Email saved.');
 }
+function renderVendorCatChecks(selected){
+  const wrap=document.getElementById('v-cats');if(!wrap)return;
+  const sel=new Set(selected||[]);
+  wrap.innerHTML=VCAT.map(c=>`<label class="v-cat-check"><input type="checkbox" value="${c.id}"${sel.has(c.id)?' checked':''}> ${c.label}</label>`).join('');
+}
+function readVendorCatChecks(){
+  return Array.from(document.querySelectorAll('#v-cats input[type=checkbox]:checked')).map(i=>i.value);
+}
 function openAddVendor(){
   editVendorId=null;document.getElementById('vendor-modal-title').textContent='Add Vendor';
   ['v-name','v-role','v-phone','v-email','v-notes'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('v-cat').value='handyman';document.getElementById('v-del-btn').style.display='none';
+  renderVendorCatChecks(['handyman']);document.getElementById('v-del-btn').style.display='none';
   document.getElementById('v-pay-venmo').checked=false;document.getElementById('v-pay-cashapp').checked=false;
   document.getElementById('vendor-modal').classList.add('open');
 }
@@ -5425,7 +5465,7 @@ function openEditVendor(id){
   document.getElementById('vendor-modal-title').textContent='Edit Vendor';
   document.getElementById('v-name').value=v.name;document.getElementById('v-role').value=v.role;
   document.getElementById('v-phone').value=v.phone;document.getElementById('v-email').value=v.email||'';
-  document.getElementById('v-notes').value=v.note||'';document.getElementById('v-cat').value=v.categories[0]||'other';
+  document.getElementById('v-notes').value=v.note||'';renderVendorCatChecks(v.categories||[]);
   // Payment methods — default none for vendors without the field (opt-in)
   const pm=v.paymentMethods||[];
   document.getElementById('v-pay-venmo').checked=pm.includes('venmo');
@@ -5436,15 +5476,17 @@ async function saveVendor(){
   const name=document.getElementById('v-name').value.trim();if(!name){showToast('Name required.','err');return;}
   const pm=[];if(document.getElementById('v-pay-venmo').checked)pm.push('venmo');if(document.getElementById('v-pay-cashapp').checked)pm.push('cashapp');
   const old=editVendorId?vendors.find(x=>x.id===editVendorId):null;
-  const cat=document.getElementById('v-cat').value;
-  // 2026-10-04: the form edits the primary category only; other categories are kept.
+  // 2026-10-24: every category is a checkbox. Categories not in the current list are kept.
+  const picked=readVendorCatChecks();
+  if(!picked.length){showToast('Pick at least one category.','err');return;}
   const oldCats=(old&&Array.isArray(old.categories))?old.categories:[];
-  const categories=oldCats.includes(cat)?[cat,...oldCats.filter(c=>c!==cat)]:[cat,...oldCats.slice(1).filter(c=>c!==cat)];
+  const categories=[...picked,...oldCats.filter(c=>!VCAT.some(x=>x.id===c)&&!picked.includes(c))];
   const fields={name,role:document.getElementById('v-role').value.trim(),phone:document.getElementById('v-phone').value.trim(),email:document.getElementById('v-email').value.trim(),categories,note:document.getElementById('v-notes').value.trim(),paymentMethods:pm};
   let renamed=null;
   if(old){
     const oldName=old.name||'';
     Object.assign(old,fields); // keeps invoices, saved links and any other fields
+    if(old.rank)Object.keys(old.rank).forEach(c=>{if(!categories.includes(c))delete old.rank[c];}); // unchecked → no rank there
     if(oldName&&oldName.toLowerCase()!==name.toLowerCase())renamed=oldName;
   }else vendors.push({id:'v'+Date.now(),...fields});
   await saveVendors();closeModal('vendor-modal');renderVendors();
@@ -5484,6 +5526,111 @@ async function deleteVendor(){
   _deletedVendorIds.add(deleted.id);
   vendors=vendors.filter(v=>v.id!==editVendorId);await saveVendors();closeModal('vendor-modal');renderVendors();
   showToast('Vendor deleted.','',async()=>{_deletedVendorIds.delete(deleted.id);vendors.splice(idx,0,deleted);await saveVendors();renderVendors();showToast('Vendor restored.');});
+}
+
+// ── Vendor profile: work history + Chip's notes (2026-10-24) ─────────────────
+// History is read from tasks whose vendor is this vendor's name (facts only).
+// Notes live on the vendor record as v.notesLog = [{id, time, by, text}]. They are
+// admin-only: vendor links never show them. Agents read both through _intake getVendor.
+let _vpVid=null;
+function _vpEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function _vpDate(d){
+  if(!d)return'';
+  const x=String(d).length<=10?new Date(d+'T12:00:00'):new Date(d);
+  return isNaN(x)?'':x.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+}
+function vendorWorkHistory(v){
+  const nm=(v.name||'').toLowerCase();
+  const mine=tasks.filter(t=>(t.vendor||'').toLowerCase()===nm);
+  const jobDate=t=>t.date||String(t.completedAt||t.created||'').slice(0,10);
+  const isRoutine=t=>!!(t._loggedService||t.recurring);
+  const newestFirst=(a,b)=>jobDate(b).localeCompare(jobDate(a));
+  const done=mine.filter(t=>t.status==='complete');
+  const repairs=done.filter(t=>!isRoutine(t)).sort(newestFirst);
+  const routine=done.filter(isRoutine).sort(newestFirst);
+  const open=mine.filter(t=>!isDone(t)).sort((a,b)=>(jobDate(a)||'9999').localeCompare(jobDate(b)||'9999'));
+  const dates=done.map(jobDate).filter(Boolean).sort();
+  const tally=(arr,f)=>{const m={};arr.forEach(t=>{const k=f(t)||'';m[k]=(m[k]||0)+1;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);};
+  const completionNote=t=>(t.notes||[]).filter(n=>n&&n.type==='vendor'&&n.text&&!/^Marked as done by vendor\.?$/i.test(String(n.text).trim())).map(n=>n.text).join(' / ');
+  return {done,repairs,routine,open,first:dates[0]||'',last:dates[dates.length-1]||'',
+    byCat:tally(done,t=>t.category),byProp:tally(done,t=>t.property),jobDate,completionNote};
+}
+function openVendorProfile(vid){
+  const v=vendors.find(x=>x.id===vid);if(!v)return;
+  _vpVid=vid;
+  let m=document.getElementById('vp-modal');
+  if(!m){
+    m=document.createElement('div');m.className='mo';m.id='vp-modal';
+    m.innerHTML=`<div class="modal vp-modal"><div class="mhdr"><div class="mtitle" id="vp-title"></div><button class="mclose" onclick="closeModal('vp-modal')">&#x2715;</button></div><div id="vp-body"></div></div>`;
+    document.body.appendChild(m);
+  }
+  renderVendorProfile();
+  m.classList.add('open');
+}
+function renderVendorProfile(){
+  const v=vendors.find(x=>x.id===_vpVid);const body=document.getElementById('vp-body');if(!v||!body)return;
+  document.getElementById('vp-title').textContent=v.name;
+  const H=vendorWorkHistory(v);
+  const catLabel=c=>(VCAT.find(x=>x.id===c)||{}).label||(CAT_LABELS[c])||c||'No category';
+  const propLabel=pid=>{const p=getProp(pid);return p?p.name:(pid||'No property');};
+  const cats=(v.categories||[]).map(c=>{
+    const pos=vendorsForCat(c).findIndex(x=>x.id===v.id)+1;
+    return `<span class="vp-chip">${_vpEsc(catLabel(c))}${pos?` <b>#${pos}</b>`:''}</span>`;
+  }).join('')||'<span class="vp-muted">No categories</span>';
+  const notes=(v.notesLog||[]).slice().sort((a,b)=>String(b.time||'').localeCompare(String(a.time||'')));
+  const notesHtml=notes.length?notes.map(n=>`<div class="vp-note">
+      <div class="vp-note-meta">${_vpEsc(_vpDate(n.time))}${n.by?' · '+_vpEsc(n.by):''}<button class="vp-note-del" onclick="deleteVendorNote('${_vpEsc(n.id)}')">Delete</button></div>
+      <div class="vp-note-text">${_vpEsc(n.text)}</div></div>`).join(''):'<div class="vp-muted">No notes yet.</div>';
+  const jobRow=t=>{
+    const note=H.completionNote(t);
+    return `<div class="vp-job" onclick="closeModal('vp-modal');openDetail('${t.id}')">
+      <div class="vp-job-date">${_vpEsc(_vpDate(H.jobDate(t)))||'—'}</div>
+      <div class="vp-job-main"><div class="vp-job-prob">${_vpEsc(t.problem)}</div>
+        <div class="vp-job-sub">${_vpEsc(propLabel(t.property))} · ${_vpEsc(catLabel(t.category))}</div>
+        ${note?`<div class="vp-job-note">Vendor note: ${_vpEsc(note)}</div>`:''}</div></div>`;
+  };
+  const chips=(arr,lab)=>arr.map(([k,n])=>`<span class="vp-chip">${_vpEsc(lab(k))} <b>${n}</b></span>`).join('');
+  body.innerHTML=`
+    <div class="vp-head">
+      <div class="vp-role">${_vpEsc(v.role||'')}</div>
+      <div class="vp-contact">${_vpEsc(v.phone||'')}${v.email?' · '+_vpEsc(v.email):''}</div>
+      <div class="vp-chips">${cats}</div>
+      ${v.note?`<div class="vp-summary">${_vpEsc(v.note)}</div>`:''}
+    </div>
+    <div class="vp-sec"><h4>Notes</h4>
+      <div class="vp-note-add"><textarea id="vp-note-input" rows="2" placeholder="Add a note about this vendor: what they're good at, limits, pricing, how to reach them..."></textarea>
+      <button class="btn btn-g" onclick="addVendorNote()">Add Note</button></div>
+      <div class="vp-note-hint">Only admins see these notes. Agents can read them.</div>
+      ${notesHtml}
+    </div>
+    <div class="vp-sec"><h4>Work history</h4>
+      <div class="vp-stats">
+        <div><b>${H.repairs.length}</b><span>repair / one-off jobs</span></div>
+        <div><b>${H.routine.length}</b><span>routine services</span></div>
+        <div><b>${_vpEsc(_vpDate(H.first))||'—'}</b><span>first job</span></div>
+        <div><b>${_vpEsc(_vpDate(H.last))||'—'}</b><span>last job</span></div>
+      </div>
+      ${H.byCat.length?`<div class="vp-lbl">By category</div><div class="vp-chips">${chips(H.byCat,catLabel)}</div>`:''}
+      ${H.byProp.length?`<div class="vp-lbl">By property</div><div class="vp-chips">${chips(H.byProp,propLabel)}</div>`:''}
+      ${H.open.length?`<div class="vp-lbl">Open now (${H.open.length})</div>${H.open.map(jobRow).join('')}`:''}
+      <div class="vp-lbl">Repair / one-off jobs (${H.repairs.length})</div>
+      ${H.repairs.length?H.repairs.map(jobRow).join(''):'<div class="vp-muted">None on file.</div>'}
+      ${H.routine.length?`<details class="vp-routine"><summary>Routine services (${H.routine.length})</summary>${H.routine.map(jobRow).join('')}</details>`:''}
+    </div>`;
+}
+async function addVendorNote(){
+  const v=vendors.find(x=>x.id===_vpVid);if(!v)return;
+  const inp=document.getElementById('vp-note-input');const text=((inp&&inp.value)||'').trim();if(!text)return;
+  if(!Array.isArray(v.notesLog))v.notesLog=[];
+  v.notesLog.push({id:'vn'+Date.now(),time:new Date().toISOString(),by:getCurrentUserName(),text});
+  await saveVendors();renderVendorProfile();showToast('Note added.');
+}
+async function deleteVendorNote(nid){
+  const v=vendors.find(x=>x.id===_vpVid);if(!v||!Array.isArray(v.notesLog))return;
+  const i=v.notesLog.findIndex(n=>n.id===nid);if(i<0)return;
+  const [removed]=v.notesLog.splice(i,1);
+  await saveVendors();renderVendorProfile();
+  showToast('Note deleted.','',async()=>{v.notesLog.splice(Math.min(i,v.notesLog.length),0,removed);await saveVendors();renderVendorProfile();showToast('Note restored.');});
 }
 
 function closeModal(id){document.getElementById(id).classList.remove('open');}
@@ -9067,7 +9214,6 @@ async function rpQuickDelivered(id) {
     {id:'wizards',label:"The Wizard's Edge",props:['wizards']},
     {id:'hibernation',label:'Hibernation Station',props:['hibernation']},
     {id:'hero',label:'Hero Hideout',props:['hero']},
-    {id:'magic',label:'Magic Mountain',props:['magic']},
   ];
   const VENMO_USER='Chip-Burns';
   const CASHAPP_TAG='chipburns';
@@ -9524,6 +9670,7 @@ async function initApp(){
   await loadSettings();
   await loadReplacements();
   await rpCleanupOnce();
+  await dataSetup20261024();
   loadHospInfo(); // not awaited — door codes fall back to PROPS until it lands
   await loadSmsTemplate();
   await loadCombinedSmsTemplate();
@@ -10940,7 +11087,7 @@ async function ppInvSaveKey(pid) {
 function ppInboxCount() {
   if (!PP) return 0;
   let n = 0;
-  Object.values(PP).forEach((p) => {
+  Object.keys(PP).filter((pid) => !(getProp(pid) || {}).retired).map((pid) => PP[pid]).forEach((p) => {
     n += (p._gaps || []).length;
     n += (p.outstanding_issues || []).filter((i) => i.status === 'imported' || i.status === 'imported_for_promotion').length;
   });
@@ -10950,7 +11097,7 @@ function ppInboxCount() {
 function ppRenderInbox() {
   const wrap = document.getElementById('pp-inbox-wrap');
   if (!PP) { wrap.innerHTML = ''; return; }
-  const propIds = Object.keys(PP).sort();
+  const propIds = Object.keys(PP).filter((pid) => !(getProp(pid) || {}).retired).sort();
   const totalGaps = propIds.reduce((n, pid) => n + (PP[pid]._gaps || []).length, 0);
   const totalIssues = propIds.reduce((n, pid) => n + (PP[pid].outstanding_issues || []).filter((i) => i.status === 'imported' || i.status === 'imported_for_promotion').length, 0);
 
@@ -11285,6 +11432,47 @@ async function shopMarkBought(id){
 }
 // One-time (2026-10-04): Chip asked to remove the old Bearadise weather-stripping
 // item when the Replacements tab was retired. Closes it once; safe to delete later.
+// ── One-time data setup, 2026-10-24 (Chip's directions) ─────────────────────
+//  • Magic Mountain was sold: taken out of recurring templates (its own Aqua Clear job is removed).
+//  • Vendor categories and per-category ranking; James Hawthorne no longer works with us.
+// Runs once. The flag is saved in se_settings so later re-ranking is never overwritten.
+async function dataSetup20261024(){
+  if(!settingsLoadedOk||!vendorsLoadedOk||!recurringLoadedOk)return;
+  if(!appSettings.migrations||typeof appSettings.migrations!=='object')appSettings.migrations={};
+  if(appSettings.migrations.setup20261024)return;
+  // Recurring templates
+  let recChanged=false;
+  recurring.slice().forEach(r=>{
+    const props=Array.isArray(r.properties)?r.properties:[];
+    if(!props.includes('magic'))return;
+    const rest=props.filter(x=>x!=='magic');
+    if(!rest.length){_deletedRecIds.add(r.id);recurring=recurring.filter(x=>x!==r);}
+    else r.properties=rest;
+    recChanged=true;
+  });
+  // Vendors
+  const find=n=>vendors.find(v=>(v.name||'').toLowerCase().startsWith(n.toLowerCase()));
+  const addCat=(v,c)=>{if(!v)return;if(!Array.isArray(v.categories))v.categories=[];if(!v.categories.includes(c))v.categories.push(c);};
+  const setRanks=(cat,list)=>list.filter(Boolean).forEach((v,i)=>{addCat(v,cat);v.rank=Object.assign({},v.rank,{[cat]:i+1});});
+  const addNote=(v,text)=>{if(!v)return;if(!Array.isArray(v.notesLog))v.notesLog=[];if(v.notesLog.some(n=>n.text===text))return;
+    v.notesLog.push({id:'vn'+Date.now()+Math.random().toString(36).slice(2,6),time:new Date().toISOString(),by:'Chip',text});};
+  const gray=find('Gray Electric'),ambient=find('Ambient Services'),whaley=find('Whaley Mechanical'),javier=find('Javier Soto'),
+        michael=find('Michael Gilchrist'),ai=find('A&I Plumbing'),gary=find('Gary Moyers'),james=find('James Hawthorne');
+  if(gray&&Array.isArray(gray.categories))gray.categories=gray.categories.filter(c=>c!=='hvac'); // filed under HVAC only because Electrical didn't exist
+  setRanks('electrical',[gray,ambient,whaley,javier,michael]);
+  setRanks('plumbing',[ai,gary,javier]);
+  setRanks('hvac',[whaley,ambient]);
+  addNote(ai,'Contact: Cory Wells.');
+  addNote(javier,'Electrical: light work only.');
+  addNote(michael,'Electrical: simple hanging fixtures and very basic electric only.');
+  if(james){_deletedVendorIds.add(james.id);vendors=vendors.filter(v=>v!==james);}
+  if(recChanged)await saveRec();
+  await saveVendors();
+  appSettings.migrations.setup20261024=new Date().toISOString();
+  try{await S.set('se_settings',JSON.stringify(appSettings));}catch(e){console.warn('[setup20261024] flag save failed',e);}
+  console.log('[setup20261024] vendor rankings + Magic Mountain cleanup applied');
+}
+
 async function rpCleanupOnce(){
   if(!tasksLoadedOk)return;
   const t=tasks.find(x=>x.id==='1776268991342');

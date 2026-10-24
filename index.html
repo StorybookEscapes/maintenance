@@ -811,8 +811,9 @@
       <div class="fgr"><label>Role / Title</label><input type="text" id="v-role" placeholder="e.g. Plumber — Primary"></div>
       <div class="fgr"><label>Phone</label><input type="text" id="v-phone" placeholder="(000) 000-0000"></div>
       <div class="fgr"><label>Email</label><input type="email" id="v-email" placeholder="vendor@email.com"></div>
-      <div class="fgr full"><label>Category</label>
-        <select id="v-cat"><option value="cleaning">Cleaning</option><option value="handyman">Handyman</option><option value="plumbing">Plumbing</option><option value="hvac">HVAC / Electrical</option><option value="pest">Pest Control</option><option value="landscaping">Landscaping</option><option value="hot_tub">Hot Tub</option><option value="pool">Pool</option><option value="arcade">Arcade / Billiards</option><option value="septic">Septic</option><option value="water">Water Filtration</option><option value="bed_bugs">Bed Bugs</option><option value="other">Other</option></select>
+      <div class="fgr full"><label>Categories</label>
+        <div id="v-cats" class="v-cat-checks"></div>
+        <div style="font-size:.64rem;color:var(--text3);margin-top:4px">Check every kind of work this vendor does. Order within each category is set by dragging on the Vendors page.</div>
       </div>
       <!-- Payment Methods hidden — Venmo/Cash App feature sunset 2026-06-04. Inputs kept in DOM (hidden) so vendor save logic still resolves them. Remove style="display:none" to restore. -->
       <div class="fgr full" style="display:none"><label>Payment Methods</label>
