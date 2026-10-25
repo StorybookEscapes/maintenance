@@ -35,6 +35,7 @@
       <button class="nav-btn" style="display:none" onclick="switchView('replacements',this)">Replacements</button>
       <button class="nav-btn" onclick="switchView('properties',this)">Properties</button>
       <button class="nav-btn" onclick="switchView('projects',this)">Projects</button>
+      <button class="nav-btn" onclick="switchView('sam-activity',this)">Sam Activity</button>
       <button class="nav-btn" onclick="switchView('settings',this)">Settings</button>
     </div>
     <div class="hactions">
@@ -46,6 +47,7 @@
       <!-- Alerts -->
       <div id="dr-wrap"></div>
       <div id="cq-wrap"></div>
+      <div id="maintenance-proposals"></div>
       <div id="hb-wrap"></div>
       <div id="vr-wrap"></div>
       <div id="vdn-wrap"></div>
@@ -295,6 +297,20 @@
       </div>
     </div>
 
+    <div class="view" id="view-sam-activity">
+      <h2>Sam Activity</h2>
+      <p>Actions, factual reasons and verification. External outcomes are reported by the authenticated writer; the maintenance site does not independently verify Hospitable actions. Times below are UTC.</p>
+      <p>Intent means a planned attempt, not proof it was sent. Uncertain outcomes require checking the source before retrying. Corrections preserve the original entry.</p>
+      <button class="btn" onclick="samActivityLoad();samTaskActivityLoad()">Refresh</button>
+      <label>Filter loaded entries by batch, operation, property or outcome <input id="sam-activity-filter" type="search" oninput="samActivityRender()"></label>
+      <p id="sam-activity-status" role="status"></p>
+      <div id="sam-activity-results"></div>
+      <button class="btn" id="sam-activity-more" onclick="samActivityLoad(true)">Load older activity</button>
+      <h3>Verified maintenance task commits</h3>
+      <p>These receipts were stored with task changes. They are separate from external action reports.</p>
+      <div id="sam-task-activity"></div>
+      <button class="btn" id="sam-task-more" onclick="samTaskActivityLoad(true)">Load older task audit</button>
+    </div>
     <div class="view" id="view-settings">
       <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--green);font-weight:600;margin-bottom:18px">Settings</h2>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px">

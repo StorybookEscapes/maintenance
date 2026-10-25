@@ -393,11 +393,11 @@ function pjShowDetail(pid) {
 }
 
 // ── ACTIONS ─────────────────────────────────────────────────
-function pjToggleTask(taskId, pid) {
+async function pjToggleTask(taskId, pid) {
   const task = tasks.find(t => t.id === taskId);
   if (!task) return;
   task.status = task.status === 'complete' ? 'open' : 'complete';
-  saveTasks();
+  if(!(await saveTasks()))return;
   pjShowDetail(pid);
   showToast(task.status === 'complete' ? 'Marked ready for inspection' : 'Marked not complete');
 }
@@ -426,7 +426,7 @@ async function pjRecreateTask(pid, itemId) {
   };
   tasks.push(t); if (typeof logTaskChange === 'function') logTaskChange('created', t);
   item.task_id = tid;
-  await saveTasks(); savePJ();
+  if(!(await saveTasks()))return; savePJ();
   pjShowDetail(pid);
   showToast('Task recreated and re-linked.');
 }
@@ -462,7 +462,7 @@ async function pjRelinkAll(pid) {
     count++;
   }
   if (count) {
-    await saveTasks(); savePJ();
+    if(!(await saveTasks()))return; savePJ();
     pjShowDetail(pid);
     showToast(`${count} task(s) recreated and re-linked.`);
   } else {
@@ -494,7 +494,7 @@ function pjConfirmComplete(pid) {
   }
 }
 
-function pjDeleteProject(pid) {
+async function pjDeleteProject(pid) {
   const p = projects.find(x => x.id === pid);
   if (!p) return;
   const projTasks = tasks.filter(t => t.project_id === pid);
@@ -510,8 +510,8 @@ function pjDeleteProject(pid) {
   // Remove project
   const idx = projects.findIndex(x => x.id === pid);
   if (idx !== -1) projects.splice(idx, 1);
-  savePJ();
-  saveTasks();
+  if(!(await saveTasks()))return;
+  await savePJ();
   pjRenderList();
   renderAll();
   showToast('Project deleted — tasks kept on Tasks tab');
@@ -602,7 +602,7 @@ function pjOpenTaskPicker(pid) {
   modal.classList.add('open');
 }
 
-function pjLinkSelected(pid) {
+async function pjLinkSelected(pid) {
   const p = projects.find(x => x.id === pid);
   if (!p) return;
   const cbs = document.querySelectorAll('.pj-pick-cb:checked');
@@ -616,7 +616,7 @@ function pjLinkSelected(pid) {
     }
   });
   if (count) {
-    saveTasks();
+    if(!(await saveTasks()))return;
     closeModal('pj-import-modal');
     pjShowDetail(pid);
     renderAll();
@@ -626,13 +626,13 @@ function pjLinkSelected(pid) {
   }
 }
 
-function pjUnlinkTask(taskId, pid) {
+async function pjUnlinkTask(taskId, pid) {
   const t = tasks.find(x => x.id === taskId);
   if (!t) return;
   if (!confirm('Remove this task from the project? The task will remain on the main Tasks tab.')) return;
   delete t.project_id;
   delete t.project_title;
-  saveTasks();
+  if(!(await saveTasks()))return;
   pjShowDetail(pid);
   renderAll();
   showToast('Task removed from project');
@@ -682,7 +682,7 @@ function pjOpenCreateTask(pid) {
   if (p.property) document.getElementById('pjt-property').value = p.property;
 }
 
-function pjSaveNewTask(pid) {
+async function pjSaveNewTask(pid) {
   const p = projects.find(x => x.id === pid);
   if (!p) return;
   const propVal = document.getElementById('pjt-property').value;
@@ -713,7 +713,7 @@ function pjSaveNewTask(pid) {
   };
   if (cat === 'replacement') { t.purchaseNote = prob; t.purchaseStatus = 'needed'; t.purchaser = 'owner'; }
   tasks.unshift(t);if(typeof logTaskChange==='function')logTaskChange('created',t);
-  saveTasks();
+  if(!(await saveTasks()))return;
   closeModal('pj-import-modal');
   pjShowDetail(pid);
   renderAll();
@@ -1320,7 +1320,7 @@ function pjParseReport(text) {
 }
 
 // ── CREATE PROJECT ──────────────────────────────────────────
-function pjCreateProject() {
+async function pjCreateProject() {
   const d = pjImportData;
   const pid = 'proj_' + Date.now();
   const selectedItems = d.items.filter(i => i._create !== false);
@@ -1387,8 +1387,8 @@ function pjCreateProject() {
   };
 
   projects.push(project);
-  savePJ().then(() => pjMigratePdfs());
-  saveTasks();
+  if(!(await saveTasks()))return;
+  await savePJ(); pjMigratePdfs();
   closeModal('pj-import-modal');
   pjRenderList();
   renderAll();

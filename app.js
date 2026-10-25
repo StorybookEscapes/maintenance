@@ -465,7 +465,7 @@ const S = {
         signal: AbortSignal.timeout(8000)
       });
       if (r.status === 401) { showReAuthPrompt(); return null; }
-      if (r.ok) { const d = await r.json(); return d.value ? { value: d.value } : null; }
+      if (r.ok) { const d = await r.json(); return d.value ? { value: d.value, revision: d.revision, taskProtocol: d.taskProtocol } : null; }
       console.warn('[storage] GET returned', r.status);
       return null;
     } catch(e) {
@@ -474,7 +474,7 @@ const S = {
       return null;
     }
   },
-  set: async (k, v) => {
+  set: async (k, v, writeOptions = {}) => {
     const token = getAuthToken();
     if (!token) {
       if (isAppAuthed()) showReAuthPrompt();
@@ -485,19 +485,26 @@ const S = {
       const r = await fetch(STORAGE_API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body: JSON.stringify({ key: k, value: v }),
+        body: JSON.stringify({ key: k, value: v, ...(k === 'se_t' ? { expectedRevision: writeOptions.expectedRevision, requestId: writeOptions.requestId } : {}) }),
         signal: AbortSignal.timeout(8000)
       });
       if (r.status === 401) { showReAuthPrompt(); return false; }
       if (!r.ok) {
+        if (k === 'se_t') {
+          const failure = await r.json().catch(() => ({}));
+          _lastTaskWriteFailure = { status: r.status, message: failure.error || 'Task save failed.' };
+          taskSaveWarning(_lastTaskWriteFailure.message);
+        }
         console.error('[storage] SET failed:', r.status);
         updateSyncStatus('error');
         showToast('\u274c Save failed — please try again','','',5000);
         return false;
       }
+      if (k === 'se_t') { _lastTaskWriteReceipt = await r.json(); _lastTaskWriteFailure = null; }
       updateSyncStatus('ok');
       return true;
     } catch(e) {
+      if (k === 'se_t') { _lastTaskWriteFailure = { status: 0, message: 'Task save could not be confirmed. Use Retry save before making more changes.' }; taskSaveWarning(_lastTaskWriteFailure.message); }
       console.warn('[storage] Server set failed:', e.message);
       updateSyncStatus('error');
       showToast('\u274c Save failed — check your connection','','',5000);
@@ -523,7 +530,7 @@ async function _kvGetStrict(k){
   if (!r.ok) throw new Error('HTTP ' + r.status);
   const d = await r.json();
   if (!d || !('value' in d)) throw new Error('malformed storage response');
-  return d.value ? { value: d.value } : null;
+  return d.value ? { value: d.value, revision: d.revision, taskProtocol: d.taskProtocol } : null;
 }
 // ── Sync status indicator ──
 function updateSyncStatus(state){
@@ -667,20 +674,7 @@ async function _rbwMerge(kvKey, localArray, idField='id', excludeIds=null) {
   }
 }
 
-// ── Task save: three-way merge + one save at a time (2026-10-04) ─────────────
-// _taskBaseline holds every task exactly as the server had it when this page last
-// loaded or saved. At save time the current server copy is compared with that
-// baseline, so changes made elsewhere since then — vendor completions, notes,
-// photos, self-scheduled dates, another admin tab — are kept instead of being
-// overwritten by this page's older copy:
-//   • unchanged on this page                 → take the server's version
-//   • changed here, unchanged on the server  → keep this page's version
-//   • changed in both places                 → keep this page's edits and add the
-//                                              server's other field changes; notes and
-//                                              photos added on the server are appended
-//   • deleted elsewhere, untouched here      → stays deleted
-//   • added elsewhere                        → added here
-// Task objects are updated in place so open dialogs keep pointing at the same task.
+// ── Conditional task saves (all backend writers share the same protocol) ──
 let _taskBaseline = new Map();
 function _snapshotTaskBaseline(arr){ _taskBaseline = new Map((arr||[]).map(t=>[t.id, JSON.stringify(t)])); }
 function _sameJSON(a,b){ return JSON.stringify(a)===JSON.stringify(b); }
@@ -688,95 +682,131 @@ function _replaceTaskInPlace(target, src){
   Object.keys(target).forEach(k=>{ if(!(k in src)) delete target[k]; });
   Object.assign(target, src);
 }
-function _mergeListKey(item){
-  if(item&&typeof item==='object') return item.url || ((item.time||'')+'|'+(item.text||''));
-  return String(item);
-}
 const _APPEND_MERGE_FIELDS = new Set(['notes','vendorPhotos','photos']);
 function _mergeTaskFields(base, local, server){
-  const keys = new Set([...Object.keys(base), ...Object.keys(local), ...Object.keys(server)]);
-  keys.forEach(k=>{
-    const bv=base[k], lv=local[k], sv=server[k];
-    if(_sameJSON(sv,bv)) return;                       // server didn't change this field
-    if(_sameJSON(lv,bv)){                              // only the server changed it
-      if(sv===undefined) delete local[k]; else local[k]=sv;
-      return;
+  for(const k of new Set([...Object.keys(base), ...Object.keys(local), ...Object.keys(server)])){
+    const bv=base[k],lv=local[k],sv=server[k];
+    if(_sameJSON(sv,bv)||_sameJSON(lv,sv))continue;
+    if(_sameJSON(lv,bv)){if(sv===undefined)delete local[k];else local[k]=sv;continue;}
+    if(_APPEND_MERGE_FIELDS.has(k)&&Array.isArray(lv)&&Array.isArray(sv)){
+      const original=Array.isArray(bv)?bv:[];
+      if(original.every(x=>lv.some(y=>_sameJSON(x,y))&&sv.some(y=>_sameJSON(x,y)))){
+        local[k]=[...lv,...sv.filter(x=>!lv.some(y=>_sameJSON(x,y)))];continue;
+      }
     }
-    if(_APPEND_MERGE_FIELDS.has(k) && Array.isArray(sv)){ // both changed a list: append server additions
-      const baseKeys=new Set((Array.isArray(bv)?bv:[]).map(_mergeListKey));
-      const localArr=Array.isArray(lv)?lv:[];
-      const localKeys=new Set(localArr.map(_mergeListKey));
-      const added=sv.filter(x=>!baseKeys.has(_mergeListKey(x))&&!localKeys.has(_mergeListKey(x)));
-      if(added.length) local[k]=[...localArr, ...added];
-    }
-    // any other field changed in both places: this page's value wins
-  });
+    throw new Error('Another person changed '+k+' on task '+local.id+'. Reload and review both changes before saving.');
+  }
 }
 function _mergeTasksWithServer(localArr, serverArr, deletedIds){
-  const serverById=new Map(serverArr.filter(t=>t&&t.id).map(t=>[t.id,t]));
-  const out=[]; const seen=new Set();
-  let fromServer=0, merged=0, removedElsewhere=0, added=0;
+  const serverById=new Map(serverArr.map(t=>[t.id,t])),out=[],seen=new Set();
   for(const lt of localArr){
-    const id=lt.id; seen.add(id);
-    const st=serverById.get(id);
-    const base=_taskBaseline.get(id);
-    const lj=JSON.stringify(lt);
+    seen.add(lt.id);const st=serverById.get(lt.id),base=_taskBaseline.get(lt.id),lj=JSON.stringify(lt);
     if(!st){
-      if(base!==undefined && lj===base){ removedElsewhere++; continue; }
-      out.push(lt); continue;                           // new on this page, or edited here
+      if(base!==undefined){if(lj!==base)throw new Error('Task '+lt.id+' was removed elsewhere. Reload before saving.');continue;}
+      out.push(lt);continue;
     }
-    if(base===undefined){ out.push(lt); continue; }
-    const sj=JSON.stringify(st);
-    if(sj!==base){
-      if(lj===base){ _replaceTaskInPlace(lt, st); fromServer++; }
-      else { _mergeTaskFields(JSON.parse(base), lt, st); merged++; }
-    }
+    if(base===undefined){if(!_sameJSON(lt,st))throw new Error('A new task ID conflicts with another saved task. Reload before saving.');out.push(lt);continue;}
+    if(JSON.stringify(st)!==base)_mergeTaskFields(JSON.parse(base),lt,st);
     out.push(lt);
   }
   for(const st of serverArr){
-    if(!st||!st.id||seen.has(st.id)) continue;
-    if(deletedIds&&deletedIds.has(st.id)) continue;     // deleted on this page
-    if(_taskBaseline.has(st.id)) continue;               // removed on this page
-    out.push(st); added++;
-  }
-  if(fromServer||merged||removedElsewhere||added){
-    console.log(`[merge] se_t: ${fromServer} updated from server, ${merged} merged, ${added} added, ${removedElsewhere} removed elsewhere`);
+    if(seen.has(st.id))continue;
+    const base=_taskBaseline.get(st.id);
+    if(base!==undefined){
+      if(JSON.stringify(st)!==base)throw new Error('A task being removed changed elsewhere. Reload before deleting it.');
+      continue;
+    }
+    if(deletedIds&&deletedIds.has(st.id))throw new Error('A removed task was recreated elsewhere. Reload before saving.');
+    out.push(st);
   }
   return out;
 }
-// Saves run one at a time, in order; each resolves to true only when the server confirmed it.
-let _taskSaveChain = Promise.resolve();
-const saveTasks = () => {
-  const run = _taskSaveChain.then(_saveTasksNow, _saveTasksNow);
-  _taskSaveChain = run.catch(()=>{});
-  return run;
+let _lastTaskWriteReceipt=null,_lastTaskWriteFailure=null,_pendingTaskSave=null;
+function taskSaveWarning(message){
+  updateSyncStatus('error');
+  let el=document.getElementById('task-save-warning');
+  if(!el){
+    el=document.createElement('div');el.id='task-save-warning';el.setAttribute('role','alert');
+    el.style.cssText='position:sticky;top:0;z-index:1000;padding:14px;background:#fff0e6;color:#612315;border:2px solid #a54125;border-radius:8px;margin:12px;';
+    const root=document.getElementById('view-tasks')||document.body;root.prepend(el);
+  }
+  el.replaceChildren();
+  const text=document.createElement('div');text.textContent='Task changes need attention. '+message;el.append(text);
+  const retry=document.createElement('button');retry.className='btn';retry.textContent='Retry save';retry.onclick=()=>saveTasks();el.append(retry);
+  const reload=document.createElement('button');reload.className='btn';reload.textContent='Reload saved tasks';
+  reload.onclick=()=>{if(confirm('Reload the saved data? Unsaved changes in this tab will be lost.'))location.reload();};el.append(reload);
+}
+function _acceptTaskSave(pending){
+  const saved=JSON.parse(pending.payload),captured=new Map(pending.local.map(t=>[t.id,t]));
+  const currentById=new Map(tasks.map(t=>[t.id,t])),savedIds=new Set(saved.map(t=>t.id));
+  const updates=new Map(),additions=[],removed=new Set();
+  // Rebase only edits made since this request was captured. Keeping a whole
+  // stale object while advancing the baseline would undo merged server fields
+  // on the next save. Validate every reconciliation before changing any object.
+  for(const task of saved){
+    const current=currentById.get(task.id),before=captured.get(task.id);
+    if(before&&current){
+      const merged=JSON.parse(JSON.stringify(current));
+      try{_mergeTaskFields(before,merged,task);}
+      catch(e){throw new Error('Saved changes conflict with edits made while saving. '+e.message);}
+      updates.set(task.id,merged);
+    }else if(before){
+      if(!_sameJSON(before,task))throw new Error('Task '+task.id+' changed elsewhere while you removed it. Reload and review before deleting it.');
+    }else if(current){
+      if(!_sameJSON(current,task))throw new Error('A task added while saving conflicts with a saved task ID. Reload and review both changes.');
+    }else{
+      if(_deletedTaskIds.has(task.id))throw new Error('A saved task appeared while it was being removed. Reload and review before deleting it.');
+      additions.push(task);
+    }
+  }
+  for(const current of tasks){
+    if(savedIds.has(current.id)||!captured.has(current.id))continue;
+    if(!_sameJSON(current,captured.get(current.id)))throw new Error('Task '+current.id+' was removed elsewhere while you edited it. Reload and review before saving.');
+    removed.add(current.id);
+  }
+  for(const [id,value] of updates)_replaceTaskInPlace(currentById.get(id),value);
+  tasks=tasks.filter(t=>!removed.has(t.id));tasks.push(...additions);
+  _snapshotTaskBaseline(saved);_tasksLoadedCount=saved.length;
+}
+let _taskSaveChain=Promise.resolve();
+const saveTasks=()=>{
+  const run=_taskSaveChain.then(_saveTasksNow,_saveTasksNow);_taskSaveChain=run.catch(()=>{});return run;
 };
 async function _saveTasksNow(){
-  if (!tasksLoadedOk) {
-    console.error('[SAFETY] saveTasks() BLOCKED — initial load failed. Reload the page with a working connection.');
-    showToast('⚠️ Task save blocked — data did not load properly. Please reload.','','',8000);
-    return false;
-  }
-  // Read the server copy and merge (see above). If the read fails, save this page's copy as before.
-  try {
-    const r = await S.get('se_t');
-    if (r && r.value) {
-      const serverArr = JSON.parse(r.value);
-      if (Array.isArray(serverArr)) tasks = _mergeTasksWithServer(tasks, serverArr, _deletedTaskIds);
+  if(!tasksLoadedOk){taskSaveWarning('Task data did not load. Reload before making changes.');return false;}
+  try{
+    // Reuse the exact request after an uncertain response, before reading/merging
+    // again. The server returns the original receipt without a second mutation.
+    if(_pendingTaskSave){
+      const p=_pendingTaskSave;
+      if(!(await S.set('se_t',p.payload,p))){
+        if(_lastTaskWriteFailure&&[400,409,428].includes(_lastTaskWriteFailure.status))_pendingTaskSave=null;
+        return false;
+      }
+      _acceptTaskSave(p);_pendingTaskSave=null;
     }
-  } catch(e) { console.warn('[merge] se_t: read-before-write failed, using local state'); }
-  // Shrinkage guard: if the result is drastically smaller than the baseline, block
-  if (_tasksLoadedCount > 5 && tasks.length < _tasksLoadedCount * 0.5) {
-    console.error(`[SAFETY] saveTasks() BLOCKED — drastic shrinkage detected (${_tasksLoadedCount} → ${tasks.length}). This looks like accidental data loss.`);
-    showToast(`⚠️ Save blocked: task count dropped from ${_tasksLoadedCount} to ${tasks.length}. This may be a bug — reload to recover.`,'','',10000);
-    return false;
-  }
-  _tasksLoadedCount = tasks.length;
-  const payload = JSON.stringify(tasks);
-  let ok = false;
-  try { ok = await S.set('se_t', payload); } catch (e) { ok = false; }
-  if (ok) _snapshotTaskBaseline(JSON.parse(payload));
-  return ok;
+    const local=JSON.parse(JSON.stringify(tasks));
+    const response=await _kvGetStrict('se_t');
+    if(!response||response.taskProtocol!==1||!response.revision)throw new Error('The backend update is required before this page can safely save tasks.');
+    const server=JSON.parse(response.value);
+    if(!Array.isArray(server))throw new Error('The current task list is unreadable.');
+    const merged=_mergeTasksWithServer(JSON.parse(JSON.stringify(local)),server,_deletedTaskIds);
+    if(_tasksLoadedCount>5&&merged.length<_tasksLoadedCount*0.5)throw new Error('The task count dropped unexpectedly. Reload and review before saving.');
+    const payload=JSON.stringify(merged);
+    const pending={payload,local,expectedRevision:response.revision,requestId:crypto.randomUUID()};
+    if(payload===JSON.stringify(server)){
+      _acceptTaskSave(pending);document.getElementById('task-save-warning')?.remove();return true;
+    }
+    _pendingTaskSave=pending;
+    if(!(await S.set('se_t',payload,pending))){
+      if(_lastTaskWriteFailure&&[400,409,428].includes(_lastTaskWriteFailure.status))_pendingTaskSave=null;
+      return false;
+    }
+    _acceptTaskSave(pending);_pendingTaskSave=null;
+    if(!_lastTaskWriteReceipt?.readback?.verified){taskSaveWarning('The save has a receipt, but verification could not finish. Reload saved tasks before continuing.');return false;}
+    if(!_lastTaskWriteReceipt.readback.matches){taskSaveWarning('Your save was recorded, then another update arrived. Reload saved tasks to see the latest changes.');return false;}
+    document.getElementById('task-save-warning')?.remove();return true;
+  }catch(e){taskSaveWarning(e.message||'Save failed. Reload before retrying.');return false;}
 }
 const saveVendors = async () => {
   if (!vendorsLoadedOk) {
@@ -903,6 +933,7 @@ function switchView(name,btn){
   const el = document.getElementById('view-'+name);
   if (el) el.classList.add('active');
   if(btn)btn.classList.add('active');
+  if (name === 'sam-activity') { samActivityLoad(); samTaskActivityLoad(); }
   // Reviews — load aggregated ratings (24h client-cached) + host cleaning sub-section
   if (name === 'reviews' && typeof rvInit === 'function') rvInit();
   // Refresh replacements view when switching to it
@@ -1021,7 +1052,7 @@ async function vscAck(id,e){
   if(e){e.stopPropagation();}
   const t=tasks.find(x=>x.id===id);if(!t)return;
   t.selfScheduleAcknowledged=true;
-  await saveTasks();renderVSC();
+  if(!(await saveTasks()))return;renderVSC();
   showToast('Acknowledged.');
 }
 
@@ -1089,7 +1120,7 @@ async function vrImport(id){
   if(r.photoUrl){if(Array.isArray(r.photoUrl))newTask.photos.push(...r.photoUrl.filter(_isSafeHttpsUrl));else if(_isSafeHttpsUrl(r.photoUrl))newTask.photos.push(r.photoUrl);}
   tasks.push(newTask);logTaskChange('created',newTask);
   r.status='imported';
-  await saveTasks();await saveVendorReports();
+  if(!(await saveTasks()))return;await saveVendorReports();
   renderAll();showToast('Imported as task.');
   openDetail(newTask.id);
 }
@@ -1457,12 +1488,12 @@ function bulkSchedule(){
   if(_bulkCalProp)setTimeout(()=>toggleDP('b'),100);
 }
 
-function bulkApplySchedule(){
+async function bulkApplySchedule(){
   const date=_bulkSelectedDate||document.getElementById('b-date').value;
   if(!date){showToast('Please select a date');return;}
   const sel=_getSelectedTasks();
   sel.forEach(t=>{t.date=date;if(t.status==='open')t.status='scheduled';});
-  saveTasks();renderAll();updateBulkBar();
+  if(!(await saveTasks()))return;renderAll();updateBulkBar();
   closeModal('bulk-modal');
   showToast(sel.length+' task'+(sel.length!==1?'s':'')+' scheduled for '+fmtDate(date));
 }
@@ -1512,28 +1543,28 @@ function bulkFilterVendors(q){
   });
 }
 
-function bulkPickVendor(name){
+async function bulkPickVendor(name){
   const sel=_getSelectedTasks();
   sel.forEach(t=>{t.vendor=name;});
-  saveTasks();renderAll();updateBulkBar();
+  if(!(await saveTasks()))return;renderAll();updateBulkBar();
   closeModal('bulk-modal');
   showToast(sel.length+' task'+(sel.length!==1?'s':'')+' assigned to '+name);
 }
 
-function bulkToggleUrgent(){
+async function bulkToggleUrgent(){
   const sel=_getSelectedTasks();if(!sel.length){showToast('No tasks selected');return;}
   const anyNotUrgent=sel.some(t=>!t.urgent);
   sel.forEach(t=>{t.urgent=anyNotUrgent;});
-  saveTasks();renderAll();updateBulkBar();
+  if(!(await saveTasks()))return;renderAll();updateBulkBar();
   showToast(sel.length+' task'+(sel.length!==1?'s':'')+' marked '+(anyNotUrgent?'urgent':'not urgent'));
 }
 
-function bulkMarkComplete(){
+async function bulkMarkComplete(){
   const sel=_getSelectedTasks();if(!sel.length){showToast('No tasks selected');return;}
   if(!confirm('Mark '+sel.length+' task(s) as complete?'))return;
   sel.forEach(t=>{t.status='complete';logTaskChange('bulk_complete',t);});
   _selectedTasks.clear();
-  saveTasks();renderAll();updateBulkBar();
+  if(!(await saveTasks()))return;renderAll();updateBulkBar();
   advanceRecurringForTasks(sel);
   showToast(sel.length+' task'+(sel.length!==1?'s':'')+' marked complete');
 }
@@ -1928,7 +1959,7 @@ function _gsRenderConfirm(){
 
 window._gsCancelConfirm=function(){_gsState.view='pick';_gsState.pendingDate=null;_gsRender();};
 
-window._gsConfirmDate=function(ds,taskIds){
+window._gsConfirmDate=async function(ds,taskIds){
   // Lock the buttons to prevent double-submit
   const btns=document.querySelectorAll('.vs-dp-footer-btns button');
   btns.forEach(b=>{b.disabled=true;b.style.opacity='.5';});
@@ -1949,7 +1980,7 @@ window._gsConfirmDate=function(ds,taskIds){
     btns.forEach(b=>{b.disabled=false;b.style.opacity='';});
     return;
   }
-  saveTasks();
+  if(!(await saveTasks())){btns.forEach(b=>{b.disabled=false;b.style.opacity='';});return;}
   if(typeof renderAll==='function')renderAll();
   // Flip to success view
   _gsState.scheduledIds=updated;
@@ -2081,7 +2112,7 @@ window._gsTextVendor=function(ds,taskIds){
   window.location.href='sms:'+tel+'?body='+encodeURIComponent(body);
 };
 
-window._gsAssignVendor=function(taskIds){
+window._gsAssignVendor=async function(taskIds){
   const sel=document.getElementById('gs-vendor-select');
   const vName=sel?sel.value:'';
   if(!vName){alert('Pick a vendor first.');return;}
@@ -2094,19 +2125,19 @@ window._gsAssignVendor=function(taskIds){
     if(typeof logTaskChange==='function')logTaskChange('group_assign',t);
     n++;
   });
-  saveTasks();
+  if(!(await saveTasks()))return;
   if(typeof renderAll==='function')renderAll();
   if(typeof showToast==='function')showToast(n+' task'+(n!==1?'s':'')+' assigned to '+vName);
   closeGroupScheduler();
 };
 
-function bulkDelete(){
+async function bulkDelete(){
   const sel=_getSelectedTasks();if(!sel.length){showToast('No tasks selected');return;}
   if(!confirm('Permanently delete '+sel.length+' task(s)? This cannot be undone.'))return;
   sel.forEach(t=>{logTaskChange('bulk_delete',t);_deletedTaskIds.add(t.id);const idx=tasks.indexOf(t);if(idx!==-1)tasks.splice(idx,1);});
   if(_unlinkTasksFromProjects(sel.map(t=>t.id)).length&&typeof savePJ==='function')savePJ(); // 2026-10-04
   _selectedTasks.clear();
-  saveTasks();renderAll();updateBulkBar();
+  if(!(await saveTasks()))return;renderAll();updateBulkBar();
   showToast(sel.length+' task'+(sel.length!==1?'s':'')+' deleted');
 }
 
@@ -2449,7 +2480,7 @@ async function clearDate(px){
   document.getElementById('d-dp-popup').style.display='none';
   const _clrBtn=document.getElementById('d-clear-inline');if(_clrBtn)_clrBtn.style.display='none';
   document.getElementById('d-status').value=t.status;
-  await saveTasks();
+  if(!(await saveTasks()))return;
   renderDetailBadges(t);
   checkCombine();
   renderAll();
@@ -3042,7 +3073,7 @@ async function saveLogTask(){
   if(isFilterTask)task.filter_service_bundled=true;
 
   tasks.unshift(task);
-  await saveTasks();
+  if(!(await saveTasks()))return;
   if(typeof logTaskChange==='function')logTaskChange('log_service',task);
   await advanceRecurringForTasks([task]);
 
@@ -3090,7 +3121,7 @@ async function genFromRec(id){
     if(dup){skipped++;return;}
     tasks.unshift({id:Date.now().toString()+Math.random().toString(36).slice(2,6)+pid,property:pid,guest:'',problem:r.name,category:r.category,status:'scheduled',date:r.nextDue||'',vendor:r.vendor,urgent:false,recurring:true,notes:[],vendorNotes:'',created:new Date().toISOString()});n++;
   });
-  await saveTasks();renderAll();
+  if(!(await saveTasks()))return;renderAll();
   if(n&&!skipped)showToast(`${n} task${n>1?'s':''} generated.`);
   else if(n&&skipped)showToast(`${n} task${n>1?'s':''} generated, ${skipped} skipped (already exist).`);
   else showToast('All tasks already exist for this date.','err');
@@ -3157,7 +3188,7 @@ async function unbundleFilterService(id){
   // Also clear the recount-submitted flag so the task is in a clean state.
   delete t.filter_recount_submitted_by_vendor;
   if(typeof logTaskChange==='function'){try{logTaskChange('unbundle_filter',t);}catch(e){}}
-  await saveTasks();
+  if(!(await saveTasks()))return;
   // Refresh the relevant pieces of the open detail modal in place.
   renderBundleBanner(t);
   renderNotes(t);
@@ -3179,7 +3210,7 @@ async function combineTask(rid,date){
   r.nextDue=date;await saveRec();
   const vendor=t.vendor||r.vendor;
   tasks.unshift({id:Date.now().toString(),property:t.property,guest:"",problem:r.name,category:r.category,status:"scheduled",date,vendor,urgent:false,recurring:true,notes:[{text:`Combined with existing task on ${date}.`,type:"admin",time:new Date().toISOString()}],vendorNotes:"",created:new Date().toISOString()});
-  await saveTasks();renderAll();document.getElementById('d-combine').innerHTML='';showToast('Tasks combined into one visit.');
+  if(!(await saveTasks()))return;renderAll();document.getElementById('d-combine').innerHTML='';showToast('Tasks combined into one visit.');
 }
 
 // ADD TASK
@@ -3243,7 +3274,7 @@ async function saveTask(){
   // Deploy 2: bundle filter service into this task if the user checked the bundler
   if(typeof fsMaybeStampTask==='function')fsMaybeStampTask(t);
   const _cqId=_cqEditingId; if(_cqId)_cqDecorateTask(t,_cqId); // 2026-10-04: editing a Claude suggestion before import
-  tasks.unshift(t);logTaskChange('created',t);const _saved=await saveTasks();closeModal('task-modal');renderAll();renderReplacements();showToast('Task created.');
+  tasks.unshift(t);logTaskChange('created',t);const _saved=await saveTasks();if(!_saved)return;closeModal('task-modal');renderAll();renderReplacements();showToast('Task created.');
   if(_cqId){_cqEditingId=null;const _sb=document.getElementById('f-save-btn');if(_sb)_sb.textContent='Save Task';if(_saved)await _cqRemoveImported(_cqId);}
 }
 
@@ -3354,7 +3385,7 @@ async function taskSaveTitle() {
   if (!t || t.problem === newText) return;
   t.problem = newText;
   titleEl.textContent = newText;
-  await saveTasks();
+  if(!(await saveTasks()))return;
   renderAll();
   showToast('Description updated.');
 }
@@ -3367,7 +3398,7 @@ async function savePurchaseNote(){
   // Auto-set purchase tracking defaults when a purchase note is first entered
   if(val&&!t.purchaseStatus){t.purchaseStatus='needed';t.purchaser=t.purchaser||'owner';}
   if(!val){t.purchaseStatus='';t.purchaser='';}
-  await saveTasks();
+  if(!(await saveTasks()))return;
   const pSaved=document.getElementById('d-purchase-saved');
   if(pSaved){pSaved.style.display=val?'':'none';}
   // Update purchase foldout preview
@@ -3412,7 +3443,7 @@ async function setPurchaseBought(on){
   if(isDone(t)){renderPurchaseWorkflow(t);return;}
   if(on){t.purchaseStatus='purchased';t.purchasedAt=t.purchasedAt||new Date().toISOString();}
   else{t.purchaseStatus='needed';t.purchasedAt='';}
-  await saveTasks();renderPurchaseWorkflow(t);renderAll();
+  if(!(await saveTasks()))return;renderPurchaseWorkflow(t);renderAll();
   showToast(on?'Bought — off the shopping list.':'Back on the shopping list.');
 }
 async function setPurchaseStatus(status){
@@ -3420,14 +3451,14 @@ async function setPurchaseStatus(status){
   t.purchaseStatus=status;
   if(status==='purchased')t.purchasedAt=new Date().toISOString();
   if(status==='delivered'&&!t.purchasedAt)t.purchasedAt=new Date().toISOString();
-  await saveTasks();renderPurchaseWorkflow(t);renderAll();
+  if(!(await saveTasks()))return;renderPurchaseWorkflow(t);renderAll();
   const labels={needed:'Needs buying',purchased:'Marked as purchased',delivered:'Marked as delivered'};
   showToast(labels[status]||'Updated.');
 }
 async function setPurchaser(who){
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
   t.purchaser=who;
-  await saveTasks();renderPurchaseWorkflow(t);renderAll();
+  if(!(await saveTasks()))return;renderPurchaseWorkflow(t);renderAll();
   showToast(who==='owner'?'You\'ll buy this.':'Vendor will buy this.');
 }
 function onDetailCatChange(val){
@@ -3453,7 +3484,7 @@ async function confirmPropertyChange(newPropId){
     document.getElementById('d-prop').style.display='';return;
   }
   t.property=newPropId;
-  await saveTasks();
+  if(!(await saveTasks()))return;
   // Update the label and color
   const nb=getNb(newPropId);
   document.getElementById('d-prop').textContent=newP?newP.name:newPropId;
@@ -3582,7 +3613,7 @@ async function uploadTaskPhoto(file){
     // Migrate legacy photoUrl into array if needed
     if(t.photoUrl&&!t.photos.includes(t.photoUrl)){t.photos.unshift(t.photoUrl);t.photoUrl='';}
     t.photos.push(data.url);
-    await saveTasks();
+    if(!(await saveTasks()))return;
     showTaskPhoto(t);
     status.textContent='';
     showToast('Photo attached.');
@@ -3605,7 +3636,7 @@ async function removeTaskPhoto(url){
   if(Array.isArray(t.photos))t.photos=t.photos.filter(u=>u!==url);
   // Also clear legacy photoUrl if it matches
   if(t.photoUrl===url)t.photoUrl=null;
-  await saveTasks();
+  if(!(await saveTasks()))return;
   showTaskPhoto(t);
   showToast('Photo removed.');
 }
@@ -3648,7 +3679,7 @@ async function cleanupOldPhotos(){
       if(kept.length!==t.vendorPhotos.length){t.vendorPhotos=kept;changed=true;}
     }
   }
-  if(changed)await saveTasks();
+  if(changed)if(!(await saveTasks()))return;
 }
 /* Open the vendor-day modal showing all tasks for a vendor on a specific date */
 async function openVendorDay(vendorName,date){
@@ -3775,7 +3806,7 @@ async function sendGuestCommMsg(rid,guestFirst){
     inp.value='';btn.textContent='Sent ✓';btn.style.background='#2e7d52';btn.style.borderColor='#2e7d52';
     // Add note to task
     const t=tasks.find(x=>x.id===detailId);
-    if(t){if(!t.notes)t.notes=[];t.notes.push({text:`Message sent to ${guestFirst}: "${msg.slice(0,80)}${msg.length>80?'...':''}"`,type:'admin',time:new Date().toISOString(),by:getCurrentUserName()});await saveTasks();renderNotes(t);}
+    if(t){if(!t.notes)t.notes=[];t.notes.push({text:`Message sent to ${guestFirst}: "${msg.slice(0,80)}${msg.length>80?'...':''}"`,type:'admin',time:new Date().toISOString(),by:getCurrentUserName()});if(!(await saveTasks()))return;renderNotes(t);}
     showToast(`Message sent to ${guestFirst}!`);
     setTimeout(()=>{btn.textContent='Send';btn.style.background='';btn.style.borderColor='';btn.disabled=false;},2000);
   }catch(e){showToast('Failed to send: '+e.message);btn.textContent='Send';btn.disabled=false;}
@@ -4617,7 +4648,7 @@ function renderNotes(t){
 }
 function editNoteInline(i){document.getElementById('nt-'+i).style.display='none';document.getElementById('ne-'+i).style.display='';const ta=document.getElementById('nei-'+i);ta.focus();ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';}
 function cancelNoteEdit(i){document.getElementById('nt-'+i).style.display='';document.getElementById('ne-'+i).style.display='none';}
-async function saveNoteEdit(i){const t=tasks.find(x=>x.id===detailId);if(!t||!t.notes||!t.notes[i])return;const txt=document.getElementById('nei-'+i).value.trim();if(!txt)return;t.notes[i].text=txt;await saveTasks();renderNotes(t);showToast('Note updated');}
+async function saveNoteEdit(i){const t=tasks.find(x=>x.id===detailId);if(!t||!t.notes||!t.notes[i])return;const txt=document.getElementById('nei-'+i).value.trim();if(!txt)return;t.notes[i].text=txt;if(!(await saveTasks()))return;renderNotes(t);showToast('Note updated');}
 async function deleteNoteInline(i){
   const el=document.getElementById('detail-note-'+i);
   if(el.querySelector('.note-del-confirm')){el.querySelector('.note-del-confirm').remove();return;}
@@ -4625,19 +4656,19 @@ async function deleteNoteInline(i){
   c.innerHTML=`<p>Delete this note?</p><div style="display:flex;gap:6px"><button class="btn btn-red" onclick="confirmDeleteNote(${i})">Delete</button><button class="btn" onclick="this.closest('.note-del-confirm').remove()">Cancel</button></div>`;
   el.appendChild(c);
 }
-async function confirmDeleteNote(i){const t=tasks.find(x=>x.id===detailId);if(!t||!t.notes)return;t.notes.splice(i,1);await saveTasks();renderNotes(t);showToast('Note deleted');}
+async function confirmDeleteNote(i){const t=tasks.find(x=>x.id===detailId);if(!t||!t.notes)return;t.notes.splice(i,1);if(!(await saveTasks()))return;renderNotes(t);showToast('Note deleted');}
 async function addNote(type){
   const inp=document.getElementById('d-note-input');const txt=inp.value.trim();if(!txt)return;
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
   if(!t.notes)t.notes=[];t.notes.push({text:txt,type,time:new Date().toISOString(),by:getCurrentUserName()});
-  await saveTasks();renderNotes(t);inp.value='';
+  if(!(await saveTasks()))return;renderNotes(t);inp.value='';
 }
 async function updateField(f,v){
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
   t[f]=v;
   // Auto-advance status: setting a date on an open task → scheduled
   if(f==='date'&&v&&t.status==='open'){t.status='scheduled';document.getElementById('d-status').value='scheduled';}
-  await saveTasks();renderAll();
+  if(!(await saveTasks()))return;renderAll();
   // Refresh badges to reflect any status/category change
   renderDetailBadges(t);
   // Re-render vendor section when vendor or category changes
@@ -4656,7 +4687,7 @@ async function assignVendor(name){
     tasks.filter(x=>x.id!==t.id&&x.property===t.property&&x.date===t.date&&!isDone(x))
       .forEach(x=>{x.vendor=name;if(x.status==='open'&&x.date)x.status='scheduled';});
   }
-  await saveTasks();
+  if(!(await saveTasks()))return;
   // Refresh the modal fields to reflect the change immediately
   document.getElementById('d-vendor').value=name;
   document.getElementById('d-status').value=t.status;
@@ -4684,7 +4715,7 @@ async function letVendorSchedule(name){
   // Deliberately do NOT set a date. Status stays 'open' until vendor picks a date.
   // (Matches assignVendor's existing behavior of leaving status=open when no date.)
   if(!t.date&&t.status!=='open')t.status='open';
-  await saveTasks();
+  if(!(await saveTasks()))return;
   // Build the scheduling-focused SMS
   try{
     const token=await createVendorAgenda(name);
@@ -4769,7 +4800,7 @@ async function toggleDetailUrgent(){
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
   t.urgent=!t.urgent;
   renderDetailBadges(t);
-  await saveTasks();renderAll();
+  if(!(await saveTasks()))return;renderAll();
   showToast(t.urgent?'Marked as urgent.':'Urgent removed.');
 }
 
@@ -4868,7 +4899,7 @@ async function markComplete(){
   }
   t.status='complete';document.getElementById('d-status').value='complete';
   document.getElementById('complete-btn').style.display='none';
-  logTaskChange('completed',t);await saveTasks();closeModal('detail-modal');renderAll();showToast('Task marked complete.');
+  logTaskChange('completed',t);if(!(await saveTasks()))return;closeModal('detail-modal');renderAll();showToast('Task marked complete.');
   // Deploy 2: if this task carried filter service, writeback profile last_service_date
   if(typeof fsOnTaskComplete==='function')fsOnTaskComplete(t);
   advanceRecurringForTasks([t]);
@@ -4886,7 +4917,7 @@ async function vdQuickComplete(id,e){
     if(!ok)return;
   }
   t.status='complete';logTaskChange('completed',t);
-  await saveTasks();renderAll();showToast('Task marked complete.');
+  if(!(await saveTasks()))return;renderAll();showToast('Task marked complete.');
   if(typeof fsOnTaskComplete==='function')fsOnTaskComplete(t);
   advanceRecurringForTasks([t]);
   checkAdminPaymentPrompt(t);
@@ -5023,7 +5054,7 @@ async function generateInvoice(vendorName,method,dateStr,taskIds){
   const invoiceRecord={id:invNum,vendor:vendorName,method,date:dateStr,total,receiptTotal,laborAmt,taskIds,createdAt:new Date().toISOString()};
   // Attach to each task
   invTasks.forEach(t=>{t.invoice=invoiceRecord;});
-  await saveTasks();
+  if(!(await saveTasks()))return;
   // Attach to vendor record
   const vMatch=vendors.find(v=>v.name.toLowerCase()===vendorName.toLowerCase());
   if(vMatch){
@@ -5061,14 +5092,14 @@ async function markResolvedByGuest(){
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
   t.status='resolved_by_guest';
   t.notes=t.notes||[];t.notes.push({text:'Marked as resolved by guest.',type:'admin',time:new Date().toISOString()});
-  await saveTasks();closeModal('detail-modal');renderAll();showToast('Task marked as resolved by guest.');
+  if(!(await saveTasks()))return;closeModal('detail-modal');renderAll();showToast('Task marked as resolved by guest.');
 }
 async function assignToGuest(){
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
   t.vendor='Guest (Ask Next Guest)';
   t.assignedToGuest=true;
   t.notes=t.notes||[];t.notes.push({text:'Assigned to guest — will ask next guest to verify/address.',type:'admin',time:new Date().toISOString()});
-  await saveTasks();
+  if(!(await saveTasks()))return;
   document.getElementById('d-vendor').value='Guest (Ask Next Guest)';
   const p=getProp(t.property);
   renderDetailVendors(t,p);renderAll();
@@ -5126,7 +5157,7 @@ async function addTaskToProject(projectId, projectTitle){
   t.project_id = p.id;
   t.project_title = p.title;
   await savePJ();
-  await saveTasks();
+  if(!(await saveTasks()))return;
   showToast(`Added to "${projectTitle}"`);
   // Refresh the button to confirm state
   const btn=document.getElementById('add-to-project-btn');
@@ -5146,10 +5177,10 @@ async function deleteTask(){
   logTaskChange('deleted',deleted);
   _deletedTaskIds.add(deleted.id);                 // tombstone so the rbw merge can't resurrect it
   const unlinked=_unlinkTasksFromProjects([deleted.id]); // 2026-10-04
-  tasks=tasks.filter(x=>x.id!==detailId);await saveTasks();
+  tasks=tasks.filter(x=>x.id!==detailId);if(!(await saveTasks()))return;
   if(unlinked.length&&typeof savePJ==='function')await savePJ();
   closeModal('detail-modal');renderAll();
-  showToast('Task deleted.','',async()=>{_deletedTaskIds.delete(deleted.id);tasks.splice(idx,0,deleted);unlinked.forEach(u=>{u.item.task_id=u.taskId;});await saveTasks();if(unlinked.length&&typeof savePJ==='function')await savePJ();renderAll();showToast('Task restored.');});
+  showToast('Task deleted.','',async()=>{_deletedTaskIds.delete(deleted.id);tasks.splice(idx,0,deleted);unlinked.forEach(u=>{u.item.task_id=u.taskId;});if(!(await saveTasks()))return;if(unlinked.length&&typeof savePJ==='function')await savePJ();renderAll();showToast('Task restored.');});
 }
 
 // PROPERTY HISTORY
@@ -5164,7 +5195,7 @@ async function saveHistTask(){
   const vendor=document.getElementById('h-vendor').value.trim();
   if(!date||!pid||!desc){showToast('Date, property, and description are required.','err');return;}
   const t={id:Date.now().toString(),property:pid,guest:'',problem:desc,category:cat,status:'complete',date,vendor,urgent:false,recurring:false,notes:[{text:'Added as historical record.',type:'admin',time:new Date().toISOString()}],vendorNotes:'',created:new Date().toISOString()};
-  tasks.unshift(t);logTaskChange('created',t);await saveTasks();
+  tasks.unshift(t);logTaskChange('created',t);if(!(await saveTasks()))return;
   histFormOpen=false;renderAll();showToast('Historical task added.');
 }
 function buildHistForm(){
@@ -5612,7 +5643,7 @@ async function _cascadeVendorRename(oldName,newName,v){
       await S.set('se_vs_'+tok,JSON.stringify(sheet));
     }catch(e){console.warn('[vendor-rename] link update failed',tok,e);}
   }
-  if(tc)await saveTasks();
+  if(tc)if(!(await saveTasks()))return;
   if(rc)await saveRec();
   if(pc&&typeof savePJ==='function')await savePJ();
   renderAll();
@@ -6101,7 +6132,7 @@ async function aabLogAll(){
     if(typeof logTaskChange==='function'){try{logTaskChange('log_service',task);}catch(e){}}
     logged++;
   });
-  await saveTasks();
+  if(!(await saveTasks()))return;
   renderAll();
   closeModal('aab-import-modal');
   _aabRows=[];
@@ -6494,7 +6525,7 @@ async function hbRestore(id) {
     vendorNotes: '', created: item.receivedAt || new Date().toISOString(),
   };
   tasks.unshift(t);
-  await saveTasks();
+  if(!(await saveTasks()))return;
   // Remove from dismissed
   hbDismissed = hbDismissed.filter(x => x.id !== id);
   await hbSaveDismissed();
@@ -6554,9 +6585,9 @@ async function cqLoad() {
   renderCQ();
 }
 function cqStart() {
-  cqLoad();
+  cqLoad(); maintenanceProposalsLoad();
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && Date.now() - cqLastLoad > 60000) cqLoad();
+    if (document.visibilityState === 'visible' && Date.now() - cqLastLoad > 60000) { cqLoad(); maintenanceProposalsLoad(); }
   });
 }
 // Re-reads both lists before writing so suggestions Claude added since this page loaded are kept.
@@ -6898,7 +6929,7 @@ async function clImportHistorical() {
   }
 
   if (imported > 0) {
-    await saveTasks();
+    if(!(await saveTasks()))return;
     renderAll();
     if (typeof renderCleaningLog === 'function') renderCleaningLog();
     showToast(`${imported} historical cleaning alert(s) imported.`);
@@ -7808,7 +7839,7 @@ async function loadReplacements() {
       migrated++;
     }
     if (migrated) {
-      await saveTasks();
+      if(!(await saveTasks()))return;
       // Clear legacy data after successful migration
       rpData = [];
       await save('se_purchases', []);
@@ -7975,14 +8006,14 @@ async function rpQuickPurchased(id) {
   const t = tasks.find(x => x.id === id); if (!t) return;
   t.purchaseStatus = 'purchased';
   t.purchasedAt = new Date().toISOString();
-  await saveTasks(); renderReplacements(); renderAll();
+  if(!(await saveTasks()))return; renderReplacements(); renderAll();
   showToast('Marked as purchased \u2014 ready for delivery.');
 }
 async function rpQuickDelivered(id) {
   const t = tasks.find(x => x.id === id); if (!t) return;
   t.purchaseStatus = 'delivered';
   t.status = 'complete';logTaskChange('completed',t);
-  await saveTasks(); renderReplacements(); renderAll();
+  if(!(await saveTasks()))return; renderReplacements(); renderAll();
   showToast('Delivered \u2014 task complete.');
 }
 
@@ -10775,7 +10806,7 @@ async function ppPromoteIssue(pid, issueId) {
     task_id: newTaskId,
   });
   ppRenderDetail();
-  if (typeof saveTasks === 'function') await saveTasks();
+  if (typeof saveTasks === 'function') if(!(await saveTasks()))return;
   await ppSave('se_pp', PP);
   await ppSave('se_pp_log', PP_LOG);
   if (typeof renderAll === 'function') renderAll();
@@ -11596,7 +11627,7 @@ function renderShoppingList(){
 async function shopMarkBought(id){
   const t=tasks.find(x=>x.id===id);if(!t)return;
   t.purchaseStatus='purchased';t.purchasedAt=t.purchasedAt||new Date().toISOString();
-  await saveTasks();renderAll();
+  if(!(await saveTasks()))return;renderAll();
   showToast('Bought: '+taskEffectivePurchaseNote(t));
 }
 // One-time (2026-10-04): Chip asked to remove the old Bearadise weather-stripping
@@ -11661,7 +11692,7 @@ async function rpCleanupOnce(){
   if(!t.notes)t.notes=[];
   t.notes.push({text:'Closed when the Replacements tab was retired (Oct 4, 2026).',type:'admin',time:new Date().toISOString()});
   logTaskChange('completed',t);
-  await saveTasks();
+  if(!(await saveTasks()))return;
 }
 
 // Buy list from shortfall only (no opportunistic restocking). Uses assume-zero
@@ -13832,3 +13863,129 @@ async function tvDeleteFromModal() {
   tvRender();
 }
 // ═══════════════  END Roku TV Directory  ═══════════════
+
+// Administrator review of exact reschedule proposals. No connector key is ever
+// present in this page; approval uses the existing verified administrator login.
+let maintenanceProposalBusy=false;
+async function maintenanceRequest(action,input={}){
+  const response=await hospFetch(STORAGE_API,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({maintenanceAction:action,...input}),signal:AbortSignal.timeout(55000)});
+  const result=await response.json().catch(()=>({}));
+  if(!response.ok){const error=new Error(result.error||'The request could not be confirmed. Refresh its status before retrying.');error.status=response.status;error.code=result.code;throw error;}
+  return result;
+}
+function maintenanceElement(tag,text){const el=document.createElement(tag);if(text!==undefined)el.textContent=text;return el;}
+async function maintenanceProposalsLoad(){
+  const root=document.getElementById('maintenance-proposals');if(!root||maintenanceProposalBusy)return;
+  try{const data=await maintenanceRequest('listRescheduleProposals');maintenanceRenderProposals(data.proposals||[]);}
+  catch(e){root.replaceChildren();const message=maintenanceElement('p','Schedule proposals could not load. '+e.message);message.setAttribute('role','status');root.append(message);}
+}
+function maintenanceRenderProposals(proposals){
+  const root=document.getElementById('maintenance-proposals');if(!root)return;root.replaceChildren();root.style.cssText='';
+  if(!proposals.length)return;
+  root.style.cssText='padding:16px;border:1px solid var(--gold);border-radius:12px;margin-bottom:16px';
+  root.append(maintenanceElement('h3','Proposed schedule changes'));
+  root.append(maintenanceElement('p','Review the exact change and access window. Approving changes the task schedule; it does not contact the vendor.'));
+  const refresh=maintenanceElement('button','Refresh proposals');refresh.className='btn';refresh.onclick=maintenanceProposalsLoad;root.append(refresh);
+  for(const p of proposals){
+    const card=maintenanceElement('section');card.style.cssText='border-top:1px solid var(--border);padding:14px 0';
+    card.append(maintenanceElement('h4',p.property+' — '+p.problem));
+    const table=maintenanceElement('table');table.style.cssText='width:100%;text-align:left;margin:10px 0';
+    const header=maintenanceElement('tr');for(const title of ['Field','Current','Proposed'])header.append(maintenanceElement('th',title));table.append(header);
+    for(const [label,field] of [['Date','date'],['Vendor','vendor'],['Status','status']]){
+      const row=maintenanceElement('tr');for(const value of [label,p.before[field]||'Not set',p.after[field]||'Not set'])row.append(maintenanceElement('td',value));table.append(row);
+    }
+    card.append(table,maintenanceElement('p','Reason: '+p.reason));
+    const w=p.availability.commonWindow;
+    card.append(maintenanceElement('p','Confirmed access window: '+w.start+'–'+w.end+' ('+w.timeZone+'). Vendor availability still needs confirmation.'));
+    card.append(maintenanceElement('p','Checked houses: '+p.availability.windows.map(x=>x.property).join(', ')+'. Expires: '+new Date(p.expiresAt).toLocaleString()));
+    if(p.availability.otherTasksThatDay.length)card.append(maintenanceElement('p','This vendor has '+p.availability.otherTasksThatDay.length+' other task(s) on that date.'));
+    if(p.status==='approved')card.append(maintenanceElement('p','Approved by '+(p.approvedBy?.name||'an administrator')+'. The change still needs to be applied.'));
+    const button=maintenanceElement('button',p.status==='approved'?'Apply approved change':'Approve and reschedule');button.className='btn btn-g';
+    button.onclick=()=>maintenanceApproveProposal(p,button);card.append(button);root.append(card);
+  }
+}
+function maintenanceHasUnsavedTasks(){
+  return !tasksLoadedOk||!!_pendingTaskSave||tasks.length!==_taskBaseline.size||tasks.some(t=>JSON.stringify(t)!==_taskBaseline.get(t.id));
+}
+async function maintenanceApproveProposal(p,button){
+  if(maintenanceProposalBusy)return;
+  if(maintenanceHasUnsavedTasks()){taskSaveWarning('Save your current task edits or reload before approving a schedule proposal.');return;}
+  const message=p.property+' — '+p.problem+'\n\nDate: '+(p.before.date||'Not set')+' → '+p.after.date+'\nVendor: '+(p.before.vendor||'Not set')+' → '+p.after.vendor+'\nStatus: '+p.before.status+' → '+p.after.status+'\nReason: '+p.reason+'\n\nApply this exact change? No message will be sent.';
+  if(!confirm(message))return;
+  maintenanceProposalBusy=true;button.disabled=true;
+  try{
+    if(p.status!=='approved')await maintenanceRequest('approveReschedule',{proposalId:p.id,approvalDigest:p.approvalDigest});
+    const result=await maintenanceRequest('applyApprovedReschedule',{proposalId:p.id});
+    if(!result.readback?.verified||!result.readback.matches)throw new Error('The change has a save receipt, but the current schedule needs verification. Refresh the proposal and saved tasks before making another change.');
+    const snapshot=await _kvGetStrict('se_t');
+    if(!snapshot||snapshot.taskProtocol!==1)throw new Error('The task changed, but the current list could not reload. Reload saved tasks before continuing.');
+    if(maintenanceHasUnsavedTasks())throw new Error('The approved schedule was saved. Edits made while it was saving are still on this page; save them or reload saved tasks before continuing.');
+    tasks=JSON.parse(snapshot.value);_snapshotTaskBaseline(tasks);_tasksLoadedCount=tasks.length;_deletedTaskIds.clear();
+    renderAll();showToast('Approved schedule change saved and verified.');
+  }catch(e){taskSaveWarning(e.message);}
+  finally{maintenanceProposalBusy=false;button.disabled=false;await maintenanceProposalsLoad();}
+}
+
+// Sam Activity: administrator-only API, rendered as text (never injected HTML).
+let samActivityEvents=[],samActivityBefore=null,samActivityBusy=false;
+function samPendingKey(){
+ const payload=JSON.parse(atob(getAuthToken().split('.')[1]));
+ if(!payload.email)throw new Error('Sign in before correcting activity.');
+ return 'se_sam_pending_v1_'+payload.email.toLowerCase();
+}
+function samPendingRead(){const value=JSON.parse(sessionStorage.getItem(samPendingKey())||'{}');if(!value||Array.isArray(value)||typeof value!=='object'||Object.keys(value).length>20)throw new Error('Pending correction storage needs review.');return value;}
+function samPendingStore(id,body){const all=samPendingRead();if(body)all[id]=body;else delete all[id];if(Object.keys(all).length>20)throw new Error('Reconcile pending corrections first.');sessionStorage.setItem(samPendingKey(),JSON.stringify(all));}
+
+async function samActivityLoad(older=false){
+ const root=document.getElementById('sam-activity-results');if(!root||samActivityBusy)return;
+ samActivityBusy=true;const status=document.getElementById('sam-activity-status');status.textContent='Loading activity…';
+ try{
+  const data=await maintenanceRequest('listSamActivity',older&&samActivityBefore!==null?{before:samActivityBefore}:{});
+  samActivityEvents=older?samActivityEvents.concat(data.events):data.events;samActivityBefore=data.nextBefore;
+  samActivityRender();status.textContent=data.count+' / '+data.capacity+' events; '+Math.round((data.bytes||0)/1024)+' / '+Math.round(data.byteCapacity/1024)+' KiB. '+(data.count>=data.capacity*.8||data.bytes>=data.byteCapacity*.8?'Capacity is nearing its limit; arrange an archive before enabling more actions.':'');
+ }catch(e){status.textContent='Activity could not load. '+e.message;}
+ finally{samActivityBusy=false;}
+}
+function samActivityTime(ms){return Number.isFinite(ms)?new Date(ms).toISOString():'Not recorded';}
+function samActivityRender(){
+ const root=document.getElementById('sam-activity-results');root.replaceChildren();
+ const query=(document.getElementById('sam-activity-filter').value||'').toLowerCase();
+ const rows=samActivityEvents.filter(e=>[e.batchId,e.operationId,e.kind,e.phase,e.property].join(' ').toLowerCase().includes(query));
+ if(!rows.length)root.append(maintenanceElement('p','No matching entries in the loaded pages.'));
+ for(const e of rows){
+  const card=maintenanceElement('details');card.style.cssText='padding:12px;border-bottom:1px solid var(--border);overflow-wrap:anywhere';
+  card.append(maintenanceElement('summary',e.phase.toUpperCase()+' · '+e.kind.replaceAll('_',' ')+' · '+(e.property||'All properties')+' · '+samActivityTime(e.recordedAtMs)));
+  const fields=[['Reason',e.reason],['Evidence',e.evidence||'None recorded'],['Actor',e.actor.name+' ('+e.actor.kind+')'],['Operation',e.operationId],['Batch',e.batchId],['Event',e.id],['Recorded by server',samActivityTime(e.recordedAtMs)],['Observed window',e.observation.start+' → '+e.observation.end],['Verification',e.verification.method+' · '+e.verification.provenance+' · '+(e.verification.summary||'Not checked')],['Verification observed',samActivityTime(e.verification.observedAtMs)],['Verification reference',e.verification.reference||'None'],['Source',e.source.system+' / '+e.source.id]];
+  if(e.correctionOf)fields.push(['Corrects event',e.correctionOf]);
+  fields.push([e.phase==='intent'?'Proposed wording (not proof of sending)':'Recorded wording',e.wording.state==='exact'?e.wording.text:e.wording.state==='withheld'?'Withheld for sensitive content':'Not applicable']);
+  for(const [label,value]of fields){const p=maintenanceElement('p');p.style.whiteSpace='pre-wrap';p.append(maintenanceElement('strong',label+': '),maintenanceElement('span',value));card.append(p);}
+  if(e.source.url){try{const u=new URL(e.source.url);if(u.protocol==='https:'&&!u.username&&!u.password&&!u.search&&!u.hash&&(u.hostname==='hospitable.com'||u.hostname.endsWith('.hospitable.com'))){const a=maintenanceElement('a','Open source in Hospitable');a.href=u.href;a.target='_blank';a.rel='noopener noreferrer';card.append(a);}}catch(_) {}}
+  const form=maintenanceElement('details');form.append(maintenanceElement('summary','Add a factual correction'));
+  const input=maintenanceElement('textarea');input.placeholder='Explain the correction and supporting evidence. Do not include secrets or full guest conversations.';input.setAttribute('aria-label','Correction for '+e.id);input.maxLength=1000;input.style.cssText='display:block;width:100%;min-height:80px;margin:8px 0';
+  const button=maintenanceElement('button','Append correction');button.className='btn';const feedback=maintenanceElement('p');feedback.setAttribute('role','status');let pending=null;
+  try{pending=samPendingRead()[e.id]||null;if(pending){input.value=pending.reason;input.disabled=true;button.textContent='Retry same correction';feedback.textContent='An earlier correction is awaiting confirmation. Retry uses its original request ID.';}}
+  catch(error){button.disabled=true;feedback.textContent='Cannot preserve a correction retry safely: '+error.message;}
+  button.onclick=async()=>{
+   if(!pending){if(input.value.trim().length<5){feedback.textContent='Enter a factual correction of at least five characters.';return;}
+    const now=new Date().toISOString();pending={requestId:crypto.randomUUID(),operationId:e.operationId,batchId:e.batchId,kind:e.kind,phase:'correction',source:e.source,property:e.property,reason:input.value,evidence:'Administrator correction entered through Sam Activity.',wording:{state:'not_applicable',text:''},observation:{start:now,end:now},verification:{method:'manual_review',summary:'Administrator supplied correction; external action was not re-executed.',observedAt:now},correctionOf:e.id};try{samPendingStore(e.id,pending);}catch(error){pending=null;feedback.textContent='Correction was not sent: '+error.message;return;}input.disabled=true;}
+   button.disabled=true;
+   try{await maintenanceRequest('appendSamActivity',pending);samPendingStore(e.id,null);pending=null;feedback.textContent='Correction recorded. Original entry preserved.';await samActivityLoad();}
+   catch(error){if(error.status===400){samPendingStore(e.id,null);pending=null;input.disabled=false;feedback.textContent='Correction rejected before saving. Edit it and submit again. '+error.message;button.textContent='Append correction';}else{feedback.textContent='Correction not confirmed. Retry this same request; do not enter it again. '+error.message;button.textContent='Retry same correction';}}
+   finally{button.disabled=false;}
+  };
+  form.append(input,button,feedback);card.append(form);root.append(card);
+ }
+ const more=document.getElementById('sam-activity-more');more.disabled=samActivityBefore===0||samActivityBefore===null;
+}
+let samTaskBefore=null;
+async function samTaskActivityLoad(older=false){
+ const root=document.getElementById('sam-task-activity');
+ try{
+  const data=await maintenanceRequest('listSamTaskActivity',older&&samTaskBefore!==null?{before:samTaskBefore}:{});samTaskBefore=data.nextBefore;if(!older)root.replaceChildren();
+  if(!data.events.length)root.append(maintenanceElement('p','No Sam task commits in this audit page.'));
+  for(const e of data.events){const item=maintenanceElement('details');item.append(maintenanceElement('summary',e.action+' · '+e.at));
+   for(const [label,value]of [['Audit receipt',e.id],['Proposal',e.proposalId||'None'],['Batch',e.batchId||'Not supplied'],['Operation',e.operationId||'Not supplied'],['Reason',e.reason],['Proposed by',e.proposedBy?.name||'Not recorded'],['Approved by',e.approvedBy?.name||'Not recorded'],['Applied by',e.actor?.name||e.actor?.id],['Before / after',JSON.stringify(e.changes,null,2)]]){const p=maintenanceElement('p',label+': '+value);p.style.whiteSpace='pre-wrap';item.append(p);}root.append(item);}
+  document.getElementById('sam-task-more').disabled=samTaskBefore===0;
+ }catch(e){root.append(maintenanceElement('p','Task audit could not load. '+e.message));}
+}
