@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Set up your maintenance password</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script><script src="account-setup.js" defer></script></head>
+<body><main><h1>Set up your maintenance password</h1><p>Use your own approved Google identity once to prove ownership. No emails are sent. You can then use a password on the new portal.</p>
+<p id="setup-status" role="status">Preparing identity verification…</p><div id="setup-google"></div><button id="setup-retry" type="button" hidden>Restart identity check</button>
+<form id="setup-form" hidden><p id="setup-identity"></p><label>New password (15–128 characters) <input id="setup-password" type="password" minlength="15" maxlength="128" autocomplete="new-password" required></label><label>Confirm password <input id="setup-confirm" type="password" minlength="15" maxlength="128" autocomplete="new-password" required></label><button id="setup-submit" type="submit">Enroll only my account</button></form>
+<section id="setup-recovery" hidden><h2>Save your private recovery codes</h2><p>Store these in your password manager. They are shown once. Do not paste them into chat. Using one replaces all old codes and revokes your portal sessions.</p><pre id="setup-codes"></pre></section>
+<p><a href="https://storybook-webhook.vercel.app/maintenance/" rel="noreferrer">Open password sign-in</a></p><p><a href="./" rel="noreferrer">Return to existing Google portal</a></p></main></body></html>
