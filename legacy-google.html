@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Storybook Escapes — Maintenance</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>if(window.pdfjsLib)pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="login-screen">
+  <div class="login-box">
+    <h1>Storybook Escapes</h1>
+    <p>Maintenance Portal — Sign in to continue</p>
+    <div id="g_id_signin"></div>
+  </div>
+</div>
+<div id="app">
+  <header>
+    <div class="hbrand">
+      <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAQFUlEQVR4nO1ba3RUVZb+9rlVlfdDMLx8jA8abKK97BZblMakgAZEZ+xe3VWtJqlKoiQSfLSiPTO9ZtbNnbWc1lFRIFWheAYEnalqxx4dAUlVbiIRUdHWRrK6ZRBGRh7hEZKQVFJ179l7fxxSpYYQwjMof+pb61b9c+t839n7u/v7DoD/R/cCM8ChI1d/9gsnTHrRlXKq9uL8DwnAIVUFMCP+0rGCufSOuaFo4t7J8Z0SIB/1goiYpcl8AqKJe/1z/M4Ioqt5Nqf2YNRWFc7IGpI2EyQaE9/U99vvOyFAMOhSnFqDUVt7r7HbbatO2PSMBGIkTmsalpaM6WmKtSMV9VwzNWrqnuf2BaY+tem39kgeHzJi17PBJ+/es//nIl3RCbLjQOFMLIFZVqs9pSo2aSc4rcjLePNTSqU6es/KfrAZ6VUW6VKLXS1OOVATSGBwnokOGoeyc9ujyPVY7qy54sYQ4IwHUOne33p73wMTszJSNMcOodj68ck59oPhWELnZ5Lsk43qABTN3E6EDTAyCgwgAqFkQRSBpeX7F8j8CiaCKkFvAFZIX0h1OWwArldWrvCPsyconzPgi2mXMS02x/b1h8M2S5edM9B+m5LBdpn3ufMR/tG//Bl/xVQZhkiLwcyHE7WBuYpgv5JWv2mC1sTZZLldQJlaaAYyrZ5d4uuKdlgDMIFSqVI9dDh7BepLDPqG72/hMUeh7DPrQNI21gsQR0+QcUjCcmbLBYBLUyiz3SMlb0xX67I7Zq762iI5oSZ8LQpEQ1GaYWGMIen3qrGX7j/9dVdRX1otvvPkRAlzB4y1m7fxHk1J+MMR0OgeWRZ6OAKSriY1LxOd5LT016b62zu7ujFRHUkc0FmdGqxCUwRImCPvBfIiBViReh8kAkA3GMCGEA4zDIGwm0Jr82SveAIDGpaVO05SzhBBjTEN+yeDauJSN9uavtp8qM9SrXOmGSB9mSDMlZtgP/s3jVx4gGlhMGbAAVj2v1lf0THZ6ym+7YgZSkuxo7+g+xMQ6kahDXL4PdP6X85HQ0W97xjurCtMcR3Etk3IbQNOJeCKB7AAiRFiYV16zCQAaAp5pUoppknk0wEwk9kHy/zCjGQq3ksndUBSY0kwGC5sQFCPwlwejnU3uuaHoQDkNWICeXN7YsLCwJCMteXl3zOgGsMWU8A+/vOP3N7pDsdP50b6o95f+ECTvh6ApLAFA1oMRclas3Gy12bCwdJRDiQ+XJFJJSDIlxRwKH+lsdxycMbd3uV07vyDT4VAyUodGD9/hHpgQpxTACnrvLPDclZKsvC2EoO7u+EbJFCCmZggkEyFZgiUxTGbJColjJmsyTAAQxFISS5aCFWGyNBVpU9AlJbdHY0bUrtgvsztovABmMOFWZs5k4M+Q/KEgfMqsbGc2D0o7t7NiN+xx0yEhsqQpR5LCKWxSVBE4EIvadk5/clnLQINhvwL0kOc6n3emzS6WS0ayYZgAEYiRJgQpkhkASwb1vPoCgNgESBIgmTnxFzCRuAyATIANEJkEmGA2mChKQAtLbiMiIsJQACmSQSCOAdRJ4BYp0SYUdDBTTBCxhDSJqcmEsT0mk/ZCdLWl7f+6faA7ygG5QG2g6Oohit3Y1RIzsrKTCAkW8bR49JjK7XE6VuhIUbIkcAAZ9svkHgBdR1s4py2Vo0My+eqR+7hpG3DdqMu4fcxIPnCgiV0XeO3vi8FVXu4BA1SpqlQJINTURHAl7rv6/AOEVYzJ2dZM+ciXqNQYBJyX3aR13sfMdPyFM7vQe+H464LjfwGt4mD6pZ1APgAAAABJRU5ErkJggg==" class="hlogo" alt="Storybook Escapes">
+      <div class="hdiv"></div>
+      <span class="hsub">Maintenance</span>
+      <span id="sync-status" class="sync-dot sync-ok" title="Connected — saves are working"></span>
+    </div>
+    <div class="hnav">
+      <button class="nav-btn active" onclick="switchView('tasks',this)">Tasks</button>
+      <button class="nav-btn" onclick="switchView('history',this)">Service History</button>
+      <button class="nav-btn" onclick="switchView('vendors',this)">Vendors</button>
+      <button class="nav-btn" onclick="switchView('reviews',this)">Reviews</button>
+      <!-- SUNSET 2026-10-04: Replacements tab retired — buying now lives on Tasks (shopping list + task window). View + code kept. -->
+      <button class="nav-btn" style="display:none" onclick="switchView('replacements',this)">Replacements</button>
+      <button class="nav-btn" onclick="switchView('properties',this)">Properties</button>
+      <button class="nav-btn" onclick="switchView('projects',this)">Projects</button>
+      <button class="nav-btn" onclick="switchView('sam-activity',this)">Sam Activity</button>
+      <button class="nav-btn" onclick="switchView('settings',this)">Settings</button>
+    </div>
+    <div class="hactions">
+      <button class="btn btn-g" onclick="openAddTask()">+ New Task</button>
+    </div>
+  </header>
+  <main>
+    <div class="view active" id="view-tasks">
+      <!-- Alerts -->
+      <div id="dr-wrap"></div>
+      <div id="cq-wrap"></div>
+      <div id="maintenance-proposals"></div>
+      <div id="maintenance-task-proposals"></div>
+      <div id="hb-wrap"></div>
+      <div id="vr-wrap"></div>
+      <div id="vdn-wrap"></div>
+      <div id="vsc-wrap"></div>
+      <div id="ub-wrap"></div>
+
+      <!-- 3-Week Calendar -->
+      <div id="three-week-cal" style="margin-bottom:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+          <div class="cal-legend" id="cal-legend" style="margin-bottom:0"></div>
+          <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+            <a onclick="goToRecurring()" style="font-size:.72rem;color:var(--text3);cursor:pointer;text-decoration:none;border-bottom:1px dashed var(--text3)">Recurring Tasks</a>
+            <div class="cal-toggle">
+              <label onclick="toggleShowDone()" style="font-size:.74rem;color:var(--text2);cursor:pointer;user-select:none">Show completed</label>
+              <div class="toggle-track" id="toggle-done" onclick="toggleShowDone()"><div class="toggle-thumb"></div></div>
+            </div>
+          </div>
+        </div>
+        <div id="cal-container"></div>
+      </div>
+
+      <!-- Day Detail Panel (shows when a day is clicked) -->
+      <div id="day-detail-panel" style="display:none;margin-bottom:20px;background:var(--surface);border:1px solid var(--gold);border-radius:var(--radius);padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.2)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div id="day-detail-title" style="font-family:'Cormorant Garamond',serif;font-size:1.15rem;color:var(--gold);font-weight:600"></div>
+          <button onclick="closeDayDetail()" style="background:none;border:none;color:var(--text2);font-size:1.2rem;cursor:pointer;padding:2px 6px">&times;</button>
+        </div>
+        <div id="day-detail-tasks"></div>
+      </div>
+
+      <!-- Shopping List (2026-10-04) — open tasks with something not yet bought -->
+      <div id="shop-wrap"></div>
+
+      <!-- Task Lists -->
+      <input type="hidden" id="search-input" value="">
+      <div id="task-toolbar"></div>
+      <div id="task-list"></div>
+      <!-- Bulk Action Bar (multi-select) -->
+      <div id="bulk-bar" class="bulk-bar" style="display:none">
+        <div class="bulk-left">
+          <span id="bulk-count" class="bulk-count">0 selected</span>
+          <button class="btn bulk-sm" onclick="bulkSelectAll()">All</button>
+          <button class="btn bulk-sm" onclick="bulkDeselectAll()">None</button>
+        </div>
+        <div class="bulk-actions">
+          <button class="btn" onclick="bulkSchedule()">📅 Schedule</button>
+          <button class="btn" onclick="bulkAssignVendor()">👤 Vendor</button>
+          <button class="btn" onclick="bulkToggleUrgent()">🔴 Urgent</button>
+          <button class="btn btn-g" onclick="bulkMarkComplete()">✓ Complete</button>
+          <button class="btn btn-red" onclick="bulkDelete()">Delete</button>
+          <button class="btn bulk-sm" onclick="exitSelectMode()">✕ Done</button>
+        </div>
+      </div>
+      <!-- Bulk Action Modal -->
+      <div class="mo" id="bulk-modal">
+        <div class="modal" style="max-width:520px">
+          <div class="mhdr">
+            <div class="mtitle" id="bulk-modal-title">Bulk Action</div>
+            <button class="mclose" onclick="closeModal('bulk-modal')">&#x2715;</button>
+          </div>
+          <div id="bulk-modal-body"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hidden: keep cal-title for compatibility but it's no longer shown -->
+    <div id="cal-title" style="display:none"></div>
+
+    <div class="view" id="view-recurring">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+        <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--green);font-weight:600">Recurring Tasks</h2>
+        <button class="btn btn-g" onclick="openAddRecurring()">+ Add Recurring Task</button>
+      </div>
+      <div id="rec-container"></div>
+    </div>
+
+    <div class="view" id="view-history">
+      <div id="hist-container"></div>
+    </div>
+
+    <div class="view" id="view-reviews">
+      <div class="rv-wrap">
+        <!-- Primary section tabs -->
+        <div class="rv-section-tabs">
+          <button class="rv-section-tab active" id="rv-sec-tab-reviews"  onclick="rvSetSection('reviews')">Property Reviews</button>
+          <button class="rv-section-tab"        id="rv-sec-tab-cleaning" onclick="rvSetSection('cleaning')">Cleaning Flags &amp; History</button>
+        </div>
+
+        <!-- Section: Property Reviews -->
+        <div id="rv-section-reviews">
+        <!-- Main: sortable property list with sparklines -->
+        <div id="rv-main">
+          <div class="rv-header">
+            <h2 class="rv-title">Property Reviews</h2>
+            <div class="rv-toolbar">
+              <label class="rv-sort-lbl">Sort
+                <select id="rv-sort" onchange="rvRender()">
+                  <option value="lowAvg12" selected>Lowest 12-mo avg (within neighborhood)</option>
+                  <option value="drop">Biggest 4-wk drop</option>
+                  <option value="lowAvg4">Lowest 4-wk avg</option>
+                  <option value="alpha">Alphabetical</option>
+                  <option value="reviews">Most reviews</option>
+                </select>
+              </label>
+              <button class="btn rv-refresh" onclick="rvFetchAll(true)" title="Refresh from Hospitable">&#x21bb; Refresh</button>
+              <span id="rv-status" class="rv-status"></span>
+            </div>
+          </div>
+
+          <!-- Portfolio overview: 3 toggleable views -->
+          <div class="rv-portfolio">
+            <div class="rv-portfolio-head">
+              <h3 class="rv-portfolio-title">Portfolio Trend &mdash; last 52 weeks</h3>
+              <div class="rv-tabs" id="rv-tabs">
+                <button class="rv-tab active" data-view="avg"   onclick="rvSetPortfolioView('avg')">Portfolio Average</button>
+                <button class="rv-tab"        data-view="all"   onclick="rvSetPortfolioView('all')">All Properties</button>
+                <button class="rv-tab"        data-view="byNb"  onclick="rvSetPortfolioView('byNb')">By Neighborhood</button>
+              </div>
+            </div>
+            <div id="rv-portfolio-body"></div>
+          </div>
+
+          <div id="rv-list"></div>
+        </div>
+
+        <!-- Drill-in: single property line chart -->
+        <div id="rv-drill" style="display:none">
+          <button class="btn rv-back" onclick="rvBack()">&larr; Back to all properties</button>
+          <div id="rv-drill-body"></div>
+        </div>
+        </div><!-- /rv-section-reviews -->
+
+        <!-- Section: Cleaning Flags &amp; History -->
+        <div id="rv-section-cleaning" style="display:none">
+          <div class="cl-wrap">
+            <div id="cl-hero"></div>
+            <div id="cl-toolbar" style="margin-bottom:10px">
+              <span id="cl-status" style="font-size:.7rem;color:var(--text2)"></span>
+              <select id="cl-prop-filter" onchange="renderCleaningLog()" style="display:none"></select>
+            </div>
+            <div id="cl-picker"></div>
+            <div id="cl-summary"></div>
+            <div id="cl-log"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="view" id="view-replacements">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+        <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--green);font-weight:600">Replacements & Purchases</h2>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="rp-prop-filter" onchange="renderReplacements()" style="padding:6px 10px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.82rem;font-family:inherit">
+            <option value="all">All Properties</option>
+          </select>
+          <select id="rp-purchaser-filter" onchange="renderReplacements()" style="padding:6px 10px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.82rem;font-family:inherit">
+            <option value="all">All Buyers</option>
+            <option value="owner">I'm Buying</option>
+            <option value="vendor">Vendor Buys</option>
+          </select>
+          <button class="btn btn-g" onclick="openNewReplacementTask()">+ New Replacement</button>
+        </div>
+      </div>
+      <!-- Phase filter tabs -->
+      <div id="rp-phase-tabs" style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap">
+        <button class="btn rp-phase-btn" onclick="rpSetPhase('needed')" id="rp-tab-needed" style="font-size:.76rem;padding:5px 14px">Needs Buying</button>
+        <button class="btn rp-phase-btn" onclick="rpSetPhase('purchased')" id="rp-tab-purchased" style="font-size:.76rem;padding:5px 14px">Purchased — Deliver</button>
+        <button class="btn rp-phase-btn" onclick="rpSetPhase('delivered')" id="rp-tab-delivered" style="font-size:.76rem;padding:5px 14px">Delivered</button>
+        <button class="btn rp-phase-btn" onclick="rpSetPhase('all')" id="rp-tab-all" style="font-size:.76rem;padding:5px 14px">All</button>
+      </div>
+      <div id="rp-list"></div>
+      <div id="rp-purchased" style="margin-top:24px"></div>
+    </div>
+
+    <div class="view" id="view-vendors">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px;flex-wrap:wrap">
+        <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--green);font-weight:600">Vendor Directory</h2>
+        <button class="btn btn-g" onclick="openAddVendor()">+ Add Vendor</button>
+      </div>
+      <div class="vd-search-row">
+        <input type="text" id="vendor-search" class="vd-search" placeholder="Search vendors by name, role, or phone…" oninput="onVendorSearch(this.value)" autocomplete="off">
+        <button class="vd-search-clear" id="vendor-search-clear" onclick="clearVendorSearch()" title="Clear search" style="display:none">&#x2715;</button>
+      </div>
+      <div id="vendor-dir"></div>
+    </div>
+
+    <div class="view" id="view-properties">
+      <div id="tv-wrap" class="tv-wrap"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+        <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--green);font-weight:600">Property Bible</h2>
+        <div class="pp-tabs">
+          <button class="pp-tab active" id="pp-tab-list" onclick="ppSwitchTab('list')">Cabins</button>
+          <!-- SUNSET 2026-10-04 (filter service): tab hidden, kept in place -->
+          <button class="pp-tab" id="pp-tab-inv" style="display:none" onclick="ppSwitchTab('inventory')">Filter Inventory</button>
+          <button class="pp-tab" id="pp-tab-inbox" onclick="ppSwitchTab('inbox')">Needs Attention <span class="pp-badge" id="pp-inbox-badge">0</span></button>
+        </div>
+      </div>
+      <div id="pp-list-wrap"></div>
+      <div id="pp-detail-wrap" style="display:none"></div>
+      <div id="pp-inv-wrap" style="display:none"></div>
+      <div id="pp-inbox-wrap" style="display:none"></div>
+    </div>
+
+    <div class="view" id="view-projects">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+        <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--green);font-weight:600">Projects</h2>
+        <button class="btn btn-g" onclick="pjOpenImport()">+ New Project</button>
+      </div>
+      <div id="pj-list"></div>
+      <div id="pj-detail" style="display:none"></div>
+    </div>
+
+    <!-- PDF Viewer Modal -->
+    <div class="mo" id="pj-pdf-modal">
+      <div style="background:var(--white);border-radius:14px;width:92%;max-width:960px;height:85vh;display:flex;flex-direction:column;margin:auto;box-shadow:var(--shadow-md);overflow:hidden">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 20px;background:var(--surface2);border-bottom:1px solid var(--border)">
+          <span id="pj-pdf-title" style="font-weight:600;font-size:.88rem;color:var(--green)">Source Document</span>
+          <span id="pj-pdf-page" style="font-size:.72rem;color:var(--green);font-weight:600;background:var(--green-light);padding:3px 10px;border-radius:12px"></span>
+          <button class="mclose" onclick="closeModal('pj-pdf-modal')" style="font-size:1.4rem">&times;</button>
+        </div>
+        <div style="flex:1;overflow:hidden"><iframe id="pj-pdf-frame" src="" style="width:100%;height:100%;border:none"></iframe></div>
+      </div>
+    </div>
+
+    <!-- Project Vendor Picker Modal -->
+    <div class="mo" id="pj-vendor-picker-modal">
+      <div class="modal" style="max-width:420px;max-height:80vh;display:flex;flex-direction:column">
+        <div class="mhdr">
+          <div class="mtitle">Add Vendor to Project</div>
+          <button class="mclose" onclick="closeModal('pj-vendor-picker-modal')">&#x2715;</button>
+        </div>
+        <div style="padding:10px 12px;border-bottom:1px solid var(--border)">
+          <input type="text" id="pj-vendor-search" placeholder="Search vendors..." style="width:100%;font-size:.82rem" oninput="pjFilterVendorPicker(this.value)">
+        </div>
+        <div id="pj-vendor-picker-list" style="overflow-y:auto;flex:1"></div>
+      </div>
+    </div>
+
+    <!-- Project Import Modal -->
+    <div class="mo" id="pj-import-modal">
+      <div class="modal" style="max-width:760px">
+        <div class="mhdr">
+          <div class="mtitle" id="pj-import-title">New Project</div>
+          <button class="mclose" onclick="closeModal('pj-import-modal')">&#x2715;</button>
+        </div>
+        <div id="pj-import-body"></div>
+      </div>
+    </div>
+
+    <div class="view" id="view-sam-activity">
+      <h2>Sam Activity</h2>
+      <p>Actions, factual reasons and verification. External outcomes are reported by the authenticated writer; the maintenance site does not independently verify Hospitable actions. Times below are UTC.</p>
+      <p>Intent means a planned attempt, not proof it was sent. Uncertain outcomes require checking the source before retrying. Corrections preserve the original entry.</p>
+      <details style="padding:12px;border:1px solid var(--border);margin:12px 0">
+        <summary>Review and import historical activity</summary>
+        <p>This records earlier evidence only. It does not resolve messages, send replies or change tasks. Unknown action times stay unknown; the server records the import time separately.</p>
+        <label>Choose a reviewed historical activity file (up to 25 records)
+          <input id="sam-history-file" type="file" accept="application/json,.json" onchange="samHistoryChooseFile(this)">
+        </label>
+        <button class="btn" onclick="samHistoryRestore()">Restore pending import</button>
+        <p id="sam-history-status" role="status"></p>
+        <div id="sam-history-preview"></div>
+      </details>
+      <button class="btn" onclick="samActivityLoad();samTaskActivityLoad()">Refresh</button>
+      <label>Filter loaded entries by batch, operation, property or outcome <input id="sam-activity-filter" type="search" oninput="samActivityRender()"></label>
+      <p id="sam-activity-status" role="status"></p>
+      <div id="sam-activity-results"></div>
+      <button class="btn" id="sam-activity-more" onclick="samActivityLoad(true)">Load older activity</button>
+      <h3>Verified maintenance task commits</h3>
+      <p>These receipts were stored with task changes. They are separate from external action reports.</p>
+      <div id="sam-task-activity"></div>
+      <button class="btn" id="sam-task-more" onclick="samTaskActivityLoad(true)">Load older task audit</button>
+    </div>
+    <div class="view" id="view-settings">
+      <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--green);font-weight:600;margin-bottom:18px">Settings</h2>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px">
+        <h3 style="font-size:.88rem;font-weight:600;color:var(--green);margin-bottom:4px">SMS Message Template</h3>
+        <p style="font-size:.76rem;color:var(--text2);margin-bottom:14px;line-height:1.5">Customize the default text message sent to vendors. Use placeholders below and they'll be replaced with real values when composing a message.</p>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+          <span class="badge" style="background:var(--green-light);color:var(--green);border:1px solid var(--border);font-size:.68rem;cursor:pointer" onclick="insertPlaceholder('sms-template','{vendor_first_name}')">{vendor_first_name}</span>
+          <span class="badge" style="background:var(--green-light);color:var(--green);border:1px solid var(--border);font-size:.68rem;cursor:pointer" onclick="insertPlaceholder('sms-template','{property_name}')">{property_name}</span>
+          <span class="badge" style="background:var(--green-light);color:var(--green);border:1px solid var(--border);font-size:.68rem;cursor:pointer" onclick="insertPlaceholder('sms-template','{address}')">{address}</span>
+          <span class="badge" style="background:var(--green-light);color:var(--green);border:1px solid var(--border);font-size:.68rem;cursor:pointer" onclick="insertPlaceholder('sms-template','{door_code}')">{door_code}</span>
+          <span class="badge" style="background:var(--green-light);color:var(--green);border:1px solid var(--border);font-size:.68rem;cursor:pointer" onclick="insertPlaceholder('sms-template','{issue}')">{issue}</span>
+          <span class="badge" style="background:var(--green-light);color:var(--green);border:1px solid var(--border);font-size:.68rem;cursor:pointer" onclick="insertPlaceholder('sms-template','{guest_name}')">{guest_name}</span>
+          <span class="badge" style="background:var(--green-light);color:var(--green);border:1px solid var(--border);font-size:.68rem;cursor:pointer" onclick="insertPlaceholder('sms-template','{date_info}')">{date_info}</span>
+          <span class="badge" style="background:var(--green-light);color:var(--green);border:1px solid var(--border);font-size:.68rem;cursor:pointer" onclick="insertPlaceholder('sms-template','{urgent_notice}')">{urgent_notice}</span>
+        </div>
+        <textarea id="sms-template" style="width:100%;min-height:180px;font-family:'DM Sans',sans-serif;font-size:.82rem;padding:12px;border:1px solid var(--border);border-radius:8px;resize:vertical;line-height:1.6"></textarea>
+        <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
+          <button class="btn" onclick="resetSmsTemplate()">Reset to Default</button>
+          <button class="btn btn-g" onclick="saveSmsTemplate()">Save Template</button>
+        </div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px">
+        <h3 style="font-size:.88rem;font-weight:600;color:var(--green);margin-bottom:4px">Combined SMS Template</h3>
+        <p style="font-size:.76rem;color:var(--text2);margin-bottom:14px;line-height:1.5">Customize the message sent when a vendor has multiple tasks on the same day. The job sheet link is automatically appended.</p>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+          <span class="badge" style="background:var(--green-light);color:var(--green);border:1px solid var(--border);font-size:.68rem;cursor:pointer" onclick="insertPlaceholder('sms-combined-template','{vendor_first_name}')">{vendor_first_name}</span>
+          <span class="badge" style="background:var(--green-light);color:var(--green);border:1px solid var(--border);font-size:.68rem;cursor:pointer" onclick="insertPlaceholder('sms-combined-template','{task_count}')">{task_count}</span>
+          <span class="badge" style="background:var(--green-light);color:var(--green);border:1px solid var(--border);font-size:.68rem;cursor:pointer" onclick="insertPlaceholder('sms-combined-template','{date}')">{date}</span>
+          <span class="badge" style="background:var(--green-light);color:var(--green);border:1px solid var(--border);font-size:.68rem;cursor:pointer" onclick="insertPlaceholder('sms-combined-template','{link_text}')">{link_text}</span>
+          <span class="badge" style="background:var(--green-light);color:var(--green);border:1px solid var(--border);font-size:.68rem;cursor:pointer" onclick="insertPlaceholder('sms-combined-template','{signoff}')">{signoff}</span>
+        </div>
+        <textarea id="sms-combined-template" style="width:100%;min-height:120px;font-family:'DM Sans',sans-serif;font-size:.82rem;padding:12px;border:1px solid var(--border);border-radius:8px;resize:vertical;line-height:1.6"></textarea>
+        <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
+          <button class="btn" onclick="resetCombinedSmsTemplate()">Reset to Default</button>
+          <button class="btn btn-g" onclick="saveCombinedSmsTemplate()">Save Template</button>
+        </div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px">
+        <h3 style="font-size:.88rem;font-weight:600;color:var(--green);margin-bottom:4px">App Logo</h3>
+        <p style="font-size:.76rem;color:var(--text2);margin-bottom:14px;line-height:1.5">Upload a PNG or JPG image to use as the header logo and browser favicon. Recommended: square image, at least 128×128px.</p>
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+          <img id="logo-preview" src="" style="height:48px;width:48px;object-fit:contain;border:1px solid var(--border);border-radius:8px;background:var(--green);padding:4px;display:none">
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <label class="btn" style="cursor:pointer;display:inline-block;text-align:center">
+              Choose Image
+              <input type="file" id="logo-upload" accept="image/png,image/jpeg" style="display:none" onchange="handleLogoUpload(this)">
+            </label>
+            <button class="btn btn-red" onclick="removeLogo()" id="logo-remove-btn" style="display:none">Remove Logo</button>
+          </div>
+        </div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px">
+        <h3 style="font-size:.88rem;font-weight:600;color:var(--green);margin-bottom:4px">Product Roadmap</h3>
+        <p style="font-size:.76rem;color:var(--text2);margin-bottom:14px;line-height:1.5">Track ideas, feature requests, and accomplishments. Drag items between sections to reorganize.</p>
+        <div class="rm-tabs" id="rm-tabs">
+          <button class="rm-tab active" data-rm="active" onclick="rmSwitchTab('active')">Active <span class="rm-badge" id="rm-cnt-active">0</span></button>
+          <button class="rm-tab" data-rm="completed" onclick="rmSwitchTab('completed')">Completed <span class="rm-badge" id="rm-cnt-completed">0</span></button>
+          <button class="rm-tab" data-rm="dismissed" onclick="rmSwitchTab('dismissed')">Dismissed <span class="rm-badge" id="rm-cnt-dismissed">0</span></button>
+        </div>
+        <div class="rm-add" id="rm-add-wrap">
+          <input type="text" id="rm-input" placeholder="Add an idea or feature request…" onkeydown="if(event.key==='Enter')rmAdd()">
+          <button class="btn btn-g" onclick="rmAdd()">Add</button>
+        </div>
+        <div class="rm-list" id="rm-list"></div>
+        <div class="rm-add-section" id="rm-add-section-wrap">
+          <input type="text" id="rm-section-input" placeholder="Add a new section…" onkeydown="if(event.key==='Enter')rmAddSection()">
+          <button class="btn" onclick="rmAddSection()">+ Section</button>
+        </div>
+      </div>
+
+      <!-- ── Vendor Task Sheet Fields ── -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px">
+        <h3 style="font-size:.88rem;font-weight:600;color:var(--green);margin-bottom:4px">Vendor Task Sheet — Property Info</h3>
+        <p style="font-size:.76rem;color:var(--text2);margin-bottom:14px;line-height:1.5">Choose which property details are shown at the top of vendor task sheets. Additional fields are pulled from Property Bible profiles.</p>
+        <div id="set-vs-fields" style="display:flex;flex-direction:column;gap:8px"></div>
+        <div style="display:flex;justify-content:flex-end;margin-top:14px">
+          <button class="btn btn-g" onclick="saveVendorSheetFieldSettings()">Save Field Settings</button>
+        </div>
+      </div>
+
+      <!-- ── Vendor Categories ── -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px">
+        <h3 style="font-size:.88rem;font-weight:600;color:var(--green);margin-bottom:4px">Vendor Categories</h3>
+        <p style="font-size:.76rem;color:var(--text2);margin-bottom:14px;line-height:1.5">Manage the categories used to organize vendors and tasks. Changes update all dropdowns throughout the app.</p>
+        <div id="set-vcat-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="text" id="set-vcat-new-id" placeholder="ID (e.g. roofing)" style="width:140px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.78rem;font-family:inherit">
+          <input type="text" id="set-vcat-new-label" placeholder="Label (e.g. Roofing)" style="width:180px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.78rem;font-family:inherit">
+          <button class="btn btn-g" onclick="settingsAddCategory()" style="font-size:.76rem">+ Add</button>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:14px">
+          <button class="btn btn-g" onclick="saveCategorySettings()">Save Categories</button>
+        </div>
+      </div>
+
+      <!-- ── Project Types ── -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px">
+        <h3 style="font-size:.88rem;font-weight:600;color:var(--green);margin-bottom:4px">Project Types</h3>
+        <p style="font-size:.76rem;color:var(--text2);margin-bottom:14px;line-height:1.5">Manage the types available when creating projects. Types with "Has Report" enabled will show the PDF import wizard; others skip straight to manual item entry.</p>
+        <div id="set-ptype-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="text" id="set-ptype-new-id" placeholder="ID (e.g. turnover)" style="width:140px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.78rem;font-family:inherit">
+          <input type="text" id="set-ptype-new-label" placeholder="Label (e.g. Turnover)" style="width:180px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.78rem;font-family:inherit">
+          <label style="font-size:.74rem;color:var(--text2);display:flex;align-items:center;gap:4px"><input type="checkbox" id="set-ptype-new-report"> Has Report</label>
+          <button class="btn btn-g" onclick="settingsAddProjectType()" style="font-size:.76rem">+ Add</button>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:14px">
+          <button class="btn btn-g" onclick="saveProjectTypeSettings()">Save Project Types</button>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- TASK MODAL -->
+<div class="mo" id="task-modal">
+  <div class="modal">
+    <div class="mhdr">
+      <div class="mtitle" id="task-modal-title">New Task</div>
+      <button class="mclose" onclick="closeModal('task-modal')">&#x2715;</button>
+    </div>
+    <div class="utog" onclick="toggleUrgent()">
+      <input type="checkbox" id="f-urgent" onclick="event.stopPropagation()">
+      <label for="f-urgent">Mark as Urgent — requires same-day or immediate response</label>
+    </div>
+    <div class="fg">
+      <div class="fgr">
+        <label>Property</label>
+        <select id="f-property" onchange="onPropChange()"></select>
+      </div>
+      <div class="fgr">
+        <label>Reported By (Guest)</label>
+        <input type="text" id="f-guest" placeholder="Guest name">
+      </div>
+      <div class="fgr full">
+        <label>Problem Description</label>
+        <textarea id="f-problem" rows="3" placeholder="Describe the issue..."></textarea>
+      </div>
+      <div class="fgr">
+        <label>Category</label>
+        <select id="f-category" onchange="onCatChange()">
+          <option value="">Select category</option>
+          <option value="replacement">Replacement</option>
+          <option value="cleaning">Cleaning</option>
+          <option value="handyman">Handyman</option>
+          <option value="plumbing">Plumbing</option>
+          <option value="hvac">HVAC</option>
+          <option value="electrical">Electrical</option>
+          <option value="pest">Pest Control</option>
+          <option value="landscaping">Landscaping</option>
+          <option value="hot_tub">Hot Tub</option>
+          <option value="pool">Pool</option>
+          <option value="arcade">Arcade / Billiards</option>
+          <option value="septic">Septic</option>
+          <option value="water">Water Filtration</option>
+          <option value="bed_bugs">Bed Bugs</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="fgr">
+        <label>Status</label>
+        <select id="f-status">
+          <option value="open">Open</option>
+          <option value="scheduled">Scheduled</option>
+          <option value="in_progress">In Progress</option>
+          <option value="complete">Complete</option>
+          <option value="resolved_by_guest">Resolved by Guest</option>
+        </select>
+      </div>
+      <div class="fgr full">
+        <label>Scheduled Fix Date</label>
+        <div class="dp-wrap" id="f-dp-wrap">
+          <button type="button" class="dp-trigger" id="f-dp-btn" onclick="toggleDP('f')">
+            <span id="f-dp-display" class="dp-ph">Select a date...</span>
+            <span style="color:var(--text3);font-size:.8rem">&#x25BC;</span>
+          </button>
+          <div class="dp-popup" id="f-dp-popup" style="display:none"></div>
+        </div>
+        <input type="hidden" id="f-date">
+      </div>
+      <div class="fgr full" id="f-fs-bundler"></div>
+      <div class="fgr full" id="f-vendor-suggest"></div>
+      <div class="fgr full">
+        <label>Assigned Vendor</label>
+        <input type="text" id="f-vendor" placeholder="Vendor name">
+      </div>
+      <div class="fgr full">
+        <label>Need to buy? <span style="font-weight:400;opacity:.7">(optional — adds it to the shopping list)</span></label>
+        <input type="text" id="f-buy" placeholder="e.g. Coffee maker, baking pans, broom">
+      </div>
+      <div class="fgr full">
+        <label>Notes <span style="font-weight:400;opacity:.7">(the assigned vendor can see these)</span></label>
+        <textarea id="f-notes" rows="2" placeholder="Notes for your team..."></textarea>
+      </div>
+    </div>
+    <div style="display:flex;gap:9px;margin-top:20px;justify-content:flex-end">
+      <button class="btn" onclick="closeModal('task-modal')">Cancel</button>
+      <button class="btn btn-g" id="f-save-btn" onclick="saveTask()">Save Task</button>
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="mo" id="detail-modal">
+  <div class="modal">
+    <div class="modal-body">
+
+    <!-- HEADER: property as title, badges, description, vendor+date -->
+    <div class="mhdr" style="align-items:flex-start">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+          <span id="d-prop" class="d-prop-hdr" title="Click to change property" onclick="document.getElementById('d-prop-select').style.display='';this.style.display='none'"></span>
+          <select id="d-prop-select" style="display:none;font-size:.82rem;font-family:inherit;padding:3px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);max-width:280px" onchange="confirmPropertyChange(this.value)"></select>
+        </div>
+        <!-- Badge row: category | status | urgent — rendered by renderDetailBadges() -->
+        <div id="d-badge-row" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;position:relative"></div>
+        <!-- Description as small paragraph -->
+        <div class="d-task-desc" id="d-title" title="Click to edit description" onclick="taskStartEditTitle()"></div>
+        <textarea id="d-title-input" rows="3" style="display:none;font-family:'DM Sans',sans-serif;font-size:.85rem;color:var(--text);border:1px solid var(--gold);border-radius:var(--radius);padding:6px 10px;width:100%;background:var(--surface2);outline:none;resize:vertical;line-height:1.45" onblur="taskSaveTitle()" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();this.blur();}if(event.key==='Escape'){taskCancelEditTitle();}"></textarea>
+        <!-- Vendor + Schedule directly under description -->
+        <div style="display:flex;gap:10px;margin-top:10px">
+          <div class="fgr" style="flex:1;position:relative">
+            <label>Vendor</label>
+            <div class="vd-wrap" id="vd-wrap">
+              <input type="text" id="d-vendor" autocomplete="off" placeholder="Search or select..." oninput="filterVendorDD(this.value)" onfocus="openVendorDD()" onblur="setTimeout(validateVendorInput,150)">
+              <button type="button" class="vd-arrow" onclick="toggleVendorDD()">&#x25BC;</button>
+              <div class="vd-dropdown" id="vd-dropdown" style="display:none"></div>
+            </div>
+          </div>
+          <div class="fgr" style="flex:1">
+            <label>Schedule</label>
+            <div class="dp-wrap">
+              <button type="button" class="dp-trigger" id="d-dp-btn" onclick="toggleDP('d')">
+                <span id="d-dp-display" class="dp-ph">Select a date...</span>
+                <span style="color:var(--text3);font-size:.8rem">&#x25BC;</span>
+              </button>
+              <div class="dp-popup" id="d-dp-popup" style="display:none"></div>
+            </div>
+            <button type="button" id="d-clear-inline" onclick="clearDate('d')" style="display:none;margin-top:5px;background:none;border:none;color:var(--red);font-size:.72rem;font-weight:600;cursor:pointer;padding:2px 0">&#x2715; Clear date (unschedule)</button>
+            <input type="hidden" id="d-date">
+          </div>
+        </div>
+      </div>
+      <button class="mclose" onclick="closeModal('detail-modal')">&#x2715;</button>
+    </div>
+
+    <!-- Hidden selects — backing store for all updateField logic -->
+    <select id="d-status" style="display:none" onchange="updateField('status',this.value)">
+      <option value="open">Open</option>
+      <option value="scheduled">Scheduled</option>
+      <option value="in_progress">In Progress</option>
+      <option value="complete">Complete</option>
+      <option value="resolved_by_guest">Resolved by Guest</option>
+    </select>
+    <select id="d-category" style="display:none" onchange="updateField('category',this.value);onDetailCatChange(this.value)">
+      <option value="">No category</option>
+      <option value="replacement">Replacement</option>
+      <option value="cleaning">Cleaning</option>
+      <option value="handyman">Handyman</option>
+      <option value="plumbing">Plumbing</option>
+      <option value="hvac">HVAC</option>
+      <option value="electrical">Electrical</option>
+      <option value="pest">Pest Control</option>
+      <option value="landscaping">Landscaping</option>
+      <option value="hot_tub">Hot Tub</option>
+      <option value="pool">Pool</option>
+      <option value="arcade">Arcade / Billiards</option>
+      <option value="septic">Septic</option>
+      <option value="water">Water Filtration</option>
+      <option value="bed_bugs">Bed Bugs</option>
+      <option value="other">Other</option>
+    </select>
+
+    <!-- Vendor contact row (Text / Call) — populated by openDetail -->
+    <div id="d-contact-row" style="display:none;gap:8px;margin-bottom:14px"></div>
+
+    <div id="d-combine"></div>
+    <div id="d-bundle"></div>
+
+    <!-- Photos foldout -->
+    <div class="dm-foldout" id="dm-fold-photos">
+      <button class="dm-fold-trigger" onclick="toggleDMFold('dm-fold-photos')">
+        <span class="dm-fold-label">&#x1F4F7; Photos <span class="dm-fold-count" id="dm-photo-count" style="display:none"></span></span>
+        <span class="dm-fold-arrow">&#x25BA;</span>
+      </button>
+      <div class="dm-fold-body">
+        <div class="dm-fold-inner">
+          <div id="d-photo-section">
+            <div id="d-photo-gallery" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px"></div>
+            <div id="d-photo-upload">
+              <div id="d-photo-dropzone" style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px dashed var(--border);border-radius:var(--radius);background:var(--surface2);transition:border-color .2s,background .2s;cursor:pointer" onclick="document.getElementById('d-photo-input').click()">
+                <span style="font-size:.9rem">&#x1F4F7;</span>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:.72rem;font-weight:500;color:var(--green)">Attach Photo</div>
+                  <div style="font-size:.6rem;color:var(--text3)">Click, drag &amp; drop, or paste</div>
+                </div>
+                <input type="file" id="d-photo-input" accept="image/*" multiple style="display:none" onchange="uploadTaskPhotos(this.files)">
+              </div>
+              <span id="d-photo-status" style="font-size:.68rem;color:var(--text3);display:block;margin-top:4px"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Purchase Required foldout -->
+    <div class="dm-foldout" id="dm-fold-purchase">
+      <button class="dm-fold-trigger" onclick="toggleDMFold('dm-fold-purchase')">
+        <span class="dm-fold-label">&#x1F6D2; Purchase Required <span class="dm-fold-preview" id="dm-purchase-preview"></span></span>
+        <span class="dm-fold-arrow">&#x25BA;</span>
+      </button>
+      <div class="dm-fold-body">
+        <div class="dm-fold-inner" id="d-purchase-wrap">
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+            <input type="text" id="d-purchase" placeholder="e.g. Coffee maker, bath towels, 4x12 vent..." style="flex:1" onkeydown="if(event.key==='Enter')savePurchaseNote()" oninput="clearTimeout(this._debounce);this._debounce=setTimeout(()=>savePurchaseNote(),1200)">
+            <button class="btn btn-g" onclick="savePurchaseNote()" style="padding:5px 11px;font-size:.72rem;white-space:nowrap">Save</button>
+          </div>
+          <div id="d-purchase-saved" style="font-size:.62rem;color:var(--green-mid);margin-bottom:6px;display:none">Saved — on the shopping list until it's bought.</div>
+          <div id="d-purchase-workflow" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px">
+            <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:1px;font-weight:700;color:#e65100;margin-bottom:10px">Purchase</div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+              <div style="font-size:.74rem;color:var(--text2);min-width:70px">Who buys?</div>
+              <div style="display:flex;gap:4px;flex-wrap:wrap">
+                <button class="btn" id="d-purchaser-owner" onclick="setPurchaser('owner')" style="padding:3px 12px;font-size:.7rem">Me</button>
+                <button class="btn" id="d-purchaser-vendor" onclick="setPurchaser('vendor')" style="padding:3px 12px;font-size:.7rem">Vendor</button>
+              </div>
+            </div>
+            <label class="pw-bought" for="d-purch-bought">
+              <input type="checkbox" id="d-purch-bought" onchange="setPurchaseBought(this.checked)">
+              <span id="d-purch-bought-label">Bought</span>
+            </label>
+            <div id="d-purch-hint" class="pw-hint"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notes foldout -->
+    <div class="dm-foldout" id="dm-fold-notes">
+      <button class="dm-fold-trigger" onclick="toggleDMFold('dm-fold-notes')">
+        <span class="dm-fold-label">&#x1F4AC; Notes <span class="dm-fold-count" id="dm-notes-count" style="display:none"></span></span>
+        <span class="dm-fold-arrow">&#x25BA;</span>
+      </button>
+      <div class="dm-fold-body">
+        <div class="dm-fold-inner">
+          <div class="notes" id="d-notes"></div>
+          <div class="note-row" style="margin-top:8px">
+            <input type="text" id="d-note-input" placeholder="Add a note (the vendor can see it)..." onkeydown="if(event.key==='Enter')addNote('admin')">
+            <button class="btn btn-g" onclick="addNote('admin')">Add</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="d-next-co" style="font-size:.7rem;color:var(--text2);margin:2px 0 6px"></div>
+    <div id="d-guest-context"></div>
+    <div class="stitle" id="d-vendors-title"></div>
+    <div id="d-vendors"></div>
+    <div id="d-vnotes-section" style="display:none"><div class="stitle">Vendor Completion Notes</div>
+    <textarea id="d-vnotes" rows="3" placeholder="Vendor fills this out after completing work..." onchange="updateField('vendorNotes',this.value)" oninput="clearTimeout(this._debounce);this._debounce=setTimeout(()=>updateField('vendorNotes',this.value),800)"></textarea></div>
+    <div id="d-vendor-done-notice" style="display:none;background:var(--green-light);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;margin-bottom:8px">
+      <div style="font-size:.76rem;font-weight:600;color:var(--green-mid);margin-bottom:2px">&#x2713; Vendor marked this complete</div>
+      <div style="font-size:.7rem;color:var(--text2)">Submitted at <span class="vd-time"></span>. Review photos and notes before approving.</div>
+    </div>
+    <div id="d-guest-comm-section"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-red" onclick="deleteTask()">Delete Task</button>
+      <div style="display:flex;gap:7px;align-items:center">
+        <div style="position:relative">
+          <button class="btn" onclick="toggleAddToProject(this)" id="add-to-project-btn">+ Project</button>
+          <div id="atp-dropdown" style="display:none;position:absolute;bottom:calc(100% + 6px);left:0;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-md);min-width:220px;z-index:200;padding:6px 0;max-height:240px;overflow-y:auto"></div>
+        </div>
+        <button class="btn" onclick="closeModal('detail-modal')">Close</button>
+        <button class="btn btn-g" onclick="markComplete()" id="complete-btn">Mark Complete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- VENDOR DAY MODAL -->
+<div class="mo" id="vendor-day-modal">
+  <div class="modal">
+    <div class="mhdr" style="display:flex;justify-content:space-between;align-items:center">
+      <div class="mtitle" id="vd-title" style="font-size:1.1rem"></div>
+      <button class="mclose" onclick="closeModal('vendor-day-modal')">&#x2715;</button>
+    </div>
+    <div id="vd-contact-row"></div>
+    <div id="vd-combined-sms"></div>
+    <div style="display:flex;justify-content:space-between;gap:7px;margin-top:4px">
+      <button class="btn btn-red" style="font-size:.68rem;padding:6px 10px" onclick="closeModal('vendor-day-modal')">Delete</button>
+      <div style="display:flex;gap:6px">
+        <button class="btn" style="padding:6px 14px" onclick="closeModal('vendor-day-modal')">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- RECURRING MODAL -->
+<div class="mo" id="rec-modal">
+  <div class="modal">
+    <div class="mhdr">
+      <div class="mtitle" id="rec-modal-title">New Recurring Task</div>
+      <button class="mclose" onclick="closeModal('rec-modal')">&#x2715;</button>
+    </div>
+    <div class="fg">
+      <div class="fgr full"><label>Task Name</label><input type="text" id="r-name" placeholder="e.g. HVAC Filter Replacement"></div>
+      <div class="fgr full"><label>Properties (hold Ctrl/Cmd for multiple)</label><select id="r-props" multiple style="min-height:90px"></select></div>
+      <div class="fgr"><label>Category</label>
+        <select id="r-cat" onchange="populateRecVendor()"><option value="hvac">HVAC</option><option value="water">Water Filtration</option><option value="septic">Septic</option><option value="electrical">Electrical</option><option value="handyman">Handyman</option><option value="cleaning">Cleaning</option><option value="bed_bugs">Bed Bugs</option><option value="other">Other</option></select>
+      </div>
+      <div class="fgr"><label>Frequency</label>
+        <select id="r-freq"><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="biannual">Twice a Year</option><option value="annual">Annual</option><option value="biennial">Every 2 Years</option></select>
+      </div>
+      <div class="fgr"><label>Next Due Date</label><input type="date" id="r-next"></div>
+      <div class="fgr"><label>Default Vendor</label><select id="r-vendor" onchange="onRecVendorChange()"><option value="">— None —</option></select></div>
+      <div class="fgr" id="r-vendor-custom-wrap" style="display:none"><label>Custom Vendor Name</label><input type="text" id="r-vendor-custom" placeholder="Enter vendor name"></div>
+      <div class="fgr full"><label>Notes</label><textarea id="r-notes" rows="2" placeholder="Additional instructions..."></textarea></div>
+    </div>
+    <div style="display:flex;gap:9px;margin-top:20px;justify-content:flex-end">
+      <button class="btn" onclick="closeModal('rec-modal')">Cancel</button>
+      <button class="btn btn-g" onclick="saveRecurring()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- LOG TASK MODAL -->
+<div class="mo" id="log-task-modal">
+  <div class="modal">
+    <div class="mhdr">
+      <div class="mtitle" id="log-task-title">Log Completed Service</div>
+      <button class="mclose" onclick="closeModal('log-task-modal')">&#x2715;</button>
+    </div>
+    <div class="fg">
+      <div class="fgr full">
+        <label>Service</label>
+        <div id="lt-service-name" style="font-weight:600;padding:5px 0;color:var(--text1);font-size:.95rem"></div>
+      </div>
+      <div class="fgr full"><label>Property / Location</label><select id="lt-prop"></select></div>
+      <div class="fgr"><label>Date Completed</label><input type="date" id="lt-date"></div>
+      <div class="fgr"><label>Vendor / Who Did It</label><select id="lt-vendor" onchange="onLogTaskVendorChange()"><option value="">— None —</option></select></div>
+      <div class="fgr" id="lt-vendor-custom-wrap" style="display:none"><label>Custom Vendor Name</label><input type="text" id="lt-vendor-custom" placeholder="Enter vendor name"></div>
+      <div class="fgr full"><label>Notes (optional)</label><textarea id="lt-notes" rows="2" placeholder="Any details about this service visit..."></textarea></div>
+    </div>
+    <div style="display:flex;gap:9px;margin-top:20px;justify-content:flex-end">
+      <button class="btn" onclick="closeModal('log-task-modal')">Cancel</button>
+      <button class="btn btn-g" onclick="saveLogTask()">Log Service</button>
+    </div>
+  </div>
+</div>
+
+<!-- ALL ABOUT BUGS — IMPORT SERVICE LOGS MODAL -->
+<div class="mo" id="aab-import-modal">
+  <div class="modal" style="max-width:920px;width:96vw">
+    <div class="mhdr">
+      <div class="mtitle">Import Service Logs — All About Bugs</div>
+      <button class="mclose" onclick="closeModal('aab-import-modal')">&#x2715;</button>
+    </div>
+    <div id="aab-drop" class="aab-drop">
+      <div class="aab-drop-icon">&#x21A7;</div>
+      <div class="aab-drop-title">Drop pest control PDFs here</div>
+      <div class="aab-drop-sub">or <span class="aab-drop-link" onclick="document.getElementById('aab-file').click()">browse</span> &middot; multi-file OK &middot; multi-message PDFs split automatically</div>
+      <input type="file" id="aab-file" accept="application/pdf" multiple style="display:none">
+    </div>
+    <div id="aab-status" class="aab-status" style="display:none"></div>
+    <div id="aab-rows-wrap" style="display:none">
+      <div class="aab-rows-hdr">
+        <div>Detected services <span id="aab-count" class="aab-count-badge"></span></div>
+        <button class="btn" onclick="aabClearRows()" style="font-size:.78rem;padding:4px 10px">Clear all</button>
+      </div>
+      <div id="aab-rows"></div>
+    </div>
+    <div style="display:flex;gap:9px;margin-top:18px;justify-content:flex-end" id="aab-actions" style="display:none">
+      <button class="btn" onclick="closeModal('aab-import-modal')">Cancel</button>
+      <button class="btn btn-g" id="aab-log-btn" onclick="aabLogAll()">Log all selected</button>
+    </div>
+  </div>
+</div>
+
+<!-- VENDOR MODAL -->
+<div class="mo" id="tv-modal">
+  <div class="modal" style="max-width:560px">
+    <div class="mhdr">
+      <div class="mtitle" id="tv-modal-title">Add TV</div>
+      <button class="mclose" onclick="closeModal('tv-modal')">&#x2715;</button>
+    </div>
+    <div class="fg">
+      <div class="fgr full"><label>Property</label><select id="tv-prop"></select></div>
+      <div class="fgr full"><label>Roku account email</label><input type="text" id="tv-account" list="tv-account-list" autocomplete="off"><datalist id="tv-account-list"></datalist></div>
+      <div class="fgr"><label>Roku device name</label><input type="text" id="tv-name" placeholder="e.g. Big House - Bed 3" autocomplete="off"></div>
+      <div class="fgr"><label>Roku location</label><input type="text" id="tv-location" placeholder="e.g. Bedroom" autocomplete="off"></div>
+      <div class="fgr"><label>Model</label><input type="text" id="tv-model" placeholder='e.g. 50" TCL Roku TV' autocomplete="off"></div>
+      <div class="fgr"><label>Guest Mode</label><select id="tv-guest"><option value="on">ON</option><option value="off">OFF</option></select></div>
+      <div class="fgr full"><label>Serial (ESN)</label><input type="text" id="tv-serial" autocomplete="off"></div>
+    </div>
+    <div style="display:flex;gap:9px;margin-top:20px;justify-content:space-between;align-items:center">
+      <button class="btn btn-red" id="tv-del-btn" onclick="tvDeleteFromModal()" style="display:none">Delete TV</button>
+      <div style="display:flex;gap:7px;margin-left:auto">
+        <button class="btn" onclick="closeModal('tv-modal')">Cancel</button>
+        <button class="btn btn-g" onclick="tvSaveModal()">Save TV</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mo" id="vendor-modal">
+  <div class="modal">
+    <div class="mhdr">
+      <div class="mtitle" id="vendor-modal-title">Add Vendor</div>
+      <button class="mclose" onclick="closeModal('vendor-modal')">&#x2715;</button>
+    </div>
+    <div class="fg">
+      <div class="fgr"><label>Name</label><input type="text" id="v-name" placeholder="Vendor or company name"></div>
+      <div class="fgr"><label>Role / Title</label><input type="text" id="v-role" placeholder="e.g. Plumber — Primary"></div>
+      <div class="fgr"><label>Phone</label><input type="text" id="v-phone" placeholder="(000) 000-0000"></div>
+      <div class="fgr"><label>Email</label><input type="email" id="v-email" placeholder="vendor@email.com"></div>
+      <div class="fgr full"><label>Categories</label>
+        <div id="v-cats" class="v-cat-checks"></div>
+        <div style="font-size:.64rem;color:var(--text3);margin-top:4px">Check every kind of work this vendor does. Order within each category is set by dragging on the Vendors page.</div>
+      </div>
+      <div class="fgr full"><label>Properties served</label>
+        <div id="v-props" class="v-props"></div>
+        <div style="font-size:.64rem;color:var(--text3);margin-top:4px">Check a neighborhood to select all of its houses. Suggested vendors on a task only include vendors who serve that property.</div>
+      </div>
+      <!-- Payment Methods hidden — Venmo/Cash App feature sunset 2026-06-04. Inputs kept in DOM (hidden) so vendor save logic still resolves them. Remove style="display:none" to restore. -->
+      <div class="fgr full" style="display:none"><label>Payment Methods</label>
+        <div style="display:flex;gap:16px;margin-top:4px">
+          <label style="display:flex;align-items:center;gap:6px;font-size:.82rem;font-weight:400;cursor:pointer"><input type="checkbox" id="v-pay-venmo"> Venmo</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:.82rem;font-weight:400;cursor:pointer"><input type="checkbox" id="v-pay-cashapp"> Cash App</label>
+        </div>
+        <div style="font-size:.64rem;color:var(--text3);margin-top:4px">Controls which payment options appear on the vendor's day sheet.</div>
+      </div>
+      <div class="fgr full"><label>Notes</label><textarea id="v-notes" rows="3" placeholder="Notes about this vendor..."></textarea></div>
+    </div>
+    <div style="display:flex;gap:9px;margin-top:20px;justify-content:space-between;align-items:center">
+      <button class="btn btn-red" id="v-del-btn" onclick="deleteVendor()" style="display:none">Delete Vendor</button>
+      <div style="display:flex;gap:7px;margin-left:auto">
+        <button class="btn" onclick="closeModal('vendor-modal')">Cancel</button>
+        <button class="btn btn-g" onclick="saveVendor()">Save Vendor</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Generate Cleaner Link Modal ── -->
+<div class="mo" id="cv-modal">
+  <div class="modal" style="max-width:560px">
+    <div class="mhdr">
+      <div class="mtitle">Share Cleaner Link</div>
+      <button class="mclose" onclick="closeCleanerLinkModal()">&#x2715;</button>
+    </div>
+
+    <!-- Saved links panel (populated dynamically) -->
+    <div id="cv-saved-links"></div>
+
+    <!-- Create new section -->
+    <div id="cv-new-section">
+      <div id="cv-new-toggle" style="display:none;margin-bottom:14px">
+        <button class="btn" onclick="cvToggleNewForm()" id="cv-new-toggle-btn" style="font-size:.8rem;width:100%;text-align:center">＋ Create Link for a New Cleaner</button>
+      </div>
+      <div id="cv-new-form">
+        <p style="font-size:.82rem;color:var(--text2);margin-bottom:14px;line-height:1.5">Generate a permanent link that shows a read-only cleaning performance dashboard for a specific cleaner. They'll see Top Performers, properties that need attention, guest reviews, and ratings — but no admin tools or tasks.</p>
+        <label class="fl" style="margin-bottom:12px">Cleaner Name
+          <input type="text" id="cv-name" placeholder="e.g., Natasha" style="width:100%;padding:8px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit;margin-top:4px" oninput="cvCheckGenerateBtn()">
+        </label>
+        <label class="fl" style="margin-bottom:8px">Select Properties</label>
+        <div id="cv-prop-picker" style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);padding:12px;background:var(--surface2);margin-bottom:14px"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn" id="cv-cancel-new-btn" onclick="cvToggleNewForm()" style="display:none">Cancel</button>
+          <button class="btn" onclick="closeCleanerLinkModal()">Close</button>
+          <button class="btn btn-g" id="cv-generate-btn" onclick="cvGenerateLink()" disabled>Generate Link</button>
+        </div>
+        <div id="cv-result" style="display:none"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Invoice Reconciliation Modal ── -->
+<div class="mo" id="inv-modal">
+  <div class="modal" style="max-width:860px;max-height:92vh;display:flex;flex-direction:column">
+    <div class="mhdr">
+      <div class="mtitle" id="inv-modal-title">Invoice Reconciliation</div>
+      <button class="mclose" onclick="closeModal('inv-modal')">&#x2715;</button>
+    </div>
+    <div id="inv-body" style="overflow-y:auto;flex:1;padding:14px 18px 18px"></div>
+  </div>
+</div>
+
+<!-- ── Cleaner View (public, read-only) ── -->
+<div id="cleaner-view" style="display:none">
+  <!-- Loading screen -->
+  <div id="cv-loader">
+    <div class="cv-loader-title">Storybook Escapes</div>
+    <div class="cv-loader-sub" id="cv-loader-sub">Loading...</div>
+    <div class="cv-loader-bar-wrap">
+      <div class="cv-loader-bar" id="cv-loader-bar"></div>
+    </div>
+    <div class="cv-loader-badge" id="cv-loader-badge" style="opacity:0">
+      <span class="cv-loader-badge-star">★</span>
+      <span class="cv-loader-badge-text" id="cv-loader-badge-text"></span>
+    </div>
+  </div>
+  <!-- Main content (hidden until loader lifts) -->
+  <div id="cv-content-wrap" style="opacity:0">
+    <div class="cv-header">
+      <div class="cv-header-text">
+        <h1 class="cv-title">STORYBOOK ESCAPES</h1>
+        <p class="cv-subtitle" id="cv-subtitle">Cleaning Performance</p>
+      </div>
+    </div>
+    <div class="cv-body">
+      <div id="cv-error" style="display:none;text-align:center;padding:40px">
+        <div style="font-size:1.1rem;font-weight:600;color:var(--red);margin-bottom:8px">Invalid Link</div>
+        <div style="color:var(--text2);font-size:.88rem">This cleaning dashboard link is not valid. Please contact Storybook Escapes if you need access.</div>
+      </div>
+      <div id="cv-content" style="display:none">
+        <div id="cv-summary"></div>
+        <div id="cv-log"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Project Vendor Sheet ── -->
+<div id="project-vendor-sheet" style="display:none">
+  <div id="pvs-root"></div>
+</div>
+
+<!-- ── Vendor Day Sheet ── -->
+<div id="vendor-sheet" style="display:none">
+  <div class="vs-header">
+    <img id="vs-logo" src="" class="vs-logo" alt="Storybook Escapes">
+    <div class="vs-header-text">
+      <h1 class="vs-title">MAINTENANCE</h1>
+      <p class="vs-subtitle" id="vs-subtitle">Loading...</p>
+    </div>
+  </div>
+  <div class="vs-body">
+    <div id="vs-loading" style="text-align:center;padding:40px;color:var(--text2)">Loading your tasks...</div>
+    <div id="vs-error" style="display:none;text-align:center;padding:40px">
+      <div style="font-size:1.1rem;font-weight:600;color:var(--red);margin-bottom:8px">Link Expired or Invalid</div>
+      <div style="color:var(--text2);font-size:.88rem">This job sheet link is no longer active. Please contact Storybook Escapes if you need access.</div>
+    </div>
+    <div id="vs-tasks" style="display:none"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="auth.js"></script>
+<script src="app.js"></script>
+<script src="projects.js"></script>
+</body>
+</html>
