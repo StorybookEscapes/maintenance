@@ -1,7 +1,7 @@
 // ── User Name Mapping (for note attribution) ─────────────────
 const USER_NAME_MAP={'cb@chipburns.com':'Chip','properties@chipburns.com':'Chip'};
 function getCurrentUserName(){
-  try{const t=localStorage.getItem('se_auth_token');if(t){const p=JSON.parse(atob(t.split('.')[1]));return USER_NAME_MAP[(p.email||'').toLowerCase()]||p.name||'Admin';}}catch(e){}
+  try{const t=getAuthToken();if(t){const p=decodeAuthPayload(t);return USER_NAME_MAP[(p.email||'').toLowerCase()]||p.name||'Admin';}}catch(e){}
   return 'Chip'; // fallback for dev
 }
 
@@ -400,17 +400,28 @@ function hospFetch(url, opts){
   const headers = Object.assign({}, opts.headers || {}, t ? { 'Authorization': 'Bearer ' + t } : {});
   return fetch(url, Object.assign({}, opts, { headers }));
 }
+function decodeAuthPayload(token){
+  if(window.maintenanceAuth?.readPayload)return window.maintenanceAuth.readPayload(token);
+  return JSON.parse(decodeURIComponent(Array.from(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')),c=>'%'+c.charCodeAt(0).toString(16).padStart(2,'0')).join('')));
+}
+// Production auth.js pins the signed-in account for this tab. The fallback
+// keeps the existing vendor/dev views and staged older auth.js compatible.
+let _authTabEmail='';
 function getAuthToken(){
-  try{const a=localStorage.getItem('se_auth_token');return a||null;}catch(e){return null;}
+  if(window.maintenanceAuth?.getToken)return window.maintenanceAuth.getToken();
+  try{const token=localStorage.getItem('se_auth_token');if(!token)return null;
+    const email=String(decodeAuthPayload(token).email||'').toLowerCase();if(!email)return null;
+    if(_authTabEmail&&email!==_authTabEmail)return null;_authTabEmail=email;return token;
+  }catch(e){return null;}
 }
 // ── Auth health helpers ──
 function isTokenExpired(){
   const t=getAuthToken();if(!t)return true;
-  try{const p=JSON.parse(atob(t.split('.')[1]));return p.exp&&p.exp*1000<Date.now();}catch(e){return true;}
+  try{const p=decodeAuthPayload(t);return !Number.isFinite(p.exp)||p.exp*1000<=Date.now();}catch(e){return true;}
 }
 function tokenExpiresIn(){
   const t=getAuthToken();if(!t)return 0;
-  try{const p=JSON.parse(atob(t.split('.')[1]));return Math.max(0,(p.exp*1000)-Date.now());}catch(e){return 0;}
+  try{const p=decodeAuthPayload(t);return Number.isFinite(p.exp)?Math.max(0,(p.exp*1000)-Date.now()):0;}catch(e){return 0;}
 }
 let _authWarnShown=false;
 function showReAuthPrompt(){
@@ -425,10 +436,56 @@ function showReAuthPrompt(){
   d.innerHTML=`<div style="background:#1a2a1a;border:2px solid #c0392b;border-radius:16px;padding:32px 28px;max-width:420px;width:90%;text-align:center;color:#e8dcc8;font-family:DM Sans,sans-serif;">
     <div style="font-size:36px;margin-bottom:12px;">\u26a0\ufe0f</div>
     <h2 style="margin:0 0 8px;font-size:20px;color:#e74c3c;">Session Expired</h2>
-    <p style="margin:0 0 20px;font-size:15px;line-height:1.5;color:#b8a88a;">Your sign-in has expired. Any unsaved changes may be lost.<br>Please sign in again to continue.</p>
-    <button onclick="localStorage.removeItem('se_auth_token');location.reload()" style="background:#2d6a3f;color:#fff;border:none;padding:12px 32px;border-radius:8px;font-size:16px;cursor:pointer;font-family:inherit;">Sign In Again</button>
+    <p style="margin:0 0 20px;font-size:15px;line-height:1.5;color:#b8a88a;">Sign in with the same account to continue. Your open edits will stay on this page. After signing in, review and retry any interrupted save.</p>
+    <div id="reauth-google" style="display:flex;justify-content:center"></div>
+    <p id="reauth-status" role="status" style="font-size:14px"></p>
   </div>`;
   document.body.appendChild(d);
+  if(window.maintenanceAuth)window.maintenanceAuth.renderSignIn(document.getElementById('reauth-google'));
+  else document.getElementById('reauth-status').textContent='Google sign-in is not available yet. Keep this page open and check your connection.';
+}
+function maintenanceAuthRenewed(){
+  document.getElementById('reauth-overlay')?.remove();_authWarnShown=false;
+  startExpiryWatcher();updateSyncStatus('renewed');
+  if(!tasksLoadedOk||!vendorsLoadedOk||!recurringLoadedOk)showAuthRecovery();
+  showToast('Sign-in renewed. Review and retry any interrupted save.','',null,8000);
+}
+
+function showAuthRecovery(){
+  if(document.getElementById('auth-data-recovery'))return;
+  const box=document.createElement('div');box.id='auth-data-recovery';box.setAttribute('role','status');
+  const text=document.createElement('p');text.textContent='Sign-in renewed. Some data is still missing and saving remains paused. Reload that data when your open edits are ready.';
+  const button=document.createElement('button');button.textContent='Reload missing data';
+  button.onclick=async()=>{
+    button.disabled=true;
+    try{await reloadMissingAuthData();box.remove();showToast('Missing data loaded. Review and retry any interrupted save.');}
+    catch(e){text.textContent=e.message;}finally{button.disabled=false;}
+  };
+  box.append(text,button);document.body.appendChild(box);
+}
+function maintenanceCollectionEdited(rows,baseline,deleted){
+  return !!deleted&&[...deleted].some(id=>baseline.has(id))||rows.length!==baseline.size||rows.some(row=>JSON.stringify(row)!==baseline.get(row.id));
+}
+function maintenanceTaskEditsPending(){
+  return !!_pendingTaskSave||maintenanceCollectionEdited(tasks,_taskBaseline,_deletedTaskIds);
+}
+async function reloadMissingAuthData(){
+  if(maintenanceTaskEditsPending()||(!tasksLoadedOk&&_deletedTaskIds.size))throw new Error('Save or copy your pending task edits before reloading missing data.');
+  if((!vendorsLoadedOk&&(_deletedVendorIds.size||maintenanceCollectionEdited(vendors,_vendorBaseline,_deletedVendorIds)))||
+     (!recurringLoadedOk&&(_deletedRecIds.size||maintenanceCollectionEdited(recurring,_recBaseline,_deletedRecIds))))
+    throw new Error('Copy your pending vendor or recurring edits before reloading missing data. They are still on this page.');
+  const before={tasks:JSON.stringify(tasks),vendors:JSON.stringify(vendors),recurring:JSON.stringify(recurring)};
+  const needs={se_t:!tasksLoadedOk,se_v:!vendorsLoadedOk,se_r:!recurringLoadedOk},loaded={};
+  for(const key of Object.keys(needs).filter(key=>needs[key])){
+    const r=await _kvGetStrict(key),value=r?JSON.parse(r.value):[];
+    if(!Array.isArray(value))throw new Error('Data could not be safely reloaded. Keep this page open and retry.');loaded[key]=value;
+  }
+  if(JSON.stringify(tasks)!==before.tasks||JSON.stringify(vendors)!==before.vendors||JSON.stringify(recurring)!==before.recurring)
+    throw new Error('Edits changed while loading. They are still on this page; review them before retrying.');
+  if(loaded.se_t){tasks=loaded.se_t;tasksLoadedOk=true;_tasksLoadedCount=tasks.length;_snapshotTaskBaseline(tasks);}
+  if(loaded.se_v){vendors=loaded.se_v;vendorsLoadedOk=true;_vendorsLoadedCount=vendors.length;_vendorBaseline=_snapById(vendors);}
+  if(loaded.se_r){recurring=loaded.se_r;recurringLoadedOk=true;_recurringLoadedCount=recurring.length;_recBaseline=_snapById(recurring);}
+  renderAll();updateSyncStatus('renewed');
 }
 
 // ── Proactive token expiry watcher ──
@@ -536,7 +593,7 @@ async function _kvGetStrict(k){
 function updateSyncStatus(state){
   const dot=document.getElementById('sync-status');if(!dot)return;
   dot.className='sync-dot sync-'+state;
-  const titles={ok:'Connected — saves are working',error:'Save failed — retrying may help',disconnected:'Session expired — please sign in again'};
+  const titles={renewed:'Sign-in renewed — review and retry any interrupted save',ok:'Connected — saves are working',error:'Save failed — retrying may help',disconnected:'Session expired — please sign in again'};
   dot.title=titles[state]||'';
 }
 
@@ -3599,7 +3656,7 @@ async function uploadTaskPhoto(file){
   try{
     const compressed=await compressImage(file);
     status.textContent='Uploading...';
-    const token=localStorage.getItem('se_auth_token')||'';
+    const token=getAuthToken();if(!token){showReAuthPrompt();return;}
     const fname=`task-${t.id}-${Date.now()}-${Math.random().toString(36).slice(2,5)}.jpg`;
     const r=await fetch(`${PROXY_BASE}/api/photo?taskId=${t.id}&filename=${fname}`,{
       method:'POST',
@@ -3627,7 +3684,7 @@ async function removeTaskPhoto(url){
   const t=tasks.find(x=>x.id===detailId);if(!t||!url)return;
   if(!confirm('Remove this photo?'))return;
   try{
-    const token=localStorage.getItem('se_auth_token')||'';
+    const token=getAuthToken();if(!token){showReAuthPrompt();return;}
     fetch(`${PROXY_BASE}/api/photo?url=${encodeURIComponent(url)}`,{
       method:'DELETE',headers:{'Authorization':'Bearer '+token}
     }).catch(()=>{});
@@ -3649,7 +3706,7 @@ async function cleanupOldPhotos(){
   // The 30-day retention rule itself is unchanged.
   if(!tasksLoadedOk)return;
   const cutoff=Date.now()-30*24*60*60*1000;
-  const token=localStorage.getItem('se_auth_token')||'';
+  const token=getAuthToken();if(!token){showReAuthPrompt();return;}
   const delBlob=async url=>{
     try{
       const r=await fetch(`${PROXY_BASE}/api/photo?url=${encodeURIComponent(url)}`,{
@@ -13871,6 +13928,7 @@ async function maintenanceRequest(action,input={}){
   const response=await hospFetch(STORAGE_API,{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({maintenanceAction:action,...input}),signal:AbortSignal.timeout(55000)});
   const result=await response.json().catch(()=>({}));
+  if(response.status===401&&typeof showReAuthPrompt==='function')showReAuthPrompt();
   if(!response.ok){const error=new Error(result.error||'The request could not be confirmed. Refresh its status before retrying.');error.status=response.status;error.code=result.code;throw error;}
   return result;
 }
@@ -13879,6 +13937,7 @@ async function maintenanceProposalsLoad(){
   const root=document.getElementById('maintenance-proposals');if(!root||maintenanceProposalBusy)return;
   try{const data=await maintenanceRequest('listRescheduleProposals');maintenanceRenderProposals(data.proposals||[]);}
   catch(e){root.replaceChildren();const message=maintenanceElement('p','Schedule proposals could not load. '+e.message);message.setAttribute('role','status');root.append(message);}
+  await maintenanceTaskProposalsLoad();
 }
 function maintenanceRenderProposals(proposals){
   const root=document.getElementById('maintenance-proposals');if(!root)return;root.replaceChildren();root.style.cssText='';
@@ -13906,7 +13965,7 @@ function maintenanceRenderProposals(proposals){
   }
 }
 function maintenanceHasUnsavedTasks(){
-  return !tasksLoadedOk||!!_pendingTaskSave||tasks.length!==_taskBaseline.size||tasks.some(t=>JSON.stringify(t)!==_taskBaseline.get(t.id));
+  return !tasksLoadedOk||maintenanceTaskEditsPending();
 }
 async function maintenanceApproveProposal(p,button){
   if(maintenanceProposalBusy)return;
@@ -13927,10 +13986,53 @@ async function maintenanceApproveProposal(p,button){
   finally{maintenanceProposalBusy=false;button.disabled=false;await maintenanceProposalsLoad();}
 }
 
+// Creation and private notes have their own review cards; older schedule clients
+// never receive these proposal kinds. They cannot approve from a chat assertion.
+async function maintenanceTaskProposalsLoad(){
+ const root=document.getElementById('maintenance-task-proposals');if(!root||maintenanceProposalBusy)return;
+ try{const data=await maintenanceRequest('listTaskProposals');maintenanceRenderTaskProposals(data.proposals||[]);}
+ catch(e){root.replaceChildren(maintenanceElement('p','Task proposals could not load. '+e.message));}
+}
+function maintenanceTaskProposalDescription(p){
+ if(p.kind==='create')return 'Create an open, undated task. No purchase or vendor notification will be created.\nProperty: '+p.after.property+'\nProblem: '+p.after.problem+'\nCategory: '+p.after.category+'\nVendor: '+(p.after.vendor||'Unassigned')+'\nStatus: open\nDate: not set';
+ return 'Append one private administrator note to '+p.property+' — '+p.problem+'. Existing task fields and notes stay in place.\nExact note: '+p.after.note+'\nVisibility: administrators only; excluded from vendor views.';
+}
+function maintenanceRenderTaskProposals(proposals){
+ const root=document.getElementById('maintenance-task-proposals');if(!root)return;root.replaceChildren();root.style.cssText='';
+ if(!proposals.length)return;
+ root.style.cssText='padding:16px;border:1px solid var(--gold);border-radius:12px;margin-bottom:16px';
+ root.append(maintenanceElement('h3','Proposed new tasks and private notes'),maintenanceElement('p','Review each exact change. Only your website approval permits the task operation. No message is sent.'));
+ const refresh=maintenanceElement('button','Refresh task proposals');refresh.className='btn';refresh.onclick=maintenanceTaskProposalsLoad;root.append(refresh);
+ for(const p of proposals){
+  const card=maintenanceElement('section');card.style.cssText='border-top:1px solid var(--border);padding:14px 0';
+  card.append(maintenanceElement('h4',(p.kind==='create'?'New task: ':'Private note: ')+p.property+' — '+p.problem));
+  const detail=maintenanceElement('p',maintenanceTaskProposalDescription(p));detail.style.whiteSpace='pre-wrap';card.append(detail);
+  card.append(maintenanceElement('p','Reason: '+p.reason),maintenanceElement('p','Proposed by '+(p.proposedBy?.name||'Unknown proposer')+'. Expires: '+new Date(p.expiresAt).toLocaleString()));
+  if(p.status==='approved')card.append(maintenanceElement('p','Already approved by '+(p.approvedBy?.name||'an administrator')+'. Check/apply the same proposal to reconcile its outcome.'));
+  const b=maintenanceElement('button',p.status==='approved'?'Apply approved task change':p.kind==='create'?'Approve and create task':'Approve and append private note');b.className='btn btn-g';b.onclick=()=>maintenanceApproveTaskProposal(p,b);card.append(b);root.append(card);
+ }
+}
+async function maintenanceApproveTaskProposal(p,button){
+ if(maintenanceProposalBusy)return;
+ if(maintenanceHasUnsavedTasks()){taskSaveWarning('Save your current task edits or reload before approving a task proposal.');return;}
+ if(!confirm(maintenanceTaskProposalDescription(p)+'\nReason: '+p.reason+'\n\nApply this exact change? No message will be sent.'))return;
+ maintenanceProposalBusy=true;button.disabled=true;
+ try{
+  if(p.status!=='approved')await maintenanceRequest('approveTaskProposal',{proposalId:p.id,approvalDigest:p.approvalDigest});
+  const result=await maintenanceRequest('applyApprovedTaskProposal',{proposalId:p.id});
+  if(!result.readback?.verified||!result.readback.matches)throw new Error('The task change could not be fully verified. Refresh this same proposal and saved tasks before retrying; do not create another proposal.');
+  const snapshot=await _kvGetStrict('se_t');
+  if(!snapshot||snapshot.taskProtocol!==1)throw new Error('Saved task data could not reload. Keep the same proposal ID and reload before continuing.');
+  if(maintenanceHasUnsavedTasks())throw new Error('The approved change was saved. Edits made while it was saving are still on this page; save them or reload before continuing.');
+  tasks=JSON.parse(snapshot.value);_snapshotTaskBaseline(tasks);_tasksLoadedCount=tasks.length;_deletedTaskIds.clear();renderAll();showToast('Approved task change saved and verified.');
+ }catch(e){taskSaveWarning(e.message);}
+ finally{maintenanceProposalBusy=false;button.disabled=false;await maintenanceProposalsLoad();}
+}
+
 // Sam Activity: administrator-only API, rendered as text (never injected HTML).
 let samActivityEvents=[],samActivityBefore=null,samActivityBusy=false;
 function samPendingKey(){
- const payload=JSON.parse(atob(getAuthToken().split('.')[1]));
+ const payload=decodeAuthPayload(getAuthToken());
  if(!payload.email)throw new Error('Sign in before correcting activity.');
  return 'se_sam_pending_v1_'+payload.email.toLowerCase();
 }
@@ -13951,16 +14053,20 @@ function samActivityTime(ms){return Number.isFinite(ms)?new Date(ms).toISOString
 function samActivityRender(){
  const root=document.getElementById('sam-activity-results');root.replaceChildren();
  const query=(document.getElementById('sam-activity-filter').value||'').toLowerCase();
- const rows=samActivityEvents.filter(e=>[e.batchId,e.operationId,e.kind,e.phase,e.property].join(' ').toLowerCase().includes(query));
+ const rows=samActivityEvents.filter(e=>[e.batchId,e.operationId,e.kind,e.phase,e.property,e.history?.reportedOutcome,e.history?.evidenceConfidence].join(' ').toLowerCase().includes(query));
  if(!rows.length)root.append(maintenanceElement('p','No matching entries in the loaded pages.'));
  for(const e of rows){
   const card=maintenanceElement('details');card.style.cssText='padding:12px;border-bottom:1px solid var(--border);overflow-wrap:anywhere';
-  card.append(maintenanceElement('summary',e.phase.toUpperCase()+' · '+e.kind.replaceAll('_',' ')+' · '+(e.property||'All properties')+' · '+samActivityTime(e.recordedAtMs)));
-  const fields=[['Reason',e.reason],['Evidence',e.evidence||'None recorded'],['Actor',e.actor.name+' ('+e.actor.kind+')'],['Operation',e.operationId],['Batch',e.batchId],['Event',e.id],['Recorded by server',samActivityTime(e.recordedAtMs)],['Observed window',e.observation.start+' → '+e.observation.end],['Verification',e.verification.method+' · '+e.verification.provenance+' · '+(e.verification.summary||'Not checked')],['Verification observed',samActivityTime(e.verification.observedAtMs)],['Verification reference',e.verification.reference||'None'],['Source',e.source.system+' / '+e.source.id]];
+  const historical=e.phase==='historical'&&e.history?.format==='sam-history-v1';
+  card.append(maintenanceElement('summary',(historical?'HISTORICAL IMPORT · reported '+e.history.reportedOutcome:e.phase.toUpperCase())+' · '+e.kind.replaceAll('_',' ')+' · '+(e.property||(historical?'Property not recorded':'All properties'))+' · '+samActivityTime(e.recordedAtMs)));
+  const fields=[['Reason',e.reason],['Evidence',e.evidence||'None recorded'],[historical?'Imported by':'Actor',e.actor.name+' ('+e.actor.kind+')'],['Operation',e.operationId],['Batch',e.batchId],['Event',e.id],['Recorded by server',samActivityTime(e.recordedAtMs)]];
+  if(historical)fields.push(['Original action time',e.history.occurredAt||'Unknown — not inferred'],['Imported at (server)',samActivityTime(e.history.importedAtMs)],['Reported original actor',e.history.performedBy],['Evidence confidence (importer reported)',e.history.evidenceConfidence],['Historical evidence reference',e.history.evidenceReference],['Historical record ID',e.history.recordId],['Import limitation','This entry does not prove the original action happened and does not contain a fabricated prior intent.']);
+  else fields.push(['Observed window',e.observation.start+' → '+e.observation.end]);
+  fields.push(['Verification',e.verification.method+' · '+e.verification.provenance+' · '+(e.verification.summary||'Not checked')],['Verification observed',samActivityTime(e.verification.observedAtMs)],['Verification reference',e.verification.reference||'None'],['Source',e.source.system+' / '+e.source.id]);
   if(e.correctionOf)fields.push(['Corrects event',e.correctionOf]);
-  fields.push([e.phase==='intent'?'Proposed wording (not proof of sending)':'Recorded wording',e.wording.state==='exact'?e.wording.text:e.wording.state==='withheld'?'Withheld for sensitive content':'Not applicable']);
+  fields.push([e.phase==='intent'?'Proposed wording (not proof of sending)':'Recorded wording',e.wording.state==='exact'?e.wording.text:e.wording.state==='withheld'?'Withheld for sensitive content':e.wording.state==='not_recorded'?'Not recorded in the available evidence':'Not applicable']);
   for(const [label,value]of fields){const p=maintenanceElement('p');p.style.whiteSpace='pre-wrap';p.append(maintenanceElement('strong',label+': '),maintenanceElement('span',value));card.append(p);}
-  if(e.source.url){try{const u=new URL(e.source.url);if(u.protocol==='https:'&&!u.username&&!u.password&&!u.search&&!u.hash&&(u.hostname==='hospitable.com'||u.hostname.endsWith('.hospitable.com'))){const a=maintenanceElement('a','Open source in Hospitable');a.href=u.href;a.target='_blank';a.rel='noopener noreferrer';card.append(a);}}catch(_) {}}
+  if(e.source.url){try{const u=new URL(e.source.url),allowed=e.source.system==='hospitable'?(u.hostname==='hospitable.com'||u.hostname.endsWith('.hospitable.com')):e.source.system==='maintenance'&&u.hostname==='storybookescapes.github.io'&&u.pathname==='/maintenance/';if(u.protocol==='https:'&&!u.username&&!u.password&&!u.search&&!u.hash&&allowed){const a=maintenanceElement('a',e.source.system==='hospitable'?'Open source in Hospitable':'Open maintenance site');a.href=u.href;a.target='_blank';a.rel='noopener noreferrer';card.append(a);}}catch(_) {}}
   const form=maintenanceElement('details');form.append(maintenanceElement('summary','Add a factual correction'));
   const input=maintenanceElement('textarea');input.placeholder='Explain the correction and supporting evidence. Do not include secrets or full guest conversations.';input.setAttribute('aria-label','Correction for '+e.id);input.maxLength=1000;input.style.cssText='display:block;width:100%;min-height:80px;margin:8px 0';
   const button=maintenanceElement('button','Append correction');button.className='btn';const feedback=maintenanceElement('p');feedback.setAttribute('role','status');let pending=null;
@@ -13978,6 +14084,74 @@ function samActivityRender(){
  }
  const more=document.getElementById('sam-activity-more');more.disabled=samActivityBefore===0||samActivityBefore===null;
 }
+// Historical import is an administrator-reviewed append, separate from live
+// intent/outcome recording. Keep the approved batch for an idempotent retry.
+let samHistoryBusy=false,samHistoryReview=null;
+function samHistoryKey(){return samPendingKey()+'_history';}
+function samHistoryPending(){const raw=sessionStorage.getItem(samHistoryKey());return raw?JSON.parse(raw):null;}
+function samHistoryStatus(text){const el=document.getElementById('sam-history-status');if(el)el.textContent=text;}
+async function samHistoryChooseFile(input){
+ if(samHistoryBusy)return;
+ try{
+  if(samHistoryPending()){samHistoryStatus('An earlier import awaits confirmation. Restore it and retry the same batch before choosing another file.');return;}
+  const file=input.files?.[0];if(!file)return;
+  if(file.size>350000)throw new Error('Historical import files must be under 350 KB. Split larger evidence into batches of at most 25 records.');
+  samHistoryBusy=true;samHistoryReview=null;document.getElementById('sam-history-preview')?.replaceChildren();
+  const value=JSON.parse(await file.text());
+  if(!value||value.format!=='sam-history-import-v1'||Object.keys(value).some(k=>!['format','batchId','records'].includes(k)))throw new Error('Choose a sam-history-import-v1 review file.');
+  samHistoryStatus('Validating historical records; nothing is being saved.');
+  const payload={batchId:value.batchId,records:value.records};
+  const review=await maintenanceRequest('previewSamHistoryImport',payload);
+  samHistoryReview={payload:{...payload,approvalDigest:review.approvalDigest},events:review.events,pending:false};samHistoryRender();
+  samHistoryStatus('Review every record below. Import records evidence only; it does not repeat any action.');
+ }catch(e){samHistoryReview=null;document.getElementById('sam-history-preview')?.replaceChildren();samHistoryStatus('File was not imported. '+e.message);}
+ finally{samHistoryBusy=false;}
+}
+function samHistoryRestore(){
+ if(samHistoryBusy)return;
+ try{const pending=samHistoryPending();if(!pending){samHistoryStatus('No pending historical import on this browser.');return;}
+  if(!pending.payload||!Array.isArray(pending.events)||!pending.events.length||pending.events.length>25)throw new Error('Pending import data needs review.');
+  samHistoryReview={...pending,pending:true};samHistoryRender();samHistoryStatus('An approved import is awaiting confirmation. Retry retains its exact records and digest.');
+ }catch(e){samHistoryStatus('Cannot restore the pending import safely: '+e.message);}
+}
+function samHistoryRender(){
+ const root=document.getElementById('sam-history-preview');if(!root||!samHistoryReview)return;root.replaceChildren();
+ const review=samHistoryReview;
+ root.append(maintenanceElement('h4',review.events.length+' historical record(s) · batch '+review.payload.batchId));
+ for(const e of review.events){
+  const card=maintenanceElement('details');card.open=true;
+  card.append(maintenanceElement('summary',e.kind.replaceAll('_',' ')+' · reported '+e.history.reportedOutcome+' · '+(e.property||'No property')));
+  for(const [label,value]of [['Action time',e.history.occurredAt||'Unknown — not inferred'],['Original actor (reported)',e.history.performedBy],['Evidence confidence',e.history.evidenceConfidence],['Evidence reference',e.history.evidenceReference],['Reason',e.reason],['Evidence',e.evidence],['Source',e.source.system+' / '+e.source.id+(e.source.url?' · '+e.source.url:'')],['Record ID',e.history.recordId],['Wording',e.wording.state==='exact'?e.wording.text:e.wording.state]]){
+   const p=maintenanceElement('p',label+': '+value);p.style.whiteSpace='pre-wrap';card.append(p);
+  }root.append(card);
+ }
+ const label=maintenanceElement('label'),check=maintenanceElement('input');check.type='checkbox';check.checked=!!review.pending;check.disabled=!!review.pending;check.setAttribute('aria-label','I reviewed the exact historical records');label.append(check,maintenanceElement('span',' I reviewed these records, their evidence and unknown times. This imports history without replaying actions.'));
+ const button=maintenanceElement('button',review.pending?'Retry exact historical import':'Approve and import these records');button.className='btn btn-g';
+ button.onclick=()=>samHistoryApply(review,check,button);root.append(label,button);
+}
+async function samHistoryApply(review,check,button){
+ if(samHistoryBusy||!samHistoryReview)return;
+ if(review!==samHistoryReview){samHistoryStatus('The displayed review changed. Review the current batch before approving.');return;}
+ if(!check.checked){samHistoryStatus('Review each record and confirm the review checkbox first.');return;}
+ if(!review.pending&&!confirm('Import these '+review.events.length+' historical evidence records in batch '+review.payload.batchId+'? No external action will be replayed. Original action times will remain as shown.'))return;
+ try{
+  // Fail before sending if this browser cannot retain an exact retry.
+  const pending=samHistoryPending();
+  if(pending&&JSON.stringify(pending.payload)!==JSON.stringify(review.payload))throw new Error('Another historical batch is pending. Restore and reconcile it first.');
+  sessionStorage.setItem(samHistoryKey(),JSON.stringify({payload:review.payload,events:review.events}));
+ }catch(e){samHistoryStatus('Import was not sent because its retry record could not be saved: '+e.message);return;}
+ review.pending=true;samHistoryBusy=true;button.disabled=true;check.disabled=true;
+ try{
+  const saved=await maintenanceRequest('importSamHistory',review.payload);
+  if(!saved.persisted||!saved.readback?.verified)throw new Error('Import has a receipt but readback is not confirmed. Retry this exact batch.');
+  sessionStorage.removeItem(samHistoryKey());samHistoryReview=null;document.getElementById('sam-history-preview').replaceChildren();
+  samHistoryStatus('Historical records saved and read back. '+saved.events.length+' record(s) confirmed.');await samActivityLoad();
+ }catch(e){
+  if(e.status===400||e.code==='approval_mismatch'){sessionStorage.removeItem(samHistoryKey());review.pending=false;check.disabled=false;samHistoryStatus('Import rejected before saving. Revalidate the corrected file. '+e.message);}
+  else samHistoryStatus('Import is not confirmed. Keep the same file and retry this exact batch; do not invent new record IDs. '+e.message);
+  button.textContent=review.pending?'Retry exact historical import':'Approve and import these records';
+ }finally{samHistoryBusy=false;button.disabled=false;}
+}
 let samTaskBefore=null;
 async function samTaskActivityLoad(older=false){
  const root=document.getElementById('sam-task-activity');
@@ -13985,7 +14159,7 @@ async function samTaskActivityLoad(older=false){
   const data=await maintenanceRequest('listSamTaskActivity',older&&samTaskBefore!==null?{before:samTaskBefore}:{});samTaskBefore=data.nextBefore;if(!older)root.replaceChildren();
   if(!data.events.length)root.append(maintenanceElement('p','No Sam task commits in this audit page.'));
   for(const e of data.events){const item=maintenanceElement('details');item.append(maintenanceElement('summary',e.action+' · '+e.at));
-   for(const [label,value]of [['Audit receipt',e.id],['Proposal',e.proposalId||'None'],['Batch',e.batchId||'Not supplied'],['Operation',e.operationId||'Not supplied'],['Reason',e.reason],['Proposed by',e.proposedBy?.name||'Not recorded'],['Approved by',e.approvedBy?.name||'Not recorded'],['Applied by',e.actor?.name||e.actor?.id],['Before / after',JSON.stringify(e.changes,null,2)]]){const p=maintenanceElement('p',label+': '+value);p.style.whiteSpace='pre-wrap';item.append(p);}root.append(item);}
+   for(const [label,value]of [['Audit receipt',e.id],['Proposal',e.proposalId||'None'],['Batch',e.batchId||'Not supplied'],['Operation',e.operationId||'Not supplied'],['Reason',e.reason],['Proposed by',e.proposedBy?.name||'Not recorded'],['Approved by',e.approvedBy?.name||'Not recorded'],['Applied by',e.actor?.name||e.actor?.id],['Before / after',JSON.stringify(e.proposedChange||e.changes,null,2)]]){const p=maintenanceElement('p',label+': '+value);p.style.whiteSpace='pre-wrap';item.append(p);}root.append(item);}
   document.getElementById('sam-task-more').disabled=samTaskBefore===0;
  }catch(e){root.append(maintenanceElement('p','Task audit could not load. '+e.message));}
 }
