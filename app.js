@@ -520,7 +520,7 @@ function collectionWarning(message){
 }
 async function collectionOptions(key,value,options){
  let expectedRevision=options.expectedRevision||collectionBaselines.get(key)?.revision;
- if(!expectedRevision){const r=await fetch(STORAGE_API+'?key='+encodeURIComponent(key),{headers:{Authorization:'Bearer '+getAuthToken()},signal:AbortSignal.timeout(8000)});if(!r.ok)throw new Error('Could not establish the saved version. Reload before saving.');const d=await r.json();if(d.value!==null)throw new Error('This record was not loaded. Reload before changing it.');collectionRememberRead(key,d);expectedRevision=d.revision;}
+ if(!expectedRevision){const r=await hospFetch(STORAGE_API+'?key='+encodeURIComponent(key),{headers:{Authorization:'Bearer '+getAuthToken()},signal:AbortSignal.timeout(8000)});if(!r.ok)throw new Error('Could not establish the saved version. Reload before saving.');const d=await r.json();if(d.value!==null)throw new Error('This record was not loaded. Reload before changing it.');collectionRememberRead(key,d);expectedRevision=d.revision;}
  if(!/^[a-f0-9]{40}$/.test(expectedRevision||''))throw new Error('The coordinated backend update is required. Reload before saving.');
  const pending=collectionPending.get(key);if(pending){if(pending.value!==value)throw new Error('An earlier save is unconfirmed. Retry that exact save before making another change.');return pending;}
  return {expectedRevision,requestId:options.requestId||crypto.randomUUID(),value};
@@ -533,7 +533,7 @@ function portalStage(key,value,options){
 async function portalFlushPending(){
  const p=portalPendingWorkflow;if(!p)return true;
  try{
-  const r=await fetch(STORAGE_API,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+getAuthToken()},body:JSON.stringify(p.body),signal:AbortSignal.timeout(15000)});
+  const r=await hospFetch(STORAGE_API,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+getAuthToken()},body:JSON.stringify(p.body),signal:AbortSignal.timeout(15000)});
   const d=await r.json().catch(()=>({}));if(!r.ok){if(d.outcome==='not-saved')portalPendingWorkflow=null;throw new Error((d.error||'Save could not be confirmed.')+(portalPendingWorkflow?' Keep this form open and check the same save. Request: '+p.body.requestId:' No changes from this request were saved. Review the form before retrying.'));}
   if(d.outcome!=='saved'||d.collectionReceipt?.requestId!==p.body.requestId)throw new Error('Save receipt was not confirmed. Check the same save. Request: '+p.body.requestId);
   for(const w of p.body.collectionWrites)if(d.collectionReceipt.revisions?.[w.key]!==await collectionHash(w.value))throw new Error('Saved contents could not be confirmed. Check the same save. Request: '+p.body.requestId);
