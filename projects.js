@@ -403,7 +403,7 @@ async function pjToggleTask(taskId, pid) {
 }
 
 // Recreate a single orphaned task for a project item whose task was lost
-async function pjRecreateTask(pid, itemId) {
+async function _atomicImpl_pjRecreateTask(pid, itemId) {
   const p = projects.find(x => x.id === pid);
   if (!p) return;
   const item = (p.items || []).find(i => i.item_id === itemId);
@@ -432,7 +432,7 @@ async function pjRecreateTask(pid, itemId) {
 }
 
 // Bulk re-create all orphaned tasks in a project
-async function pjRelinkAll(pid) {
+async function _atomicImpl_pjRelinkAll(pid) {
   const p = projects.find(x => x.id === pid);
   if (!p) return;
   let count = 0;
@@ -494,7 +494,7 @@ function pjConfirmComplete(pid) {
   }
 }
 
-async function pjDeleteProject(pid) {
+async function _atomicImpl_pjDeleteProject(pid) {
   const p = projects.find(x => x.id === pid);
   if (!p) return;
   const projTasks = tasks.filter(t => t.project_id === pid);
@@ -602,7 +602,7 @@ function pjOpenTaskPicker(pid) {
   modal.classList.add('open');
 }
 
-async function pjLinkSelected(pid) {
+async function _atomicImpl_pjLinkSelected(pid) {
   const p = projects.find(x => x.id === pid);
   if (!p) return;
   const cbs = document.querySelectorAll('.pj-pick-cb:checked');
@@ -626,7 +626,7 @@ async function pjLinkSelected(pid) {
   }
 }
 
-async function pjUnlinkTask(taskId, pid) {
+async function _atomicImpl_pjUnlinkTask(taskId, pid) {
   const t = tasks.find(x => x.id === taskId);
   if (!t) return;
   if (!confirm('Remove this task from the project? The task will remain on the main Tasks tab.')) return;
@@ -682,7 +682,7 @@ function pjOpenCreateTask(pid) {
   if (p.property) document.getElementById('pjt-property').value = p.property;
 }
 
-async function pjSaveNewTask(pid) {
+async function _atomicImpl_pjSaveNewTask(pid) {
   const p = projects.find(x => x.id === pid);
   if (!p) return;
   const propVal = document.getElementById('pjt-property').value;
@@ -808,7 +808,7 @@ function pjProjectShareUrl(token) {
   return 'https://storybook-webhook.vercel.app/api/vendor-page?token=' + token;
 }
 
-async function pjShareVendor(pid, idx, btnEl) {
+async function _atomicImpl_pjShareVendor(pid, idx, btnEl) {
   const p = projects.find(x => x.id === pid);
   if (!p || !p.vendors || !p.vendors[idx]) return;
   const v = p.vendors[idx];
@@ -1320,7 +1320,7 @@ function pjParseReport(text) {
 }
 
 // ── CREATE PROJECT ──────────────────────────────────────────
-async function pjCreateProject() {
+async function _atomicImpl_pjCreateProject() {
   const d = pjImportData;
   const pid = 'proj_' + Date.now();
   const selectedItems = d.items.filter(i => i._create !== false);
@@ -1388,7 +1388,7 @@ async function pjCreateProject() {
 
   projects.push(project);
   if(!(await saveTasks()))return;
-  await savePJ(); pjMigratePdfs();
+  await savePJ(); if(portalWorkflow)portalWorkflow.after.push(()=>pjMigratePdfs());else await pjMigratePdfs();
   closeModal('pj-import-modal');
   pjRenderList();
   renderAll();
@@ -1722,3 +1722,19 @@ async function pjCreateProject() {
     })
     .catch(() => { root.innerHTML = '<div class="pvs-error">Could not load project. Check your connection.</div>'; });
 })();
+
+async function pjRecreateTask(...args){return portalAtomic(()=>_atomicImpl_pjRecreateTask(...args));}
+
+async function pjRelinkAll(...args){return portalAtomic(()=>_atomicImpl_pjRelinkAll(...args));}
+
+async function pjDeleteProject(...args){return portalAtomic(()=>_atomicImpl_pjDeleteProject(...args));}
+
+async function pjLinkSelected(...args){return portalAtomic(()=>_atomicImpl_pjLinkSelected(...args));}
+
+async function pjUnlinkTask(...args){return portalAtomic(()=>_atomicImpl_pjUnlinkTask(...args));}
+
+async function pjSaveNewTask(...args){return portalAtomic(()=>_atomicImpl_pjSaveNewTask(...args));}
+
+async function pjShareVendor(...args){return portalAtomic(()=>_atomicImpl_pjShareVendor(...args));}
+
+async function pjCreateProject(...args){return portalAtomic(()=>_atomicImpl_pjCreateProject(...args));}

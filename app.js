@@ -508,8 +508,57 @@ function startExpiryWatcher(){
 // and the token expired mid-use. Don't block the login screen itself.
 function isAppAuthed(){return document.getElementById('app')?.classList.contains('authed');}
 
+// Inserted into app.js before S. Reads never silently advance an edit baseline.
+const collectionBaselines=new Map(),collectionPending=new Map();
+let portalWorkflow=null,portalPendingWorkflow=null;
+function collectionRememberRead(key,data){if(data&&/^[a-f0-9]{40}$/.test(data.revision||'')&&!collectionBaselines.has(key))collectionBaselines.set(key,{revision:data.revision,value:data.value});}
+async function collectionHash(value){const bytes=new TextEncoder().encode(value),hash=await crypto.subtle.digest('SHA-1',bytes);return [...new Uint8Array(hash)].map(n=>n.toString(16).padStart(2,'0')).join('');}
+function collectionWarning(message){
+ updateSyncStatus('error');let box=document.getElementById('collection-save-warning');if(!box){box=document.createElement('div');box.id='collection-save-warning';box.setAttribute('role','alert');box.style.cssText='position:sticky;top:0;z-index:1001;padding:14px;background:#fff0e6;color:#612315;border:2px solid #a54125';document.body.prepend(box);}
+ box.replaceChildren();const text=document.createElement('div');text.textContent=message;box.append(text);const retry=document.createElement('button');retry.textContent='Check / retry the same save';retry.onclick=()=>portalPendingWorkflow?portalFlushPending():location.reload();box.append(retry);const reload=document.createElement('button');reload.textContent='Reload saved data';reload.onclick=()=>{if(confirm('Reload saved data? Copy any unsaved edits first.'))location.reload();};box.append(reload);
+}
+async function collectionOptions(key,value,options){
+ let expectedRevision=options.expectedRevision||collectionBaselines.get(key)?.revision;
+ if(!expectedRevision){const r=await fetch(STORAGE_API+'?key='+encodeURIComponent(key),{headers:{Authorization:'Bearer '+getAuthToken()},signal:AbortSignal.timeout(8000)});if(!r.ok)throw new Error('Could not establish the saved version. Reload before saving.');const d=await r.json();if(d.value!==null)throw new Error('This record was not loaded. Reload before changing it.');collectionRememberRead(key,d);expectedRevision=d.revision;}
+ if(!/^[a-f0-9]{40}$/.test(expectedRevision||''))throw new Error('The coordinated backend update is required. Reload before saving.');
+ const pending=collectionPending.get(key);if(pending){if(pending.value!==value)throw new Error('An earlier save is unconfirmed. Retry that exact save before making another change.');return pending;}
+ return {expectedRevision,requestId:options.requestId||crypto.randomUUID(),value};
+}
+function portalStage(key,value,options){
+ const ctx=portalWorkflow;if(!ctx)return Promise.resolve(false);
+ const work=(async()=>{try{const prior=ctx.writes.get(key),o=await collectionOptions(key,value,options);ctx.writes.set(key,{key,value,expectedRevision:prior?.expectedRevision||o.expectedRevision});if(key==='se_t'){_lastTaskWriteReceipt={readback:{verified:true,matches:true,staged:true}};_lastTaskWriteFailure=null;}return true;}catch(e){ctx.failed=e;throw e;}})();
+ ctx.pending.add(work);work.finally(()=>ctx.pending.delete(work)).catch(()=>{});return work;
+}
+async function portalFlushPending(){
+ const p=portalPendingWorkflow;if(!p)return true;
+ try{
+  const r=await fetch(STORAGE_API,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+getAuthToken()},body:JSON.stringify(p.body),signal:AbortSignal.timeout(15000)});
+  const d=await r.json().catch(()=>({}));if(!r.ok){if([400,409,428].includes(r.status))portalPendingWorkflow=null;throw new Error(d.error||'Save could not be confirmed. Keep this request and retry.');}
+  if(d.outcome!=='saved'||!d.collectionReceipt)throw new Error('Save receipt was not confirmed. Retry the same save.');
+  for(const w of p.body.collectionWrites)collectionBaselines.set(w.key,{value:w.value,revision:d.collectionReceipt.revisions[w.key]});
+  portalPendingWorkflow=null;
+  for(const w of p.body.collectionWrites){if(w.key==='se_t'){_snapshotTaskBaseline(JSON.parse(w.value));_tasksLoadedCount=JSON.parse(w.value).length;}if(w.key==='se_v')_vendorBaseline=_snapById(JSON.parse(w.value));if(w.key==='se_r')_recBaseline=_snapById(JSON.parse(w.value));}
+  if(!d.collectionReadback?.verified||!d.collectionReadback.matches){collectionWarning('The save was recorded, but current data needs to be reloaded before continuing.');return false;}
+  document.getElementById('collection-save-warning')?.remove();updateSyncStatus('ok');
+  for(const fn of p.after){try{await fn();}catch{collectionWarning('The maintenance save is confirmed. External queue cleanup could not be confirmed; do not repeat the saved task action. Reload and reconcile the source queue.');return true;}}for(const args of p.toasts)p.toast(...args);return true;
+ }catch(e){collectionWarning(e.message);return false;}
+}
+async function portalAtomic(work){
+ if(portalWorkflow||portalPendingWorkflow||collectionPending.size){collectionWarning('Finish or reconcile the pending save before starting another change.');return false;}
+ const saved={task:_taskBaseline,vendor:_vendorBaseline,rec:_recBaseline,taskCount:_tasksLoadedCount,vendorCount:_vendorsLoadedCount,recCount:_recurringLoadedCount};
+ const p={writes:new Map(),pending:new Set(),failed:null,toasts:[],after:[],toast:showToast};portalWorkflow=p;showToast=(...a)=>p.toasts.push(a);
+ let result;try{result=await work();while(p.pending.size)await Promise.all([...p.pending]);if(p.failed)throw p.failed;}
+ catch(e){p.failed=e;}
+ finally{portalWorkflow=null;showToast=p.toast;}
+ if(p.failed){_taskBaseline=saved.task;_vendorBaseline=saved.vendor;_recBaseline=saved.rec;_tasksLoadedCount=saved.taskCount;_vendorsLoadedCount=saved.vendorCount;_recurringLoadedCount=saved.recCount;_pendingTaskSave=null;collectionWarning('Related changes were not saved. '+p.failed.message);return false;}
+ if(!p.writes.size){for(const a of p.toasts)p.toast(...a);return result;}
+ portalPendingWorkflow={body:{requestId:crypto.randomUUID(),collectionWrites:[...p.writes.values()]},after:p.after,toasts:p.toasts,toast:p.toast};
+ const ok=await portalFlushPending();if(!ok){_taskBaseline=saved.task;_vendorBaseline=saved.vendor;_recBaseline=saved.rec;_tasksLoadedCount=saved.taskCount;_vendorsLoadedCount=saved.vendorCount;_recurringLoadedCount=saved.recCount;_pendingTaskSave=null;}return ok?result:false;
+}
+
 const S = {
   get: async (k) => {
+    if(portalWorkflow?.writes.has(k)){const w=portalWorkflow.writes.get(k);return {value:w.value,revision:await collectionHash(w.value),taskProtocol:k==='se_t'?1:undefined,collectionProtocol:1};}
     const token = getAuthToken();
     if (!token) {
       if (isAppAuthed()) showReAuthPrompt();
@@ -522,7 +571,7 @@ const S = {
         signal: AbortSignal.timeout(8000)
       });
       if (r.status === 401) { showReAuthPrompt(); return null; }
-      if (r.ok) { const d = await r.json(); return d.value ? { value: d.value, revision: d.revision, taskProtocol: d.taskProtocol } : null; }
+      if (r.ok) { const d = await r.json(); collectionRememberRead(k,d); return d.value ? { value: d.value, revision: d.revision, taskProtocol: d.taskProtocol } : null; }
       console.warn('[storage] GET returned', r.status);
       return null;
     } catch(e) {
@@ -532,6 +581,7 @@ const S = {
     }
   },
   set: async (k, v, writeOptions = {}) => {
+    if(portalWorkflow)return portalStage(k,v,writeOptions);
     const token = getAuthToken();
     if (!token) {
       if (isAppAuthed()) showReAuthPrompt();
@@ -539,14 +589,18 @@ const S = {
     }
     if (isTokenExpired()) { showReAuthPrompt(); return false; }
     try {
+      if(portalPendingWorkflow)throw new Error('Reconcile the pending related save before making another change.');
+      const options=await collectionOptions(k,v,writeOptions);collectionPending.set(k,options);
       const r = await fetch(STORAGE_API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body: JSON.stringify({ key: k, value: v, ...(k === 'se_t' ? { expectedRevision: writeOptions.expectedRevision, requestId: writeOptions.requestId } : {}) }),
+        body: JSON.stringify({ key: k, value: v, expectedRevision: options.expectedRevision, requestId: options.requestId }),
         signal: AbortSignal.timeout(8000)
       });
       if (r.status === 401) { showReAuthPrompt(); return false; }
       if (!r.ok) {
+        if([400,409,428].includes(r.status))collectionPending.delete(k);
+        if (k !== 'se_t'){const failure=await r.json().catch(()=>({}));collectionWarning(failure.error||'Save was not confirmed. Reload current data before retrying.');}
         if (k === 'se_t') {
           const failure = await r.json().catch(() => ({}));
           _lastTaskWriteFailure = { status: r.status, message: failure.error || 'Task save failed.' };
@@ -557,10 +611,14 @@ const S = {
         showToast('\u274c Save failed — please try again','','',5000);
         return false;
       }
-      if (k === 'se_t') { _lastTaskWriteReceipt = await r.json(); _lastTaskWriteFailure = null; }
+      const receipt=await r.json();
+      collectionPending.delete(k);collectionBaselines.set(k,{value:v,revision:receipt.collectionReceipt?.revisions?.[k]||receipt.savedRevision});
+      if (k === 'se_t') { _lastTaskWriteReceipt = {...receipt,readback:receipt.collectionReadback||receipt.readback}; _lastTaskWriteFailure = null; }
+      if(receipt.collectionReadback&&(!receipt.collectionReadback.verified||!receipt.collectionReadback.matches)){collectionWarning('Saved with a receipt; reload to verify current data.');return false;}
       updateSyncStatus('ok');
       return true;
     } catch(e) {
+      collectionWarning(e.message||'Save could not be confirmed. Retry the same save.');
       if (k === 'se_t') { _lastTaskWriteFailure = { status: 0, message: 'Task save could not be confirmed. Use Retry save before making more changes.' }; taskSaveWarning(_lastTaskWriteFailure.message); }
       console.warn('[storage] Server set failed:', e.message);
       updateSyncStatus('error');
@@ -576,6 +634,7 @@ const S = {
 // server confirms the key is empty (HTTP 200, value null) and THROWS on any
 // failure (no/expired token, 401, non-200, timeout, network error).
 async function _kvGetStrict(k){
+  if(portalWorkflow?.writes.has(k)){const w=portalWorkflow.writes.get(k);return {value:w.value,revision:await collectionHash(w.value),taskProtocol:k==='se_t'?1:undefined,collectionProtocol:1};}
   const token = getAuthToken();
   if (!token) throw new Error('no auth token');
   if (isTokenExpired()) throw new Error('auth token expired');
@@ -587,6 +646,7 @@ async function _kvGetStrict(k){
   if (!r.ok) throw new Error('HTTP ' + r.status);
   const d = await r.json();
   if (!d || !('value' in d)) throw new Error('malformed storage response');
+  collectionRememberRead(k,d);
   return d.value ? { value: d.value, revision: d.revision, taskProtocol: d.taskProtocol } : null;
 }
 // ── Sync status indicator ──
@@ -615,6 +675,8 @@ const _deletedVendorIds = new Set();
 const _deletedRecIds = new Set();
 
 async function load() {
+  try{const p=await _kvGetStrict('se_props'),n=await _kvGetStrict('se_nbs');if(p){const v=JSON.parse(p.value);if(!Array.isArray(v))throw new Error('Invalid property catalog');PROPS.splice(0,PROPS.length,...v);}if(n){const v=JSON.parse(n.value);if(!Array.isArray(v))throw new Error('Invalid neighborhood catalog');NBS.splice(0,NBS.length,...v);}rebuildPropertyMaps();}catch(e){collectionWarning('Saved property catalog could not be loaded. Reload before editing properties.');}
+
   try {
     const r = await _kvGetStrict('se_t');
     if (r) {
@@ -671,7 +733,7 @@ async function load() {
   // Task change log
   try{await loadTaskLog();}catch(e){}
 }
-async function save(k,v){try{await S.set(k,JSON.stringify(v));}catch(e){}}
+async function save(k,v){const ok=await S.set(k,JSON.stringify(v));if(!ok){const e=new Error('Save was not confirmed for '+k+'. Reload current data before continuing.');if(portalWorkflow)portalWorkflow.failed=e;throw e;}return true;}
 
 // ── Read-before-write merge helper ────────────────────────────────────────────
 // Fetches the current server state and merges any items added by other admins
@@ -687,29 +749,32 @@ async function save(k,v){try{await S.set(k,JSON.stringify(v));}catch(e){}}
 let _vendorBaseline=new Map(), _recBaseline=new Map();
 const _snapById=arr=>new Map((arr||[]).filter(x=>x&&x.id).map(x=>[x.id,JSON.stringify(x)]));
 async function _rbw3Merge(kvKey, localArr, baseline, excludeIds, unionField){
-  let server;
+  let server,mergeRevision;
   try{
-    const r=await S.get(kvKey);if(!r||!r.value)return localArr;
+    const r=await S.get(kvKey);if(!r||!r.value)throw new Error('Collection read unavailable; reload before saving.');mergeRevision=r.revision;
     server=JSON.parse(r.value);if(!Array.isArray(server))return localArr;
-  }catch(e){console.warn(`[rbw3] ${kvKey}: read failed, using local state`);return localArr;}
+  }catch(e){throw new Error('Current collection could not be read. Reload before saving.');}
   const sMap=new Map(server.filter(x=>x&&x.id).map(x=>[x.id,x]));
   const J=x=>JSON.stringify(x);
   const out=[];
   localArr.forEach(l=>{
     const s=sMap.get(l.id),bStr=baseline.get(l.id);
-    if(!s){if(bStr&&J(l)===bStr)return;out.push(l);return;}   // gone on server and untouched here → stays gone
-    if(!bStr){out.push(l);return;}                              // new on this page
+    if(!s){if(bStr&&J(l)===bStr)return;if(bStr)throw new Error('This record was deleted by another editor. Reload before saving.');out.push(l);return;}   // gone on server and untouched here → stays gone
+    if(!bStr){if(J(l)!==J(s))throw new Error('A different record already uses this ID. Reload before saving.');out.push(s);return;}                              // new on this page
     if(J(l)===bStr){out.push(s);return;}                        // untouched here → server copy
     const b=JSON.parse(bStr),m=Object.assign({},l);
+    for(const key of new Set([...Object.keys(b),...Object.keys(l),...Object.keys(s)])){if(key===unionField)continue;if(J(l[key])!==J(b[key])&&J(s[key])!==J(b[key])&&J(l[key])!==J(s[key]))throw new Error('Another editor changed '+key+'. Reload and review both changes before saving.');}
     Object.keys(s).forEach(k=>{if(J(s[k])!==J(b[k])&&J(l[k])===J(b[k]))m[k]=s[k];});
     if(unionField&&Array.isArray(s[unionField])){
+      if(J(l[unionField])!==J(b[unionField])&&J(s[unionField])!==J(b[unionField])&&J(l[unionField])!==J(s[unionField])){const bmap=new Map((b[unionField]||[]).map(n=>[n.id,J(n)]));const lmap=new Map((l[unionField]||[]).map(n=>[n.id,J(n)]));for(const n of s[unionField])if(bmap.has(n.id)&&J(n)!==bmap.get(n.id)&&lmap.get(n.id)!==J(n))throw new Error('A saved note changed. Reload and review both versions.');}
       const have=new Set((m[unionField]||[]).map(n=>n&&n.id)),was=new Set((b[unionField]||[]).map(n=>n&&n.id));
       s[unionField].forEach(n=>{if(n&&n.id&&!have.has(n.id)&&!was.has(n.id))(m[unionField]=m[unionField]||[]).push(n);});
     }
     out.push(m);
   });
   const localIds=new Set(localArr.map(x=>x&&x.id));
-  server.forEach(s=>{if(s&&s.id&&!localIds.has(s.id)&&!(excludeIds&&excludeIds.has(s.id)))out.push(s);});
+  server.forEach(s=>{if(s&&s.id&&!localIds.has(s.id)){if(excludeIds&&excludeIds.has(s.id)){if(baseline.has(s.id)&&J(s)!==baseline.get(s.id))throw new Error('This record changed before deletion. Reload before saving.');}else out.push(s);}});
+  collectionBaselines.set(kvKey,{revision:mergeRevision,value:JSON.stringify(server)});
   return out;
 }
 async function _rbwMerge(kvKey, localArray, idField='id', excludeIds=null) {
@@ -780,6 +845,7 @@ function _mergeTasksWithServer(localArr, serverArr, deletedIds){
 }
 let _lastTaskWriteReceipt=null,_lastTaskWriteFailure=null,_pendingTaskSave=null;
 function taskSaveWarning(message){
+  if(portalWorkflow)portalWorkflow.failed=new Error(message);
   updateSyncStatus('error');
   let el=document.getElementById('task-save-warning');
   if(!el){
@@ -947,6 +1013,7 @@ const _nbById=Object.fromEntries(NBS.map(n=>[n.id,n]));
 // Sold properties: shown only in Service History so their past records stay visible. (2026-10-24)
 const RETIRED_NB={id:'sold',name:'Sold',sub:'No longer in the portfolio',cls:'sold',props:PROPS.filter(p=>p.retired).map(p=>p.id)};
 RETIRED_NB.props.forEach(pid=>{_nbMap[pid]=RETIRED_NB;});
+function rebuildPropertyMaps(){for(const map of [_propMap,_nbMap,_nbById])for(const k of Object.keys(map))delete map[k];PROPS.forEach(p=>_propMap[p.id]=p);NBS.forEach(n=>{_nbById[n.id]=n;(n.props||[]).forEach(id=>_nbMap[id]=n);});RETIRED_NB.props=PROPS.filter(p=>p.retired).map(p=>p.id);RETIRED_NB.props.forEach(id=>_nbMap[id]=RETIRED_NB);}
 function activePropIds(){return PROPS.filter(p=>!p.retired).map(p=>p.id);}
 // Virtual "neighborhood-level" properties for log entries covering an entire resort
 const _nbVirtualProps={
@@ -1616,13 +1683,13 @@ async function bulkToggleUrgent(){
   showToast(sel.length+' task'+(sel.length!==1?'s':'')+' marked '+(anyNotUrgent?'urgent':'not urgent'));
 }
 
-async function bulkMarkComplete(){
+async function _atomicImpl_bulkMarkComplete(){
   const sel=_getSelectedTasks();if(!sel.length){showToast('No tasks selected');return;}
   if(!confirm('Mark '+sel.length+' task(s) as complete?'))return;
   sel.forEach(t=>{t.status='complete';logTaskChange('bulk_complete',t);});
   _selectedTasks.clear();
   if(!(await saveTasks()))return;renderAll();updateBulkBar();
-  advanceRecurringForTasks(sel);
+  await advanceRecurringForTasks(sel);
   showToast(sel.length+' task'+(sel.length!==1?'s':'')+' marked complete');
 }
 
@@ -3110,7 +3177,7 @@ function getLogTaskVendorValue(){
   return v==='__custom__'?document.getElementById('lt-vendor-custom').value.trim():v;
 }
 
-async function saveLogTask(){
+async function _atomicImpl_saveLogTask(){
   const r=recurring.find(x=>x.id===_logTaskRecId);if(!r){showToast('Recurring task not found.','err');return;}
   const prop=document.getElementById('lt-prop').value;
   if(!prop){showToast('Please select a property.','err');return;}
@@ -3313,7 +3380,7 @@ function openAddTask(propId){
   if(propId){setTimeout(()=>{document.getElementById('f-property').value=propId;if(typeof fsRenderBundlerInline==='function')fsRenderBundlerInline();},50);}
   else document.getElementById('f-property').value='';
 }
-async function saveTask(){
+async function _atomicImpl_saveTask(){
   const pid=document.getElementById('f-property').value;const prob=document.getElementById('f-problem').value.trim();
   if(!pid||!prob){showToast('Property and problem are required.','err');return;}
   const nt=document.getElementById('f-notes').value.trim();
@@ -4946,7 +5013,7 @@ document.addEventListener('click',e=>{
   if(!e.target.closest('.db-wrap'))document.querySelectorAll('.db-picker').forEach(p=>p.classList.remove('open'));
 });
 
-async function markComplete(){
+async function _atomicImpl_markComplete(){
   const t=tasks.find(x=>x.id===detailId);if(!t)return;
   // Deploy 3: gate filter tasks on a recount close-out before marking complete.
   // Vendor must enter how many filters of each size are left at the cabin.
@@ -4958,14 +5025,14 @@ async function markComplete(){
   document.getElementById('complete-btn').style.display='none';
   logTaskChange('completed',t);if(!(await saveTasks()))return;closeModal('detail-modal');renderAll();showToast('Task marked complete.');
   // Deploy 2: if this task carried filter service, writeback profile last_service_date
-  if(typeof fsOnTaskComplete==='function')fsOnTaskComplete(t);
-  advanceRecurringForTasks([t]);
+  if(typeof fsOnTaskComplete==='function')await fsOnTaskComplete(t);
+  await advanceRecurringForTasks([t]);
   // Check if this completes a payment group where vendor requested payment
   checkAdminPaymentPrompt(t);
 }
 
 // Quick-complete from vendor-done banner (no modal needed)
-async function vdQuickComplete(id,e){
+async function _atomicImpl_vdQuickComplete(id,e){
   e.stopPropagation();
   const t=tasks.find(x=>x.id===id);if(!t)return;
   // Deploy 3: filter tasks get the recount modal even on quick-complete path
@@ -4975,8 +5042,8 @@ async function vdQuickComplete(id,e){
   }
   t.status='complete';logTaskChange('completed',t);
   if(!(await saveTasks()))return;renderAll();showToast('Task marked complete.');
-  if(typeof fsOnTaskComplete==='function')fsOnTaskComplete(t);
-  advanceRecurringForTasks([t]);
+  if(typeof fsOnTaskComplete==='function')await fsOnTaskComplete(t);
+  await advanceRecurringForTasks([t]);
   checkAdminPaymentPrompt(t);
 }
 
@@ -5228,7 +5295,7 @@ function _unlinkTasksFromProjects(ids){
   projects.forEach(p=>(p.items||[]).forEach(item=>{if(item.task_id&&set.has(item.task_id)){out.push({item,taskId:item.task_id});item.task_id=null;}}));
   return out;
 }
-async function deleteTask(){
+async function _atomicImpl_deleteTask(){
   const deleted=tasks.find(x=>x.id===detailId);if(!deleted)return;
   const idx=tasks.indexOf(deleted);
   logTaskChange('deleted',deleted);
@@ -5244,7 +5311,7 @@ async function deleteTask(){
 /* Quick-add historical task form */
 let histFormOpen=false;
 function toggleHistForm(){histFormOpen=!histFormOpen;renderHistory();}
-async function saveHistTask(){
+async function _atomicImpl_saveHistTask(){
   const date=document.getElementById('h-date').value;
   const pid=document.getElementById('h-prop').value;
   const cat=document.getElementById('h-cat').value;
@@ -5656,7 +5723,7 @@ function openEditVendor(id){
   document.getElementById('v-pay-cashapp').checked=pm.includes('cashapp');
   document.getElementById('v-del-btn').style.display='';document.getElementById('vendor-modal').classList.add('open');
 }
-async function saveVendor(){
+async function _atomicImpl_saveVendor(){
   const name=document.getElementById('v-name').value.trim();if(!name){showToast('Name required.','err');return;}
   const pm=[];if(document.getElementById('v-pay-venmo').checked)pm.push('venmo');if(document.getElementById('v-pay-cashapp').checked)pm.push('cashapp');
   const old=editVendorId?vendors.find(x=>x.id===editVendorId):null;
@@ -5694,11 +5761,11 @@ async function _cascadeVendorRename(oldName,newName,v){
   if(v&&v.links){if(v.links.agenda)linkTokens.push(v.links.agenda);Object.values(v.links.days||{}).forEach(x=>linkTokens.push(x));}
   for(const tok of [...linkTokens,...projTokens]){
     try{
-      const r=await S.get('se_vs_'+tok);if(!r||!r.value)continue;
+      const r=await S.get('se_vs_'+tok);if(!r||!r.value)throw new Error('A vendor link could not be read.');
       const sheet=JSON.parse(r.value);
       if(sheet.type==='project')sheet.vendor_name=newName;else sheet.vendor=newName;
       await S.set('se_vs_'+tok,JSON.stringify(sheet));
-    }catch(e){console.warn('[vendor-rename] link update failed',tok,e);}
+    }catch(e){if(portalWorkflow)portalWorkflow.failed=e;throw e;}
   }
   if(tc)if(!(await saveTasks()))return;
   if(rc)await saveRec();
@@ -6168,7 +6235,7 @@ function openAabImport(){
   _aabLoadPdfLib().catch(e=>console.warn('[aab] pdf.js preload failed',e));
 }
 
-async function aabLogAll(){
+async function _atomicImpl_aabLogAll(){
   const rows=_aabRows.filter(r=>!r.skip);
   if(!rows.length){showToast('Nothing to log — all rows skipped.','err');return;}
   // Validate
@@ -6206,6 +6273,7 @@ const HB_CONFIG = {
 };
 let hbItems = [];
 let hbDismissed = []; // dismissed items (persisted to KV)
+let hbDispositions=[];
 let hbDismissedLoadedOk = false; // 2026-10-04
 async function hbSaveDismissed() {
   if (!hbDismissedLoadedOk) { console.error('[hb] dismissed-list save blocked — list did not load'); return; }
@@ -6262,7 +6330,7 @@ async function hbFetch() {
     const r = await fetch(HB_CONFIG.apiUrl + '/api/tasks', { headers, signal: AbortSignal.timeout(10000) });
     if (!r.ok) return;
     const data = await r.json();
-    hbItems = data.items || [];
+    hbItems = (data.items || []).filter(x=>![...hbDismissed,...hbDispositions].some(d=>d.id===x.id));
     renderHB();
   } catch (e) { console.warn('HostBuddy fetch failed:', e.message); }
 }
@@ -6271,6 +6339,7 @@ async function hbStartPolling() {
   if (!HB_CONFIG.apiUrl) return;
   // Load dismissed items from KV
   try {
+    const dispositions=await _kvGetStrict('se_hb_dispositions');hbDispositions=dispositions?JSON.parse(dispositions.value):[];if(!Array.isArray(hbDispositions))throw new Error('Invalid source dispositions');
     const raw = await _kvGetStrict('se_hb_dismissed');
     if (raw && raw.value) { const arr = JSON.parse(raw.value); if (Array.isArray(arr)) hbDismissed = arr; }
     hbDismissedLoadedOk = true;
@@ -6442,9 +6511,10 @@ function getTimeAgo(iso) {
   return Math.floor(hrs / 24) + 'd ago';
 }
 
-async function hbImport(id) {
+async function _atomicImpl_hbImport(id) {
   const item = hbItems.find(x => x.id === id);
   if (!item) return;
+  const existingTask=tasks.find(t=>t.id===item.taskId||t.sourceRecord?.sourceId===id&&String(t.sourceRecord.kind).includes('hostBuddy'));if(existingTask){openDetail(existingTask.id);showToast('This source already has a task.');return;}
   // Try standard field match first, then deep-scan raw payload as fallback
   let pid = hbMatchProperty(item.property);
   if (!pid && item._raw) pid = hbDeepMatchProperty(item._raw);
@@ -6463,6 +6533,7 @@ async function hbImport(id) {
   }
   const t = {
     id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
+    sourceRecord:{kind:'hostBuddy',sourceId:item.id},
     property: pid || '',
     guest: guest || '',
     problem: problem || 'HostBuddy action item',
@@ -6495,7 +6566,7 @@ async function hbImport(id) {
   if (!pid) { detailId = t.id; openDetail(t.id); }
 }
 
-async function hbImportAll() {
+async function _atomicImpl_hbImportAll() {
   let n = 0;
   const ids = [];
   for (const item of [...hbItems]) {
@@ -6509,7 +6580,8 @@ async function hbImportAll() {
     }
     tasks.unshift({
       id: Date.now().toString() + Math.random().toString(36).slice(2, 6) + n,
-      property: pid || '', guest: item.guest || '',
+      sourceRecord:{kind:'hostBuddy',sourceId:item.id},
+    property: pid || '', guest: item.guest || '',
       problem: problem || 'HostBuddy action item',
       category: cat || '', status: 'open', date: '', vendor: '',
       urgent: !!(item.urgent), recurring: false,
@@ -6535,7 +6607,7 @@ async function hbImportAll() {
   showToast(`${n} task${n > 1 ? 's' : ''} imported from HostBuddy.`);
 }
 
-async function hbDismiss(id) {
+async function _atomicImpl_hbDismiss(id) {
   const item = hbItems.find(x => x.id === id);
   if (item) {
     hbDismissed.unshift({ ...item, dismissedAt: new Date().toISOString() });
@@ -6549,7 +6621,7 @@ async function hbDismiss(id) {
   showToast('Item dismissed.');
 }
 
-async function hbDismissAll() {
+async function _atomicImpl_hbDismissAll() {
   const now = new Date().toISOString();
   hbItems.forEach(item => hbDismissed.unshift({ ...item, dismissedAt: now }));
   if (hbDismissed.length > 50) hbDismissed = hbDismissed.slice(0, 50);
@@ -6560,9 +6632,10 @@ async function hbDismissAll() {
   showToast('All incoming items dismissed.');
 }
 
-async function hbRestore(id) {
+async function _atomicImpl_hbRestore(id) {
   const item = hbDismissed.find(x => x.id === id);
   if (!item) return;
+  const existingTask=tasks.find(t=>t.id===item.taskId||t.sourceRecord?.sourceId===id&&String(t.sourceRecord.kind).includes('hostBuddy'));if(existingTask){openDetail(existingTask.id);showToast('This source already has a task.');return;}
   // Import as task (same as hbImport but from dismissed list)
   let pid = hbMatchProperty(item.property);
   if (!pid && item._raw) pid = hbDeepMatchProperty(item._raw);
@@ -6574,6 +6647,7 @@ async function hbRestore(id) {
   }
   const t = {
     id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
+    sourceRecord:{kind:'hostBuddy',sourceId:item.id},
     property: pid || '', guest: item.guest || '',
     problem: problem || 'HostBuddy action item',
     category: cat || '', status: 'open', date: '', vendor: '',
@@ -6607,12 +6681,20 @@ function toggleHbDismissed() {
 }
 
 async function hbRemoveFromServer(id) {
+  if(portalWorkflow){
+    if(!hbDismissedLoadedOk)throw new Error('Source dispositions did not load; no changes saved.');
+    const ids=id==='all'?hbItems.map(x=>x.id):id.split(',');
+    const now=new Date().toISOString();for(const sourceId of ids)if(!hbDispositions.some(x=>x.id===sourceId))hbDispositions.push({id:sourceId,at:now,by:getCurrentUserName(),disposition:'handled'});
+    await save('se_hb_dispositions',hbDispositions);portalWorkflow.after.push(()=>ids.length?hbRemoveFromServer(ids.join(',')):undefined);return;
+  }
   if (!HB_CONFIG.apiUrl) return;
   try {
     const headers = {};
     if (HB_CONFIG.apiToken) headers['Authorization'] = 'Bearer ' + HB_CONFIG.apiToken;
-    await fetch(HB_CONFIG.apiUrl + '/api/tasks?id=' + encodeURIComponent(id), { method: 'DELETE', headers, signal: AbortSignal.timeout(8000) });
-  } catch (e) { console.warn('Failed to remove item from server:', e.message); }
+    headers['Content-Type']='application/json';
+    const response=await fetch(HB_CONFIG.apiUrl + '/api/tasks?id=' + encodeURIComponent(id), { method: 'DELETE', headers, body:JSON.stringify({requestId:'hb_'+crypto.randomUUID()}), signal: AbortSignal.timeout(8000) });
+    if(!response.ok)throw new Error('External queue cleanup unconfirmed');
+  } catch (e) { throw new Error('External queue cleanup unconfirmed'); }
 }
 
 // ── Suggested by Claude: review list (2026-10-04) ─────────────
@@ -6690,7 +6772,7 @@ async function _cqAddTasks(items) {
   newTasks.forEach(t => { try { logTaskChange('created', t); } catch (e) {} });
   return newTasks;
 }
-async function cqImport(ids) {
+async function _atomicImpl_cqImport(ids) {
   if (cqBusy || !cqLoadedOk) return;
   const items = cqItems.filter(x => ids.includes(x.id));
   if (!items.length) return;
@@ -6710,7 +6792,7 @@ async function cqImport(ids) {
     renderCQ(); renderAll();
   } finally { cqBusy = false; }
 }
-async function cqDismiss(ids) {
+async function _atomicImpl_cqDismiss(ids) {
   if (cqBusy || !cqLoadedOk) return;
   const items = cqItems.filter(x => ids.includes(x.id));
   if (!items.length) return;
@@ -6728,7 +6810,7 @@ async function cqDismiss(ids) {
     showToast(items.length === 1 ? 'Suggestion dismissed.' : `${items.length} suggestions dismissed.`);
   } finally { cqBusy = false; }
 }
-async function cqRestore(id) {
+async function _atomicImpl_cqRestore(id) {
   if (cqBusy || !cqLoadedOk) return;
   const item = cqDismissed.find(x => x.id === id);
   if (!item) return;
@@ -6833,12 +6915,12 @@ function renderDrafts(){
   const open=drItems.filter(d=>d.status==='draft');
   if(!open.length){el.innerHTML='';return;}
   let h=`<div class="hb-banner dr-banner"><div class="hb-hdr" style="flex-wrap:wrap;gap:8px">
-    <div class="hb-title dr-title">Texts to send — drafted by Claude</div><span class="hb-count">${open.length} waiting</span></div>`;
+    <div class="hb-title dr-title">Texts to send</div><span class="hb-count">${open.length} waiting</span></div>`;
   open.forEach(d=>{
     const id=escHtml(d.id);
     const items=(d.taskIds||[]).map(tid=>tasks.find(t=>t.id===tid)).filter(Boolean)
       .map(t=>`<span>${escHtml(shortPropName(t.property))}: ${escHtml(t.problem.length>60?t.problem.slice(0,60)+'…':t.problem)}</span>`).join('');
-    h+=`<div class="hb-item dr-item"><div class="dr-to">To: ${escHtml((d.to||[]).map(x=>x.name).join(', '))}</div>
+    h+=`<div class="hb-item dr-item"><div class="dr-to">To: ${escHtml((d.to||[]).map(x=>x.name).join(', '))} · Drafted by ${escHtml(d.actor?.name||d.by||'Claude')}</div>
       ${items?`<div class="hb-item-meta dr-items">${items}</div>`:''}
       <textarea id="dr-ta-${id}" class="dr-ta" rows="${Math.min(8,Math.max(3,Math.ceil(String(d.text||'').length/70)))}" oninput="drSyncLink('${id}')">${escHtml(d.text)}</textarea>
       ${d.note?`<div class="hb-item-snippet">${escHtml(d.note)}</div>`:''}
@@ -7851,7 +7933,7 @@ let rpData = []; // Legacy — kept for migration only
 let rpPhaseFilter = 'needed'; // 'needed'|'purchased'|'delivered'|'all'
 
 // ── Migration: convert old rpData items into tasks ──
-async function loadReplacements() {
+async function _atomicImpl_loadReplacements() {
   try {
     const r = await S.get('se_purchases');
     if (r) rpData = JSON.parse(r.value);
@@ -10756,7 +10838,7 @@ function ppCancelEdit() {
   ppRenderDetail();
 }
 
-async function ppCommitEdit(path) {
+async function _atomicImpl_ppCommitEdit(path) {
   const input = document.getElementById('pp-ed-' + path);
   if (!input) return;
   const raw = input.value;
@@ -10828,7 +10910,7 @@ function ppRenderIssue(iss) {
   return h;
 }
 
-async function ppPromoteIssue(pid, issueId) {
+async function _atomicImpl_ppPromoteIssue(pid, issueId) {
   const p = PP[pid];
   if (!p) return;
   const iss = (p.outstanding_issues || []).find((i) => i.id === issueId);
@@ -10870,7 +10952,7 @@ async function ppPromoteIssue(pid, issueId) {
   if (typeof showToast === 'function') showToast('✓ Promoted to task');
 }
 
-async function ppDismissIssue(pid, issueId) {
+async function _atomicImpl_ppDismissIssue(pid, issueId) {
   const p = PP[pid];
   if (!p) return;
   const iss = (p.outstanding_issues || []).find((i) => i.id === issueId);
@@ -11169,7 +11251,7 @@ function ppInvPopOutsideClick(e) {
   ppInvClosePop();
 }
 
-async function ppInvSavePopover(pid, size) {
+async function _atomicImpl_ppInvSavePopover(pid, size) {
   const p = PP[pid];
   if (!p) return;
   if (!p.hvac) p.hvac = {};
@@ -11306,7 +11388,7 @@ function ppInvEditKey(ev, pid) {
   }, 0);
 }
 
-async function ppInvSaveKey(pid) {
+async function _atomicImpl_ppInvSaveKey(pid) {
   const p = PP[pid];
   if (!p) return;
   if (!p.access) p.access = {};
@@ -11693,7 +11775,7 @@ async function shopMarkBought(id){
 //  • Magic Mountain was sold: taken out of recurring templates (its own Aqua Clear job is removed).
 //  • Vendor categories and per-category ranking; James Hawthorne no longer works with us.
 // Runs once. The flag is saved in se_settings so later re-ranking is never overwritten.
-async function dataSetup20261024(){
+async function _atomicImpl_dataSetup20261024(){
   if(!settingsLoadedOk||!vendorsLoadedOk||!recurringLoadedOk)return;
   if(!appSettings.migrations||typeof appSettings.migrations!=='object')appSettings.migrations={};
   if(appSettings.migrations.setup20261024)return;
@@ -11928,7 +12010,7 @@ function fsRecountOpen(profile, sizes) {
   }, 20);
 }
 
-async function fsRecountSave() {
+async function _atomicImpl_fsRecountSave() {
   const task = _fsRecountTask;
   if (!task) return;
   const p = PP && PP[task.property];
@@ -12039,7 +12121,7 @@ function fsRenderNeedsAttention() {
   return h;
 }
 
-async function fsBumpServiceDate(pid) {
+async function _atomicImpl_fsBumpServiceDate(pid) {
   if (!PP || !PP[pid]) return;
   if (!confirm('Mark filter service complete for this cabin as of today?')) return;
   const p = PP[pid];
@@ -12067,7 +12149,7 @@ async function fsBumpServiceDate(pid) {
   showToast('Marked serviced ' + today);
 }
 
-async function fsEditServiceDate(pid) {
+async function _atomicImpl_fsEditServiceDate(pid) {
   if (!PP || !PP[pid]) return;
   const p = PP[pid];
   const cur = (p.hvac && p.hvac.filter_service && p.hvac.filter_service.last_service_date) || '';
@@ -14163,3 +14245,57 @@ async function samTaskActivityLoad(older=false){
   document.getElementById('sam-task-more').disabled=samTaskBefore===0;
  }catch(e){root.append(maintenanceElement('p','Task audit could not load. '+e.message));}
 }
+
+async function saveVendor(...args){return portalAtomic(()=>_atomicImpl_saveVendor(...args));}
+
+async function saveLogTask(...args){return portalAtomic(()=>_atomicImpl_saveLogTask(...args));}
+
+async function saveTask(...args){return portalAtomic(()=>_atomicImpl_saveTask(...args));}
+
+async function saveHistTask(...args){return portalAtomic(()=>_atomicImpl_saveHistTask(...args));}
+
+async function ppCommitEdit(...args){return portalAtomic(()=>_atomicImpl_ppCommitEdit(...args));}
+
+async function ppPromoteIssue(...args){return portalAtomic(()=>_atomicImpl_ppPromoteIssue(...args));}
+
+async function ppDismissIssue(...args){return portalAtomic(()=>_atomicImpl_ppDismissIssue(...args));}
+
+async function ppInvSavePopover(...args){return portalAtomic(()=>_atomicImpl_ppInvSavePopover(...args));}
+
+async function ppInvSaveKey(...args){return portalAtomic(()=>_atomicImpl_ppInvSaveKey(...args));}
+
+async function fsRecountSave(...args){return portalAtomic(()=>_atomicImpl_fsRecountSave(...args));}
+
+async function fsBumpServiceDate(...args){return portalAtomic(()=>_atomicImpl_fsBumpServiceDate(...args));}
+
+async function fsEditServiceDate(...args){return portalAtomic(()=>_atomicImpl_fsEditServiceDate(...args));}
+
+async function cqImport(...args){return portalAtomic(()=>_atomicImpl_cqImport(...args));}
+
+async function cqDismiss(...args){return portalAtomic(()=>_atomicImpl_cqDismiss(...args));}
+
+async function cqRestore(...args){return portalAtomic(()=>_atomicImpl_cqRestore(...args));}
+
+async function hbImport(...args){return portalAtomic(()=>_atomicImpl_hbImport(...args));}
+
+async function hbImportAll(...args){return portalAtomic(()=>_atomicImpl_hbImportAll(...args));}
+
+async function hbDismiss(...args){return portalAtomic(()=>_atomicImpl_hbDismiss(...args));}
+
+async function hbDismissAll(...args){return portalAtomic(()=>_atomicImpl_hbDismissAll(...args));}
+
+async function aabLogAll(...args){return portalAtomic(()=>_atomicImpl_aabLogAll(...args));}
+
+async function markComplete(...args){return portalAtomic(()=>_atomicImpl_markComplete(...args));}
+
+async function vdQuickComplete(...args){return portalAtomic(()=>_atomicImpl_vdQuickComplete(...args));}
+
+async function deleteTask(...args){return portalAtomic(()=>_atomicImpl_deleteTask(...args));}
+
+async function bulkMarkComplete(...args){return portalAtomic(()=>_atomicImpl_bulkMarkComplete(...args));}
+
+async function hbRestore(...args){return portalAtomic(()=>_atomicImpl_hbRestore(...args));}
+
+async function loadReplacements(...args){return portalAtomic(()=>_atomicImpl_loadReplacements(...args));}
+
+async function dataSetup20261024(...args){return portalAtomic(()=>_atomicImpl_dataSetup20261024(...args));}
