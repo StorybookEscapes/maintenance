@@ -514,8 +514,9 @@ let portalWorkflow=null,portalPendingWorkflow=null;
 function collectionRememberRead(key,data){if(data&&/^[a-f0-9]{40}$/.test(data.revision||'')&&!collectionBaselines.has(key))collectionBaselines.set(key,{revision:data.revision,value:data.value});}
 async function collectionHash(value){const bytes=new TextEncoder().encode(value),hash=await crypto.subtle.digest('SHA-1',bytes);return [...new Uint8Array(hash)].map(n=>n.toString(16).padStart(2,'0')).join('');}
 function collectionWarning(message){
+ if(typeof _taskCreationAttempt!=='undefined'&&_taskCreationAttempt)taskCreationMessage(message+'\nTask ID: '+_taskCreationAttempt.task.id);
  updateSyncStatus('error');let box=document.getElementById('collection-save-warning');if(!box){box=document.createElement('div');box.id='collection-save-warning';box.setAttribute('role','alert');box.style.cssText='position:sticky;top:0;z-index:1001;padding:14px;background:#fff0e6;color:#612315;border:2px solid #a54125';document.body.prepend(box);}
- box.replaceChildren();const text=document.createElement('div');text.textContent=message;box.append(text);const retry=document.createElement('button');retry.textContent='Check / retry the same save';retry.onclick=()=>portalPendingWorkflow?portalFlushPending():location.reload();box.append(retry);const reload=document.createElement('button');reload.textContent='Reload saved data';reload.onclick=()=>{if(confirm('Reload saved data? Copy any unsaved edits first.'))location.reload();};box.append(reload);
+ box.replaceChildren();const text=document.createElement('div');text.textContent=message;box.append(text);const retry=document.createElement('button');retry.textContent='Check / retry the same save';retry.onclick=()=>typeof _taskCreationAttempt!=='undefined'&&_taskCreationAttempt?saveTask():portalPendingWorkflow?portalFlushPending():location.reload();box.append(retry);const reload=document.createElement('button');reload.textContent='Reload saved data';reload.onclick=()=>{if(confirm('Reload saved data? Copy any unsaved edits first.'))location.reload();};box.append(reload);
 }
 async function collectionOptions(key,value,options){
  let expectedRevision=options.expectedRevision||collectionBaselines.get(key)?.revision;
@@ -526,19 +527,22 @@ async function collectionOptions(key,value,options){
 }
 function portalStage(key,value,options){
  const ctx=portalWorkflow;if(!ctx)return Promise.resolve(false);
- const work=(async()=>{try{const prior=ctx.writes.get(key),o=await collectionOptions(key,value,options);ctx.writes.set(key,{key,value,expectedRevision:prior?.expectedRevision||o.expectedRevision});if(key==='se_t'){_lastTaskWriteReceipt={readback:{verified:true,matches:true,staged:true}};_lastTaskWriteFailure=null;}return true;}catch(e){ctx.failed=e;throw e;}})();
+ const work=(async()=>{try{const prior=ctx.writes.get(key),o=await collectionOptions(key,value,options);ctx.writes.set(key,{key,value,expectedRevision:prior?.expectedRevision||o.expectedRevision});if(key==='se_t'){_lastTaskWriteReceipt={staged:true,readback:{verified:false,matches:false}};_lastTaskWriteFailure=null;}return true;}catch(e){ctx.failed=e;throw e;}})();
  ctx.pending.add(work);work.finally(()=>ctx.pending.delete(work)).catch(()=>{});return work;
 }
 async function portalFlushPending(){
  const p=portalPendingWorkflow;if(!p)return true;
  try{
   const r=await fetch(STORAGE_API,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+getAuthToken()},body:JSON.stringify(p.body),signal:AbortSignal.timeout(15000)});
-  const d=await r.json().catch(()=>({}));if(!r.ok){if([400,409,428].includes(r.status))portalPendingWorkflow=null;throw new Error(d.error||'Save could not be confirmed. Keep this request and retry.');}
-  if(d.outcome!=='saved'||!d.collectionReceipt)throw new Error('Save receipt was not confirmed. Retry the same save.');
+  const d=await r.json().catch(()=>({}));if(!r.ok){if(d.outcome==='not-saved')portalPendingWorkflow=null;throw new Error((d.error||'Save could not be confirmed.')+(portalPendingWorkflow?' Keep this form open and check the same save. Request: '+p.body.requestId:' No changes from this request were saved. Review the form before retrying.'));}
+  if(d.outcome!=='saved'||d.collectionReceipt?.requestId!==p.body.requestId)throw new Error('Save receipt was not confirmed. Check the same save. Request: '+p.body.requestId);
+  for(const w of p.body.collectionWrites)if(d.collectionReceipt.revisions?.[w.key]!==await collectionHash(w.value))throw new Error('Saved contents could not be confirmed. Check the same save. Request: '+p.body.requestId);
+  if(!d.collectionReadback?.verified||!d.collectionReadback.matches){p.savedReceipt=d.collectionReceipt;collectionWarning('The save was recorded, but current data could not be verified. Do not create it again. Check the same save or review saved data. Request: '+p.body.requestId);return false;}
+  p.savedReceipt=d.collectionReceipt;
+  if(p.acceptTask)_acceptTaskSave(p.acceptTask);
   for(const w of p.body.collectionWrites)collectionBaselines.set(w.key,{value:w.value,revision:d.collectionReceipt.revisions[w.key]});
+  for(const w of p.body.collectionWrites){if(w.key==='se_t'&&!p.acceptTask){_snapshotTaskBaseline(JSON.parse(w.value));_tasksLoadedCount=JSON.parse(w.value).length;}if(w.key==='se_v')_vendorBaseline=_snapById(JSON.parse(w.value));if(w.key==='se_r')_recBaseline=_snapById(JSON.parse(w.value));}
   portalPendingWorkflow=null;
-  for(const w of p.body.collectionWrites){if(w.key==='se_t'){_snapshotTaskBaseline(JSON.parse(w.value));_tasksLoadedCount=JSON.parse(w.value).length;}if(w.key==='se_v')_vendorBaseline=_snapById(JSON.parse(w.value));if(w.key==='se_r')_recBaseline=_snapById(JSON.parse(w.value));}
-  if(!d.collectionReadback?.verified||!d.collectionReadback.matches){collectionWarning('The save was recorded, but current data needs to be reloaded before continuing.');return false;}
   document.getElementById('collection-save-warning')?.remove();updateSyncStatus('ok');
   for(const fn of p.after){try{await fn();}catch{collectionWarning('The maintenance save is confirmed. External queue cleanup could not be confirmed; do not repeat the saved task action. Reload and reconcile the source queue.');return true;}}for(const args of p.toasts)p.toast(...args);return true;
  }catch(e){collectionWarning(e.message);return false;}
@@ -552,7 +556,7 @@ async function portalAtomic(work){
  finally{portalWorkflow=null;showToast=p.toast;}
  if(p.failed){_taskBaseline=saved.task;_vendorBaseline=saved.vendor;_recBaseline=saved.rec;_tasksLoadedCount=saved.taskCount;_vendorsLoadedCount=saved.vendorCount;_recurringLoadedCount=saved.recCount;_pendingTaskSave=null;collectionWarning('Related changes were not saved. '+p.failed.message);return false;}
  if(!p.writes.size){for(const a of p.toasts)p.toast(...a);return result;}
- portalPendingWorkflow={body:{requestId:crypto.randomUUID(),collectionWrites:[...p.writes.values()]},after:p.after,toasts:p.toasts,toast:p.toast};
+ portalPendingWorkflow={body:{requestId:crypto.randomUUID(),collectionWrites:[...p.writes.values()]},after:p.after,toasts:p.toasts,toast:p.toast,acceptTask:p.acceptTask};
  const ok=await portalFlushPending();if(!ok){_taskBaseline=saved.task;_vendorBaseline=saved.vendor;_recBaseline=saved.rec;_tasksLoadedCount=saved.taskCount;_vendorsLoadedCount=saved.vendorCount;_recurringLoadedCount=saved.recCount;_pendingTaskSave=null;}return ok?result:false;
 }
 
@@ -906,6 +910,7 @@ async function _saveTasksNow(){
         if(_lastTaskWriteFailure&&[400,409,428].includes(_lastTaskWriteFailure.status))_pendingTaskSave=null;
         return false;
       }
+      if(portalWorkflow){portalWorkflow.acceptTask=p;_pendingTaskSave=null;return true;}
       _acceptTaskSave(p);_pendingTaskSave=null;
     }
     const local=JSON.parse(JSON.stringify(tasks));
@@ -918,13 +923,14 @@ async function _saveTasksNow(){
     const payload=JSON.stringify(merged);
     const pending={payload,local,expectedRevision:response.revision,requestId:crypto.randomUUID()};
     if(payload===JSON.stringify(server)){
-      _acceptTaskSave(pending);document.getElementById('task-save-warning')?.remove();return true;
+      if(portalWorkflow)portalWorkflow.acceptTask=pending;else _acceptTaskSave(pending);document.getElementById('task-save-warning')?.remove();return true;
     }
     _pendingTaskSave=pending;
     if(!(await S.set('se_t',payload,pending))){
       if(_lastTaskWriteFailure&&[400,409,428].includes(_lastTaskWriteFailure.status))_pendingTaskSave=null;
       return false;
     }
+    if(portalWorkflow){portalWorkflow.acceptTask=pending;_pendingTaskSave=null;return true;}
     _acceptTaskSave(pending);_pendingTaskSave=null;
     if(!_lastTaskWriteReceipt?.readback?.verified){taskSaveWarning('The save has a receipt, but verification could not finish. Reload saved tasks before continuing.');return false;}
     if(!_lastTaskWriteReceipt.readback.matches){taskSaveWarning('Your save was recorded, then another update arrived. Reload saved tasks to see the latest changes.');return false;}
@@ -1001,8 +1007,8 @@ function logTaskChange(action, t) {
     by: (typeof getCurrentUserName === 'function' ? getCurrentUserName() : 'admin')
   };
   _taskLog.push(entry);
-  // Fire-and-forget save — don't block the UI
-  saveTaskLog();
+  // Existing callers may ignore this promise; create explicitly awaits it.
+  const pending=saveTaskLog();pending.catch(()=>{});return pending;
 }
 
 // HELPERS
@@ -3364,7 +3370,16 @@ function onCatChange(){
       ${v.note?`<div style="font-size:.73rem;color:var(--text2);margin-top:4px">${v.note}</div>`:''}
     </div>`).join('');
 }
+let _taskCreationAttempt=null,_taskCreateBusy=false,_taskCreateLockedControls=null;
+function taskCreationMessage(message){
+ let box=document.getElementById('task-create-status');
+ if(!box){box=document.createElement('div');box.id='task-create-status';box.setAttribute('role','alert');box.style.cssText='margin:12px 20px;padding:12px;background:#fff0e6;color:#612315;border:2px solid #a54125;white-space:pre-wrap';const button=document.getElementById('f-save-btn');button?.parentElement?.before(box);}
+ box.textContent=message;
+}
+if(typeof window!=='undefined')window.addEventListener('beforeunload',event=>{if(_taskCreateBusy||(_taskCreationAttempt&&portalPendingWorkflow)){event.preventDefault();event.returnValue='';}});
 function openAddTask(propId){
+  if(_taskCreateBusy||_taskCreationAttempt&&portalPendingWorkflow){document.getElementById('task-modal').classList.add('open');taskCreationMessage('An earlier task save needs checking. Keep its form and use Check same save; do not create a second task.');return;}
+  document.getElementById('task-create-status')?.remove();
   document.getElementById('task-modal-title').textContent='New Task';
   _cqEditingId=null;const _sb=document.getElementById('f-save-btn');if(_sb)_sb.textContent='Save Task'; // 2026-10-04
   ['f-guest','f-problem','f-category','f-vendor','f-notes'].forEach(id=>document.getElementById(id).value='');
@@ -3398,8 +3413,13 @@ async function _atomicImpl_saveTask(){
   // Deploy 2: bundle filter service into this task if the user checked the bundler
   if(typeof fsMaybeStampTask==='function')fsMaybeStampTask(t);
   const _cqId=_cqEditingId; if(_cqId)_cqDecorateTask(t,_cqId); // 2026-10-04: editing a Claude suggestion before import
-  tasks.unshift(t);logTaskChange('created',t);const _saved=await saveTasks();if(!_saved)return;closeModal('task-modal');renderAll();renderReplacements();showToast('Task created.');
-  if(_cqId){_cqEditingId=null;const _sb=document.getElementById('f-save-btn');if(_sb)_sb.textContent='Save Task';if(_saved)await _cqRemoveImported(_cqId);}
+  _taskCreationAttempt={task:t,priorIds:new Set(tasks.map(row=>row.id)),logBefore:_taskLog.slice()};
+  tasks.unshift(t);await logTaskChange('created',t);const _saved=await saveTasks();if(!_saved)return;
+  if(_cqId)await _cqRemoveImported(_cqId);
+  const finish=()=>{for(const {el,disabled} of _taskCreateLockedControls||[])el.disabled=disabled;_taskCreateLockedControls=null;_taskCreationAttempt=null;_cqEditingId=null;document.getElementById('task-create-status')?.remove();closeModal('task-modal');renderAll();renderReplacements();showToast('Task created.');};
+  // Staging is not persistence. These UI effects run only after the final receipt and readback.
+  if(portalWorkflow)portalWorkflow.after.push(finish);else finish();
+  return true;
 }
 
 // DETAIL
@@ -14250,7 +14270,19 @@ async function saveVendor(...args){return portalAtomic(()=>_atomicImpl_saveVendo
 
 async function saveLogTask(...args){return portalAtomic(()=>_atomicImpl_saveLogTask(...args));}
 
-async function saveTask(...args){return portalAtomic(()=>_atomicImpl_saveTask(...args));}
+async function saveTask(...args){
+ if(_taskCreateBusy)return false;
+ const button=document.getElementById('f-save-btn');_taskCreateBusy=true;if(button){button.disabled=true;button.textContent='Saving…';}
+ if(!_taskCreateLockedControls)_taskCreateLockedControls=['f-property','f-problem','f-notes','f-date','f-status','f-category','f-guest','f-vendor','f-urgent','f-buy','f-dp-btn'].map(id=>document.getElementById(id)).filter(Boolean).map(el=>({el,disabled:el.disabled}));
+ for(const {el} of _taskCreateLockedControls)el.disabled=true;
+ try{
+  const result=_taskCreationAttempt&&portalPendingWorkflow?await portalFlushPending():await portalAtomic(()=>_atomicImpl_saveTask(...args));
+  if(!result&&_taskCreationAttempt&&!portalPendingWorkflow){
+   const attempt=_taskCreationAttempt;tasks=tasks.filter(row=>row!==attempt.task&&(row.id!==attempt.task.id||attempt.priorIds.has(row.id)));_taskLog=attempt.logBefore;_taskCreationAttempt=null;
+  }
+  return result;
+ }finally{_taskCreateBusy=false;if(!(_taskCreationAttempt&&portalPendingWorkflow)){for(const {el,disabled} of _taskCreateLockedControls||[])el.disabled=disabled;_taskCreateLockedControls=null;}if(button){button.disabled=false;button.textContent=_taskCreationAttempt&&portalPendingWorkflow?'Check same save':'Save Task';}}
+}
 
 async function saveHistTask(...args){return portalAtomic(()=>_atomicImpl_saveHistTask(...args));}
 
